@@ -17,5 +17,5 @@ texture = ExtResource("2")
 position = Vector2(-32, -32)
 
 [node name="Camera2D" type="Camera2D" parent="."]
-enabled = true
+current = true
 anchor_mode = 0
