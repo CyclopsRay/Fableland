@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Player.cs" id="1"]
+[ext_resource type="Texture2D" path="res://Sprites/player_placeholder.svg" id="2"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(64, 64)
+
+[node name="Player" type="CharacterBody2D"]
+script = ExtResource("1")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+position = Vector2(-32, -32)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+enabled = true
+anchor_mode = 0

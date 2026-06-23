@@ -1,0 +1,37 @@
+# Godot 4+ specific ignores
+.godot/
+
+# Godot-specific
+*.import
+*.translation
+
+# .NET / C#
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.DotSettings
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Thumbnails
+._*
+
+# Android
+/android/
+
+# Claude
+.claude/
