@@ -108,7 +108,8 @@ public partial class Pomegraknight : CharacterController
 
         // NOTE: with animation, move this MeleeCone call onto the Slash clip's
         // damage-event frame instead of firing it immediately here.
-        MeleeCone(SlashRange, SlashHalfAngle, dmg, SlashKnockback, applyBurn: false, 0f);
+        int hits = MeleeCone(SlashRange, SlashHalfAngle, dmg, SlashKnockback, applyBurn: false, 0f);
+        if (hits > 0) ShakeCamera(0.22f);
         // Anim?.Play($"Slash{(_comboStage % 3) + 1}");
 
         ApplyMovePenalty(SwingPenaltyMult, SwingPenaltyDur);
@@ -153,6 +154,7 @@ public partial class Pomegraknight : CharacterController
     private void TornadoHit()
     {
         Vector2 origin = GlobalPosition;
+        int hits = 0;
         foreach (Node n in GetTree().GetNodesInGroup("enemy"))
         {
             if (n is not Enemy e) continue;
@@ -161,7 +163,9 @@ public partial class Pomegraknight : CharacterController
             Vector2 push = (to.LengthSquared() > 0.01f ? to.Normalized() : Vector2.Up) * TornadoPush;
             e.TakeDamage(TornadoDamage, push);
             e.SetBurning(2f);
+            hits++;
         }
+        if (hits > 0) ShakeCamera(0.15f);
     }
 
     // ── Pome Seed Eruption ────────────────────────────────────────────────

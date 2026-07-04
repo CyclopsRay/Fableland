@@ -8,6 +8,16 @@
 
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
+### Changelog
+- **0.1.1** — Standard units model (`Units.cs`: 2 m player / 8 m jump / 1 s ground jump ⇒
+  g = 2048 px/s², 32 px/m). Named collision layers (Player/Foes/Ground/Platform/Projectile/
+  Hazard). One-way platforms with **press-down drop-through** (hold = fall further; ground stays
+  solid). Pome seeds **linger** where they land. Attack feedback: **camera shake**, enemy
+  **blink**, real **knockback bounce**. **Damage-number** popups (red damage / green heal, size
+  scales 20→100). **Version stamp** top-left; patch auto-bumps +0.0.1 per commit.
+- **0.1.0** — Initial playable slice + Pomegraknight on a `CharacterController` base.
+
+
 A **self-contained, playable vertical slice** now ships in this repo. The goal here was
 *playability*, not feature parity — it proves out the core loop (arena + character +
 skills + enemies + collectibles + win/lose) end-to-end so the fuller port below has a
@@ -26,6 +36,7 @@ skeleton to grow into. It is intentionally simpler than the full architecture in
 | Melee combo (3-stage 15/15/30, mag 3, reload) | `J` or **Left Mouse** |
 | Blush → self-ignite + Fire Tornado charge | `Left Shift` |
 | Pome Seed Eruption (3 waves of gravity seeds) | `E` |
+| Drop through platform (hold = fall further) | `S` / `Down` |
 | Restart after win/lose | `R` |
 
 Affected-range lines are drawn on-screen: the yellow **BA cone** (brightens on each

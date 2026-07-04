@@ -27,9 +27,9 @@ public partial class CharacterController : CharacterBody2D
     [Export] public int MaxLives = 3;
 
     [ExportGroup("Movement")]
-    [Export] public float MoveSpeed = 320f;
-    [Export] public float JumpVelocity = -560f;
-    [Export] public float Gravity = 1200f;
+    [Export] public float MoveSpeed = 320f;              // ~10 m/s
+    [Export] public float JumpVelocity = -Units.JumpSpeed; // -1024 px/s (8 m jump)
+    [Export] public float Gravity = Units.Gravity;         // 2048 px/s²
     [Export] public int MaxJumps = 2;
 
     [ExportGroup("Debug")]
@@ -55,6 +55,7 @@ public partial class CharacterController : CharacterBody2D
     protected Sprite2D Sprite;
     protected AnimationPlayer Anim;        // may be null until animations are authored
     protected Node2D FirePoint;            // optional projectile origin
+    protected ShakeCamera2D CameraShake;   // optional; present on the player
 
     private float _burnTimer;
     private float _speedPenaltyTimer;
@@ -62,6 +63,8 @@ public partial class CharacterController : CharacterBody2D
     private float _invulnTimer;
     private int _jumpsRemaining;
     private bool _dead;
+    private bool _dropping;
+    private float _dropReleaseTimer;
     private Vector2 _spawnPoint;
     private Color _baseTint = Colors.White;
 
@@ -70,6 +73,7 @@ public partial class CharacterController : CharacterBody2D
         Sprite = GetNode<Sprite2D>("Sprite2D");
         Anim = GetNodeOrNull<AnimationPlayer>("AnimationPlayer");   // room for animation
         FirePoint = GetNodeOrNull<Node2D>("FirePoint");
+        CameraShake = GetNodeOrNull<ShakeCamera2D>("Camera2D");
         _spawnPoint = GlobalPosition;
 
         CurrentHP = MaxHP;
@@ -145,6 +149,8 @@ public partial class CharacterController : CharacterBody2D
                 v.Y = JumpVelocity;
                 _jumpsRemaining--;
             }
+
+            UpdateDropThrough(Input.IsActionPressed("move_down"), dt);
         }
 
         v.X = inputDir * MoveSpeed * _speedPenaltyMult;
@@ -153,6 +159,32 @@ public partial class CharacterController : CharacterBody2D
 
         if (inputDir > 0.01f) { Facing = 1f; Sprite.FlipH = false; }
         else if (inputDir < -0.01f) { Facing = -1f; Sprite.FlipH = true; }
+    }
+
+    /// <summary>
+    /// Press-down drop-through for one-way platforms. Starting a drop removes the
+    /// Platform layer from our collision mask so we fall through; holding down
+    /// keeps it off (fall further — "how long you press decides how far"), and
+    /// releasing re-solidifies so the next platform below catches us. Ground is a
+    /// separate layer and stays solid, so this never drops us through the ground.
+    /// </summary>
+    private void UpdateDropThrough(bool wantDrop, float dt)
+    {
+        if (wantDrop && IsOnFloor() && !_dropping)
+        {
+            _dropping = true;
+            _dropReleaseTimer = 0.25f;
+            SetCollisionMaskValue(Units.LayerPlatform, false);
+        }
+        if (_dropping)
+        {
+            _dropReleaseTimer = wantDrop ? 0.25f : _dropReleaseTimer - dt;
+            if (_dropReleaseTimer <= 0f)
+            {
+                _dropping = false;
+                SetCollisionMaskValue(Units.LayerPlatform, true);
+            }
+        }
     }
 
     // ── Ability hooks ─────────────────────────────────────────────────────
@@ -229,16 +261,35 @@ public partial class CharacterController : CharacterBody2D
         if (_dead) return;
         if (!ignoreIFrames && _invulnTimer > 0f) return;
 
-        CurrentHP = Mathf.Max(0f, CurrentHP - amount * DamageTakenMult);
+        float dealt = amount * DamageTakenMult;
+        CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
         HpChanged?.Invoke(CurrentHP, MaxHP);
+        PopNumber(dealt, heal: false);
 
         if (knockback != Vector2.Zero)
         {
             Velocity = knockback;
             _invulnTimer = 0.8f;
+            ShakeCamera(0.35f);
         }
         if (CurrentHP <= 0f) Die();
     }
+
+    /// <summary>Restore HP (green damage number). No source uses it yet, but the
+    /// system is wired for pickups/regen.</summary>
+    public void Heal(float amount)
+    {
+        if (_dead || amount <= 0f) return;
+        CurrentHP = Mathf.Min(MaxHP, CurrentHP + amount);
+        HpChanged?.Invoke(CurrentHP, MaxHP);
+        PopNumber(amount, heal: true);
+    }
+
+    private void PopNumber(float amount, bool heal) =>
+        DamageNumberManager.Instance?.Pop(
+            GlobalPosition + new Vector2(0f, -Units.PlayerHeightPx * 0.5f), amount, heal);
+
+    protected void ShakeCamera(float amount) => CameraShake?.AddTrauma(amount);
 
     private void Die()
     {

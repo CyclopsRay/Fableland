@@ -1,27 +1,32 @@
 using Godot;
 
 /// <summary>
-/// Prototype crab foe — a simplified port of BaseFoe/CrabFoe. Patrols the ground,
-/// chases the player when close, deals contact damage, and can be set on fire
-/// (burn DoT) by Pomegraknight's combo/seeds.
+/// Prototype crab foe — a simplified port of BaseFoe/CrabFoe. Patrols, chases the
+/// player when close, deals contact damage, can be set on fire (burn DoT), and
+/// reacts to hits with a knockback bounce + blink + floating damage numbers.
 /// </summary>
 public partial class Enemy : CharacterBody2D
 {
     [Export] public float MaxHP = 60f;
     [Export] public float MoveSpeed = 90f;
-    [Export] public float Gravity = 1200f;
+    [Export] public float Gravity = Units.Gravity;
     [Export] public float AggroRange = 320f;
     [Export] public float ContactRange = 44f;
     [Export] public float ContactDamage = 18f;
     [Export] public float ContactCooldown = 0.9f;
     [Export] public float BurnDamagePerSecond = 14f;
+    [Export] public float KnockbackTime = 0.18f;   // window where patrol yields to knockback
 
     private Sprite2D _sprite;
     private float _hp;
     private float _dir = 1f;
     private float _contactTimer;
     private float _flashTimer;
+    private float _blinkTimer;
+    private float _knockbackTimer;
     private float _burnTimer;
+    private float _burnAccum;      // batched so burn numbers don't spam
+    private float _burnPopTimer;
 
     public override void _Ready()
     {
@@ -35,54 +40,79 @@ public partial class Enemy : CharacterBody2D
     {
         float dt = (float)delta;
         if (_contactTimer > 0f) _contactTimer -= dt;
+        if (_knockbackTimer > 0f) _knockbackTimer -= dt;
 
-        // Burn damage-over-time.
         if (_burnTimer > 0f)
         {
             _burnTimer -= dt;
-            _hp -= BurnDamagePerSecond * dt;
+            float d = BurnDamagePerSecond * dt;
+            _hp -= d;
+            _burnAccum += d;
+            _burnPopTimer -= dt;
+            if (_burnPopTimer <= 0f && _burnAccum >= 1f)
+            {
+                PopNumber(_burnAccum);
+                _burnAccum = 0f;
+                _burnPopTimer = 0.5f;
+            }
             if (_hp <= 0f) { QueueFree(); return; }
-            if (_burnTimer <= 0f && _flashTimer <= 0f) _sprite.Modulate = Colors.White;
         }
 
+        if (_blinkTimer > 0f)
+        {
+            _blinkTimer -= dt;
+            _sprite.Visible = Mathf.PosMod(_blinkTimer, 0.08f) < 0.04f;
+            if (_blinkTimer <= 0f) _sprite.Visible = true;
+        }
         if (_flashTimer > 0f)
         {
             _flashTimer -= dt;
-            if (_flashTimer <= 0f) _sprite.Modulate = _burnTimer > 0f ? new Color(1f, 0.6f, 0.35f) : Colors.White;
+            if (_flashTimer <= 0f)
+                _sprite.Modulate = _burnTimer > 0f ? new Color(1f, 0.6f, 0.35f) : Colors.White;
         }
 
         Vector2 v = Velocity;
         if (!IsOnFloor()) v.Y += Gravity * dt;
 
-        CharacterController player = GetTree().GetFirstNodeInGroup("player") as CharacterController;
-        if (player != null)
+        if (_knockbackTimer > 0f)
         {
-            Vector2 to = player.GlobalPosition - GlobalPosition;
-            if (Mathf.Abs(to.X) < AggroRange)
-                _dir = Mathf.Sign(to.X);
-
-            if (to.Length() < ContactRange && _contactTimer <= 0f)
+            // Let the knockback carry, bleeding off horizontally — a visible bounce.
+            v.X = Mathf.MoveToward(v.X, 0f, 900f * dt);
+        }
+        else
+        {
+            CharacterController player = GetTree().GetFirstNodeInGroup("player") as CharacterController;
+            if (player != null)
             {
-                _contactTimer = ContactCooldown;
-                Vector2 knock = new Vector2(Mathf.Sign(to.X == 0f ? 1f : to.X), -0.4f).Normalized() * 300f;
-                player.TakeDamage(ContactDamage, knock);
+                Vector2 to = player.GlobalPosition - GlobalPosition;
+                if (Mathf.Abs(to.X) < AggroRange) _dir = Mathf.Sign(to.X);
+
+                if (to.Length() < ContactRange && _contactTimer <= 0f)
+                {
+                    _contactTimer = ContactCooldown;
+                    Vector2 knock = new Vector2(Mathf.Sign(to.X == 0f ? 1f : to.X), -0.4f).Normalized() * 300f;
+                    player.TakeDamage(ContactDamage, knock);
+                }
             }
+
+            if (IsOnWall()) _dir = -_dir;
+            v.X = _dir * MoveSpeed;
+            _sprite.FlipH = _dir < 0f;
         }
 
-        if (IsOnWall()) _dir = -_dir;
-
-        v.X = _dir * MoveSpeed;
         Velocity = v;
         MoveAndSlide();
-        _sprite.FlipH = _dir < 0f;
     }
 
     public void TakeDamage(float amount, Vector2 knockback)
     {
         _hp -= amount;
         Velocity = knockback;
+        _knockbackTimer = KnockbackTime;
         _sprite.Modulate = new Color(1f, 0.6f, 0.6f);
         _flashTimer = 0.12f;
+        _blinkTimer = 0.24f;
+        PopNumber(amount);
         if (_hp <= 0f) QueueFree();
     }
 
@@ -91,4 +121,7 @@ public partial class Enemy : CharacterBody2D
         _burnTimer = Mathf.Max(_burnTimer, duration);
         if (_flashTimer <= 0f) _sprite.Modulate = new Color(1f, 0.6f, 0.35f);
     }
+
+    private void PopNumber(float amount) =>
+        DamageNumberManager.Instance?.Pop(GlobalPosition + new Vector2(0f, -28f), amount, false);
 }

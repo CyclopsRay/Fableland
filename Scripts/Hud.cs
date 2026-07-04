@@ -21,6 +21,7 @@ public partial class Hud : CanvasLayer
         _livesLabel = GetNode<Label>("LivesLabel");
         _pagesLabel = GetNode<Label>("PagesLabel");
         _banner = GetNode<Label>("Banner");
+        GetNode<Label>("VersionLabel").Text = "v" + GameVersion.Current;
     }
 
     public void SetHp(float cur, float max)

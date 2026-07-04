@@ -1,15 +1,16 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://Scripts/Pomegraknight.cs" id="1"]
 [ext_resource type="Texture2D" path="res://Sprites/player_placeholder.svg" id="2"]
 [ext_resource type="PackedScene" path="res://Scenes/PomeSeed.tscn" id="3"]
+[ext_resource type="Script" path="res://Scripts/ShakeCamera2D.cs" id="4"]
 
 [sub_resource type="RectangleShape2D" id="1"]
-size = Vector2(56, 62)
+size = Vector2(44, 64)
 
 [node name="Pomegraknight" type="CharacterBody2D"]
-collision_layer = 2
-collision_mask = 1
+collision_layer = 1
+collision_mask = 12
 script = ExtResource("1")
 PomeSeedScene = ExtResource("3")
 
@@ -25,6 +26,7 @@ position = Vector2(0, -30)
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
 
 [node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("4")
 current = true
 position_smoothing_enabled = true
 position_smoothing_speed = 6.0
