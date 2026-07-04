@@ -65,6 +65,7 @@ public partial class CharacterController : CharacterBody2D
     private bool _dead;
     private bool _dropping;
     private float _dropReleaseTimer;
+    private SoftVolume _softVolume;   // non-null while inside a go-inside volume
     private Vector2 _spawnPoint;
     private Color _baseTint = Colors.White;
 
@@ -131,6 +132,13 @@ public partial class CharacterController : CharacterBody2D
     public override void _PhysicsProcess(double delta)
     {
         float dt = (float)delta;
+
+        if (_softVolume != null && !_dead)
+        {
+            MoveInsideVolume();
+            return;
+        }
+
         Vector2 v = Velocity;
 
         if (!IsOnFloor())
@@ -185,6 +193,37 @@ public partial class CharacterController : CharacterBody2D
                 SetCollisionMaskValue(Units.LayerPlatform, true);
             }
         }
+    }
+
+    // ── Go-inside (SoftVolume) movement ───────────────────────────────────
+    public void EnterSoftVolume(SoftVolume v)
+    {
+        _softVolume = v;
+        // Cancel any in-progress platform drop so we don't leave the mask off.
+        if (_dropping) { _dropping = false; SetCollisionMaskValue(Units.LayerPlatform, true); }
+    }
+
+    public void ExitSoftVolume(SoftVolume v)
+    {
+        if (_softVolume == v) _softVolume = null;
+    }
+
+    private void MoveInsideVolume()
+    {
+        float horiz = 0f, vert = 0f;
+        if (!ControlsLocked)
+        {
+            if (Input.IsActionPressed("move_left")) horiz -= 1f;
+            if (Input.IsActionPressed("move_right")) horiz += 1f;
+            if (Input.IsActionPressed("jump")) vert -= 1f;        // jump/hold = rise
+            if (Input.IsActionPressed("move_down")) vert += 1f;
+        }
+
+        Velocity = _softVolume.ComputeVelocity(MoveSpeed, horiz, vert);
+        MoveAndSlide();
+
+        if (horiz > 0.01f) { Facing = 1f; Sprite.FlipH = false; }
+        else if (horiz < -0.01f) { Facing = -1f; Sprite.FlipH = true; }
     }
 
     // ── Ability hooks ─────────────────────────────────────────────────────

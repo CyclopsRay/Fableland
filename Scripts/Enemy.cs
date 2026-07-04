@@ -27,6 +27,10 @@ public partial class Enemy : CharacterBody2D
     private float _burnTimer;
     private float _burnAccum;      // batched so burn numbers don't spam
     private float _burnPopTimer;
+    private SoftVolume _softVolume;
+
+    public void EnterSoftVolume(SoftVolume v) => _softVolume = v;
+    public void ExitSoftVolume(SoftVolume v) { if (_softVolume == v) _softVolume = null; }
 
     public override void _Ready()
     {
@@ -71,15 +75,8 @@ public partial class Enemy : CharacterBody2D
                 _sprite.Modulate = _burnTimer > 0f ? new Color(1f, 0.6f, 0.35f) : Colors.White;
         }
 
-        Vector2 v = Velocity;
-        if (!IsOnFloor()) v.Y += Gravity * dt;
-
-        if (_knockbackTimer > 0f)
-        {
-            // Let the knockback carry, bleeding off horizontally — a visible bounce.
-            v.X = Mathf.MoveToward(v.X, 0f, 900f * dt);
-        }
-        else
+        // Aggro + contact damage (runs unless being knocked back).
+        if (_knockbackTimer <= 0f)
         {
             CharacterController player = GetTree().GetFirstNodeInGroup("player") as CharacterController;
             if (player != null)
@@ -94,7 +91,28 @@ public partial class Enemy : CharacterBody2D
                     player.TakeDamage(ContactDamage, knock);
                 }
             }
+        }
 
+        // Inside a go-inside volume: same stagnation + gravity drift as the player.
+        if (_softVolume != null)
+        {
+            float h = _knockbackTimer > 0f ? 0f : _dir;
+            Velocity = _softVolume.ComputeVelocity(MoveSpeed, h, 0f);
+            MoveAndSlide();
+            _sprite.FlipH = _dir < 0f;
+            return;
+        }
+
+        Vector2 v = Velocity;
+        if (!IsOnFloor()) v.Y += Gravity * dt;
+
+        if (_knockbackTimer > 0f)
+        {
+            // Let the knockback carry, bleeding off horizontally — a visible bounce.
+            v.X = Mathf.MoveToward(v.X, 0f, 900f * dt);
+        }
+        else
+        {
             if (IsOnWall()) _dir = -_dir;
             v.X = _dir * MoveSpeed;
             _sprite.FlipH = _dir < 0f;

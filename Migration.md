@@ -9,6 +9,11 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.1.2** — Two platform kinds. The thin one-way **platform** (land/cross/drop-through) now has
+  a sibling **SoftVolume** (`SoftVolume.cs`) — the go-inside "tree" archetype: stand on its one-way
+  top or press-down to sink in; inside, falling halts and up/down move like left/right, capped by a
+  **stagnation index** (0.5·maxSpeed) with a constant **gravity index** drift (0.1·maxSpeed). Applies
+  to players *and* foes. A placeholder tree is placed in the arena.
 - **0.1.1** — Standard units model (`Units.cs`: 2 m player / 8 m jump / 1 s ground jump ⇒
   g = 2048 px/s², 32 px/m). Named collision layers (Player/Foes/Ground/Platform/Projectile/
   Hazard). One-way platforms with **press-down drop-through** (hold = fall further; ground stays

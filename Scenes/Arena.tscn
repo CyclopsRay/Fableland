@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://Scripts/GameManager.cs" id="1"]
 [ext_resource type="PackedScene" path="res://Scenes/Pomegraknight.tscn" id="2"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://Scenes/Enemy.tscn" id="4"]
 [ext_resource type="PackedScene" path="res://Scenes/WonderPage.tscn" id="5"]
 [ext_resource type="Texture2D" path="res://Sprites/platform_placeholder.svg" id="6"]
+[ext_resource type="PackedScene" path="res://Scenes/SoftVolume.tscn" id="7"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(2000, 120)
@@ -97,6 +98,9 @@ one_way_collision = true
 [node name="Sprite2D" type="Sprite2D" parent="World/Platform3"]
 texture = ExtResource("6")
 scale = Vector2(2.03125, 0.75)
+
+[node name="Tree" parent="World" instance=ExtResource("7")]
+position = Vector2(850, 450)
 
 [node name="SpawnPoints" type="Node2D" parent="."]
 
