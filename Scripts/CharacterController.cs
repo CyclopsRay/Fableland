@@ -30,7 +30,8 @@ public partial class CharacterController : CharacterBody2D
     [Export] public float MoveSpeed = 320f;              // ~10 m/s
     [Export] public float JumpVelocity = -Units.JumpSpeed; // -1024 px/s (8 m jump)
     [Export] public float Gravity = Units.Gravity;         // 2048 px/s²
-    [Export] public int MaxJumps = 2;
+    [Export] public int MaxJumps = 2;                      // jumps before touching down again
+    [Export] public float JumpCooldown = 0.3f;             // universal min gap between jumps
 
     [ExportGroup("Debug")]
     [Export] public bool ShowDebugRanges = true;
@@ -65,6 +66,7 @@ public partial class CharacterController : CharacterBody2D
     private bool _dead;
     private bool _dropping;
     private float _dropReleaseTimer;
+    private float _jumpCdTimer;
     private SoftVolume _softVolume;   // non-null while inside a go-inside volume
     private Vector2 _spawnPoint;
     private Color _baseTint = Colors.White;
@@ -82,6 +84,7 @@ public partial class CharacterController : CharacterBody2D
         AddToGroup("player");
 
         InitCharacter();
+        _jumpsRemaining = MaxJumps;
         HpChanged?.Invoke(CurrentHP, MaxHP);
     }
 
@@ -132,6 +135,7 @@ public partial class CharacterController : CharacterBody2D
     public override void _PhysicsProcess(double delta)
     {
         float dt = (float)delta;
+        if (_jumpCdTimer > 0f) _jumpCdTimer -= dt;
 
         if (_softVolume != null && !_dead)
         {
@@ -144,7 +148,7 @@ public partial class CharacterController : CharacterBody2D
         if (!IsOnFloor())
             v.Y += Gravity * dt;
         else if (v.Y >= 0f)
-            _jumpsRemaining = MaxJumps;
+            _jumpsRemaining = MaxJumps;   // touching ground/platform refreshes jumps
 
         float inputDir = 0f;
         if (!ControlsLocked && !_dead)
@@ -152,10 +156,11 @@ public partial class CharacterController : CharacterBody2D
             if (Input.IsActionPressed("move_left")) inputDir -= 1f;
             if (Input.IsActionPressed("move_right")) inputDir += 1f;
 
-            if (Input.IsActionJustPressed("jump") && _jumpsRemaining > 0)
+            if (Input.IsActionJustPressed("jump") && _jumpsRemaining > 0 && _jumpCdTimer <= 0f)
             {
                 v.Y = JumpVelocity;
                 _jumpsRemaining--;
+                _jumpCdTimer = JumpCooldown;
             }
 
             UpdateDropThrough(Input.IsActionPressed("move_down"), dt);
@@ -210,6 +215,8 @@ public partial class CharacterController : CharacterBody2D
 
     private void MoveInsideVolume()
     {
+        _jumpsRemaining = MaxJumps;   // being supported by a soft volume refreshes jumps
+
         float horiz = 0f, vert = 0f;
         if (!ControlsLocked)
         {
@@ -257,15 +264,25 @@ public partial class CharacterController : CharacterBody2D
         int hits = 0;
         Vector2 origin = GlobalPosition;
         Vector2 aim = new Vector2(Facing, 0f);
-        float cos = Mathf.Cos(Mathf.DegToRad(halfAngleDeg));
+        float halfRad = Mathf.DegToRad(halfAngleDeg);
 
         foreach (Node n in GetTree().GetNodesInGroup("enemy"))
         {
             if (n is not Enemy e) continue;
+
+            // Treat the foe as a circle of radius HitRadius and test whether the
+            // cone overlaps it at all — so a glancing clip still counts, not just
+            // a hit dead-on the foe's center.
             Vector2 to = e.GlobalPosition - origin;
             float dist = to.Length();
-            if (dist > range) continue;
-            if (dist > 0.01f && to.Normalized().Dot(aim) < cos) continue;
+            float r = e.HitRadius;
+            if (dist - r > range) continue;                       // nearest point out of reach
+            if (dist > 0.01f)
+            {
+                // Widen the cone by the angle the foe's radius subtends at this distance.
+                float angTol = dist > r ? Mathf.Asin(Mathf.Clamp(r / dist, 0f, 1f)) : Mathf.Pi;
+                if (to.Normalized().Dot(aim) < Mathf.Cos(halfRad + angTol)) continue;
+            }
 
             Vector2 knock = new Vector2(Facing, -0.35f).Normalized() * knockbackSpeed;
             e.TakeDamage(damage, knock);

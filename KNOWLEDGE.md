@@ -30,6 +30,10 @@ Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
    capped by StagnationIndex (0.5·maxSpeed) plus a constant GravityIndex drift
    (0.1·maxSpeed). Applies to players AND foes.
 
+**Jumps** — per-character `MaxJumps` (jumps before touching down again; Pomegraknight = 1),
+refreshed on touching ground / platform / SoftVolume. A universal `JumpCooldown` (0.3 s) is the
+minimum gap between jumps; override per character only when explicitly specified.
+
 **Versioning** — bump patch (+0.0.1) every commit; keep `Scripts/GameVersion.cs`, the
 repo-root `VERSION` file, and the HUD `VersionLabel` (`Scenes/Hud.tscn`) in sync. Shown
 top-left in-game.
@@ -42,6 +46,13 @@ compiler surfaces below.
 ---
 
 ## Caveats / gotchas (grow this on every bug fix)
+
+### Hit tests must use the target's radius, not just its center (v0.1.5)
+- **Symptom:** a melee/AoE that visibly clips a foe dealt no damage — the check only tested
+  the foe's center point against the range/cone.
+- **Rule:** approximate the target as a circle of `HitRadius` and test overlap: reach passes if
+  `dist - r <= range`, and widen the cone half-angle by `asin(r/dist)` (foe fully covers origin
+  when `dist <= r`). "It touches the foe" should mean the shape overlaps, not the center.
 
 ### Godot 4 has no `Label2D` (v0.1.3)
 - **Symptom:** `The type or namespace name 'Label2D' could not be found`.

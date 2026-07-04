@@ -9,6 +9,9 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.1.5** — Melee now hits when the cone overlaps a foe's body (radius-aware), not only its
+  center. Per-character jump count (`MaxJumps`; Pomegraknight = 1) refreshed on ground/platform/
+  SoftVolume, with a universal 0.3 s jump cooldown. Test tree made bigger and moved far right.
 - **0.1.4** — Docs: added `KNOWLEDGE.md` (conventions + running Godot/C# caveats) and
   `CLAUDE.md` (read-first pointers + mandatory workflow: log every bug fix as a caveat,
   bump version per commit).

@@ -73,6 +73,7 @@ public partial class Pomegraknight : CharacterController
     protected override void InitCharacter()
     {
         BurnImmune = true;            // Pomegranate Shell
+        MaxJumps = 1;                 // Pomegraknight: single jump
         _ammo = MagazineSize;
     }
 

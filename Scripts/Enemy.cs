@@ -16,6 +16,7 @@ public partial class Enemy : CharacterBody2D
     [Export] public float ContactCooldown = 0.9f;
     [Export] public float BurnDamagePerSecond = 14f;
     [Export] public float KnockbackTime = 0.18f;   // window where patrol yields to knockback
+    [Export] public float HitRadius = 26f;         // bounding circle for melee/AoE overlap
 
     private Sprite2D _sprite;
     private float _hp;
