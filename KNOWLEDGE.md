@@ -50,7 +50,7 @@ time** (`CoyoteTime`, 0.2 s): leaving a surface doesn't cost a jump for that lon
 still work), but if it elapses with no manual jump, one jump charge is forfeited once — see the
 caveat below for why this needed its own bookkeeping beyond "refresh on floor".
 
-**Hazards / debuffs** (`Hazard.cs`, `DecayingDebuff.cs`) — a `Hazard` is a stationary Area2D
+**Hazards / statuses** (`Hazard.cs`, `DecayingDebuff.cs`) — a `Hazard` is a stationary Area2D
 whose collision box is built from `BoxSize` in code (never authored separately in the `.tscn`),
 so the hittable shape can't drift from the drawn telegraph. While a body overlaps, it ticks
 every `TickInterval` (0.25 s default) via `Hazard.Deliver(...)`, which routes to
@@ -60,14 +60,17 @@ invuln) — a hazard reapplies every 0.25 s, faster than that window, and "stand
 should keep hurting you the way a discrete punch's i-frames shouldn't. One-shot hazards (e.g.
 `TsunamiHazard`) go through the normal `TakeHit` instead, explicitly opting into invuln/knockback
 gating since they're meant to land once.
-`DecayingDebuff` is the stack behind **OnFire** and **Frozen**: integer "points", added flat on
-each hit (stackable), decaying 10%/0.2s (`Mathf.Ceil`, so it always reaches exactly 0, never
-asymptotes) with the decayed amount dealt as damage. While active, OnFire multiplies
-`MoveSpeed`/`GroundAccel`/`AirAccel` by 1.2 and adds +0.2 to `DamageDealtMultiplier` (an
-aggregatable `Dictionary<string,float>` keyed by source — multiple buffs sum, e.g. 0.2 + 0.3 →
-0.5); Frozen multiplies the same three by 0.8 and grants 20% damage resistance
-(`ResistanceMultiplier`, applied to everything taken: hits, hazard ticks, and Burn/Fire/Frozen's
-own self-damage). Friction is deliberately **not** scaled by either status — only accel/speed.
+`DecayingDebuff` is the stack behind **OnFire** and **Frozen** (not necessarily debuffs — OnFire
+is a buff): integer "points", capped at `MaxStack` (99), added flat on each hit (stackable),
+decaying 10%/0.2s (`Mathf.Ceil`, so it always reaches exactly 0, never asymptotes) with the
+decayed amount dealt as damage. While active: OnFire multiplies **`MoveSpeed` only** (not
+accel/friction — deliberately left alone so this doesn't complicate momentum tuning) by 1.2 and
+adds +0.2 to `DamageDealtMultiplier` (an aggregatable `Dictionary<string,float>` keyed by source
+— multiple buffs sum, e.g. 0.2 + 0.3 → 0.5); Frozen multiplies `MoveSpeed` by 0.8 and adds +30 to
+an aggregatable **defense** pool (`_defenseBonuses`, same dictionary-by-source pattern).
+**Defense → damage-taken multiplier is `100/(100+defense)`** (`DefenseMultiplier`; base defense
+is 0, so no status = no mitigation), applied to everything taken: hits, hazard ticks, and
+Burn/Fire/Frozen's own self-damage.
 
 **Versioning** — bump patch (+0.0.1) every commit; keep `Scripts/GameVersion.cs`, the
 repo-root `VERSION` file, and the HUD `VersionLabel` (`Scenes/Hud.tscn`) in sync. Shown
@@ -116,6 +119,16 @@ compiler surfaces below.
   before your foot has been off a surface for a beat," not "jumps since the last button
   press," so multi-jump characters keep their real air jumps while 1-jump characters can't
   jump mid-air past the grace window.
+
+### A `CollisionShape2D`'s size doesn't make the sprite match it (v0.2.1)
+- **Symptom:** Pomegraknight's `CollisionShape2D` was 44×64 (not square) but she rendered as
+  a visible square in-game.
+- **Rule:** `Sprite2D` draws its texture at native pixel size regardless of any sibling
+  `CollisionShape2D` — resizing the collision shape alone does **not** reshape what's on
+  screen. The `.svg` placeholder itself (`player_placeholder.svg`) was a 64×64 square; the
+  collision box's 44-wide value was never reflected visually. When a character's proportions
+  matter, resize the actual texture (or apply `Sprite2D.Scale`) *and* the collision shape
+  together — check both, not just the shape.
 
 ### Call `Init(...)` after `AddChild`, not before (reference)
 - Godot runs `_Ready()` synchronously during `AddChild`. Spawners set a projectile's

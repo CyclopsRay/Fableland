@@ -41,7 +41,7 @@ public partial class Pomegraknight : CharacterController
     [Export] public float TornadoHalfW = 128f;     // 8m wide — much bigger than her sideways
     [Export] public float TornadoHalfH = 40f;      // 2.5m tall — slightly bigger than her (2m)
     [Export] public float TornadoPush = 64f;       // ~2 m/s — a slight knockoff, not a launch
-    [Export] public float TornadoDamageReduction = 0.6f;
+    [Export] public float TornadoDefense = 66.7f;  // dmg mult 100/(100+66.7) ≈ 0.6 while active
 
     [ExportGroup("Pome Seed Eruption (Skill 2)")]
     [Export] public PackedScene PomeSeedScene;
@@ -135,7 +135,7 @@ public partial class Pomegraknight : CharacterController
     {
         _tornadoActive = TornadoDuration;
         _tornadoTickTimer = 0f;            // tick on the next frame
-        DamageTakenMult = TornadoDamageReduction;
+        SetDefenseSource("FireTornado", TornadoDefense);
     }
 
     private void UpdateTornado(float dt)
@@ -148,7 +148,7 @@ public partial class Pomegraknight : CharacterController
             _tornadoTickTimer = TornadoTick;
             TornadoHit();
         }
-        if (_tornadoActive <= 0f) DamageTakenMult = 1f;
+        if (_tornadoActive <= 0f) ClearDefenseSource("FireTornado");
     }
 
     private void TornadoHit()

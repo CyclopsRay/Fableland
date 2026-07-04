@@ -9,6 +9,13 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.2.1** — Damage mitigation now flows through **defense only**: removed the flat
+  `DamageTakenMult` "damage reduction" multiplier (was only used by Fire Tornado's 0.6x); Fire
+  Tornado now grants +66.7 defense via the same aggregatable `SetDefenseSource`/
+  `ClearDefenseSource` mechanism Frozen uses, so there's a single damage-taken lever
+  (`100/(100+defense)`) everywhere. Fixed the player rendering as a square: the placeholder
+  sprite (`player_placeholder.svg`) was a 64×64 square regardless of the 44-wide collision
+  box; both are now 48×64 (3:4 w:h). Bonfire/frozen-pit test hazards resized to match.
 - **0.2.0** — Jump coyote time (0.2s grace after leaving a surface before a jump is forfeited,
   so 1-jump characters can edge-jump but not air-jump). Bumped `GroundAccel`/`AirAccel` ~20% for
   snappier control. Fire Tornado reshaped into a wide-and-short rectangle with a slight knockback

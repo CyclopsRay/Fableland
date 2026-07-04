@@ -4,4 +4,4 @@
 
 [node name="FireHazard" type="Area2D"]
 script = ExtResource("1")
-BoxSize = Vector2(44, 64)
+BoxSize = Vector2(48, 64)

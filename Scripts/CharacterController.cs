@@ -11,7 +11,7 @@ using System.Collections.Generic;
 /// Provides: movement + double-jump (with coyote time), HP/lives, i-frames,
 /// knockback, death/respawn, a generic Burning status (DoT for non-immune
 /// targets; a passive trigger for those who are), the hazard-driven OnFire/Frozen
-/// debuffs (stackable, self-decaying — see <see cref="DecayingDebuff"/>), a
+/// statuses (stackable, self-decaying — see <see cref="DecayingDebuff"/>), a
 /// post-swing move-speed penalty, a melee cone helper, and a debug-draw hook that
 /// subclasses use to visualize skill ranges.
 ///
@@ -65,7 +65,6 @@ public partial class CharacterController : CharacterBody2D
     protected bool IsBurning;
     protected bool BurnImmune;             // set in InitCharacter (Pomegraknight = true)
     protected float BurnDotPerSecond = 12f;
-    protected float DamageTakenMult = 1f;  // e.g. Fire Tornado grants 0.6 while active
 
     /// <summary>1 + sum of active damage-dealt bonuses (e.g. OnFire → +0.2). Multiple
     /// sources add rather than multiply, so a 0.2 and a 0.3 bonus together give 0.5.</summary>
@@ -79,9 +78,21 @@ public partial class CharacterController : CharacterBody2D
         }
     }
 
-    // Frozen's resistance and move penalty; OnFire's move boost. Multiplicative
-    // (not aggregated) since only these two named statuses ever touch them.
-    private float ResistanceMultiplier => _frozenDebuff.Active ? 0.8f : 1f;
+    /// <summary>Defense → damage-taken multiplier: dmg = 100/(100+defense). Aggregatable
+    /// by source (e.g. Frozen → +30); base is 0, so no status means no mitigation.</summary>
+    private float DefenseMultiplier
+    {
+        get
+        {
+            float defense = 0f;
+            foreach (float v in _defenseBonuses.Values) defense += v;
+            return 100f / (100f + Mathf.Max(-99f, defense));
+        }
+    }
+
+    // OnFire's/Frozen's move-speed change. Multiplicative (not aggregated) since
+    // only these two named statuses ever touch it. Only MoveSpeed is scaled —
+    // accel/friction are left alone so this doesn't complicate momentum tuning.
     private float MoveMultiplier
     {
         get
@@ -98,14 +109,16 @@ public partial class CharacterController : CharacterBody2D
     protected Node2D FirePoint;            // optional projectile origin
     protected ShakeCamera2D CameraShake;   // optional; present on the player
 
-    // Hazard-driven debuffs (distinct from the kit-level Burn status above):
+    // Hazard-driven statuses (distinct from the kit-level Burn status above):
     // OnFire boosts move + damage dealt while decaying itself as damage; Frozen
-    // slows + grants damage resistance the same way. Both are stackable "points".
+    // slows + grants defense the same way. Both are stackable "points" (max 99).
     private readonly DecayingDebuff _fire = new();
     private readonly DecayingDebuff _frozenDebuff = new();
     // Aggregatable damage-dealt bonuses by source name (e.g. "OnFire" → +0.2);
     // total multiplier = 1 + sum of all active entries.
     private readonly Dictionary<string, float> _dealtDmgBonuses = new();
+    // Aggregatable defense bonuses by source name (e.g. "Frozen" → +30).
+    private readonly Dictionary<string, float> _defenseBonuses = new();
 
     private float _burnTimer;
     private float _speedPenaltyTimer;
@@ -192,6 +205,9 @@ public partial class CharacterController : CharacterBody2D
         if (_fire.Active) _dealtDmgBonuses["OnFire"] = 0.2f;
         else _dealtDmgBonuses.Remove("OnFire");
 
+        if (_frozenDebuff.Active) _defenseBonuses["Frozen"] = 30f;
+        else _defenseBonuses.Remove("Frozen");
+
         UpdateStatusTint();
     }
 
@@ -254,10 +270,9 @@ public partial class CharacterController : CharacterBody2D
         }
 
         // Horizontal intent with momentum: accelerate toward the target, friction to stop.
-        // OnFire/Frozen scale MoveSpeed and the two accel rates (not friction).
-        float moveMult = MoveMultiplier;
-        float target = inputDir * MoveSpeed * _speedPenaltyMult * moveMult;
-        float rate = Mathf.Abs(inputDir) > 0.01f ? (IsOnFloor() ? GroundAccel : AirAccel) * moveMult
+        // OnFire/Frozen only scale MoveSpeed — accel/friction are untouched.
+        float target = inputDir * MoveSpeed * _speedPenaltyMult * MoveMultiplier;
+        float rate = Mathf.Abs(inputDir) > 0.01f ? (IsOnFloor() ? GroundAccel : AirAccel)
                                                  : (IsOnFloor() ? GroundFriction : AirFriction);
         _intentVel.X = Mathf.MoveToward(_intentVel.X, target, rate * dt);
 
@@ -446,7 +461,7 @@ public partial class CharacterController : CharacterBody2D
     {
         if (_dead || _invulnTimer > 0f) return;
 
-        float dealt = hit.Damage * DamageTakenMult * ResistanceMultiplier;
+        float dealt = hit.Damage * DefenseMultiplier;
         CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
         HpChanged?.Invoke(CurrentHP, MaxHP);
         PopNumber(dealt, heal: false);
@@ -469,7 +484,7 @@ public partial class CharacterController : CharacterBody2D
 
         if (damage > 0f)
         {
-            float dealt = damage * DamageTakenMult * ResistanceMultiplier;
+            float dealt = damage * DefenseMultiplier;
             CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
             HpChanged?.Invoke(CurrentHP, MaxHP);
             PopNumber(dealt, heal: false);
@@ -489,13 +504,19 @@ public partial class CharacterController : CharacterBody2D
     /// <summary>Add integer "points" to the stackable Frozen hazard debuff.</summary>
     public void AddFrozenStack(float amount) => _frozenDebuff.AddStack(amount);
 
+    /// <summary>Set/clear a named, aggregatable defense contribution (e.g. a skill's
+    /// temporary damage mitigation). Defense is the only damage-taken lever — there's
+    /// no separate flat "damage reduction" multiplier alongside it.</summary>
+    protected void SetDefenseSource(string source, float defense) => _defenseBonuses[source] = defense;
+    protected void ClearDefenseSource(string source) => _defenseBonuses.Remove(source);
+
     /// <summary>Add a delta-v impulse to the external-velocity channel (knockback/wind/…).</summary>
     public void AddImpulse(Vector2 impulse) => _externalVel += impulse;
 
     private void ApplyDotDamage(float amount)
     {
         if (_dead) return;
-        float dealt = amount * ResistanceMultiplier;
+        float dealt = amount * DefenseMultiplier;
         CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
         HpChanged?.Invoke(CurrentHP, MaxHP);
         if (CurrentHP <= 0f) Die();
@@ -528,6 +549,7 @@ public partial class CharacterController : CharacterBody2D
         _fire.Clear();
         _frozenDebuff.Clear();
         _dealtDmgBonuses.Clear();
+        _defenseBonuses.Clear();
         Died?.Invoke();
     }
 
@@ -543,6 +565,7 @@ public partial class CharacterController : CharacterBody2D
         _fire.Clear();
         _frozenDebuff.Clear();
         _dealtDmgBonuses.Clear();
+        _defenseBonuses.Clear();
         Sprite.Modulate = Colors.White;
         Sprite.SelfModulate = _baseTint;
         Sprite.Visible = true;

@@ -6,7 +6,7 @@ using System.Collections.Generic;
 /// player, deals contact damage, can burn, and uses the same intent + external
 /// velocity model as the player so knockback is a real, decaying shove and a
 /// gain-no window freezes its AI + animation. Also affected by the hazard-driven
-/// OnFire/Frozen debuffs, mirroring <see cref="CharacterController"/>.
+/// OnFire/Frozen statuses, mirroring <see cref="CharacterController"/>.
 /// </summary>
 public partial class Enemy : CharacterBody2D
 {
@@ -40,11 +40,12 @@ public partial class Enemy : CharacterBody2D
     private Vector2 _intentVel;
     private Vector2 _externalVel;
 
-    // Hazard-driven debuffs, same rules as CharacterController (named _frozenDebuff
+    // Hazard-driven statuses, same rules as CharacterController (named _frozenDebuff
     // here so it doesn't collide with the existing "frozen" gain-no local below).
     private readonly DecayingDebuff _fire = new();
     private readonly DecayingDebuff _frozenDebuff = new();
     private readonly Dictionary<string, float> _dealtDmgBonuses = new();
+    private readonly Dictionary<string, float> _defenseBonuses = new();
 
     private float DealtDamageMultiplier
     {
@@ -55,7 +56,17 @@ public partial class Enemy : CharacterBody2D
             return 1f + sum;
         }
     }
-    private float ResistanceMultiplier => _frozenDebuff.Active ? 0.8f : 1f;
+    /// <summary>Defense → damage-taken multiplier: dmg = 100/(100+defense).</summary>
+    private float DefenseMultiplier
+    {
+        get
+        {
+            float defense = 0f;
+            foreach (float v in _defenseBonuses.Values) defense += v;
+            return 100f / (100f + Mathf.Max(-99f, defense));
+        }
+    }
+    // Only MoveSpeed is scaled — Enemy has no accel model to begin with.
     private float MoveMultiplier
     {
         get
@@ -84,7 +95,7 @@ public partial class Enemy : CharacterBody2D
         if (_burnTimer > 0f)
         {
             _burnTimer -= dt;
-            float d = BurnDamagePerSecond * dt * ResistanceMultiplier;
+            float d = BurnDamagePerSecond * dt * DefenseMultiplier;
             _hp -= d;
             _burnAccum += d;
             _burnPopTimer -= dt;
@@ -97,11 +108,12 @@ public partial class Enemy : CharacterBody2D
             if (_hp <= 0f) { QueueFree(); return; }
         }
 
-        float fireDmg = _fire.Tick(dt) * ResistanceMultiplier;
+        float fireDmg = _fire.Tick(dt) * DefenseMultiplier;
         if (fireDmg > 0f) { _hp -= fireDmg; PopNumber(fireDmg); }
-        float frozenDmg = _frozenDebuff.Tick(dt) * ResistanceMultiplier;
+        float frozenDmg = _frozenDebuff.Tick(dt) * DefenseMultiplier;
         if (frozenDmg > 0f) { _hp -= frozenDmg; PopNumber(frozenDmg); }
         if (_fire.Active) _dealtDmgBonuses["OnFire"] = 0.2f; else _dealtDmgBonuses.Remove("OnFire");
+        if (_frozenDebuff.Active) _defenseBonuses["Frozen"] = 30f; else _defenseBonuses.Remove("Frozen");
         if (_hp <= 0f) { QueueFree(); return; }
 
         if (_blinkTimer > 0f)
@@ -175,7 +187,7 @@ public partial class Enemy : CharacterBody2D
 
     public void TakeHit(HitInfo hit)
     {
-        float dealt = hit.Damage * ResistanceMultiplier;
+        float dealt = hit.Damage * DefenseMultiplier;
         _hp -= dealt;
         AddImpulse(hit.Knockback);
         float stun = hit.ResolveStun();
@@ -195,7 +207,7 @@ public partial class Enemy : CharacterBody2D
     {
         if (damage > 0f)
         {
-            float dealt = damage * ResistanceMultiplier;
+            float dealt = damage * DefenseMultiplier;
             _hp -= dealt;
             PopNumber(dealt);
         }

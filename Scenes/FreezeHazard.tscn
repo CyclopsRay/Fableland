@@ -4,4 +4,4 @@
 
 [node name="FreezeHazard" type="Area2D"]
 script = ExtResource("1")
-BoxSize = Vector2(88, 32)
+BoxSize = Vector2(96, 32)
