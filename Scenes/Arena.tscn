@@ -1,7 +1,7 @@
 [gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://Scripts/GameManager.cs" id="1"]
-[ext_resource type="PackedScene" path="res://Scenes/Fighter.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://Scenes/Pomegraknight.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://Scenes/Hud.tscn" id="3"]
 [ext_resource type="PackedScene" path="res://Scenes/Enemy.tscn" id="4"]
 [ext_resource type="PackedScene" path="res://Scenes/WonderPage.tscn" id="5"]
@@ -111,7 +111,7 @@ position = Vector2(1700, 380)
 
 [node name="Entities" type="Node2D" parent="."]
 
-[node name="Fighter" parent="." instance=ExtResource("2")]
+[node name="Pomegraknight" parent="." instance=ExtResource("2")]
 position = Vector2(1000, 480)
 
 [node name="Hud" parent="." instance=ExtResource("3")]

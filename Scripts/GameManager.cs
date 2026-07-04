@@ -20,7 +20,7 @@ public partial class GameManager : Node2D
 
     private Node2D _entities;
     private Hud _hud;
-    private Fighter _player;
+    private CharacterController _player;
     private Godot.Collections.Array<Node> _enemySpawns;
     private Godot.Collections.Array<Node> _pageSpawns;
 
@@ -35,7 +35,7 @@ public partial class GameManager : Node2D
 
         _entities = GetNode<Node2D>(EntitiesPath);
         _hud = GetNode<Hud>(HudPath);
-        _player = GetTree().GetFirstNodeInGroup("player") as Fighter;
+        _player = GetTree().GetFirstNodeInGroup("player") as CharacterController;
         _enemySpawns = GetTree().GetNodesInGroup("enemy_spawn");
         _pageSpawns = GetTree().GetNodesInGroup("page_spawn");
 

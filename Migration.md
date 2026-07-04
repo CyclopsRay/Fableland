@@ -23,9 +23,14 @@ skeleton to grow into. It is intentionally simpler than the full architecture in
 |---|---|
 | Move | `A` / `D` (or `←` / `→`) |
 | Jump / double-jump | `Space` |
-| Melee combo (3 hits: 15/15/30) | `J` or **Left Mouse** |
-| Blush (self-buff: +50% dmg, +20% speed, 5 s) | `Left Shift` |
+| Melee combo (3-stage 15/15/30, mag 3, reload) | `J` or **Left Mouse** |
+| Blush → self-ignite + Fire Tornado charge | `Left Shift` |
+| Pome Seed Eruption (3 waves of gravity seeds) | `E` |
 | Restart after win/lose | `R` |
+
+Affected-range lines are drawn on-screen: the yellow **BA cone** (brightens on each
+swing), the green **seed-launch cone** during E, and the orange **Fire Tornado box**
+while it spins. Toggle via `ShowDebugRanges` on the character.
 
 ### The loop
 Move around the arena, **collect 5 WonderPages** (gold, bobbing) to win while **crab foes**
@@ -35,38 +40,49 @@ costs HP with brief i-frames + knockback. Dying spends a life (3 total) and resp
 
 ### What was built (files)
 ```
-Scenes/Arena.tscn        Main scene: ground + 3 platforms + walls, spawn markers, HUD, player
-Scenes/Fighter.tscn      Player (CharacterBody2D + Camera2D)
-Scenes/Enemy.tscn        Crab foe (CharacterBody2D)
-Scenes/WonderPage.tscn   Collectible (Area2D)
-Scenes/Hud.tscn          Canvas HUD (HP bar, lives, page count, banner)
-Scripts/Fighter.cs       Move / double-jump / 3-hit combo / Blush / HP / i-frames / death+respawn
-Scripts/Enemy.cs         Patrol + chase + contact damage + take-damage/knockback
-Scripts/WonderPage.cs    Overlap pickup with bob animation
-Scripts/GameManager.cs   Match loop: enemy spawner (cap), page spawner, score, lives, win/lose, restart
-Scripts/Hud.cs           HUD update API
-Sprites/*.svg            Placeholder art (player, enemy, page, platform)
+Scripts/CharacterController.cs  Base playable char: movement/double-jump, HP/lives, i-frames,
+                                knockback, death+respawn, Burning status, move penalty,
+                                MeleeCone helper, debug-range draw hook, animation hook
+Scripts/Pomegraknight.cs        First character (subclass): 3-stage combo w/ magazine+reload,
+                                Blush + Fire Tornado, Pome Seed Eruption, burn passive, range lines
+Scripts/PomeSeed.cs             Gravity seed projectile; per-wave shared hit registry (30 first/6 rest)
+Scripts/Enemy.cs                Crab foe: patrol/chase/contact damage + burn DoT
+Scripts/WonderPage.cs           Overlap pickup with bob
+Scripts/GameManager.cs          Match loop: enemy/page spawners, score, lives, win/lose, restart
+Scripts/Hud.cs                  HP bar, lives, page count, banner
+Scenes/Arena.tscn               Ground + 3 platforms + walls, spawn markers, HUD, player
+Scenes/Pomegraknight.tscn       Player (CharacterBody2D + Camera2D + FirePoint + empty AnimationPlayer)
+Scenes/{Enemy,WonderPage,PomeSeed,Hud}.tscn
+Sprites/*.svg                   Placeholder art (player, enemy, page, seed, platform)
 ```
+**Animation is stubbed, not skipped:** `Pomegraknight.tscn` has an empty `AnimationPlayer`,
+`CharacterController.UpdateAnimator()` is the drive point, and BA/seed damage is applied inline
+with a `// NOTE(animation)` marker showing where to move it onto AnimationPlayer call-method tracks.
+
 `Scenes/Demo.tscn` + `Scripts/Player.cs` are the original throwaway skeleton — kept for now,
-safe to delete once Prototype 0 is confirmed.
+safe to delete once the prototype is confirmed.
 
 ### How this maps to the full plan below
-| Prototype 0 (simplified) | Full port target (§1+) |
+| Prototype (current) | Full port target (§1+) |
 |---|---|
-| `Fighter.cs` — one hardcoded kit | `CharacterController.cs` base + per-character subclasses |
-| Direct `Input.IsActionJustPressed` in `Fighter` | `InputRouter` → `InputState` struct → `ChannelSystem` dispatch |
+| `CharacterController` base + `Pomegraknight` subclass ✅ | same shape; add Pixolotl/PumpKing/Cleopastar |
+| Direct `Input.IsActionJustPressed` in base `HandleAbilities` | `InputRouter` → `InputState` struct → `ChannelSystem` dispatch |
+| Combo damage applied inline (anim hook noted) | Animation-event-driven damage on AnimationPlayer tracks |
+| `PomeSeed` instantiated per shot | object-pooled projectiles |
 | `GameManager.cs` (spawn+score+lives) | `GameManager` + `FoeManager` + `DifficultyManager` split |
-| `Enemy.cs` (one crab) | `BaseFoe` hierarchy (Crab/Drift/Seagull/Bee/Snake/Tsunami) |
-| Melee cone via group scan | Animation-event-driven damage + object-pooled projectiles |
+| `Enemy.cs` (one crab, + burn DoT) | `BaseFoe` hierarchy (Crab/Drift/Seagull/Bee/Snake/Tsunami) |
 | Single camera | Split-screen via two `SubViewport`s |
-| Collision layers: 1=world, 2=player, 4=enemy, 8=pickup | (adopt same convention) |
+| Collision layers: 1=world, 2=player, 4=enemy, 8=pickup, seeds mask 4 | (adopt same convention) |
 
 ### Deliberate cuts (deferred to the phases below)
-Two-player/split-screen, the ChannelSystem aim/trajectory/area skill types, projectiles &
-object pooling, animation (placeholders are static sprites), audio, difficulty scaling,
-Tsunami/hazards, other characters (Pixolotl/PumpKing/Cleopastar), leveling/ammo/status-VFX,
+Two-player/split-screen, the ChannelSystem aim/trajectory/area skill types, object pooling,
+real animation (AnimationPlayer is stubbed; sprites are static), audio, difficulty scaling,
+Tsunami/hazards, other characters (Pixolotl/PumpKing/Cleopastar), leveling/status-VFX,
 damage numbers, and gamepad polish. The §9 API cheat-sheet and per-file porting steps below
 remain the roadmap for adding these.
+
+Pomegraknight uses pixel units (~32 px/m); its exported stats are tuned for feel, not
+1:1 with the Unity metric values in `CLAUDE.md` — reconcile these during full tuning.
 
 ### Not yet verified at runtime
 This machine has **no Godot/.NET toolchain installed**, so the prototype was verified
