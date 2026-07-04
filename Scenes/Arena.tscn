@@ -1,0 +1,117 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://Scripts/GameManager.cs" id="1"]
+[ext_resource type="PackedScene" path="res://Scenes/Fighter.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://Scenes/Hud.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://Scenes/Enemy.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://Scenes/WonderPage.tscn" id="5"]
+[ext_resource type="Texture2D" path="res://Sprites/platform_placeholder.svg" id="6"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(2000, 120)
+
+[sub_resource type="RectangleShape2D" id="2"]
+size = Vector2(40, 900)
+
+[sub_resource type="RectangleShape2D" id="3"]
+size = Vector2(260, 24)
+
+[node name="Arena" type="Node2D"]
+script = ExtResource("1")
+EnemyScene = ExtResource("4")
+WonderPageScene = ExtResource("5")
+
+[node name="Background" type="ColorRect" parent="."]
+mouse_filter = 2
+offset_left = -400.0
+offset_top = -400.0
+offset_right = 2400.0
+offset_bottom = 1000.0
+color = Color(0.13, 0.15, 0.22, 1)
+
+[node name="World" type="Node2D" parent="."]
+
+[node name="Ground" type="StaticBody2D" parent="World"]
+position = Vector2(1000, 620)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Ground"]
+shape = SubResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="World/Ground"]
+texture = ExtResource("6")
+scale = Vector2(15.625, 3.75)
+
+[node name="WallLeft" type="StaticBody2D" parent="World"]
+position = Vector2(0, 300)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/WallLeft"]
+shape = SubResource("2")
+
+[node name="WallRight" type="StaticBody2D" parent="World"]
+position = Vector2(2000, 300)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/WallRight"]
+shape = SubResource("2")
+
+[node name="Platform1" type="StaticBody2D" parent="World"]
+position = Vector2(500, 440)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Platform1"]
+shape = SubResource("3")
+
+[node name="Sprite2D" type="Sprite2D" parent="World/Platform1"]
+texture = ExtResource("6")
+scale = Vector2(2.03125, 0.75)
+
+[node name="Platform2" type="StaticBody2D" parent="World"]
+position = Vector2(1000, 340)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Platform2"]
+shape = SubResource("3")
+
+[node name="Sprite2D" type="Sprite2D" parent="World/Platform2"]
+texture = ExtResource("6")
+scale = Vector2(2.03125, 0.75)
+
+[node name="Platform3" type="StaticBody2D" parent="World"]
+position = Vector2(1500, 440)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Platform3"]
+shape = SubResource("3")
+
+[node name="Sprite2D" type="Sprite2D" parent="World/Platform3"]
+texture = ExtResource("6")
+scale = Vector2(2.03125, 0.75)
+
+[node name="SpawnPoints" type="Node2D" parent="."]
+
+[node name="EnemySpawn1" type="Marker2D" parent="SpawnPoints" groups=["enemy_spawn"]]
+position = Vector2(150, 500)
+
+[node name="EnemySpawn2" type="Marker2D" parent="SpawnPoints" groups=["enemy_spawn"]]
+position = Vector2(1850, 500)
+
+[node name="EnemySpawn3" type="Marker2D" parent="SpawnPoints" groups=["enemy_spawn"]]
+position = Vector2(1000, 260)
+
+[node name="PageSpawn1" type="Marker2D" parent="SpawnPoints" groups=["page_spawn"]]
+position = Vector2(300, 380)
+
+[node name="PageSpawn2" type="Marker2D" parent="SpawnPoints" groups=["page_spawn"]]
+position = Vector2(700, 300)
+
+[node name="PageSpawn3" type="Marker2D" parent="SpawnPoints" groups=["page_spawn"]]
+position = Vector2(1000, 300)
+
+[node name="PageSpawn4" type="Marker2D" parent="SpawnPoints" groups=["page_spawn"]]
+position = Vector2(1300, 380)
+
+[node name="PageSpawn5" type="Marker2D" parent="SpawnPoints" groups=["page_spawn"]]
+position = Vector2(1700, 380)
+
+[node name="Entities" type="Node2D" parent="."]
+
+[node name="Fighter" parent="." instance=ExtResource("2")]
+position = Vector2(1000, 480)
+
+[node name="Hud" parent="." instance=ExtResource("3")]

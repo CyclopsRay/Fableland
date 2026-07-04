@@ -6,6 +6,75 @@
 
 ---
 
+## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
+
+A **self-contained, playable vertical slice** now ships in this repo. The goal here was
+*playability*, not feature parity — it proves out the core loop (arena + character +
+skills + enemies + collectibles + win/lose) end-to-end so the fuller port below has a
+skeleton to grow into. It is intentionally simpler than the full architecture in §1+.
+
+### How to run it
+1. Install Godot **4.7 (.NET/Mono build)** and .NET 8+ SDK.
+2. Open this folder as a Godot project (the editor imports the SVG placeholders on first open).
+3. Press **F5** (main scene is `res://Scenes/Arena.tscn`).
+
+### Controls
+| Action | Key / Mouse |
+|---|---|
+| Move | `A` / `D` (or `←` / `→`) |
+| Jump / double-jump | `Space` |
+| Melee combo (3 hits: 15/15/30) | `J` or **Left Mouse** |
+| Blush (self-buff: +50% dmg, +20% speed, 5 s) | `Left Shift` |
+| Restart after win/lose | `R` |
+
+### The loop
+Move around the arena, **collect 5 WonderPages** (gold, bobbing) to win while **crab foes**
+spawn and chase you. Melee them in front of you; use Blush for a burst. Contact with a foe
+costs HP with brief i-frames + knockback. Dying spends a life (3 total) and respawns you;
+0 lives = Game Over. Win or lose, press `R` to replay.
+
+### What was built (files)
+```
+Scenes/Arena.tscn        Main scene: ground + 3 platforms + walls, spawn markers, HUD, player
+Scenes/Fighter.tscn      Player (CharacterBody2D + Camera2D)
+Scenes/Enemy.tscn        Crab foe (CharacterBody2D)
+Scenes/WonderPage.tscn   Collectible (Area2D)
+Scenes/Hud.tscn          Canvas HUD (HP bar, lives, page count, banner)
+Scripts/Fighter.cs       Move / double-jump / 3-hit combo / Blush / HP / i-frames / death+respawn
+Scripts/Enemy.cs         Patrol + chase + contact damage + take-damage/knockback
+Scripts/WonderPage.cs    Overlap pickup with bob animation
+Scripts/GameManager.cs   Match loop: enemy spawner (cap), page spawner, score, lives, win/lose, restart
+Scripts/Hud.cs           HUD update API
+Sprites/*.svg            Placeholder art (player, enemy, page, platform)
+```
+`Scenes/Demo.tscn` + `Scripts/Player.cs` are the original throwaway skeleton — kept for now,
+safe to delete once Prototype 0 is confirmed.
+
+### How this maps to the full plan below
+| Prototype 0 (simplified) | Full port target (§1+) |
+|---|---|
+| `Fighter.cs` — one hardcoded kit | `CharacterController.cs` base + per-character subclasses |
+| Direct `Input.IsActionJustPressed` in `Fighter` | `InputRouter` → `InputState` struct → `ChannelSystem` dispatch |
+| `GameManager.cs` (spawn+score+lives) | `GameManager` + `FoeManager` + `DifficultyManager` split |
+| `Enemy.cs` (one crab) | `BaseFoe` hierarchy (Crab/Drift/Seagull/Bee/Snake/Tsunami) |
+| Melee cone via group scan | Animation-event-driven damage + object-pooled projectiles |
+| Single camera | Split-screen via two `SubViewport`s |
+| Collision layers: 1=world, 2=player, 4=enemy, 8=pickup | (adopt same convention) |
+
+### Deliberate cuts (deferred to the phases below)
+Two-player/split-screen, the ChannelSystem aim/trajectory/area skill types, projectiles &
+object pooling, animation (placeholders are static sprites), audio, difficulty scaling,
+Tsunami/hazards, other characters (Pixolotl/PumpKing/Cleopastar), leveling/ammo/status-VFX,
+damage numbers, and gamepad polish. The §9 API cheat-sheet and per-file porting steps below
+remain the roadmap for adding these.
+
+### Not yet verified at runtime
+This machine has **no Godot/.NET toolchain installed**, so the prototype was verified
+*statically* (brace/paren balance, every `.tscn` resource path resolves, every `GetNode`
+path matches its scene). First editor open is the real smoke test — see §10 Phase 1 checklist.
+
+---
+
 ## 1. High-Level Architecture (Godot Edition)
 
 ### 1.1 Language Choice: **C# (.NET)**
