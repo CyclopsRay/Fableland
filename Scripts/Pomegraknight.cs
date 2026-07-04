@@ -70,6 +70,10 @@ public partial class Pomegraknight : CharacterController
     private float _eCd;
     private float _eTelegraph;
 
+    // HUD skill-icon cooldowns: Shift = Blush, E = Pome Seed Eruption.
+    public override (float Remaining, float Max) ShiftCooldown => (_blushCd, BlushCooldown);
+    public override (float Remaining, float Max) ESkillCooldown => (_eCd, ECooldown);
+
     protected override void InitCharacter()
     {
         BurnImmune = true;            // Pomegranate Shell

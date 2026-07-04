@@ -45,6 +45,7 @@ public partial class GameManager : Node2D
             _player.Died += OnPlayerDied;
             _hud.SetHp(_player.CurrentHP, _player.MaxHP);
             _hud.SetLives(_player.LivesRemaining);
+            _hud.SetPlayer(_player);
         }
         _hud.SetPages(_pages, PagesToWin);
         _hud.HideBanner();

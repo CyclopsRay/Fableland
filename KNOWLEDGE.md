@@ -130,6 +130,16 @@ compiler surfaces below.
   matter, resize the actual texture (or apply `Sprite2D.Scale`) *and* the collision shape
   together — check both, not just the shape.
 
+### Trauma-based shake needs to be *tuned*, not just wired (v0.2.2)
+- **Symptom:** `ShakeCamera2D.AddTrauma` was called on both landing a hit and taking one, but
+  the screen never visibly shook — looked like shake wasn't implemented at all.
+- **Rule:** offset scales with `trauma²`, so small trauma additions (0.12-0.35 against a
+  `MaxOffset` of 14px) round-trip to a sub-2px, sub-0.1s flicker — mathematically present,
+  perceptually nothing. If a juice effect "isn't working" despite the call sites being
+  correct, check the actual output magnitude/duration before assuming the wiring is missing.
+  Bumped to `MaxOffset=30`, `Decay=3` (from 4.5), and raised trauma per event (0.22-0.5) so a
+  hit reads as a hit.
+
 ### Call `Init(...)` after `AddChild`, not before (reference)
 - Godot runs `_Ready()` synchronously during `AddChild`. Spawners set a projectile's
   velocity/config via an `Init(...)` method called **after** `AddChild` — so guard against a

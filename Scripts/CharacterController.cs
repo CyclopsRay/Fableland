@@ -28,6 +28,9 @@ public partial class CharacterController : CharacterBody2D
     [ExportGroup("Stats")]
     [Export] public float MaxHP = 200f;
     [Export] public int MaxLives = 3;
+    [Export] public float MaxUltCharge = 1500f;
+    [Export] public float UltChargeDealtRate = 1f;     // charge per point of damage dealt
+    [Export] public float UltChargeReceivedRate = 2f;  // charge per point of damage received
 
     [ExportGroup("Movement")]
     [Export] public float MoveSpeed = 320f;              // ~10 m/s target
@@ -47,13 +50,24 @@ public partial class CharacterController : CharacterBody2D
     [ExportGroup("Debug")]
     [Export] public bool ShowDebugRanges = true;
 
-    // Events — GameManager subscribes to drive HUD and the life flow.
+    // Events — GameManager/Hud subscribe to drive HUD and the life flow.
     public event Action<float, float> HpChanged;   // (current, max)
+    public event Action<float, float> UltChargeChanged; // (current, max)
     public event Action Died;
 
+    // Single-player prototype: lets Enemy credit ult charge for damage dealt
+    // without needing a reference back to the player (mirrors ShakeCamera2D.Instance).
+    public static CharacterController LocalPlayer { get; private set; }
+
     public float CurrentHP { get; private set; }
+    public float UltCharge { get; private set; }
     public int LivesRemaining { get; private set; }
     public bool ControlsLocked { get; set; }
+
+    /// <summary>Per-character cooldown state for the HUD's skill icons. Base has
+    /// nothing to report; characters with a Shift/E override these.</summary>
+    public virtual (float Remaining, float Max) ShiftCooldown => (0f, 0f);
+    public virtual (float Remaining, float Max) ESkillCooldown => (0f, 0f);
 
     // Frozen = no self-directed action (control lock, death, or a gain-no window).
     private bool Frozen => ControlsLocked || _dead || _stunTimer > 0f;
@@ -139,6 +153,9 @@ public partial class CharacterController : CharacterBody2D
     private Vector2 _spawnPoint;
     private Color _baseTint = Colors.White;
 
+    public override void _EnterTree() => LocalPlayer = this;
+    public override void _ExitTree() { if (LocalPlayer == this) LocalPlayer = null; }
+
     public override void _Ready()
     {
         Sprite = GetNode<Sprite2D>("Sprite2D");
@@ -154,6 +171,7 @@ public partial class CharacterController : CharacterBody2D
         InitCharacter();
         _jumpsRemaining = MaxJumps;
         HpChanged?.Invoke(CurrentHP, MaxHP);
+        UltChargeChanged?.Invoke(UltCharge, MaxUltCharge);
     }
 
     /// <summary>Override for per-character stats, immunities, ammo config.</summary>
@@ -465,12 +483,13 @@ public partial class CharacterController : CharacterBody2D
         CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
         HpChanged?.Invoke(CurrentHP, MaxHP);
         PopNumber(dealt, heal: false);
+        GainUltCharge(dealt * UltChargeReceivedRate);
 
         AddImpulse(hit.Knockback);
         float stun = hit.ResolveStun();
         if (stun > 0f) _stunTimer = Mathf.Max(_stunTimer, stun);
 
-        ShakeCamera(hit.Knockback != Vector2.Zero ? 0.35f : 0.18f);
+        ShakeCamera(hit.Knockback != Vector2.Zero ? 0.5f : 0.3f);
         if (hit.Knockback != Vector2.Zero) _invulnTimer = 0.8f;
         if (CurrentHP <= 0f) Die();
     }
@@ -488,11 +507,12 @@ public partial class CharacterController : CharacterBody2D
             CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
             HpChanged?.Invoke(CurrentHP, MaxHP);
             PopNumber(dealt, heal: false);
+            GainUltCharge(dealt * UltChargeReceivedRate);
         }
         if (knockback != Vector2.Zero)
         {
             AddImpulse(knockback);
-            ShakeCamera(0.12f);
+            ShakeCamera(0.22f);
         }
         if (CurrentHP <= 0f) Die();
     }
@@ -519,7 +539,19 @@ public partial class CharacterController : CharacterBody2D
         float dealt = amount * DefenseMultiplier;
         CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
         HpChanged?.Invoke(CurrentHP, MaxHP);
+        GainUltCharge(dealt * UltChargeReceivedRate);
         if (CurrentHP <= 0f) Die();
+    }
+
+    /// <summary>Add ult charge (clamped to MaxUltCharge) and notify the HUD. Enemy
+    /// credits the rate for damage dealt via <see cref="LocalPlayer"/>; this
+    /// character credits the rate for damage it receives itself (see TakeHit/
+    /// ApplyHazard/ApplyDotDamage above).</summary>
+    public void GainUltCharge(float amount)
+    {
+        if (_dead || amount <= 0f) return;
+        UltCharge = Mathf.Min(MaxUltCharge, UltCharge + amount);
+        UltChargeChanged?.Invoke(UltCharge, MaxUltCharge);
     }
 
     /// <summary>Restore HP (green damage number). No source uses it yet, but the

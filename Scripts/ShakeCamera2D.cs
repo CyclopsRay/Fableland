@@ -10,8 +10,8 @@ public partial class ShakeCamera2D : Camera2D
     // shake without needing a reference to the player's CharacterController.
     public static ShakeCamera2D Instance { get; private set; }
 
-    [Export] public float MaxOffset = 14f;
-    [Export] public float Decay = 4.5f;
+    [Export] public float MaxOffset = 30f;
+    [Export] public float Decay = 3f;
 
     private float _trauma;
 

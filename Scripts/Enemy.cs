@@ -197,7 +197,13 @@ public partial class Enemy : CharacterBody2D
         _flashTimer = 0.12f;
         _blinkTimer = 0.24f;
         PopNumber(dealt);
-        ShakeCamera2D.Instance?.AddTrauma(0.2f);
+        ShakeCamera2D.Instance?.AddTrauma(0.35f);
+        // Single-player prototype: any damage an enemy takes came from the player,
+        // so this is the one place that credits "damage dealt" ult charge for
+        // every source (melee cone, Tornado, seeds) without threading a dealer
+        // reference through each skill.
+        var player = CharacterController.LocalPlayer;
+        player?.GainUltCharge(dealt * player.UltChargeDealtRate);
         if (_hp <= 0f) QueueFree();
     }
 
