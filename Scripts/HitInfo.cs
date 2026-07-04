@@ -9,7 +9,7 @@ using Godot;
 ///   external velocity (which then decays). (Force-over-time effects are modelled
 ///   as per-tick impulses — see the tornado.)
 /// - <see cref="Stun"/> is the gain-no window in seconds. Negative means "use the
-///   default", which is <c>Units.StunPerDamage · Damage</c>. During it the receiver
+///   default", which is <c>Units.StunPerDamage · Damage</c> (0.005·dmg). During it the receiver
 ///   cannot act and its animation is frozen; knockback/gravity still move it.
 /// </summary>
 public struct HitInfo

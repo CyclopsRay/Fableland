@@ -28,7 +28,7 @@ public static class Units
 
     // Default gain-no (hitstun) window per point of damage, when a skill doesn't
     // specify its own: stun_seconds = StunPerDamage · damage.
-    public const float StunPerDamage = 0.05f;
+    public const float StunPerDamage = 0.005f;
 
     /// <summary>Meters → pixels.</summary>
     public static float Px(float meters) => meters * PixelsPerMeter;
