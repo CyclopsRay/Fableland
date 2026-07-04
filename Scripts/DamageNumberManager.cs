@@ -4,6 +4,9 @@ using Godot;
 /// Autoload singleton that pops floating damage/heal numbers in world space.
 /// Red = damage, green = heal. Font size scales with magnitude, clamped so 20
 /// reads as the smallest and 100 as the largest.
+///
+/// Godot 4 has no Label2D, so each number is a Node2D (world-space, camera-tracked)
+/// with a Label child; the Node2D is added to the current scene and tweened.
 /// </summary>
 public partial class DamageNumberManager : Node
 {
@@ -22,12 +25,6 @@ public partial class DamageNumberManager : Node
         int shown = Mathf.RoundToInt(amount);
         if (shown <= 0) return;
 
-        var label = new Label2D
-        {
-            Text = (heal ? "+" : "") + shown,
-            ZIndex = 100,
-        };
-
         float mag = Mathf.Clamp(Mathf.Abs(amount), 20f, 100f);
         var settings = new LabelSettings
         {
@@ -36,16 +33,30 @@ public partial class DamageNumberManager : Node
             OutlineColor = new Color(0f, 0f, 0f, 0.85f),
             OutlineSize = 5,
         };
-        label.LabelSettings = settings;
 
-        AddChild(label);
-        label.GlobalPosition = worldPos + new Vector2((float)GD.RandRange(-12.0, 12.0), -8f);
+        var label = new Label
+        {
+            Text = (heal ? "+" : "") + shown,
+            LabelSettings = settings,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Position = new Vector2(-40f, -16f),
+            Size = new Vector2(80f, 32f),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        };
 
-        Tween tween = label.CreateTween();
-        tween.TweenProperty(label, "position", label.Position + new Vector2(0f, -RiseHeight), Lifetime)
+        var root = new Node2D { ZIndex = 100 };
+        root.AddChild(label);
+
+        Node container = GetTree().CurrentScene ?? (Node)this;
+        container.AddChild(root);
+        root.GlobalPosition = worldPos + new Vector2((float)GD.RandRange(-12.0, 12.0), -8f);
+
+        Tween tween = root.CreateTween();
+        tween.TweenProperty(root, "position", root.Position + new Vector2(0f, -RiseHeight), Lifetime)
              .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
-        tween.Parallel().TweenProperty(label, "modulate:a", 0f, Lifetime)
+        tween.Parallel().TweenProperty(root, "modulate:a", 0f, Lifetime)
              .SetDelay(Lifetime * 0.35f);
-        tween.TweenCallback(Callable.From(label.QueueFree));
+        tween.TweenCallback(Callable.From(root.QueueFree));
     }
 }

@@ -11,7 +11,7 @@ using System.Collections.Generic;
 /// </summary>
 public partial class PomeSeed : Area2D
 {
-    [Export] public float Gravity = 1200f;
+    [Export] public float FallGravity = 1200f;   // avoid hiding Area2D.Gravity
     [Export] public float Lifetime = 6f;
     [Export] public float DamageFirst = 30f;
     [Export] public float DamageSubsequent = 6f;
@@ -55,7 +55,7 @@ public partial class PomeSeed : Area2D
             return;
         }
 
-        _velocity.Y += Gravity * dt;
+        _velocity.Y += FallGravity * dt;
         Position += _velocity * dt;
         _life -= dt;
         if (_life <= 0f) QueueFree();
