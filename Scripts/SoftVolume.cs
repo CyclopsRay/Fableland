@@ -16,6 +16,9 @@ public partial class SoftVolume : Area2D
 {
     [Export] public float StagnationIndex = 0.5f;
     [Export] public float GravityIndex = 0.1f;
+    // Multiplies a body's external-velocity damping while inside — knockback still
+    // shoves you in, but the viscosity eats it quickly.
+    [Export] public float ExternalDampingMult = 3f;
 
     public override void _Ready()
     {

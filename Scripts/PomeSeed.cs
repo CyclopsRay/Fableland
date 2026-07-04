@@ -78,7 +78,7 @@ public partial class PomeSeed : Area2D
             }
 
             Vector2 knock = (_velocity.LengthSquared() > 0.01f ? _velocity.Normalized() : Vector2.Down) * 80f;
-            e.TakeDamage(dmg, knock);
+            e.TakeHit(new HitInfo(dmg, knock, 0.1f));   // small gain-no for seeds
             if (_burning) e.SetBurning(BurnDuration);
             QueueFree();
             return;

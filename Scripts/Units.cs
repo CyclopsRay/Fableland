@@ -26,6 +26,10 @@ public static class Units
     public const float PlayerHeightM = 2f;
     public const float PlayerHeightPx = PlayerHeightM * PixelsPerMeter; // 64 px
 
+    // Default gain-no (hitstun) window per point of damage, when a skill doesn't
+    // specify its own: stun_seconds = StunPerDamage · damage.
+    public const float StunPerDamage = 0.05f;
+
     /// <summary>Meters → pixels.</summary>
     public static float Px(float meters) => meters * PixelsPerMeter;
 

@@ -27,11 +27,18 @@ public partial class CharacterController : CharacterBody2D
     [Export] public int MaxLives = 3;
 
     [ExportGroup("Movement")]
-    [Export] public float MoveSpeed = 320f;              // ~10 m/s
+    [Export] public float MoveSpeed = 320f;              // ~10 m/s target
     [Export] public float JumpVelocity = -Units.JumpSpeed; // -1024 px/s (8 m jump)
     [Export] public float Gravity = Units.Gravity;         // 2048 px/s²
     [Export] public int MaxJumps = 2;                      // jumps before touching down again
     [Export] public float JumpCooldown = 0.3f;             // universal min gap between jumps
+
+    [ExportGroup("Momentum")]
+    [Export] public float GroundAccel = 2600f;   // intent horizontal accel on ground
+    [Export] public float AirAccel = 1500f;      // …in the air
+    [Export] public float GroundFriction = 3000f;// intent decel when no input, grounded
+    [Export] public float AirFriction = 700f;    // …in the air
+    [Export] public float ExternalDamping = 900f;// px/s² decay of external (knockback) velocity
 
     [ExportGroup("Debug")]
     [Export] public bool ShowDebugRanges = true;
@@ -43,6 +50,9 @@ public partial class CharacterController : CharacterBody2D
     public float CurrentHP { get; private set; }
     public int LivesRemaining { get; private set; }
     public bool ControlsLocked { get; set; }
+
+    // Frozen = no self-directed action (control lock, death, or a gain-no window).
+    private bool Frozen => ControlsLocked || _dead || _stunTimer > 0f;
 
     // Facing: +1 right, -1 left. Local-space, so debug draws and fire points read from it.
     protected float Facing = 1f;
@@ -67,7 +77,10 @@ public partial class CharacterController : CharacterBody2D
     private bool _dropping;
     private float _dropReleaseTimer;
     private float _jumpCdTimer;
+    private float _stunTimer;          // gain-no window: no control, animation frozen
     private SoftVolume _softVolume;   // non-null while inside a go-inside volume
+    private Vector2 _intentVel;        // self-directed velocity (input/gravity/jump/field)
+    private Vector2 _externalVel;      // impulses (knockback/wind/…); decays over time
     private Vector2 _spawnPoint;
     private Color _baseTint = Colors.White;
 
@@ -98,8 +111,8 @@ public partial class CharacterController : CharacterBody2D
 
         UpdateTimers(dt);
         UpdateStatus(dt);
-        if (!ControlsLocked) HandleAbilities();
-        UpdateAnimator(dt);
+        if (!Frozen) HandleAbilities();
+        if (_stunTimer <= 0f) UpdateAnimator(dt);   // animation frozen during gain-no
 
         if (ShowDebugRanges) QueueRedraw();
     }
@@ -117,14 +130,14 @@ public partial class CharacterController : CharacterBody2D
             Sprite.Visible = Mathf.PosMod(_invulnTimer, 0.12f) < 0.06f;
             if (_invulnTimer <= 0f) Sprite.Visible = true;
         }
+        if (_stunTimer > 0f) _stunTimer -= dt;
     }
 
     private void UpdateStatus(float dt)
     {
         if (!IsBurning) return;
         _burnTimer -= dt;
-        if (!BurnImmune)
-            ApplyDamageInternal(BurnDotPerSecond * dt, Vector2.Zero, ignoreIFrames: true);
+        if (!BurnImmune) BurnTick(BurnDotPerSecond * dt);
         if (_burnTimer <= 0f)
         {
             IsBurning = false;
@@ -139,26 +152,28 @@ public partial class CharacterController : CharacterBody2D
 
         if (_softVolume != null && !_dead)
         {
-            MoveInsideVolume();
+            MoveInsideVolume(dt);
             return;
         }
 
-        Vector2 v = Velocity;
-
+        // Vertical intent: gravity accumulates (momentum); jump sets it.
         if (!IsOnFloor())
-            v.Y += Gravity * dt;
-        else if (v.Y >= 0f)
+            _intentVel.Y += Gravity * dt;
+        else
+        {
+            if (_intentVel.Y > 0f) _intentVel.Y = 0f;
             _jumpsRemaining = MaxJumps;   // touching ground/platform refreshes jumps
+        }
 
         float inputDir = 0f;
-        if (!ControlsLocked && !_dead)
+        if (!Frozen)
         {
             if (Input.IsActionPressed("move_left")) inputDir -= 1f;
             if (Input.IsActionPressed("move_right")) inputDir += 1f;
 
             if (Input.IsActionJustPressed("jump") && _jumpsRemaining > 0 && _jumpCdTimer <= 0f)
             {
-                v.Y = JumpVelocity;
+                _intentVel.Y = JumpVelocity;
                 _jumpsRemaining--;
                 _jumpCdTimer = JumpCooldown;
             }
@@ -166,12 +181,34 @@ public partial class CharacterController : CharacterBody2D
             UpdateDropThrough(Input.IsActionPressed("move_down"), dt);
         }
 
-        v.X = inputDir * MoveSpeed * _speedPenaltyMult;
-        Velocity = v;
+        // Horizontal intent with momentum: accelerate toward the target, friction to stop.
+        float target = inputDir * MoveSpeed * _speedPenaltyMult;
+        float rate = Mathf.Abs(inputDir) > 0.01f ? (IsOnFloor() ? GroundAccel : AirAccel)
+                                                 : (IsOnFloor() ? GroundFriction : AirFriction);
+        _intentVel.X = Mathf.MoveToward(_intentVel.X, target, rate * dt);
+
+        // External velocity (knockback/wind/…) decays independently.
+        _externalVel = _externalVel.MoveToward(Vector2.Zero, ExternalDamping * dt);
+
+        Velocity = _intentVel + _externalVel;
         MoveAndSlide();
+        ReconcileCollisions();
 
         if (inputDir > 0.01f) { Facing = 1f; Sprite.FlipH = false; }
         else if (inputDir < -0.01f) { Facing = -1f; Sprite.FlipH = true; }
+    }
+
+    /// <summary>Zero the velocity channels that ran into a surface, so gravity/knockback
+    /// don't accumulate against a wall or floor.</summary>
+    private void ReconcileCollisions()
+    {
+        if (IsOnFloor() && _externalVel.Y > 0f) _externalVel.Y = 0f;
+        if (IsOnCeiling())
+        {
+            if (_intentVel.Y < 0f) _intentVel.Y = 0f;
+            if (_externalVel.Y < 0f) _externalVel.Y = 0f;
+        }
+        if (IsOnWall()) _externalVel.X = 0f;
     }
 
     /// <summary>
@@ -213,12 +250,12 @@ public partial class CharacterController : CharacterBody2D
         if (_softVolume == v) _softVolume = null;
     }
 
-    private void MoveInsideVolume()
+    private void MoveInsideVolume(float dt)
     {
         _jumpsRemaining = MaxJumps;   // being supported by a soft volume refreshes jumps
 
         float horiz = 0f, vert = 0f;
-        if (!ControlsLocked)
+        if (!Frozen)
         {
             if (Input.IsActionPressed("move_left")) horiz -= 1f;
             if (Input.IsActionPressed("move_right")) horiz += 1f;
@@ -226,8 +263,15 @@ public partial class CharacterController : CharacterBody2D
             if (Input.IsActionPressed("move_down")) vert += 1f;
         }
 
-        Velocity = _softVolume.ComputeVelocity(MoveSpeed, horiz, vert);
+        // Intent is the volume's stagnation-clamped field; external impulses still
+        // apply but the volume's viscosity damps them fast (muffled knockback).
+        _intentVel = _softVolume.ComputeVelocity(MoveSpeed, horiz, vert);
+        float damp = ExternalDamping * _softVolume.ExternalDampingMult;
+        _externalVel = _externalVel.MoveToward(Vector2.Zero, damp * dt);
+
+        Velocity = _intentVel + _externalVel;
         MoveAndSlide();
+        ReconcileCollisions();
 
         if (horiz > 0.01f) { Facing = 1f; Sprite.FlipH = false; }
         else if (horiz < -0.01f) { Facing = -1f; Sprite.FlipH = true; }
@@ -259,7 +303,8 @@ public partial class CharacterController : CharacterBody2D
     /// AnimationPlayer "call method" track instead.
     /// </summary>
     protected int MeleeCone(float range, float halfAngleDeg, float damage,
-                            float knockbackSpeed, bool applyBurn, float burnDuration)
+                            float knockbackSpeed, bool applyBurn, float burnDuration,
+                            float stun = -1f)
     {
         int hits = 0;
         Vector2 origin = GlobalPosition;
@@ -285,7 +330,7 @@ public partial class CharacterController : CharacterBody2D
             }
 
             Vector2 knock = new Vector2(Facing, -0.35f).Normalized() * knockbackSpeed;
-            e.TakeDamage(damage, knock);
+            e.TakeHit(new HitInfo(damage, knock, stun));
             if (applyBurn) e.SetBurning(burnDuration);
             hits++;
         }
@@ -307,27 +352,40 @@ public partial class CharacterController : CharacterBody2D
         Sprite.SelfModulate = new Color(1f, 0.55f, 0.35f);
     }
 
-    public void TakeDamage(float amount, Vector2 knockback)
-    {
-        ApplyDamageInternal(amount, knockback, ignoreIFrames: false);
-    }
+    /// <summary>Convenience for a hit with default (damage-linked) gain-no window.</summary>
+    public void TakeDamage(float amount, Vector2 knockback) => TakeHit(new HitInfo(amount, knockback));
 
-    private void ApplyDamageInternal(float amount, Vector2 knockback, bool ignoreIFrames)
+    /// <summary>Apply a fully-authored hit: damage, delta-v knockback, and a gain-no
+    /// (hitstun) window during which control is off and animation is frozen.</summary>
+    public void TakeHit(HitInfo hit)
     {
-        if (_dead) return;
-        if (!ignoreIFrames && _invulnTimer > 0f) return;
+        if (_dead || _invulnTimer > 0f) return;
 
-        float dealt = amount * DamageTakenMult;
+        float dealt = hit.Damage * DamageTakenMult;
         CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
         HpChanged?.Invoke(CurrentHP, MaxHP);
         PopNumber(dealt, heal: false);
 
-        if (knockback != Vector2.Zero)
+        AddImpulse(hit.Knockback);
+        float stun = hit.ResolveStun();
+        if (stun > 0f) _stunTimer = Mathf.Max(_stunTimer, stun);
+
+        if (hit.Knockback != Vector2.Zero)
         {
-            Velocity = knockback;
             _invulnTimer = 0.8f;
             ShakeCamera(0.35f);
         }
+        if (CurrentHP <= 0f) Die();
+    }
+
+    /// <summary>Add a delta-v impulse to the external-velocity channel (knockback/wind/…).</summary>
+    public void AddImpulse(Vector2 impulse) => _externalVel += impulse;
+
+    private void BurnTick(float amount)
+    {
+        if (_dead) return;
+        CurrentHP = Mathf.Max(0f, CurrentHP - amount);
+        HpChanged?.Invoke(CurrentHP, MaxHP);
         if (CurrentHP <= 0f) Die();
     }
 
@@ -352,7 +410,8 @@ public partial class CharacterController : CharacterBody2D
         _dead = true;
         LivesRemaining = Mathf.Max(0, LivesRemaining - 1);
         Sprite.Modulate = new Color(0.4f, 0.4f, 0.4f);
-        Velocity = Vector2.Zero;
+        Velocity = _intentVel = _externalVel = Vector2.Zero;
+        _stunTimer = 0f;
         IsBurning = false;
         Died?.Invoke();
     }
@@ -363,7 +422,8 @@ public partial class CharacterController : CharacterBody2D
         _dead = false;
         CurrentHP = MaxHP;
         GlobalPosition = _spawnPoint;
-        Velocity = Vector2.Zero;
+        Velocity = _intentVel = _externalVel = Vector2.Zero;
+        _stunTimer = 0f;
         _invulnTimer = 1.2f;
         Sprite.Modulate = Colors.White;
         Sprite.SelfModulate = _baseTint;

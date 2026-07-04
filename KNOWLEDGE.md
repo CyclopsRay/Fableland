@@ -30,6 +30,19 @@ Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
    capped by StagnationIndex (0.5·maxSpeed) plus a constant GravityIndex drift
    (0.1·maxSpeed). Applies to players AND foes.
 
+**Movement / combat model** (`CharacterController`, `Enemy`, `HitInfo`):
+- Velocity = **`intentVel`** (self-directed: input, gravity, jump, or the SoftVolume field) +
+  **`externalVel`** (impulses — knockback/wind — that decay via `ExternalDamping`). This is what
+  gives external forces "room" to coexist with player control.
+- Horizontal intent has **momentum** (accelerate toward `MoveSpeed` via Ground/Air Accel; stop via
+  Ground/Air Friction). Vertical intent integrates gravity (has momentum) and jump sets it.
+- Knockback = **`AddImpulse(deltaV)`** (a delta-v; force-over-time = per-tick impulses, e.g. tornado).
+- Hits are authored per skill via **`HitInfo { Damage, Knockback (delta-v), Stun }`**. `Stun < 0`
+  means the default **gain-no** window `Units.StunPerDamage · Damage` (0.05·dmg); during it the
+  receiver can't act and its **animation is frozen** (knockback/gravity still move it).
+- Inside a **SoftVolume**, external impulses are extra-damped by `ExternalDampingMult` (viscous), so
+  knockback still shoves you in but fades fast.
+
 **Jumps** — per-character `MaxJumps` (jumps before touching down again; Pomegraknight = 1),
 refreshed on touching ground / platform / SoftVolume. A universal `JumpCooldown` (0.3 s) is the
 minimum gap between jumps; override per character only when explicitly specified.

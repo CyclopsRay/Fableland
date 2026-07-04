@@ -162,7 +162,7 @@ public partial class Pomegraknight : CharacterController
             Vector2 to = e.GlobalPosition - origin;
             if (Mathf.Abs(to.X) > TornadoHalfW || Mathf.Abs(to.Y) > TornadoHalfH) continue;
             Vector2 push = (to.LengthSquared() > 0.01f ? to.Normalized() : Vector2.Up) * TornadoPush;
-            e.TakeDamage(TornadoDamage, push);
+            e.TakeHit(new HitInfo(TornadoDamage, push));
             e.SetBurning(2f);
             hits++;
         }

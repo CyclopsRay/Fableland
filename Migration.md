@@ -9,6 +9,11 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.1.6** — Movement/combat core reconstruction. Velocity split into `intentVel` (input/gravity/
+  jump/field) + `externalVel` (decaying impulses) so knockback finally works on players too;
+  horizontal now has momentum (accel/friction). Per-skill `HitInfo` = damage + delta-v knockback +
+  gain-no window (default 0.05·dmg; frozen control + animation). SoftVolume damps external impulses
+  (viscous). Enemy rebuilt on the same model.
 - **0.1.5** — Melee now hits when the cone overlaps a foe's body (radius-aware), not only its
   center. Per-character jump count (`MaxJumps`; Pomegraknight = 1) refreshed on ground/platform/
   SoftVolume, with a universal 0.3 s jump cooldown. Test tree made bigger and moved far right.
