@@ -16,7 +16,7 @@ public partial class Enemy : CharacterBody2D
     [Export] public float ContactDamage = 18f;
     [Export] public float ContactCooldown = 0.9f;
     [Export] public float ContactKnockback = 260f;   // delta-v it puts on the player
-    [Export] public float ContactStun = 0.25f;       // gain-no it inflicts (not the 0.05·dmg default)
+    [Export] public float ContactStun = 0.25f;       // gain-no it inflicts (not the 0.005·dmg default)
     [Export] public float BurnDamagePerSecond = 14f;
     [Export] public float HitRadius = 26f;           // bounding circle for melee/AoE overlap
     [Export] public float ExternalDamping = 1200f;   // px/s² decay of knockback
