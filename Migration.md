@@ -9,6 +9,11 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.1.4** — Docs: added `KNOWLEDGE.md` (conventions + running Godot/C# caveats) and
+  `CLAUDE.md` (read-first pointers + mandatory workflow: log every bug fix as a caveat,
+  bump version per commit).
+- **0.1.3** — Build fixes: Godot 4 has no `Label2D` (damage numbers rebuilt as Node2D+Label);
+  `PomeSeed.Gravity` → `FallGravity` (was hiding `Area2D.Gravity`).
 - **0.1.2** — Two platform kinds. The thin one-way **platform** (land/cross/drop-through) now has
   a sibling **SoftVolume** (`SoftVolume.cs`) — the go-inside "tree" archetype: stand on its one-way
   top or press-down to sink in; inside, falling halts and up/down move like left/right, capped by a
