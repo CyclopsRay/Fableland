@@ -1,10 +1,12 @@
 using Godot;
+using System.Collections.Generic;
 
 /// <summary>
 /// Prototype crab foe — a simplified port of BaseFoe/CrabFoe. Patrols, chases the
 /// player, deals contact damage, can burn, and uses the same intent + external
 /// velocity model as the player so knockback is a real, decaying shove and a
-/// gain-no window freezes its AI + animation.
+/// gain-no window freezes its AI + animation. Also affected by the hazard-driven
+/// OnFire/Frozen debuffs, mirroring <see cref="CharacterController"/>.
 /// </summary>
 public partial class Enemy : CharacterBody2D
 {
@@ -38,6 +40,33 @@ public partial class Enemy : CharacterBody2D
     private Vector2 _intentVel;
     private Vector2 _externalVel;
 
+    // Hazard-driven debuffs, same rules as CharacterController (named _frozenDebuff
+    // here so it doesn't collide with the existing "frozen" gain-no local below).
+    private readonly DecayingDebuff _fire = new();
+    private readonly DecayingDebuff _frozenDebuff = new();
+    private readonly Dictionary<string, float> _dealtDmgBonuses = new();
+
+    private float DealtDamageMultiplier
+    {
+        get
+        {
+            float sum = 0f;
+            foreach (float v in _dealtDmgBonuses.Values) sum += v;
+            return 1f + sum;
+        }
+    }
+    private float ResistanceMultiplier => _frozenDebuff.Active ? 0.8f : 1f;
+    private float MoveMultiplier
+    {
+        get
+        {
+            float m = 1f;
+            if (_fire.Active) m *= 1.2f;
+            if (_frozenDebuff.Active) m *= 0.8f;
+            return m;
+        }
+    }
+
     public override void _Ready()
     {
         _sprite = GetNode<Sprite2D>("Sprite2D");
@@ -55,7 +84,7 @@ public partial class Enemy : CharacterBody2D
         if (_burnTimer > 0f)
         {
             _burnTimer -= dt;
-            float d = BurnDamagePerSecond * dt;
+            float d = BurnDamagePerSecond * dt * ResistanceMultiplier;
             _hp -= d;
             _burnAccum += d;
             _burnPopTimer -= dt;
@@ -68,6 +97,13 @@ public partial class Enemy : CharacterBody2D
             if (_hp <= 0f) { QueueFree(); return; }
         }
 
+        float fireDmg = _fire.Tick(dt) * ResistanceMultiplier;
+        if (fireDmg > 0f) { _hp -= fireDmg; PopNumber(fireDmg); }
+        float frozenDmg = _frozenDebuff.Tick(dt) * ResistanceMultiplier;
+        if (frozenDmg > 0f) { _hp -= frozenDmg; PopNumber(frozenDmg); }
+        if (_fire.Active) _dealtDmgBonuses["OnFire"] = 0.2f; else _dealtDmgBonuses.Remove("OnFire");
+        if (_hp <= 0f) { QueueFree(); return; }
+
         if (_blinkTimer > 0f)
         {
             _blinkTimer -= dt;
@@ -78,7 +114,9 @@ public partial class Enemy : CharacterBody2D
         {
             _flashTimer -= dt;
             if (_flashTimer <= 0f)
-                _sprite.Modulate = _burnTimer > 0f ? new Color(1f, 0.6f, 0.35f) : Colors.White;
+                _sprite.Modulate = _frozenDebuff.Active ? new Color(0.55f, 0.85f, 1f)
+                                   : (_burnTimer > 0f || _fire.Active) ? new Color(1f, 0.6f, 0.35f)
+                                   : Colors.White;
         }
 
         bool frozen = _stunTimer > 0f;   // gain-no: no AI, animation frozen
@@ -96,7 +134,7 @@ public partial class Enemy : CharacterBody2D
                 {
                     _contactTimer = ContactCooldown;
                     Vector2 dir = new Vector2(Mathf.Sign(to.X == 0f ? 1f : to.X), -0.4f).Normalized();
-                    player.TakeHit(new HitInfo(ContactDamage, dir * ContactKnockback, ContactStun));
+                    player.TakeHit(new HitInfo(ContactDamage * DealtDamageMultiplier, dir * ContactKnockback, ContactStun));
                 }
             }
         }
@@ -105,10 +143,11 @@ public partial class Enemy : CharacterBody2D
         float damp = ExternalDamping * (_softVolume != null ? _softVolume.ExternalDampingMult : 1f);
         _externalVel = _externalVel.MoveToward(Vector2.Zero, damp * dt);
 
+        float moveMult = MoveMultiplier;
         if (_softVolume != null)
         {
             float h = frozen ? 0f : _dir;
-            _intentVel = _softVolume.ComputeVelocity(MoveSpeed, h, 0f);
+            _intentVel = _softVolume.ComputeVelocity(MoveSpeed * moveMult, h, 0f);
         }
         else
         {
@@ -119,7 +158,7 @@ public partial class Enemy : CharacterBody2D
             else
             {
                 if (IsOnWall()) _dir = -_dir;
-                _intentVel.X = _dir * MoveSpeed;
+                _intentVel.X = _dir * MoveSpeed * moveMult;
             }
         }
 
@@ -136,7 +175,8 @@ public partial class Enemy : CharacterBody2D
 
     public void TakeHit(HitInfo hit)
     {
-        _hp -= hit.Damage;
+        float dealt = hit.Damage * ResistanceMultiplier;
+        _hp -= dealt;
         AddImpulse(hit.Knockback);
         float stun = hit.ResolveStun();
         if (stun > 0f) _stunTimer = Mathf.Max(_stunTimer, stun);
@@ -144,9 +184,27 @@ public partial class Enemy : CharacterBody2D
         _sprite.Modulate = new Color(1f, 0.6f, 0.6f);
         _flashTimer = 0.12f;
         _blinkTimer = 0.24f;
-        PopNumber(hit.Damage);
+        PopNumber(dealt);
+        ShakeCamera2D.Instance?.AddTrauma(0.2f);
         if (_hp <= 0f) QueueFree();
     }
+
+    /// <summary>Environmental hazard tick: damage + knockback with no i-frame gate
+    /// (Enemy has none to begin with), mirroring CharacterController.ApplyHazard.</summary>
+    public void ApplyHazard(float damage, Vector2 knockback)
+    {
+        if (damage > 0f)
+        {
+            float dealt = damage * ResistanceMultiplier;
+            _hp -= dealt;
+            PopNumber(dealt);
+        }
+        if (knockback != Vector2.Zero) AddImpulse(knockback);
+        if (_hp <= 0f) QueueFree();
+    }
+
+    public void AddFireStack(float amount) => _fire.AddStack(amount);
+    public void AddFrozenStack(float amount) => _frozenDebuff.AddStack(amount);
 
     public void AddImpulse(Vector2 impulse) => _externalVel += impulse;
 

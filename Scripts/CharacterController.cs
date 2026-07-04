@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Base class for playable characters — a Godot port of the Unity
@@ -7,10 +8,12 @@ using System;
 /// individual characters (Pomegraknight, and later Pixolotl/PumpKing/Cleopastar)
 /// subclass it and override the ability hooks.
 ///
-/// Provides: movement + double-jump, HP/lives, i-frames, knockback,
-/// death/respawn, a generic Burning status (DoT for non-immune targets; a passive
-/// trigger for those who are), a post-swing move-speed penalty, a melee cone
-/// helper, and a debug-draw hook that subclasses use to visualize skill ranges.
+/// Provides: movement + double-jump (with coyote time), HP/lives, i-frames,
+/// knockback, death/respawn, a generic Burning status (DoT for non-immune
+/// targets; a passive trigger for those who are), the hazard-driven OnFire/Frozen
+/// debuffs (stackable, self-decaying — see <see cref="DecayingDebuff"/>), a
+/// post-swing move-speed penalty, a melee cone helper, and a debug-draw hook that
+/// subclasses use to visualize skill ranges.
 ///
 /// ── ADDING A CHARACTER ────────────────────────────────────────────────
 ///   1. Subclass CharacterController.
@@ -32,10 +35,11 @@ public partial class CharacterController : CharacterBody2D
     [Export] public float Gravity = Units.Gravity;         // 2048 px/s²
     [Export] public int MaxJumps = 2;                      // jumps before touching down again
     [Export] public float JumpCooldown = 0.3f;             // universal min gap between jumps
+    [Export] public float CoyoteTime = 0.2f;               // grace window after leaving a surface
 
     [ExportGroup("Momentum")]
-    [Export] public float GroundAccel = 2600f;   // intent horizontal accel on ground
-    [Export] public float AirAccel = 1500f;      // …in the air
+    [Export] public float GroundAccel = 3200f;   // intent horizontal accel on ground
+    [Export] public float AirAccel = 1900f;      // …in the air
     [Export] public float GroundFriction = 3000f;// intent decel when no input, grounded
     [Export] public float AirFriction = 700f;    // …in the air
     [Export] public float ExternalDamping = 900f;// px/s² decay of external (knockback) velocity
@@ -63,16 +67,54 @@ public partial class CharacterController : CharacterBody2D
     protected float BurnDotPerSecond = 12f;
     protected float DamageTakenMult = 1f;  // e.g. Fire Tornado grants 0.6 while active
 
+    /// <summary>1 + sum of active damage-dealt bonuses (e.g. OnFire → +0.2). Multiple
+    /// sources add rather than multiply, so a 0.2 and a 0.3 bonus together give 0.5.</summary>
+    protected float DamageDealtMultiplier
+    {
+        get
+        {
+            float sum = 0f;
+            foreach (float v in _dealtDmgBonuses.Values) sum += v;
+            return 1f + sum;
+        }
+    }
+
+    // Frozen's resistance and move penalty; OnFire's move boost. Multiplicative
+    // (not aggregated) since only these two named statuses ever touch them.
+    private float ResistanceMultiplier => _frozenDebuff.Active ? 0.8f : 1f;
+    private float MoveMultiplier
+    {
+        get
+        {
+            float m = 1f;
+            if (_fire.Active) m *= 1.2f;
+            if (_frozenDebuff.Active) m *= 0.8f;
+            return m;
+        }
+    }
+
     protected Sprite2D Sprite;
     protected AnimationPlayer Anim;        // may be null until animations are authored
     protected Node2D FirePoint;            // optional projectile origin
     protected ShakeCamera2D CameraShake;   // optional; present on the player
+
+    // Hazard-driven debuffs (distinct from the kit-level Burn status above):
+    // OnFire boosts move + damage dealt while decaying itself as damage; Frozen
+    // slows + grants damage resistance the same way. Both are stackable "points".
+    private readonly DecayingDebuff _fire = new();
+    private readonly DecayingDebuff _frozenDebuff = new();
+    // Aggregatable damage-dealt bonuses by source name (e.g. "OnFire" → +0.2);
+    // total multiplier = 1 + sum of all active entries.
+    private readonly Dictionary<string, float> _dealtDmgBonuses = new();
 
     private float _burnTimer;
     private float _speedPenaltyTimer;
     private float _speedPenaltyMult = 1f;
     private float _invulnTimer;
     private int _jumpsRemaining;
+    private float _airborneTimer;      // time since last touching a surface
+    private bool _coyoteConsumed;      // whether the coyote-time jump loss already fired
+    private bool _jumpedSinceGrounded; // whether a manual jump has used the grace window
     private bool _dead;
     private bool _dropping;
     private float _dropReleaseTimer;
@@ -135,14 +177,29 @@ public partial class CharacterController : CharacterBody2D
 
     private void UpdateStatus(float dt)
     {
-        if (!IsBurning) return;
-        _burnTimer -= dt;
-        if (!BurnImmune) BurnTick(BurnDotPerSecond * dt);
-        if (_burnTimer <= 0f)
+        if (IsBurning)
         {
-            IsBurning = false;
-            Sprite.SelfModulate = _baseTint;
+            _burnTimer -= dt;
+            if (!BurnImmune) ApplyDotDamage(BurnDotPerSecond * dt);
+            if (_burnTimer <= 0f) IsBurning = false;
         }
+
+        float fireDmg = _fire.Tick(dt);
+        if (fireDmg > 0f) ApplyDotDamage(fireDmg);
+        float frozenDmg = _frozenDebuff.Tick(dt);
+        if (frozenDmg > 0f) ApplyDotDamage(frozenDmg);
+
+        if (_fire.Active) _dealtDmgBonuses["OnFire"] = 0.2f;
+        else _dealtDmgBonuses.Remove("OnFire");
+
+        UpdateStatusTint();
+    }
+
+    private void UpdateStatusTint()
+    {
+        if (_frozenDebuff.Active) Sprite.SelfModulate = new Color(0.55f, 0.85f, 1f);
+        else if (IsBurning || _fire.Active) Sprite.SelfModulate = new Color(1f, 0.55f, 0.35f);
+        else Sprite.SelfModulate = _baseTint;
     }
 
     public override void _PhysicsProcess(double delta)
@@ -158,11 +215,25 @@ public partial class CharacterController : CharacterBody2D
 
         // Vertical intent: gravity accumulates (momentum); jump sets it.
         if (!IsOnFloor())
+        {
             _intentVel.Y += Gravity * dt;
+
+            // Coyote time: leaving a surface doesn't cost a jump for CoyoteTime
+            // seconds (so you can still edge-jump), but if that window elapses
+            // without a manual jump, one jump is forfeited — this is what stops
+            // a 1-jump character from jumping anytime mid-air after walking off
+            // a ledge, while still allowing the edge jump itself.
+            _airborneTimer += dt;
+            if (!_jumpedSinceGrounded && !_coyoteConsumed && _airborneTimer >= CoyoteTime)
+            {
+                _coyoteConsumed = true;
+                _jumpsRemaining = Mathf.Max(0, _jumpsRemaining - 1);
+            }
+        }
         else
         {
             if (_intentVel.Y > 0f) _intentVel.Y = 0f;
-            _jumpsRemaining = MaxJumps;   // touching ground/platform refreshes jumps
+            RefreshJumps();   // touching ground/platform refreshes jumps
         }
 
         float inputDir = 0f;
@@ -176,14 +247,17 @@ public partial class CharacterController : CharacterBody2D
                 _intentVel.Y = JumpVelocity;
                 _jumpsRemaining--;
                 _jumpCdTimer = JumpCooldown;
+                _jumpedSinceGrounded = true;
             }
 
             UpdateDropThrough(Input.IsActionPressed("move_down"), dt);
         }
 
         // Horizontal intent with momentum: accelerate toward the target, friction to stop.
-        float target = inputDir * MoveSpeed * _speedPenaltyMult;
-        float rate = Mathf.Abs(inputDir) > 0.01f ? (IsOnFloor() ? GroundAccel : AirAccel)
+        // OnFire/Frozen scale MoveSpeed and the two accel rates (not friction).
+        float moveMult = MoveMultiplier;
+        float target = inputDir * MoveSpeed * _speedPenaltyMult * moveMult;
+        float rate = Mathf.Abs(inputDir) > 0.01f ? (IsOnFloor() ? GroundAccel : AirAccel) * moveMult
                                                  : (IsOnFloor() ? GroundFriction : AirFriction);
         _intentVel.X = Mathf.MoveToward(_intentVel.X, target, rate * dt);
 
@@ -196,6 +270,16 @@ public partial class CharacterController : CharacterBody2D
 
         if (inputDir > 0.01f) { Facing = 1f; Sprite.FlipH = false; }
         else if (inputDir < -0.01f) { Facing = -1f; Sprite.FlipH = true; }
+    }
+
+    /// <summary>Full jump refresh + reset of the coyote-time bookkeeping, called
+    /// whenever a surface (ground/platform/SoftVolume) is supporting us.</summary>
+    private void RefreshJumps()
+    {
+        _jumpsRemaining = MaxJumps;
+        _airborneTimer = 0f;
+        _coyoteConsumed = false;
+        _jumpedSinceGrounded = false;
     }
 
     /// <summary>Zero the velocity channels that ran into a surface, so gravity/knockback
@@ -252,7 +336,7 @@ public partial class CharacterController : CharacterBody2D
 
     private void MoveInsideVolume(float dt)
     {
-        _jumpsRemaining = MaxJumps;   // being supported by a soft volume refreshes jumps
+        RefreshJumps();   // being supported by a soft volume refreshes jumps
 
         float horiz = 0f, vert = 0f;
         if (!Frozen)
@@ -265,7 +349,7 @@ public partial class CharacterController : CharacterBody2D
 
         // Intent is the volume's stagnation-clamped field; external impulses still
         // apply but the volume's viscosity damps them fast (muffled knockback).
-        _intentVel = _softVolume.ComputeVelocity(MoveSpeed, horiz, vert);
+        _intentVel = _softVolume.ComputeVelocity(MoveSpeed * MoveMultiplier, horiz, vert);
         float damp = ExternalDamping * _softVolume.ExternalDampingMult;
         _externalVel = _externalVel.MoveToward(Vector2.Zero, damp * dt);
 
@@ -310,6 +394,7 @@ public partial class CharacterController : CharacterBody2D
         Vector2 origin = GlobalPosition;
         Vector2 aim = new Vector2(Facing, 0f);
         float halfRad = Mathf.DegToRad(halfAngleDeg);
+        float scaledDamage = damage * DamageDealtMultiplier;
 
         foreach (Node n in GetTree().GetNodesInGroup("enemy"))
         {
@@ -330,7 +415,7 @@ public partial class CharacterController : CharacterBody2D
             }
 
             Vector2 knock = new Vector2(Facing, -0.35f).Normalized() * knockbackSpeed;
-            e.TakeHit(new HitInfo(damage, knock, stun));
+            e.TakeHit(new HitInfo(scaledDamage, knock, stun));
             if (applyBurn) e.SetBurning(burnDuration);
             hits++;
         }
@@ -361,7 +446,7 @@ public partial class CharacterController : CharacterBody2D
     {
         if (_dead || _invulnTimer > 0f) return;
 
-        float dealt = hit.Damage * DamageTakenMult;
+        float dealt = hit.Damage * DamageTakenMult * ResistanceMultiplier;
         CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
         HpChanged?.Invoke(CurrentHP, MaxHP);
         PopNumber(dealt, heal: false);
@@ -370,21 +455,48 @@ public partial class CharacterController : CharacterBody2D
         float stun = hit.ResolveStun();
         if (stun > 0f) _stunTimer = Mathf.Max(_stunTimer, stun);
 
-        if (hit.Knockback != Vector2.Zero)
+        ShakeCamera(hit.Knockback != Vector2.Zero ? 0.35f : 0.18f);
+        if (hit.Knockback != Vector2.Zero) _invulnTimer = 0.8f;
+        if (CurrentHP <= 0f) Die();
+    }
+
+    /// <summary>Environmental hazard tick: damage + knockback that bypasses the
+    /// combat i-frame gate. Hazards reapply every ~0.25s — far faster than the
+    /// post-hit invuln window — so standing in one should keep hurting you.</summary>
+    public void ApplyHazard(float damage, Vector2 knockback)
+    {
+        if (_dead) return;
+
+        if (damage > 0f)
         {
-            _invulnTimer = 0.8f;
-            ShakeCamera(0.35f);
+            float dealt = damage * DamageTakenMult * ResistanceMultiplier;
+            CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
+            HpChanged?.Invoke(CurrentHP, MaxHP);
+            PopNumber(dealt, heal: false);
+        }
+        if (knockback != Vector2.Zero)
+        {
+            AddImpulse(knockback);
+            ShakeCamera(0.12f);
         }
         if (CurrentHP <= 0f) Die();
     }
 
+    /// <summary>Add integer "points" to the stackable OnFire hazard debuff (decays
+    /// itself as damage over time; see <see cref="DecayingDebuff"/>).</summary>
+    public void AddFireStack(float amount) => _fire.AddStack(amount);
+
+    /// <summary>Add integer "points" to the stackable Frozen hazard debuff.</summary>
+    public void AddFrozenStack(float amount) => _frozenDebuff.AddStack(amount);
+
     /// <summary>Add a delta-v impulse to the external-velocity channel (knockback/wind/…).</summary>
     public void AddImpulse(Vector2 impulse) => _externalVel += impulse;
 
-    private void BurnTick(float amount)
+    private void ApplyDotDamage(float amount)
     {
         if (_dead) return;
-        CurrentHP = Mathf.Max(0f, CurrentHP - amount);
+        float dealt = amount * ResistanceMultiplier;
+        CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
         HpChanged?.Invoke(CurrentHP, MaxHP);
         if (CurrentHP <= 0f) Die();
     }
@@ -413,6 +525,9 @@ public partial class CharacterController : CharacterBody2D
         Velocity = _intentVel = _externalVel = Vector2.Zero;
         _stunTimer = 0f;
         IsBurning = false;
+        _fire.Clear();
+        _frozenDebuff.Clear();
+        _dealtDmgBonuses.Clear();
         Died?.Invoke();
     }
 
@@ -425,6 +540,9 @@ public partial class CharacterController : CharacterBody2D
         Velocity = _intentVel = _externalVel = Vector2.Zero;
         _stunTimer = 0f;
         _invulnTimer = 1.2f;
+        _fire.Clear();
+        _frozenDebuff.Clear();
+        _dealtDmgBonuses.Clear();
         Sprite.Modulate = Colors.White;
         Sprite.SelfModulate = _baseTint;
         Sprite.Visible = true;

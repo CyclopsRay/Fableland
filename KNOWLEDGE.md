@@ -45,7 +45,29 @@ Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
 
 **Jumps** — per-character `MaxJumps` (jumps before touching down again; Pomegraknight = 1),
 refreshed on touching ground / platform / SoftVolume. A universal `JumpCooldown` (0.3 s) is the
-minimum gap between jumps; override per character only when explicitly specified.
+minimum gap between jumps; override per character only when explicitly specified. **Coyote
+time** (`CoyoteTime`, 0.2 s): leaving a surface doesn't cost a jump for that long (edge jumps
+still work), but if it elapses with no manual jump, one jump charge is forfeited once — see the
+caveat below for why this needed its own bookkeeping beyond "refresh on floor".
+
+**Hazards / debuffs** (`Hazard.cs`, `DecayingDebuff.cs`) — a `Hazard` is a stationary Area2D
+whose collision box is built from `BoxSize` in code (never authored separately in the `.tscn`),
+so the hittable shape can't drift from the drawn telegraph. While a body overlaps, it ticks
+every `TickInterval` (0.25 s default) via `Hazard.Deliver(...)`, which routes to
+`CharacterController.ApplyHazard`/`AddFireStack`/`AddFrozenStack` or the equivalent `Enemy`
+methods. **`ApplyHazard` deliberately bypasses the combat i-frame gate** (`TakeHit`'s 0.8 s
+invuln) — a hazard reapplies every 0.25 s, faster than that window, and "standing in the fire"
+should keep hurting you the way a discrete punch's i-frames shouldn't. One-shot hazards (e.g.
+`TsunamiHazard`) go through the normal `TakeHit` instead, explicitly opting into invuln/knockback
+gating since they're meant to land once.
+`DecayingDebuff` is the stack behind **OnFire** and **Frozen**: integer "points", added flat on
+each hit (stackable), decaying 10%/0.2s (`Mathf.Ceil`, so it always reaches exactly 0, never
+asymptotes) with the decayed amount dealt as damage. While active, OnFire multiplies
+`MoveSpeed`/`GroundAccel`/`AirAccel` by 1.2 and adds +0.2 to `DamageDealtMultiplier` (an
+aggregatable `Dictionary<string,float>` keyed by source — multiple buffs sum, e.g. 0.2 + 0.3 →
+0.5); Frozen multiplies the same three by 0.8 and grants 20% damage resistance
+(`ResistanceMultiplier`, applied to everything taken: hits, hazard ticks, and Burn/Fire/Frozen's
+own self-damage). Friction is deliberately **not** scaled by either status — only accel/speed.
 
 **Versioning** — bump patch (+0.0.1) every commit; keep `Scripts/GameVersion.cs`, the
 repo-root `VERSION` file, and the HUD `VersionLabel` (`Scenes/Hud.tscn`) in sync. Shown
@@ -79,6 +101,21 @@ compiler surfaces below.
 - **Rule:** `Area2D` already exposes `Gravity` (and other area-physics props). Don't shadow
   inherited members — pick a distinct name (e.g. `FallGravity`). Watch this on any
   `Area2D`/`RigidBody2D` subclass.
+
+### Air jumps need coyote time, not just an on-floor refresh (v0.2.0)
+- **Symptom:** a 1-jump character (`MaxJumps = 1`, e.g. Pomegraknight) could jump at any
+  point during a fall, not just right at the edge — because `_jumpsRemaining` only reset
+  on `IsOnFloor()` and only decremented when a jump was actually pressed. Walking off a
+  ledge without jumping left the single jump charge sitting unused indefinitely, so it
+  could be spent airborne like a free double-jump/tornado-kick.
+- **Rule:** track `_airborneTimer` since leaving a surface. Within `CoyoteTime` (0.2s) a
+  jump still works normally (edge jump preserved). If that window elapses **without** a
+  manual jump (`_jumpedSinceGrounded` stays false), forfeit one jump charge once
+  (`_coyoteConsumed` guards against repeating it). Touching ground/platform/SoftVolume
+  calls `RefreshJumps()` which resets all three fields. This makes `MaxJumps` mean "jumps
+  before your foot has been off a surface for a beat," not "jumps since the last button
+  press," so multi-jump characters keep their real air jumps while 1-jump characters can't
+  jump mid-air past the grace window.
 
 ### Call `Init(...)` after `AddChild`, not before (reference)
 - Godot runs `_Ready()` synchronously during `AddChild`. Spawners set a projectile's

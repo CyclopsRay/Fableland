@@ -38,9 +38,9 @@ public partial class Pomegraknight : CharacterController
     [Export] public float TornadoDuration = 2.5f;
     [Export] public float TornadoTick = 0.5f;
     [Export] public float TornadoDamage = 15f;
-    [Export] public float TornadoHalfW = 48f;      // 3m wide
-    [Export] public float TornadoHalfH = 32f;      // 2m tall
-    [Export] public float TornadoPush = 160f;      // ~5 m/s
+    [Export] public float TornadoHalfW = 128f;     // 8m wide — much bigger than her sideways
+    [Export] public float TornadoHalfH = 40f;      // 2.5m tall — slightly bigger than her (2m)
+    [Export] public float TornadoPush = 64f;       // ~2 m/s — a slight knockoff, not a launch
     [Export] public float TornadoDamageReduction = 0.6f;
 
     [ExportGroup("Pome Seed Eruption (Skill 2)")]
@@ -109,8 +109,7 @@ public partial class Pomegraknight : CharacterController
 
         // NOTE: with animation, move this MeleeCone call onto the Slash clip's
         // damage-event frame instead of firing it immediately here.
-        int hits = MeleeCone(SlashRange, SlashHalfAngle, dmg, SlashKnockback, applyBurn: false, 0f);
-        if (hits > 0) ShakeCamera(0.22f);
+        MeleeCone(SlashRange, SlashHalfAngle, dmg, SlashKnockback, applyBurn: false, 0f);
         // Anim?.Play($"Slash{(_comboStage % 3) + 1}");
 
         ApplyMovePenalty(SwingPenaltyMult, SwingPenaltyDur);
@@ -155,18 +154,15 @@ public partial class Pomegraknight : CharacterController
     private void TornadoHit()
     {
         Vector2 origin = GlobalPosition;
-        int hits = 0;
         foreach (Node n in GetTree().GetNodesInGroup("enemy"))
         {
             if (n is not Enemy e) continue;
             Vector2 to = e.GlobalPosition - origin;
             if (Mathf.Abs(to.X) > TornadoHalfW || Mathf.Abs(to.Y) > TornadoHalfH) continue;
             Vector2 push = (to.LengthSquared() > 0.01f ? to.Normalized() : Vector2.Up) * TornadoPush;
-            e.TakeHit(new HitInfo(TornadoDamage, push));
+            e.TakeHit(new HitInfo(TornadoDamage * DamageDealtMultiplier, push));
             e.SetBurning(2f);
-            hits++;
         }
-        if (hits > 0) ShakeCamera(0.15f);
     }
 
     // ── Pome Seed Eruption ────────────────────────────────────────────────
@@ -212,7 +208,7 @@ public partial class Pomegraknight : CharacterController
             var seed = PomeSeedScene.Instantiate<PomeSeed>();
             container.AddChild(seed);
             seed.GlobalPosition = origin;
-            seed.Init(vel, waveHits, burning);
+            seed.Init(vel, waveHits, burning, DamageDealtMultiplier);
         }
     }
 

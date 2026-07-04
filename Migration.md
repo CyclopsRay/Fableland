@@ -9,6 +9,20 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.2.0** — Jump coyote time (0.2s grace after leaving a surface before a jump is forfeited,
+  so 1-jump characters can edge-jump but not air-jump). Bumped `GroundAccel`/`AirAccel` ~20% for
+  snappier control. Fire Tornado reshaped into a wide-and-short rectangle with a slight knockback
+  instead of a launch. Screen shake now fires on every hit taken (player) or dealt (foe), via a
+  static `ShakeCamera2D.Instance` so non-owning scripts (Enemy) can trigger it. **Hazard system:**
+  `Hazard` base (Area2D, box collision built from `BoxSize` so it always matches the telegraph) +
+  **FireHazard** (bonfire — 20pt OnFire stack + slight knockback every 0.25s), **FreezeHazard**
+  (frozen pit — 20pt Frozen stack every 0.25s), **DamageHazard** (flat 20 dmg every 0.25s, no
+  debuff). **TsunamiHazard** — one-shot pyramid sweep, 35% max-HP damage, a big leftward shove
+  (delta-v solved from a 15 m target displacement), and a fixed 1s no-control window; spawned by
+  **TsunamiTrigger** (a walk-into button). New stackable, self-decaying `DecayingDebuff`
+  (10%/0.2s, integer, rounds up) backs **OnFire** (+20% move accel/speed, +0.2 aggregatable
+  damage-dealt bonus) and **Frozen** (−20% move, +20% damage resistance) on both
+  `CharacterController` and `Enemy`. 3 hazards placed on the arena's left edge for testing.
 - **0.1.6** — Movement/combat core reconstruction. Velocity split into `intentVel` (input/gravity/
   jump/field) + `externalVel` (decaying impulses) so knockback finally works on players too;
   horizontal now has momentum (accel/friction). Per-skill `HitInfo` = damage + delta-v knockback +
@@ -79,7 +93,15 @@ Scripts/Enemy.cs                Crab foe: patrol/chase/contact damage + burn DoT
 Scripts/WonderPage.cs           Overlap pickup with bob
 Scripts/GameManager.cs          Match loop: enemy/page spawners, score, lives, win/lose, restart
 Scripts/Hud.cs                  HP bar, lives, page count, banner
-Scenes/Arena.tscn               Ground + 3 platforms + walls, spawn markers, HUD, player
+Scripts/DecayingDebuff.cs       Stackable, self-decaying "points" debuff (10%/0.2s, rounds up);
+                                backs the OnFire/Frozen hazard statuses
+Scripts/Hazard.cs               Base for a stationary periodic hazard box (collision built from
+                                BoxSize; per-body tick timer; dispatches to Character/Enemy)
+Scripts/{Fire,Freeze,Damage}Hazard.cs  Bonfire / frozen pit / plain damage hazard
+Scripts/TsunamiHazard.cs        One-shot moving pyramid sweep (35% max HP, big shove, 1s stun)
+Scripts/TsunamiTrigger.cs       Walk-into button that spawns a TsunamiHazard
+Scenes/Arena.tscn               Ground + 3 platforms + walls, spawn markers, HUD, player,
+                                3 test hazards (bonfire/frozen pit/tsunami button) on the left
 Scenes/Pomegraknight.tscn       Player (CharacterBody2D + Camera2D + FirePoint + empty AnimationPlayer)
 Scenes/{Enemy,WonderPage,PomeSeed,Hud}.tscn
 Sprites/*.svg                   Placeholder art (player, enemy, page, seed, platform)

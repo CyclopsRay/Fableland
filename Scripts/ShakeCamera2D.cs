@@ -6,10 +6,17 @@ using Godot;
 /// </summary>
 public partial class ShakeCamera2D : Camera2D
 {
+    // Single-camera prototype: lets non-owning scripts (e.g. Enemy) trigger a
+    // shake without needing a reference to the player's CharacterController.
+    public static ShakeCamera2D Instance { get; private set; }
+
     [Export] public float MaxOffset = 14f;
     [Export] public float Decay = 4.5f;
 
     private float _trauma;
+
+    public override void _EnterTree() => Instance = this;
+    public override void _ExitTree() { if (Instance == this) Instance = null; }
 
     public void AddTrauma(float amount) => _trauma = Mathf.Clamp(_trauma + amount, 0f, 1f);
 

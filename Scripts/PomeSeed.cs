@@ -24,13 +24,15 @@ public partial class PomeSeed : Area2D
     private bool _landed;
     private float _life = 6f;
     private float _lingerTimer;
+    private float _dmgMult = 1f;
 
     /// <summary>Called by the spawner right after AddChild (so it runs after _Ready).</summary>
-    public void Init(Vector2 velocity, HashSet<ulong> waveHits, bool burning)
+    public void Init(Vector2 velocity, HashSet<ulong> waveHits, bool burning, float dmgMult = 1f)
     {
         _velocity = velocity;
         _waveHits = waveHits;
         _burning = burning;
+        _dmgMult = dmgMult;
         _life = Lifetime;
         if (_burning)
         {
@@ -78,7 +80,7 @@ public partial class PomeSeed : Area2D
             }
 
             Vector2 knock = (_velocity.LengthSquared() > 0.01f ? _velocity.Normalized() : Vector2.Down) * 80f;
-            e.TakeHit(new HitInfo(dmg, knock, 0.1f));   // small gain-no for seeds
+            e.TakeHit(new HitInfo(dmg * _dmgMult, knock, 0.1f));   // small gain-no for seeds
             if (_burning) e.SetBurning(BurnDuration);
             QueueFree();
             return;
