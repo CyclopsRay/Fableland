@@ -1,0 +1,34 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Pomegraknight.cs" id="1"]
+[ext_resource type="Texture2D" path="res://Sprites/player_placeholder.svg" id="2"]
+[ext_resource type="PackedScene" path="res://Scenes/PomeSeed.tscn" id="3"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(56, 62)
+
+[node name="Pomegraknight" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1")
+PomeSeedScene = ExtResource("3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+
+[node name="FirePoint" type="Marker2D" parent="."]
+position = Vector2(0, -30)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+
+[node name="Camera2D" type="Camera2D" parent="."]
+current = true
+position_smoothing_enabled = true
+position_smoothing_speed = 6.0
+limit_left = 0
+limit_top = -200
+limit_right = 2000
+limit_bottom = 720

@@ -6,6 +6,91 @@
 
 ---
 
+## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
+
+A **self-contained, playable vertical slice** now ships in this repo. The goal here was
+*playability*, not feature parity — it proves out the core loop (arena + character +
+skills + enemies + collectibles + win/lose) end-to-end so the fuller port below has a
+skeleton to grow into. It is intentionally simpler than the full architecture in §1+.
+
+### How to run it
+1. Install Godot **4.7 (.NET/Mono build)** and .NET 8+ SDK.
+2. Open this folder as a Godot project (the editor imports the SVG placeholders on first open).
+3. Press **F5** (main scene is `res://Scenes/Arena.tscn`).
+
+### Controls
+| Action | Key / Mouse |
+|---|---|
+| Move | `A` / `D` (or `←` / `→`) |
+| Jump / double-jump | `Space` |
+| Melee combo (3-stage 15/15/30, mag 3, reload) | `J` or **Left Mouse** |
+| Blush → self-ignite + Fire Tornado charge | `Left Shift` |
+| Pome Seed Eruption (3 waves of gravity seeds) | `E` |
+| Restart after win/lose | `R` |
+
+Affected-range lines are drawn on-screen: the yellow **BA cone** (brightens on each
+swing), the green **seed-launch cone** during E, and the orange **Fire Tornado box**
+while it spins. Toggle via `ShowDebugRanges` on the character.
+
+### The loop
+Move around the arena, **collect 5 WonderPages** (gold, bobbing) to win while **crab foes**
+spawn and chase you. Melee them in front of you; use Blush for a burst. Contact with a foe
+costs HP with brief i-frames + knockback. Dying spends a life (3 total) and respawns you;
+0 lives = Game Over. Win or lose, press `R` to replay.
+
+### What was built (files)
+```
+Scripts/CharacterController.cs  Base playable char: movement/double-jump, HP/lives, i-frames,
+                                knockback, death+respawn, Burning status, move penalty,
+                                MeleeCone helper, debug-range draw hook, animation hook
+Scripts/Pomegraknight.cs        First character (subclass): 3-stage combo w/ magazine+reload,
+                                Blush + Fire Tornado, Pome Seed Eruption, burn passive, range lines
+Scripts/PomeSeed.cs             Gravity seed projectile; per-wave shared hit registry (30 first/6 rest)
+Scripts/Enemy.cs                Crab foe: patrol/chase/contact damage + burn DoT
+Scripts/WonderPage.cs           Overlap pickup with bob
+Scripts/GameManager.cs          Match loop: enemy/page spawners, score, lives, win/lose, restart
+Scripts/Hud.cs                  HP bar, lives, page count, banner
+Scenes/Arena.tscn               Ground + 3 platforms + walls, spawn markers, HUD, player
+Scenes/Pomegraknight.tscn       Player (CharacterBody2D + Camera2D + FirePoint + empty AnimationPlayer)
+Scenes/{Enemy,WonderPage,PomeSeed,Hud}.tscn
+Sprites/*.svg                   Placeholder art (player, enemy, page, seed, platform)
+```
+**Animation is stubbed, not skipped:** `Pomegraknight.tscn` has an empty `AnimationPlayer`,
+`CharacterController.UpdateAnimator()` is the drive point, and BA/seed damage is applied inline
+with a `// NOTE(animation)` marker showing where to move it onto AnimationPlayer call-method tracks.
+
+`Scenes/Demo.tscn` + `Scripts/Player.cs` are the original throwaway skeleton — kept for now,
+safe to delete once the prototype is confirmed.
+
+### How this maps to the full plan below
+| Prototype (current) | Full port target (§1+) |
+|---|---|
+| `CharacterController` base + `Pomegraknight` subclass ✅ | same shape; add Pixolotl/PumpKing/Cleopastar |
+| Direct `Input.IsActionJustPressed` in base `HandleAbilities` | `InputRouter` → `InputState` struct → `ChannelSystem` dispatch |
+| Combo damage applied inline (anim hook noted) | Animation-event-driven damage on AnimationPlayer tracks |
+| `PomeSeed` instantiated per shot | object-pooled projectiles |
+| `GameManager.cs` (spawn+score+lives) | `GameManager` + `FoeManager` + `DifficultyManager` split |
+| `Enemy.cs` (one crab, + burn DoT) | `BaseFoe` hierarchy (Crab/Drift/Seagull/Bee/Snake/Tsunami) |
+| Single camera | Split-screen via two `SubViewport`s |
+| Collision layers: 1=world, 2=player, 4=enemy, 8=pickup, seeds mask 4 | (adopt same convention) |
+
+### Deliberate cuts (deferred to the phases below)
+Two-player/split-screen, the ChannelSystem aim/trajectory/area skill types, object pooling,
+real animation (AnimationPlayer is stubbed; sprites are static), audio, difficulty scaling,
+Tsunami/hazards, other characters (Pixolotl/PumpKing/Cleopastar), leveling/status-VFX,
+damage numbers, and gamepad polish. The §9 API cheat-sheet and per-file porting steps below
+remain the roadmap for adding these.
+
+Pomegraknight uses pixel units (~32 px/m); its exported stats are tuned for feel, not
+1:1 with the Unity metric values in `CLAUDE.md` — reconcile these during full tuning.
+
+### Not yet verified at runtime
+This machine has **no Godot/.NET toolchain installed**, so the prototype was verified
+*statically* (brace/paren balance, every `.tscn` resource path resolves, every `GetNode`
+path matches its scene). First editor open is the real smoke test — see §10 Phase 1 checklist.
+
+---
+
 ## 1. High-Level Architecture (Godot Edition)
 
 ### 1.1 Language Choice: **C# (.NET)**
