@@ -129,6 +129,10 @@ public static class MapRenderModel
         foreach (var e in g.Edges) { linked.Add((e.A, e.B)); linked.Add((e.B, e.A)); }
         bool Linked(MapNode a, MapNode b) => linked.Contains((a, b));
 
+        // Midpoint of each barrier border between two cities — used to place a point barrier
+        // ONLY on a blocked pass you can actually see across (kills the label spam).
+        var barrierMid = new Dictionary<(MapNode, MapNode), Vector2>();
+
         // ---- (1) outer realms: weighted Voronoi territories per world ------------
         int worldCount = g.Worlds.Count;
         for (int w = 0; w < worldCount; w++)
@@ -159,6 +163,12 @@ public static class MapRenderModel
                     var b = verts[(k + 1) % verts.Count];
                     bool road = Linked(sites[i], sites[j]);
                     rm.Borders.Add(new BorderSeg { A = a, B = b, WorldIndex = w, Kind = road ? BorderKind.Road : BorderKind.Barrier });
+                    if (!road)
+                    {
+                        var m = (a + b) * 0.5f;
+                        barrierMid[(sites[i], sites[j])] = m;
+                        barrierMid[(sites[j], sites[i])] = m;
+                    }
                 }
             }
 
@@ -176,9 +186,9 @@ public static class MapRenderModel
         // ---- (2) point barriers: landmarks on blocked would-be roads -------------
         foreach (var (a, b) in g.FailedCandidates)
         {
-            if (a.WorldIndex < 0 || a.WorldIndex != b.WorldIndex) continue; // intra-world only
-            var theme = ThemeFor(a.Zone);
-            rm.Points.Add(new PointBarrier { Pos = (a.Pos + b.Pos) * 0.5f, WorldIndex = a.WorldIndex, Label = theme.PointBarrier });
+            if (a.WorldIndex < 0 || a.WorldIndex != b.WorldIndex) continue;   // intra-world only
+            if (!barrierMid.TryGetValue((a, b), out var pos)) continue;       // only if the cities actually border
+            rm.Points.Add(new PointBarrier { Pos = pos, WorldIndex = a.WorldIndex, Label = ThemeFor(a.Zone).PointBarrier });
         }
 
         // ---- (3) roads (replace edges) -------------------------------------------

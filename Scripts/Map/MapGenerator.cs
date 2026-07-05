@@ -21,7 +21,7 @@ public static class MapGenerator
     // World layout. Radii shrink from the outer rim (level 1-A) toward the VOID.
     // LayoutScale blows the whole map up uniformly (v0.3.2, for the rendered atlas + camera):
     // a uniform scale preserves all topology/crossings, so a given seed yields the same map,
-    // just bigger. The rendered mode uses a Camera2D; the schematic mode is camera-tracked too.
+    // just bigger. Both views project world→screen in MapController (Project), no Camera2D.
     public const float LayoutScale = 1.8f;
     public static readonly Vector2 Center = new(576, 340);
 

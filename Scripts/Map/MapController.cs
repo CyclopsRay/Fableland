@@ -47,18 +47,34 @@ public partial class MapController : Node2D
     private float _time;         // for flicker + token lerp
     private Font _font;
 
-    // Rendered atlas view (v0.3.2): the schematic graph turned into a real-worldmap.
+    // Rendered atlas view (v0.3.2) + view modes (v0.3.3). Instead of a Camera2D we project
+    // world→screen ourselves (see Project): this lets the map rotate + tilt like a board on a
+    // table while node markers/labels stay upright. Three modes:
+    //   Flat       — top-down, free pan/zoom (the "current vision", a).
+    //   BossUp     — tilted; the map spins so the VOID (final boss) is always UP, player at
+    //                the bottom, so you're always heading toward the finale (b).
+    //   HeadingUp  — tilted; after each move the map spins so the step you just took points UP (c).
     private bool _rendered = true;                 // start in the atlas; toggle back to schematic
     private MapRenderModel.RenderedMap _render;
-    private Camera2D _cam;
-    private bool _panning;
-    private static readonly Vector2 ZoomLimit = new(0.15f, 3f);
+
+    public enum ViewMode { Flat, BossUp, HeadingUp }
+    private ViewMode _mode = ViewMode.Flat;
+    private float _zoom = 1f;
+    private Vector2 _pan;              // Flat-mode pan (screen px)
+    private bool _dragging;
+    private float _rot, _rotTarget;    // view rotation (radians), smoothed toward the target
+    private float _tilt = 1f;          // vertical foreshorten — the "tilted book on a table" look
+    private Vector2 _lastMoveDir = new(0, -1);
+    private Vector2 _anchor;           // screen point the focus is pinned to (recomputed each _Draw)
+    private const float TiltFactor = 0.62f;   // how far the map leans back in the tilted modes
+    private static readonly Vector2 ZoomLimit = new(0.2f, 4f);
 
     // UI
     private LineEdit _seedEdit;
     private Label _infoLabel;
     private Button _mistButton;
     private Button _renderButton;
+    private Button _viewModeButton;
 
     public override void _Ready()
     {
@@ -74,23 +90,66 @@ public partial class MapController : Node2D
         _seedEdit.TextSubmitted += OnSeedSubmitted;
         GetNode<Label>("UI/VersionLabel").Text = "v" + GameVersion.Current;
 
-        _cam = GetNode<Camera2D>("Cam");
-        _cam.MakeCurrent();
+        _viewModeButton = GetNode<Button>("UI/ViewModeButton");
+        _viewModeButton.Pressed += OnCycleViewMode;
         _renderButton.Text = _rendered ? "View: atlas" : "View: schematic";
-        FitCamera();
+        UpdateViewModeButton();
+        FitZoom();
 
         Restart(DetRandom.NewSeed());
     }
 
-    /// <summary>Center the camera and zoom so the whole map fits the viewport.</summary>
-    private void FitCamera()
+    /// <summary>Zoom so the whole map fits the viewport (Flat mode default).</summary>
+    private void FitZoom()
     {
         var vp = GetViewport().GetVisibleRect().Size;
         float worldSpan = 2f * (MapGenerator.RimRadius + 60f);
-        float z = Mathf.Min(vp.X / worldSpan, vp.Y / worldSpan);
-        z = Mathf.Clamp(z, ZoomLimit.X, ZoomLimit.Y);
-        _cam.Zoom = new Vector2(z, z);
-        _cam.Position = MapGenerator.Center;
+        _zoom = Mathf.Clamp(Mathf.Min(vp.X / worldSpan, vp.Y / worldSpan), ZoomLimit.X, ZoomLimit.Y);
+    }
+
+    private void OnCycleViewMode()
+    {
+        _mode = (ViewMode)(((int)_mode + 1) % 3);
+        _pan = Vector2.Zero;
+        UpdateViewModeButton();
+        QueueRedraw();
+    }
+
+    private void UpdateViewModeButton() => _viewModeButton.Text = _mode switch
+    {
+        ViewMode.Flat => "Cam: flat",
+        ViewMode.BossUp => "Cam: boss-up",
+        _ => "Cam: heading-up",
+    };
+
+    // ---- view projection -------------------------------------------------------
+    /// <summary>World point the view is pinned on: map center (Flat) or the player (tilted modes).</summary>
+    private Vector2 Focus() => _mode == ViewMode.Flat ? MapGenerator.Center : _tokenPos;
+
+    /// <summary>World → screen: rotate so the heading points up, foreshorten (tilt), zoom, pin the focus.</summary>
+    private Vector2 Project(Vector2 world)
+    {
+        var v = (world - Focus()).Rotated(-_rot) * _zoom;
+        v.Y *= _tilt;
+        return _anchor + _pan + v;
+    }
+
+    private float Scaled(float s) => s * _zoom;
+
+    /// <summary>Screen point the focus is pinned to: center (Flat) or near the bottom (tilted modes).</summary>
+    private Vector2 ComputeAnchor()
+    {
+        var vp = GetViewport().GetVisibleRect().Size;
+        return _mode == ViewMode.Flat ? vp / 2f : new Vector2(vp.X / 2f, vp.Y * 0.72f);
+    }
+
+    /// <summary>Desired view rotation so the heading (toward-boss, or last step) points straight up.</summary>
+    private float RotTarget()
+    {
+        if (_mode == ViewMode.Flat) return 0f;
+        var h = _mode == ViewMode.BossUp ? MapGenerator.Center - _tokenPos : _lastMoveDir;
+        if (h.LengthSquared() < 1e-4f) h = MapGenerator.Center - _tokenPos;
+        return h.LengthSquared() < 1e-4f ? _rotTarget : h.Angle() + Mathf.Pi / 2f;
     }
 
     private void OnToggleRender()
@@ -223,6 +282,7 @@ public partial class MapController : Node2D
     private void TryMove(MapNode target, Dictionary<MapNode, int> vdist)
     {
         if (target == null || target == _current) return;
+        var from = _current.Pos;
 
         if (_visited.Contains(target))
         {
@@ -241,6 +301,7 @@ public partial class MapController : Node2D
             AddRevealed(target);
             EndDay(); // reaching a NEW node ends the day
         }
+        _lastMoveDir = target.Pos - from;   // heading-up mode spins this step to the top
         QueueRedraw();
     }
 
@@ -248,54 +309,51 @@ public partial class MapController : Node2D
     {
         _time += (float)delta;
         _tokenPos = _tokenPos.Lerp(_current.Pos, Mathf.Min(1f, (float)delta * 12f));
+        _rotTarget = RotTarget();
+        float k = Mathf.Min(1f, (float)delta * 6f);
+        _rot = Mathf.LerpAngle(_rot, _rotTarget, k);
+        _tilt = Mathf.Lerp(_tilt, _mode == ViewMode.Flat ? 1f : TiltFactor, k);
         QueueRedraw();
     }
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        // Camera: right/middle-drag to pan, wheel to zoom about the cursor.
-        if (@event is InputEventMouseButton cam)
+        // Wheel zooms; right/middle-drag pans (Flat mode only — tilted modes follow the player).
+        if (@event is InputEventMouseButton wheel)
         {
-            if (cam.ButtonIndex is MouseButton.Right or MouseButton.Middle)
+            if (wheel.Pressed && wheel.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
             {
-                _panning = cam.Pressed;
+                _zoom = Mathf.Clamp(_zoom * (wheel.ButtonIndex == MouseButton.WheelUp ? 1.12f : 1f / 1.12f),
+                                    ZoomLimit.X, ZoomLimit.Y);
+                QueueRedraw();
                 return;
             }
-            if (cam.Pressed && cam.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
+            if (wheel.ButtonIndex is MouseButton.Right or MouseButton.Middle)
             {
-                ZoomAtCursor(cam.ButtonIndex == MouseButton.WheelUp ? 1.12f : 1f / 1.12f);
+                _dragging = wheel.Pressed && _mode == ViewMode.Flat;
                 return;
             }
         }
-        if (@event is InputEventMouseMotion motion && _panning)
+        if (@event is InputEventMouseMotion motion && _dragging)
         {
-            _cam.Position -= motion.Relative / _cam.Zoom; // screen delta → world delta
+            _pan += motion.Relative;
+            QueueRedraw();
             return;
         }
 
         if (@event is not InputEventMouseButton mb || !mb.Pressed || mb.ButtonIndex != MouseButton.Left)
             return;
 
-        // Hit-test in WORLD space (a Camera2D now transforms the view — see KNOWLEDGE.md).
-        var world = GetGlobalMousePosition();
-        float pickR = ClickRadius / Mathf.Max(0.001f, _cam.Zoom.X); // keep click tolerance in screen px
+        // Hit-test in SCREEN space: compare the cursor to each node's PROJECTED position.
         MapNode target = null;
-        float best = pickR * pickR;
+        float best = ClickRadius * ClickRadius;
         foreach (var n in _graph.Nodes)
         {
             if (n.Devoured) continue;
-            float d = n.Pos.DistanceSquaredTo(world);
+            float d = Project(n.Pos).DistanceSquaredTo(mb.Position);
             if (d < best) { best = d; target = n; }
         }
         if (target != null) TryMove(target, VisitedSteps());
-    }
-
-    private void ZoomAtCursor(float factor)
-    {
-        var before = GetGlobalMousePosition();
-        float z = Mathf.Clamp(_cam.Zoom.X * factor, ZoomLimit.X, ZoomLimit.Y);
-        _cam.Zoom = new Vector2(z, z);
-        _cam.Position += before - GetGlobalMousePosition(); // keep the point under the cursor fixed
     }
 
     // ---- mist visibility -------------------------------------------------------
@@ -320,6 +378,7 @@ public partial class MapController : Node2D
     public override void _Draw()
     {
         if (_graph == null) return;
+        _anchor = ComputeAnchor();
         var vdist = VisitedSteps();
 
         if (_rendered) { DrawAtlas(vdist); return; }
@@ -330,12 +389,12 @@ public partial class MapController : Node2D
 
         // Zone 6 (the VOID): dark disc containing the lv5 ring, the lake, the river ring.
         bool voidSeen = !_mist || _revealed.Contains("XX");
-        DrawCircle(_graph.Center, _graph.Zone6Radius, new Color(0.02f, 0.02f, 0.04f));
+        DrawCircle(Project(_graph.Center), Scaled(_graph.Zone6Radius), new Color(0.02f, 0.02f, 0.04f));
         if (voidSeen)
         {
-            DrawArc(_graph.Center, _graph.Zone6Radius, 0, Mathf.Tau, 64, new Color(0.30f, 0.28f, 0.45f, 0.35f), 1.5f);
-            DrawCircle(_graph.Center, _graph.LakeRadius, new Color(0.04f, 0.03f, 0.07f));
-            DrawArc(_graph.Center, _graph.RiverRadius, 0, Mathf.Tau, 48, new Color(0.25f, 0.35f, 0.65f, 0.9f), 3f);
+            DrawArc(Project(_graph.Center), Scaled(_graph.Zone6Radius), 0, Mathf.Tau, 64, new Color(0.30f, 0.28f, 0.45f, 0.35f), 1.5f);
+            DrawCircle(Project(_graph.Center), Scaled(_graph.LakeRadius), new Color(0.04f, 0.03f, 0.07f));
+            DrawArc(Project(_graph.Center), Scaled(_graph.RiverRadius), 0, Mathf.Tau, 48, new Color(0.25f, 0.35f, 0.65f, 0.9f), 3f);
         }
 
         // Edges — drawn if one endpoint is visible (so bridge edges out of a revealed world show).
@@ -343,7 +402,7 @@ public partial class MapController : Node2D
         {
             if (!e.Visible || e.A.Devoured || e.B.Devoured) continue;
             if (_mist && !NodeVisible(e.A) && !NodeVisible(e.B)) continue;
-            DrawLine(e.A.Pos, e.B.Pos, new Color(0.55f, 0.55f, 0.55f, 0.75f), 1.5f);
+            DrawLine(Project(e.A.Pos), Project(e.B.Pos), new Color(0.55f, 0.55f, 0.55f, 0.75f), 1.5f);
         }
 
         // Nodes.
@@ -360,19 +419,19 @@ public partial class MapController : Node2D
             DrawNode(n, _visited.Contains(n), explore || CanRevisit(n, vdist));
         }
 
-        DrawToken(_tokenPos);
+        DrawToken(Project(_tokenPos));
     }
 
     private void DrawWedge(int w, Color color)
     {
         float startDeg = -90f + w * 72f - WedgeDeg / 2f;
-        var pts = new List<Vector2> { _graph.Center };
+        var pts = new List<Vector2> { Project(_graph.Center) };
         int seg = 12;
         for (int i = 0; i <= seg; i++)
         {
             float deg = startDeg + WedgeDeg * i / seg;
             float rad = Mathf.DegToRad(deg);
-            pts.Add(_graph.Center + new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * MapGenerator.RimRadius);
+            pts.Add(Project(_graph.Center + new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * MapGenerator.RimRadius));
         }
         DrawColoredPolygon(pts.ToArray(), new Color(color.R, color.G, color.B, 0.12f));
     }
@@ -380,18 +439,21 @@ public partial class MapController : Node2D
     private void DrawFrontier(MapNode n)
     {
         // Unknown node you may explore into: a gold ring around a dim marker.
-        DrawArc(n.Pos, NodeRadius + 3f, 0, Mathf.Tau, 20, Gold, 1.5f);
-        DrawCircle(n.Pos, 5f, new Color(0.3f, 0.3f, 0.35f, 0.8f));
+        var p = Project(n.Pos);
+        DrawArc(p, Scaled(NodeRadius + 3f), 0, Mathf.Tau, 20, Gold, 1.5f);
+        DrawCircle(p, Scaled(5f), new Color(0.3f, 0.3f, 0.35f, 0.8f));
     }
 
     private void DrawNode(MapNode n, bool visited, bool reachable)
     {
+        var p = Project(n.Pos);
+        float r = Scaled(NodeRadius);
         float alpha = 1f;
         if (DevourDay.TryGetValue(n.LevelTag, out int d) && d == _day)
             alpha = 0.45f + 0.45f * Mathf.Sin(_time * 8f);
 
         if (reachable)
-            DrawArc(n.Pos, NodeRadius + 4f, 0, Mathf.Tau, 22, new Color(Gold.R, Gold.G, Gold.B, 0.85f), 1.5f);
+            DrawArc(p, r + Scaled(4f), 0, Mathf.Tau, 22, new Color(Gold.R, Gold.G, Gold.B, 0.85f), 1.5f);
 
         var c = visited ? VisitedGrey : n.Color;
         c.A = alpha;
@@ -399,40 +461,42 @@ public partial class MapController : Node2D
         switch (n.Kind)
         {
             case NodeKind.Combat:
-                DrawCircle(n.Pos, NodeRadius, c);
-                DrawArc(n.Pos, NodeRadius, 0, Mathf.Tau, 20, new Color(0, 0, 0, 0.6f * alpha), 1.5f);
+                DrawCircle(p, r, c);
+                DrawArc(p, r, 0, Mathf.Tau, 20, new Color(0, 0, 0, 0.6f * alpha), 1.5f);
                 break;
             case NodeKind.Boss:
-                DrawDiamond(n.Pos, NodeRadius + 3f, c);
+                DrawDiamond(p, r + Scaled(3f), c);
                 break;
             case NodeKind.Shelter:
-                DrawTriangle(n.Pos, NodeRadius + 1f, c);
+                DrawTriangle(p, r + Scaled(1f), c);
                 break;
             case NodeKind.QuestionMark:
-                DrawCircle(n.Pos, NodeRadius, c);
-                DrawString(_font, n.Pos + new Vector2(-4, 5), "?",
+                DrawCircle(p, r, c);
+                DrawString(_font, p + new Vector2(-4, 5), "?",
                     HorizontalAlignment.Left, -1, 14, new Color(0, 0, 0, alpha));
                 break;
             case NodeKind.River: // selectable marker sitting on the river ring
                 var rc = visited ? VisitedGrey : new Color(0.30f, 0.45f, 0.85f);
                 rc.A = alpha;
-                DrawCircle(n.Pos, NodeRadius - 1f, rc);
-                DrawArc(n.Pos, NodeRadius - 1f, 0, Mathf.Tau, 18, new Color(0.7f, 0.8f, 1f, alpha), 1.5f);
+                DrawCircle(p, r - Scaled(1f), rc);
+                DrawArc(p, r - Scaled(1f), 0, Mathf.Tau, 18, new Color(0.7f, 0.8f, 1f, alpha), 1.5f);
                 break;
         }
 
         if (n.IsCombat)
-            DrawString(_font, n.Pos + new Vector2(-NodeRadius, NodeRadius + 11f), n.Id,
+            DrawString(_font, p + new Vector2(-r, r + 11f), n.Id,
                 HorizontalAlignment.Left, -1, 9, new Color(1, 1, 1, 0.7f * alpha));
     }
 
+    /// <summary>Player token — drawn upright in screen space at the projected point.</summary>
     private void DrawToken(Vector2 p)
     {
-        DrawCircle(p, 9f, new Color(1f, 0.9f, 0.2f));
-        DrawArc(p, 9f, 0, Mathf.Tau, 16, new Color(0, 0, 0, 0.8f), 1.5f);
-        DrawCircle(p + new Vector2(-3, -2), 1.4f, Colors.Black);
-        DrawCircle(p + new Vector2(3, -2), 1.4f, Colors.Black);
-        DrawArc(p, 5f, Mathf.DegToRad(20), Mathf.DegToRad(160), 10, Colors.Black, 1.4f);
+        float r = Scaled(9f);
+        DrawCircle(p, r, new Color(1f, 0.9f, 0.2f));
+        DrawArc(p, r, 0, Mathf.Tau, 16, new Color(0, 0, 0, 0.8f), 1.5f);
+        DrawCircle(p + new Vector2(-r * 0.33f, -r * 0.22f), Scaled(1.4f), Colors.Black);
+        DrawCircle(p + new Vector2(r * 0.33f, -r * 0.22f), Scaled(1.4f), Colors.Black);
+        DrawArc(p, Scaled(5f), Mathf.DegToRad(20), Mathf.DegToRad(160), 10, Colors.Black, 1.4f);
     }
 
     private void DrawDiamond(Vector2 p, float r, Color c)

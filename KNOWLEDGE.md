@@ -163,12 +163,15 @@ compiler surfaces below.
 - **All map randomness goes through `DetRandom`** built from the 8-char run seed — never
   Godot's global RNG or `System.Random` for gameplay, or the seed stops reproducing the map.
   (`DetRandom.NewSeed()` uses `System.Random` *only* to mint a fresh seed for the dice button.)
-- **As of v0.3.2 the map uses a `Camera2D`** (`Cam` in `Map.tscn`) for pan (right/middle-drag)
-  and zoom (wheel). So `MapController` (a `Node2D`) hit-tests clicks against `node.Pos` in
-  **world space via `GetGlobalMousePosition()`** — NOT `InputEventMouseButton.Position` (that's
-  the screen/viewport point and diverges from world coords once a camera transforms the view).
-  The click tolerance is divided by `Cam.Zoom` so it stays constant in screen pixels. UI
-  (dice/seed/Rest/Mist/View) is a `CanvasLayer` of `Control`s, consumed before `_UnhandledInput`.
+- **The map has NO `Camera2D` (as of v0.3.3).** `MapController.Project(world)` maps world→screen
+  itself (rotate so heading is up → foreshorten/tilt → zoom → pin the focus at an anchor), and
+  everything is drawn in screen space through it. This is what lets the tilted view modes rotate
+  the map while node markers/labels stay upright (a Camera2D rotates/squashes the icons too).
+  So hit-testing compares `InputEventMouseButton.Position` (screen) against **`Project(node.Pos)`**
+  — do NOT reintroduce `GetGlobalMousePosition()`/a camera without revisiting this. Wheel = zoom
+  (`_zoom`); right/middle-drag = pan (`_pan`, Flat mode only). UI is a `CanvasLayer`, consumed
+  before `_UnhandledInput`. **An earlier v0.3.2 note here said the map used a Camera2D — that was
+  reverted; ignore any stale mention.**
 - Generation order matters: combat nodes → intra-world edges → inter-world edges → **zone 6**
   → function nodes. Zone 6 is built *before* the function pass but its edges are
   `Visible=false`, which is also what excludes them from the crossing/probability passes.
@@ -190,9 +193,18 @@ compiler surfaces below.
 - **`MapGenerator.LayoutScale` (1.8) blows the whole map up uniformly.** A uniform scale preserves
   every crossing/midpoint, so a given seed yields the identical map, just bigger — safe to change.
   `MapGenerator.RimRadius` is the outer playable radius (used to size islands + the schematic wedge).
-- Barriers are **marked, not arted** (per current scope): point barriers = a small diamond + label
-  on blocked would-be roads (from `MapGraph.FailedCandidates`); area barriers = tinted border
-  strokes + one label per realm. Per-world barrier names/colors live in `MapRenderModel.Themes`.
+- Barriers are **marked, not arted** (per current scope), and each realm has TWO kinds:
+  **AREA** = a thick themed terrain belt drawn along every disconnected frontier (reads as
+  terrain: lake / desert / bamboo forest…), one name label per realm; **POINT** = a small
+  landmark diamond on a *blocked would-be road* (a `MapGraph.FailedCandidates` pair that also
+  shares a territory border — the adjacency filter in `Build` via `barrierMid` kills the label
+  spam), name shown once per realm. Both live in `MapRenderModel.Themes` (`.AreaBarrier` /
+  `.PointBarrier` names, `.AreaColor` / `.PointColor`).
+- **View modes (v0.3.3)**, cycled by the Cam button: `Flat` (top-down, pan/zoom), `BossUp`
+  (tilted, map spins so the central VOID/boss is always up, player pinned near the bottom),
+  `HeadingUp` (tilted, spins so the last step taken points up — set `_lastMoveDir` in `TryMove`).
+  Rotation/tilt are smoothed in `_Process`; tilt is an affine vertical foreshorten (`_tilt`),
+  NOT true perspective — true book/trapezoid perspective would need a SubViewport→3D quad.
 - `DrawColoredPolygon` assumes **convex** polygons — all atlas cells/islands/pentagon are convex
   (convex clip ∩ half-planes), so don't feed it a concave polygon or the fill renders wrong.
 
