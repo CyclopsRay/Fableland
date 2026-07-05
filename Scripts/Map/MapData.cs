@@ -81,8 +81,14 @@ public sealed class MapGraph
     public List<MapEdge> Edges = new();
     public MapNode StartNode;
 
+    // Pairs the generator rolled for an edge and LOST (siblings/higher-node/cross-world links
+    // that didn't fire). The rendered map turns these into "blocked pass" point barriers — a
+    // road could have been here, but a landmark blocks it. Purely a render hint; no gameplay use.
+    public List<(MapNode A, MapNode B)> FailedCandidates = new();
+
     // Zone-6 draw hints.
     public Vector2 Center;
+    public float Zone6Radius;   // dark disc that contains all of zone 6 (lv5 ring sits inside it)
     public float RiverRadius;
     public float LakeRadius;
 

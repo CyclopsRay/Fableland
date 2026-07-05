@@ -145,6 +145,17 @@ compiler surfaces below.
   velocity/config via an `Init(...)` method called **after** `AddChild` — so guard against a
   0-lifetime free on the first `_PhysicsProcess` and don't rely on Init'd fields in `_Ready`.
 
+### A full-screen background `Control` eats clicks meant for `_UnhandledInput` (v0.2.4)
+- **Symptom:** on the Map scene the player token would not move — clicks never reached
+  `MapController._UnhandledInput`.
+- **Rule:** a `Control` (here a full-rect `ColorRect` background in a `CanvasLayer`) has
+  `mouse_filter = STOP` **by default**, so it consumes the click as GUI input and marks it
+  handled — `_UnhandledInput` then never fires, even though the ColorRect is in a
+  `layer = -1` CanvasLayer behind everything. Set **`mouse_filter = 2` (IGNORE)** on any
+  decorative/background Control (and on non-interactive `Label`s overlapping the play area)
+  so world clicks pass through to `_UnhandledInput`. Only genuinely interactive controls
+  (buttons, line edits) should keep STOP.
+
 ### World map / rogue-like meta-layer (reference, v0.2.3)
 - The overworld map lives in `Scripts/Map/` + `Scenes/Menu.tscn` / `Scenes/Map.tscn`;
   full spec in **`Docs/MapGDD.md`**. `project.godot` `main_scene` now boots **Menu**
@@ -152,14 +163,38 @@ compiler surfaces below.
 - **All map randomness goes through `DetRandom`** built from the 8-char run seed — never
   Godot's global RNG or `System.Random` for gameplay, or the seed stops reproducing the map.
   (`DetRandom.NewSeed()` uses `System.Random` *only* to mint a fresh seed for the dice button.)
-- Map draws in **screen space** (no `Camera2D`), so `MapController` (a `Node2D`) hit-tests
-  clicks with `InputEventMouseButton.Position` directly against `node.Pos`. UI (dice/seed/
-  Rest) is a `CanvasLayer` of `Control`s, so its clicks are consumed before `_UnhandledInput`.
+- **As of v0.3.2 the map uses a `Camera2D`** (`Cam` in `Map.tscn`) for pan (right/middle-drag)
+  and zoom (wheel). So `MapController` (a `Node2D`) hit-tests clicks against `node.Pos` in
+  **world space via `GetGlobalMousePosition()`** — NOT `InputEventMouseButton.Position` (that's
+  the screen/viewport point and diverges from world coords once a camera transforms the view).
+  The click tolerance is divided by `Cam.Zoom` so it stays constant in screen pixels. UI
+  (dice/seed/Rest/Mist/View) is a `CanvasLayer` of `Control`s, consumed before `_UnhandledInput`.
 - Generation order matters: combat nodes → intra-world edges → inter-world edges → **zone 6**
   → function nodes. Zone 6 is built *before* the function pass but its edges are
   `Visible=false`, which is also what excludes them from the crossing/probability passes.
 - Content of nodes (fights, shelter/question-mark effects) is **not implemented** — nodes
   differ by icon only. Difficulty/reward scaling by level is documented, not coded.
+
+### Rendered "atlas" map view (reference, v0.3.2)
+- Two views, toggled by the **View** button (`_rendered`, defaults to atlas): the original
+  **schematic** (`MapController._Draw` fall-through) and the **atlas** (`MapControllerAtlas.cs`,
+  a partial of `MapController`). Both read the SAME `MapGraph` + live state — the atlas adds no
+  gameplay, only a rendered layer.
+- `MapRenderModel.Build(graph)` precomputes the atlas (`MapRenderModel.RenderedMap`) after
+  `MapGenerator.Generate`: per-realm **weighted Voronoi (power-diagram)** territories (cell area
+  set by `ClaimRadius(kind)²` — combat big, function small), clipped to a convex island wedge via
+  `ClipHalfPlane` (Sutherland–Hodgman; each cell edge is tagged with the neighbour site that made
+  it, so a shared border is a **road** if a graph edge links the two, else a themed **barrier**).
+  Zone 6 is a central **pentagon** with 5 lv5 territories; XX-S shelters are isolated sea islets;
+  cross-realm edges are **golden causeways**. Determinism preserved (jitter uses `DetRandom(seed+"R")`).
+- **`MapGenerator.LayoutScale` (1.8) blows the whole map up uniformly.** A uniform scale preserves
+  every crossing/midpoint, so a given seed yields the identical map, just bigger — safe to change.
+  `MapGenerator.RimRadius` is the outer playable radius (used to size islands + the schematic wedge).
+- Barriers are **marked, not arted** (per current scope): point barriers = a small diamond + label
+  on blocked would-be roads (from `MapGraph.FailedCandidates`); area barriers = tinted border
+  strokes + one label per realm. Per-world barrier names/colors live in `MapRenderModel.Themes`.
+- `DrawColoredPolygon` assumes **convex** polygons — all atlas cells/islands/pentagon are convex
+  (convex clip ∩ half-planes), so don't feed it a concave polygon or the fill renders wrong.
 
 ### Getting a `Font` for `_Draw` without a Control (reference, v0.2.3)
 - **Symptom risk:** `ThemeDB.Singleton.FallbackFont` is easy to get wrong across binding

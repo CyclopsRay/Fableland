@@ -18,19 +18,26 @@ namespace Fableland.Map;
 /// </summary>
 public static class MapGenerator
 {
-    // Screen-space layout. The map is drawn directly in screen coords (no camera),
-    // centered here; radii shrink from the outer rim (level 1-A) toward the VOID.
+    // World layout. Radii shrink from the outer rim (level 1-A) toward the VOID.
+    // LayoutScale blows the whole map up uniformly (v0.3.2, for the rendered atlas + camera):
+    // a uniform scale preserves all topology/crossings, so a given seed yields the same map,
+    // just bigger. The rendered mode uses a Camera2D; the schematic mode is camera-tracked too.
+    public const float LayoutScale = 1.8f;
     public static readonly Vector2 Center = new(576, 340);
+
+    // Outer edge of the playable disc (just past level 1-A) — used to size world islands/wedges.
+    public const float RimRadius = 300f * LayoutScale + 30f;
 
     private static readonly Dictionary<string, float> Radius = new()
     {
-        ["1-A"] = 300f, ["1-B"] = 262f,
-        ["2-A"] = 224f, ["2-B"] = 190f,
-        ["3"] = 150f, ["4"] = 110f,
-        ["5"] = 76f,   // ring of lv5 nodes around the lake
+        ["1-A"] = 300f * LayoutScale, ["1-B"] = 262f * LayoutScale,
+        ["2-A"] = 224f * LayoutScale, ["2-B"] = 190f * LayoutScale,
+        ["3"] = 150f * LayoutScale, ["4"] = 110f * LayoutScale,
+        ["5"] = 78f * LayoutScale,   // ring of lv5 nodes — sits INSIDE the zone-6 disc, around the lake
     };
-    private const float RiverRadius = 44f;
-    private const float LakeRadius = 60f;
+    private const float Zone6Radius = 96f * LayoutScale; // dark disc bounding zone 6 (lv5 ring is inside it)
+    private const float RiverRadius = 38f * LayoutScale;
+    private const float LakeRadius = 58f * LayoutScale;
 
     // Outer→inner ordering of the outer-zone sublevels.
     private static readonly string[] OuterTags = { "1-A", "1-B", "2-A", "2-B", "3", "4" };
@@ -43,7 +50,7 @@ public static class MapGenerator
     public static MapGraph Generate(string seed, string homeAbbr = PomegraknightHome)
     {
         var rng = new DetRandom(seed);
-        var g = new MapGraph { Seed = seed, Center = Center, RiverRadius = RiverRadius, LakeRadius = LakeRadius };
+        var g = new MapGraph { Seed = seed, Center = Center, Zone6Radius = Zone6Radius, RiverRadius = RiverRadius, LakeRadius = LakeRadius };
 
         // --- pick 5 of 6 worlds, in ring order. The home world is always present and
         //     placed at index 0 (the start zone); the other 4 are random from the rest. ---
@@ -113,7 +120,7 @@ public static class MapGenerator
     private static List<MapNode> PlaceRow(MapGraph g, WorldDef world, int w, float worldCenterDeg,
         string tag, int level, int count, ref int runningIndex, NodeKind kind)
     {
-        const float usableDeg = 60f; // leave a 6° margin each side of the 72° fan
+        const float usableDeg = 56f; // nodes use 56° of the 72° fan, leaving a ~16° gap between worlds
         float r = Radius[tag];
         float startDeg = worldCenterDeg - usableDeg / 2f;
         var row = new List<MapNode>();
@@ -166,10 +173,12 @@ public static class MapGenerator
                 else if (rng.Chance(0.70) || h1 == null)
                 {
                     AddEdge(g, n, h0, h0.Level);
+                    if (h1 != null) g.FailedCandidates.Add((n, h1)); // nearer link kept, farther one blocked
                 }
                 else
                 {
                     AddEdge(g, n, h1, h1.Level);
+                    g.FailedCandidates.Add((n, h0)); // farther link kept, nearest one blocked
                 }
             }
         }
@@ -192,6 +201,8 @@ public static class MapGenerator
         for (int k = 0; k + 1 < row.Count; k++)
             if (rng.Chance(prob))
                 AddEdge(g, row[k], row[k + 1], row[k].Level);
+            else
+                g.FailedCandidates.Add((row[k], row[k + 1])); // adjacent siblings that didn't link
     }
 
     // ---- inter-world edges ------------------------------------------------------
@@ -301,7 +312,7 @@ public static class MapGenerator
     {
         int idx = letterCount.TryGetValue(level, out var c) ? c : 0;
         letterCount[level] = idx + 1;
-        bool shelter = forceShelter || rng.Chance(0.80);
+        bool shelter = forceShelter || rng.Chance(0.40); // 40% shelter / 60% question mark
         var node = new MapNode
         {
             Id = $"{level}-{(char)('a' + idx)}",
