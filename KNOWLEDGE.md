@@ -145,6 +145,29 @@ compiler surfaces below.
   velocity/config via an `Init(...)` method called **after** `AddChild` — so guard against a
   0-lifetime free on the first `_PhysicsProcess` and don't rely on Init'd fields in `_Ready`.
 
+### World map / rogue-like meta-layer (reference, v0.2.3)
+- The overworld map lives in `Scripts/Map/` + `Scenes/Menu.tscn` / `Scenes/Map.tscn`;
+  full spec in **`Docs/MapGDD.md`**. `project.godot` `main_scene` now boots **Menu**
+  (Arena is still the fighter scene, reachable later).
+- **All map randomness goes through `DetRandom`** built from the 8-char run seed — never
+  Godot's global RNG or `System.Random` for gameplay, or the seed stops reproducing the map.
+  (`DetRandom.NewSeed()` uses `System.Random` *only* to mint a fresh seed for the dice button.)
+- Map draws in **screen space** (no `Camera2D`), so `MapController` (a `Node2D`) hit-tests
+  clicks with `InputEventMouseButton.Position` directly against `node.Pos`. UI (dice/seed/
+  Rest) is a `CanvasLayer` of `Control`s, so its clicks are consumed before `_UnhandledInput`.
+- Generation order matters: combat nodes → intra-world edges → inter-world edges → **zone 6**
+  → function nodes. Zone 6 is built *before* the function pass but its edges are
+  `Visible=false`, which is also what excludes them from the crossing/probability passes.
+- Content of nodes (fights, shelter/question-mark effects) is **not implemented** — nodes
+  differ by icon only. Difficulty/reward scaling by level is documented, not coded.
+
+### Getting a `Font` for `_Draw` without a Control (reference, v0.2.3)
+- **Symptom risk:** `ThemeDB.Singleton.FallbackFont` is easy to get wrong across binding
+  versions and there's no toolchain here to catch it.
+- **Rule:** from any `Control` you already have a node for, call `GetThemeDefaultFont()` and
+  cache the `Font` — reliable for `DrawString` from a `Node2D._Draw`. `MapController` pulls it
+  off its `InfoLabel`.
+
 ### Autoload C# singletons (reference)
 - A C# autoload is registered as `Name="*res://Scripts/Name.cs"` in `project.godot`; set the
   static `Instance` in `_EnterTree`. Autoloads persist across `ReloadCurrentScene`, so a
