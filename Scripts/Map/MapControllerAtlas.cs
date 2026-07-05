@@ -44,7 +44,9 @@ public partial class MapController : Node2D
         foreach (var t in rm.Territories)
         {
             if (_mist && !_revealed.Contains(_graph.Worlds[t.WorldIndex].Abbr)) continue;
-            var fill = t.Node.Devoured ? new Color(0.06f, 0.06f, 0.10f)
+            // Devoured land reads as dim "dead ruins" (still legible), not pure black VOID, so you
+            // never lose sight of where you've been once the VOID eats a ring.
+            var fill = t.Node.Devoured ? new Color(0.20f, 0.19f, 0.22f)
                      : _visited.Contains(t.Node) ? t.Fill.Lerp(VisitedGrey, 0.55f)
                      : t.Fill;
             var poly = ProjectPoly(t.Poly);
@@ -80,15 +82,16 @@ public partial class MapController : Node2D
             {
                 foreach (var t in rm.Zone6Cells)
                 {
-                    var fill = t.Node.Devoured ? new Color(0.05f, 0.05f, 0.09f)
+                    var fill = t.Node.Devoured ? new Color(0.16f, 0.15f, 0.20f)
                              : _visited.Contains(t.Node) ? t.Fill.Lerp(VisitedGrey, 0.5f) : t.Fill.Lightened(0.05f);
                     var poly = ProjectPoly(t.Poly);
                     DrawColoredPolygon(poly, fill);
                     DrawPolyline(Closed(poly), new Color(0.3f, 0.28f, 0.45f, 0.4f), 1.2f);
                 }
                 DrawPolyline(Closed(ProjectPoly(rm.Pentagon)), new Color(0.35f, 0.32f, 0.5f, 0.7f), 2f);
-                DrawCircle(Project(_graph.Center), Scaled(_graph.LakeRadius), new Color(0.04f, 0.03f, 0.08f));
-                DrawArc(Project(_graph.Center), Scaled(_graph.RiverRadius), 0, Mathf.Tau, 48, new Color(0.28f, 0.4f, 0.72f, 0.9f), 3f);
+                // Lake + river are terrain, so they tilt with the map (projected discs, not upright circles).
+                DrawWorldDisc(_graph.Center, _graph.LakeRadius, new Color(0.04f, 0.03f, 0.08f));
+                DrawWorldRing(_graph.Center, _graph.RiverRadius, new Color(0.28f, 0.4f, 0.72f, 0.9f), 3f);
             }
         }
 
@@ -110,13 +113,13 @@ public partial class MapController : Node2D
             var sp = Project(p.Pos);
             DrawDiamond(sp, Scaled(6f), col);
             if (pointLabeled.Add(p.WorldIndex))
-                DrawString(_font, sp + new Vector2(8, 4), p.Label, HorizontalAlignment.Left, -1, 12, new Color(1, 1, 1, 0.8f));
+                DrawString(_font, sp + new Vector2(8, 4), p.Label, HorizontalAlignment.Left, -1, FontSize(12), new Color(1, 1, 1, 0.8f));
         }
         foreach (var a in rm.Areas)
         {
             if (_mist && !_revealed.Contains(_graph.Worlds[a.WorldIndex].Abbr)) continue;
             DrawString(_font, Project(a.Pos) + new Vector2(-a.Label.Length * 3.5f, 4), a.Label,
-                HorizontalAlignment.Left, -1, 14, new Color(1, 1, 1, 0.6f));
+                HorizontalAlignment.Left, -1, FontSize(14), new Color(1, 1, 1, 0.6f));
         }
 
         // --- city markers (icons) + token ----------------------------------------
@@ -167,7 +170,7 @@ public partial class MapController : Node2D
                 break;
             case NodeKind.QuestionMark:
                 DrawCircle(p, r, c);
-                DrawString(_font, p + new Vector2(-4, 5), "?", HorizontalAlignment.Left, -1, 14, new Color(0, 0, 0, alpha));
+                DrawString(_font, p + new Vector2(-Scaled(4f), Scaled(5f)), "?", HorizontalAlignment.Left, -1, FontSize(14), new Color(0, 0, 0, alpha));
                 break;
             case NodeKind.River:
                 var rc = visited ? VisitedGrey : new Color(0.30f, 0.45f, 0.85f);
@@ -178,8 +181,8 @@ public partial class MapController : Node2D
         }
 
         if (n.IsCombat)
-            DrawString(_font, p + new Vector2(-r, r + 13f), n.Id,
-                HorizontalAlignment.Left, -1, 10, new Color(1, 1, 1, 0.8f * alpha));
+            DrawString(_font, p + new Vector2(-r, r + Scaled(13f)), n.Id,
+                HorizontalAlignment.Left, -1, FontSize(10), new Color(1, 1, 1, 0.8f * alpha));
     }
 
     /// <summary>Sampled quadratic-bezier road, projected to screen.</summary>
@@ -191,6 +194,32 @@ public partial class MapController : Node2D
         {
             float t = (float)i / seg, u = 1f - t;
             pts[i] = Project(u * u * a + 2f * u * t * ctrl + t * t * b);
+        }
+        DrawPolyline(pts, col, width);
+    }
+
+    /// <summary>A world-space circle drawn as a projected polygon, so it tilts with the map.</summary>
+    private void DrawWorldDisc(Vector2 center, float radius, Color fill)
+    {
+        const int seg = 40;
+        var pts = new Vector2[seg];
+        for (int i = 0; i < seg; i++)
+        {
+            float a = Mathf.Tau * i / seg;
+            pts[i] = Project(center + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * radius);
+        }
+        DrawColoredPolygon(pts, fill);
+    }
+
+    /// <summary>A world-space ring drawn as a projected closed polyline, so it tilts with the map.</summary>
+    private void DrawWorldRing(Vector2 center, float radius, Color col, float width)
+    {
+        const int seg = 40;
+        var pts = new Vector2[seg + 1];
+        for (int i = 0; i <= seg; i++)
+        {
+            float a = Mathf.Tau * i / seg;
+            pts[i] = Project(center + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * radius);
         }
         DrawPolyline(pts, col, width);
     }

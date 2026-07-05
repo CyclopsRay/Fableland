@@ -305,14 +305,45 @@ public static class MapGenerator
             g.Edges.Add(new MapEdge(a, fn, e.Level) { Considered = true });
             g.Edges.Add(new MapEdge(fn, b, e.Level) { Considered = true });
         }
+
+        // (e) Guarantee variety: lv1 and lv2 fire rarely (10% / 25%), so a level can end up with
+        //     no shelter or no question mark. For each of levels 1 & 2, if a kind is missing, add
+        //     it on a random un-split level-L city→city edge.
+        foreach (int lvl in new[] { 1, 2 })
+        {
+            bool hasShelter = false, hasQuestion = false;
+            foreach (var n in g.Nodes)
+                if (n.WorldIndex == -2 && n.Level == lvl)
+                {
+                    if (n.Kind == NodeKind.Shelter) hasShelter = true;
+                    else if (n.Kind == NodeKind.QuestionMark) hasQuestion = true;
+                }
+
+            foreach (var kind in new[] { NodeKind.Shelter, NodeKind.QuestionMark })
+            {
+                if (kind == NodeKind.Shelter ? hasShelter : hasQuestion) continue;
+                // un-split = neither endpoint is already a function node (WorldIndex -2)
+                var open = g.Edges.Where(e => e.Visible && e.Level == lvl
+                                              && e.A.WorldIndex != -2 && e.B.WorldIndex != -2).ToList();
+                if (open.Count == 0) continue;
+                var e = rng.Pick(open);
+                var fn = MakeFunctionNode(g, rng, lvl, (e.A.Pos + e.B.Pos) * 0.5f, ref letterCount, false, kind);
+                var (a, b) = (e.A, e.B);
+                g.Edges.Remove(e);
+                g.Edges.Add(new MapEdge(a, fn, lvl) { Considered = true });
+                g.Edges.Add(new MapEdge(fn, b, lvl) { Considered = true });
+            }
+        }
     }
 
     private static MapNode MakeFunctionNode(MapGraph g, DetRandom rng, int level, Vector2 pos,
-        ref Dictionary<int, int> letterCount, bool forceShelter)
+        ref Dictionary<int, int> letterCount, bool forceShelter, NodeKind? forceKind = null)
     {
         int idx = letterCount.TryGetValue(level, out var c) ? c : 0;
         letterCount[level] = idx + 1;
-        bool shelter = forceShelter || rng.Chance(0.40); // 40% shelter / 60% question mark
+        // forceKind pins the kind (used to guarantee variety); else forceShelter, else 40/60 roll.
+        bool shelter = forceKind.HasValue ? forceKind.Value == NodeKind.Shelter
+                                          : forceShelter || rng.Chance(0.40);
         var node = new MapNode
         {
             Id = $"{level}-{(char)('a' + idx)}",

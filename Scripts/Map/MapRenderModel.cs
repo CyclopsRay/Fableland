@@ -127,6 +127,23 @@ public static class MapRenderModel
         // Fast lookup: does a graph edge connect these two nodes?
         var linked = new HashSet<(MapNode, MapNode)>();
         foreach (var e in g.Edges) { linked.Add((e.A, e.B)); linked.Add((e.B, e.A)); }
+
+        // A function node (shelter / ?) is a road WAYPOINT/HUB: the generator splits a city→city
+        // edge into city→fn→city, so the direct link is gone even though a road still runs
+        // through it. Treat every pair of a function node's neighbours as linked, so their shared
+        // border reads as a road, not a barrier. (A crossing hub genuinely joins all 4 — you can
+        // hop through it — so linking all its neighbour pairs is correct.)
+        foreach (var fn in g.Nodes)
+        {
+            if (fn.WorldIndex != -2) continue;
+            var neigh = g.EdgesOf(fn).Select(e => e.Other(fn)).ToList();
+            for (int i = 0; i < neigh.Count; i++)
+                for (int j = i + 1; j < neigh.Count; j++)
+                {
+                    linked.Add((neigh[i], neigh[j]));
+                    linked.Add((neigh[j], neigh[i]));
+                }
+        }
         bool Linked(MapNode a, MapNode b) => linked.Contains((a, b));
 
         // Midpoint of each barrier border between two cities — used to place a point barrier

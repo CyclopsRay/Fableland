@@ -38,6 +38,7 @@ public partial class MapController : Node2D
     private MapNode _current;
     private int _day = 1;
     private int _stamina = MaxStamina;
+    private bool _inVoid;        // passed the zone-6 singularity: outer ring devoured, time unknowable
 
     private readonly HashSet<MapNode> _visited = new();
     private readonly HashSet<string> _revealed = new();  // regions entered: world abbrs and "XX"
@@ -136,6 +137,9 @@ public partial class MapController : Node2D
 
     private float Scaled(float s) => s * _zoom;
 
+    /// <summary>Font size that scales with zoom (so labels grow/shrink with the map), min 7px.</summary>
+    private int FontSize(int s) => Mathf.Max(7, Mathf.RoundToInt(s * _zoom));
+
     /// <summary>Screen point the focus is pinned to: center (Flat) or near the bottom (tilted modes).</summary>
     private Vector2 ComputeAnchor()
     {
@@ -168,6 +172,7 @@ public partial class MapController : Node2D
         _tokenPos = _current.Pos;
         _day = 1;
         _stamina = MaxStamina;
+        _inVoid = false;
         _visited.Clear();
         _revealed.Clear();
         _visited.Add(_current);
@@ -225,7 +230,9 @@ public partial class MapController : Node2D
             else if (n.Kind == NodeKind.Shelter) camps++;
             else if (n.Kind == NodeKind.QuestionMark) marks++;
         }
-        _infoLabel.Text = $"Day {_day}   Stamina {_stamina}/{MaxStamina}\n" +
+        // Inside the VOID, time is unknowable — the black hole ate the clock.
+        string day = _inVoid ? "???" : _day.ToString();
+        _infoLabel.Text = $"Day {day}   Stamina {_stamina}/{MaxStamina}\n" +
                           $"Traversed {_visited.Count}\n" +
                           $"fights {fights}  camps {camps}  ? {marks}";
     }
@@ -302,7 +309,22 @@ public partial class MapController : Node2D
             EndDay(); // reaching a NEW node ends the day
         }
         _lastMoveDir = target.Pos - from;   // heading-up mode spins this step to the top
+        if (!_inVoid && _current.WorldIndex == -1) EnterVoid();
         QueueRedraw();
+    }
+
+    /// <summary>
+    /// Cross the zone-6 singularity: a black hole that eats information. There's no turning back
+    /// (movement is already one-way in), and outside, the world evolves so fast that the whole
+    /// outer ring (zones 1-5) is devoured at once. Time becomes unknowable — the day reads "???".
+    /// See Docs/MapGDD.md §7.
+    /// </summary>
+    private void EnterVoid()
+    {
+        _inVoid = true;
+        foreach (var n in _graph.Nodes)
+            if (n.WorldIndex != -1) n.Devoured = true; // everything outside zone 6
+        UpdateInfo();
     }
 
     public override void _Process(double delta)

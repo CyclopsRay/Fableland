@@ -200,6 +200,18 @@ compiler surfaces below.
   shares a territory border — the adjacency filter in `Build` via `barrierMid` kills the label
   spam), name shown once per realm. Both live in `MapRenderModel.Themes` (`.AreaBarrier` /
   `.PointBarrier` names, `.AreaColor` / `.PointColor`).
+- **Barrier vs road classification treats a function node as a road HUB** (v0.3.3): the generator
+  splits `city→city` into `city→fn→city`, so `Build` also links every pair of a function node's
+  neighbours in the `linked` set — otherwise the shared border reads as a false barrier even
+  though a road runs through the shelter/`?`. Don't remove this or the "connected but walled-off"
+  bug returns.
+- **Edge-levels 1 & 2 are guaranteed both a shelter AND a `?`** (`MapGenerator`, pass (e)): those
+  levels fire rarely (10% / 25%), so a post-pass adds any missing kind on a random un-split edge.
+- **Entering ANY zone-6 node = crossing the singularity** (`MapController.EnterVoid`, v0.3.3):
+  `_inVoid` latches, **all `WorldIndex != -1` nodes are devoured at once** (no gradual outer
+  devour once inside — it's one-way), and the day readout shows **`???`** (time unknowable). The
+  atlas renders devoured land as dim "dead ruins" (not black) so the explored map stays legible.
+  Lore + rule in `Docs/MapGDD.md` §7.
 - **View modes (v0.3.3)**, cycled by the Cam button: `Flat` (top-down, pan/zoom), `BossUp`
   (tilted, map spins so the central VOID/boss is always up, player pinned near the bottom),
   `HeadingUp` (tilted, spins so the last step taken points up — set `_lastMoveDir` in `TryMove`).

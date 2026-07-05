@@ -106,6 +106,14 @@ Named `<edgeLevel>-<letter>` (`4-a`, `4-b`, `3-a`, …). A function node is a **
 
 ## 7. Zone 6 — the dark zone (`XX`)
 
+**The singularity (lore + mechanic).** Zone 6 is a **black hole that eats information**. Stepping
+into it means crossing the **singularity** — there is **no turning back** (movement is one-way in).
+The instant you cross, the whole outer ring (**zones 1-5) is devoured at once**: outside the hole,
+the world evolves so fast that everything you left behind is already gone. And because the black
+hole eats information, **time itself becomes unknowable inside** — the day counter stops showing a
+number and reads **`???`**. (In the rendered map the devoured outer ring stays faintly visible as
+dim "dead ruins" so you can still read where you've been — you just can't go there.)
+
 Two layers + a river between; **entering zone 6 is one-way** (outer zones get devoured).
 Zone 6 is drawn as a **dark disc**, and **level 5 sits inside that disc** (the lv5 ring is
 within the VOID, not out on the rim next to the boss rooms). From the disc edge inward:
