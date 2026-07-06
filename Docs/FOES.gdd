@@ -30,16 +30,16 @@ the stats.
 Foe level is determined **purely by the current day**. It applies to every foe that
 spawns, regardless of which map node the player is on.
 
-| Foe Lv | Days | Skills unlocked | HP mult | ATK mult | SPD mult |
-|--------|------|----------------|---------|----------|----------|
-| 1 | 1–10 | — (patrol only) | ×1 | ×1 | ×1 |
-| 2 | 11–20 | Aggro (sight) | ×1.2 | ×1.2 | ×1.2 |
-| 3 | 21–30 | Sight improved | ×1.5 | ×1.5 | ×1.2 |
-| 4 | 31–35 | Skill 1 | ×2 | ×1.5 | ×1.2 |
-| 5 | 36–40 | Skill 1 | ×3 | ×1.5 | ×1.5 |
-| 6 | 41–45 | Skill 1 + Skill 2 | ×3 | ×2 | ×1.5 |
-| 7 | zone 6 | Skill 1 + Skill 2 | ×4 | ×3 | ×1.5 |
-| 8 | zone 6 | Skill 1 + Skill 2 | ×5 | ×3 | ×2 |
+| Foe Lv | Days | Difficulty | Skills unlocked | HP mult | ATK mult | SPD mult |
+|--------|------|-----------|----------------|---------|----------|----------|
+| 1 | 1–10 | **Fairytale** (童话般的) | — (patrol only) | ×1 | ×1 | ×1 |
+| 2 | 11–20 | **Mundane** (平凡的) | Aggro (sight) | ×1.2 | ×1.2 | ×1.2 |
+| 3 | 21–30 | **Mundane** (平凡的) | Sight improved | ×1.5 | ×1.5 | ×1.2 |
+| 4 | 31–35 | **Challenging** (崎岖的) | Skill 1 | ×2 | ×1.5 | ×1.2 |
+| 5 | 36–40 | **Challenging** (崎岖的) | Skill 1 | ×3 | ×1.5 | ×1.5 |
+| 6 | 41–45 | **Demonic** (险恶的) | Skill 1 + Skill 2 | ×3 | ×2 | ×1.5 |
+| 7 | zone 6 | **Hellish** (地狱般的) | Skill 1 + Skill 2 | ×4 | ×3 | ×1.5 |
+| 8 | zone 6 | **God-Forbid** (神惧) | Skill 1 + Skill 2 | ×5 | ×3 | ×2 |
 
 **All multipliers are from base stats, not cumulative.** A level-8 Crab has 5× base HP,
 3× base ATK, and 2× base SPD — calculated directly from the base values defined per foe

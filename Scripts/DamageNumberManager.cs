@@ -10,53 +10,53 @@ using Godot;
 /// </summary>
 public partial class DamageNumberManager : Node
 {
-    public static DamageNumberManager Instance { get; private set; }
+	public static DamageNumberManager Instance { get; private set; }
 
-    [Export] public float MinFont = 18f;   // at |amount| <= 20
-    [Export] public float MaxFont = 44f;   // at |amount| >= 100
-    [Export] public float RiseHeight = 46f;
-    [Export] public float Lifetime = 0.7f;
+	[Export] public float MinFont = 18f;   // at |amount| <= 20
+	[Export] public float MaxFont = 44f;   // at |amount| >= 100
+	[Export] public float RiseHeight = 46f;
+	[Export] public float Lifetime = 0.7f;
 
-    public override void _EnterTree() => Instance = this;
-    public override void _ExitTree() { if (Instance == this) Instance = null; }
+	public override void _EnterTree() => Instance = this;
+	public override void _ExitTree() { if (Instance == this) Instance = null; }
 
-    public void Pop(Vector2 worldPos, float amount, bool heal)
-    {
-        int shown = Mathf.RoundToInt(amount);
-        if (shown <= 0) return;
+	public void Pop(Vector2 worldPos, float amount, bool heal)
+	{
+		int shown = Mathf.RoundToInt(amount);
+		if (shown <= 0) return;
 
-        float mag = Mathf.Clamp(Mathf.Abs(amount), 20f, 100f);
-        var settings = new LabelSettings
-        {
-            FontSize = Mathf.RoundToInt(Mathf.Lerp(MinFont, MaxFont, (mag - 20f) / 80f)),
-            FontColor = heal ? new Color(0.35f, 1f, 0.4f) : new Color(1f, 0.3f, 0.3f),
-            OutlineColor = new Color(0f, 0f, 0f, 0.85f),
-            OutlineSize = 5,
-        };
+		float mag = Mathf.Clamp(Mathf.Abs(amount), 20f, 100f);
+		var settings = new LabelSettings
+		{
+			FontSize = Mathf.RoundToInt(Mathf.Lerp(MinFont, MaxFont, (mag - 20f) / 80f)),
+			FontColor = heal ? new Color(0.35f, 1f, 0.4f) : new Color(1f, 0.3f, 0.3f),
+			OutlineColor = new Color(0f, 0f, 0f, 0.85f),
+			OutlineSize = 5,
+		};
 
-        var label = new Label
-        {
-            Text = (heal ? "+" : "") + shown,
-            LabelSettings = settings,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Position = new Vector2(-40f, -16f),
-            Size = new Vector2(80f, 32f),
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-        };
+		var label = new Label
+		{
+			Text = (heal ? "+" : "") + shown,
+			LabelSettings = settings,
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
+			Position = new Vector2(-40f, -16f),
+			Size = new Vector2(80f, 32f),
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+		};
 
-        var root = new Node2D { ZIndex = 100 };
-        root.AddChild(label);
+		var root = new Node2D { ZIndex = 100 };
+		root.AddChild(label);
 
-        Node container = GetTree().CurrentScene ?? (Node)this;
-        container.AddChild(root);
-        root.GlobalPosition = worldPos + new Vector2((float)GD.RandRange(-12.0, 12.0), -8f);
+		Node container = GetTree().CurrentScene ?? (Node)this;
+		container.AddChild(root);
+		root.GlobalPosition = worldPos + new Vector2((float)GD.RandRange(-12.0, 12.0), -8f);
 
-        Tween tween = root.CreateTween();
-        tween.TweenProperty(root, "position", root.Position + new Vector2(0f, -RiseHeight), Lifetime)
-             .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
-        tween.Parallel().TweenProperty(root, "modulate:a", 0f, Lifetime)
-             .SetDelay(Lifetime * 0.35f);
-        tween.TweenCallback(Callable.From(root.QueueFree));
-    }
+		Tween tween = root.CreateTween();
+		tween.TweenProperty(root, "position", root.Position + new Vector2(0f, -RiseHeight), Lifetime)
+			 .SetTrans(Tween.TransitionType.Sine).SetEase(Tween.EaseType.Out);
+		tween.Parallel().TweenProperty(root, "modulate:a", 0f, Lifetime)
+			 .SetDelay(Lifetime * 0.35f);
+		tween.TweenCallback(Callable.From(root.QueueFree));
+	}
 }

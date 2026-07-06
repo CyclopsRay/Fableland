@@ -252,6 +252,13 @@ Apep's Maw    → moves any star from Normal column to Blackhole column, or back
 
 ---
 
+### Protagonist Landing Effect
+
+**TODO** — define the landing effect triggered when this protagonist is switched
+in via Tab. See `NODES.gdd` §3.3 (Switch Protagonist).
+
+---
+
 ## Design Notes
 
 * Cleopastar rewards patience and spatial positioning. Her power scales with how many Immature stars she has arranged before committing a Shift.

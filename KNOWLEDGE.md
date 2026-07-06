@@ -72,6 +72,12 @@ an aggregatable **defense** pool (`_defenseBonuses`, same dictionary-by-source p
 is 0, so no status = no mitigation), applied to everything taken: hits, hazard ticks, and
 Burn/Fire/Frozen's own self-damage.
 
+**ATK → damage-dealt multiplier is `(100+ATK)/100`** (base ATK is 0, so 0 ATK = 1× damage).
+ATK is a flat additive stat, same as DEF. Both are permanently increased via shelter Blessing
+actions (Sharpen Weapon: +10 ATK; Sharpen Armor: +10 DEF). Unlike the temporary Frozen DEF
+bonus (which uses the `_defenseBonuses` dictionary), permanent ATK/DEF from shelter Blessings
+are stored separately and persist across the entire run.
+
 **Versioning** — bump patch (+0.0.1) every commit; keep `Scripts/GameVersion.cs`, the
 repo-root `VERSION` file, and the HUD `VersionLabel` (`Scenes/Hud.tscn`) in sync. Shown
 top-left in-game.

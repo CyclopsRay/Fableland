@@ -115,6 +115,13 @@ Sifu Pangda maintains a **Chi shield** generated from his own damage output.
 
 ---
 
+
+---
+
+### Protagonist Landing Effect
+
+**TODO** — define the landing effect triggered when this protagonist is switched
+in via Tab. See `NODES.gdd` §3.3 (Switch Protagonist).
 ## Movement
 
 **TODO** — movement parameters not specified in the source GDD. Pangda is a tank —

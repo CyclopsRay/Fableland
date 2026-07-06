@@ -140,6 +140,13 @@ stacks to 0) or Soul Form is entered (shield cleared, stacks reset).
 
 ---
 
+
+---
+
+### Protagonist Landing Effect
+
+**TODO** — define the landing effect triggered when this protagonist is switched
+in via Tab. See `NODES.gdd` §3.3 (Switch Protagonist).
 ## Movement
 
 | Parameter | Value |

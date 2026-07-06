@@ -81,7 +81,7 @@ For all other mission types, failing to achieve the goal is **not fatal**:
 | Collection | Timer expires, not enough cores collected | No reward. Node is **not** marked as completed. Player survives. |
 | Protect | Condensed Wonder Core destroyed | No loot from the core. Player survives. Node is **not** marked as completed. |
 | Destroy | Timer expires, objectives not all destroyed | No reward. Node is **not** marked as completed. Player survives. |
-| Conquer | Player dies | Permadeath (same as any combat death). |
+| Slaughter | Player dies | Permadeath (same as any combat death). |
 | BOSS | Timer expires | **Immediate death** (permadeath). |
 
 A node that is not marked as completed can be **re-attempted** on a future visit
@@ -126,6 +126,43 @@ abilities, or provide passive effects. The full item system is defined in a sepa
 - Wonder items can be acquired from: Collection combat nodes (§4.1); trading with
   VOID traders (§5.3); jousting (the wanderer's held item; §5.4); question-mark nodes.
 
+### 3.3 Switch Protagonist (in combat)
+
+The player controls **one protagonist at a time** during combat. The three active
+party members form a **fixed sequence** (e.g., Pomegraknight → PumpKing → Pixolotl,
+set at the shelter). Pressing **Tab** (12 s cooldown) switches control to the next
+protagonist in the sequence.
+
+| Rule | Detail |
+|------|--------|
+| **HP ratio inheritance** | The incoming protagonist inherits the outgoing protagonist's **current HP ratio** (current HP / max HP), applied to their own max HP. |
+| **Cooldown penalty** | Protagonists in the background have their skill cooldowns tick at **⅕ speed** (e.g., a 10 s CD takes 50 real seconds to refresh while benched). This prevents cycling through protagonists to spam skills. |
+| **Landing effect** | When a protagonist is switched **in**, they trigger their unique **Protagonist Landing Effect** (defined per-character; see character GDDs). |
+| **Item CDs** | Held items on background protagonists tick at the same ⅕ speed (day-based CDs are unaffected — only combat second-based CDs are penalized). |
+| **Death** | If the active protagonist dies, the run is over (permadeath; §2.2) — the bench does not serve as extra lives. |
+| **Short party** | With 2 protagonists, Tab switches back and forth. With 1 protagonist, Tab is **unavailable** (greyed out). |
+| **Mid-air switch** | Position and velocity are **preserved** — the incoming protagonist appears exactly where the outgoing one was, continuing any existing trajectory. No reset, no ground-snap. |
+
+**Projectile persistence:** all active projectiles (seeds, stars, bubbles, heads, etc.)
+survive a switch and continue their natural lifetime. The **projectile owner is the
+player**, not any specific protagonist — so damage reflection bounces back to the
+currently-active protagonist, and the player retains control of steerable projectiles
+(e.g., PumpKing's head) after switching. This enables inter-protagonist combos (e.g.,
+Pomegraknight fires seeds → switch to Pixolotl and SOBRECARGA accelerates them).
+
+> **Implementation note:** each projectile must be sourced to the correct **player**
+> (not protagonist) to support potential future multiplayer. A player-level projectile
+> handler should track all live projectiles across protagonist switches.
+
+**Global stats:** ATK, DEF, and Max HP improvements from shelter Blessings
+(Rest / Sharpen Weapon / Sharpen Armor) are **global** — they apply to all
+protagonists equally. Once improved, every protagonist benefits.
+
+The switch protagonist mechanic is the core team-play feature. It lets the player
+adapt to different combat situations (e.g., switch to a tank when pressured, switch
+to a sniper when the boss is vulnerable) while the ⅕ background CD and 12 s switch
+CD prevent degenerate cycling.
+
 ---
 
 ## 4. Combat nodes
@@ -141,7 +178,7 @@ and is fixed for that node for the entire run.
 | 1 | **Collection** | ~60% | Collect wonder cores that appear on the map. When one is collected, another spawns. Cores may disappear if not collected in time. | The wonder cores collected |
 | 2 | **Protect** | ~15% | Resist enemy waves for a fixed duration and protect the **Condensed Wonder Core** (or another objective) from being destroyed. | The Condensed Wonder Core (or that objective) |
 | 3 | **Destroy** | ~10% | Destroy several objectives placed on the map within the time limit. | What the objectives drop |
-| 4 | **Conquer** | ~10% | Survive and clear a set number of enemy waves. | Base-stats upgrade |
+| 4 | **Slaughter** | ~10% | Survive and clear a set number of enemy waves within the time limit. | Base-stats upgrade |
 | 5 | **BOSS** | ~5% | Kill the BOSS within the time limit. | A new protagonist (LV4) / run victory (LV6) |
 
 Frequencies are approximate and tuned per world/level.
@@ -155,18 +192,39 @@ The parameters of each mission are determined by the node's level (1–6 on the 
 The **foe level** is determined separately by the current day (see `FOES.gdd` §2).
 These two axes multiply: a high-level node on a late day is doubly hard.
 
-| Node LV | Collection (cores) | Protect (duration) | Destroy (objectives) | Conquer (waves) | Boss |
-|---------|-------------------|--------------------|----------------------|-----------------|------|
-| **1** | 10 | 40 s | 2 | 3 waves | — |
-| **2** | 15 | 60 s | 3 | 4 waves | — |
-| **3** | 20 | 80 s | 4 | 5 waves | — |
-| **4** | — | — | — | — | Kill the world BOSS |
-| **5** | 25 | 100 s | 5 | 6 waves | — |
-| **6** | — | — | — | — | Kill the final BOSS |
+**Base requirements (LV1):** Collection 10 cores, Protect 40 s, Destroy 2 objectives,
+Slaughter 2 waves. Higher levels scale by multiplier:
 
-### 4.3 Conquer waves
+| Node LV | Difficulty | Multiplier | Collection (cores) | Protect (duration) | Destroy (objectives) | Slaughter (waves) | Boss |
+|---------|-----------|-----------|--------------------|--------------------|----------------------|-------------------|------|
+| **1** | **Trip** (旅程) | 1.0× | 10 | 40 s | 2 | 2 waves | — |
+| **2** | **Adventure** (冒险) | 1.5× | 15 | 60 s | 3 | 3 waves | — |
+| **3** | **March** (行军) | 2.0× | 20 | 80 s | 4 | 4 waves | — |
+| **4** | **Confrontation** (决战) | — | — | — | — | — | Kill the world BOSS |
+| **5** | **Reincarnation** (轮回) | 2.5× | 25 | 100 s | 5 | 5 waves | — |
+| **6** | **Rout** (溃败) | — | — | — | — | — | Kill the final BOSS |
 
-Conquer spawns enemies in discrete waves. The player must clear all enemies in the
+**Combined difficulty name:** when entering a combat node, the difficulty display
+combines the foe difficulty (from `FOES.gdd` §2, based on the current day) with the
+node difficulty: `<Foe Difficulty> <Node Difficulty>`. Examples:
+- Day 5, LV1 node → "Fairytale Trip" (童话般的旅程)
+- Day 35, LV3 node → "Challenging March" (崎岖的行军)
+- Day 42, LV5 node → "Demonic Reincarnation" (险恶的轮回)
+- Zone 6, LV6 node → **"GOD FORBID ROUT"** (神惧溃败)
+
+**Universal time limit:** all four non-BOSS mission types (Collection, Protect, Destroy,
+Slaughter) share the same time limit — the Protect duration for that node level. If the
+timer expires before the goal is achieved, the mission is failed (see §2.3 for failure
+consequences). Some larger arenas may use a longer base time limit; the values above
+are the standard.
+
+**Level multiplier formula:** `requirement = base × multiplier`. The table above
+is the canonical reference; the multiplier is a design guide for future tuning.
+For now, use the authored values directly.
+
+### 4.3 Slaughter waves
+
+Slaughter spawns enemies in discrete waves. The player must clear all enemies in the
 current wave before the next one begins. The **last wave is always fought at +1 foe
 level** (e.g., if the current day produces level-3 foes, the final wave spawns
 level-4 foes), **capped at foe level 8** (if the current day already produces
@@ -193,21 +251,45 @@ that affect allies, they may work on the core (TBD per ability).
 
 ### 4.5 Boss fights
 
-- **LV4 BOSS:** the world boss of the current world. Defeating it recruits that BOSS
-  as a playable protagonist (added to the bench; does not exceed the party cap — the
-  player may swap at the next shelter). The boss character has a full player kit
-  (movement, abilities, animations) in addition to its boss-kit used during the fight.
+- **LV4 BOSS:** the world boss of the current world. **Time limit: 240 s (4 min).**
+  Defeating it recruits that BOSS as a playable protagonist (added to the bench; does
+  not exceed the party cap — the player may swap at the next shelter). The boss
+  character has a full player kit (movement, abilities, animations) in addition to
+  its boss-kit used during the fight.
 
   > **Scope note:** boss-as-protagonist doubles the design burden — each LV4 boss
   > needs both a boss encounter kit and a balanced player-character kit. This is a
   > major feature, not a line item.
 
-- **LV6 BOSS:** the final BOSS of the run (the dark leader in zone 6). Defeating it
-  **wins the run**. This boss is not recruitable.
+- **LV6 BOSS:** the final BOSS of the run (the dark leader in zone 6). **Time limit:
+  360 s (6 min).** Defeating it **wins the run**. This boss is not recruitable.
 
 - **Timer expiry in any BOSS fight = immediate death** (permadeath; §2.2).
 
 Boss design details (phases, arenas, unique skills) belong to `FOES.gdd` §8.
+
+### 4.6 Combat actions
+
+During combat (Adventure mode inside a combat node), the player can:
+
+| Action | Input | Detail |
+|--------|-------|--------|
+| Move | `A`/`D` or `←`/`→` | Left/right movement |
+| Jump | `Space` | Jump (character-specific max jumps) |
+| Drop through platform | `S`/`Down` | Drop through one-way platforms |
+| SoftVolume vertical | `W`/`S` or `↑`/`↓` | Move up/down inside SoftVolumes |
+| Skill 1 (Shift) | `Left Shift` | Character-specific Shift ability |
+| Skill 2 (E) | `E` | Character-specific E ability |
+| Ultimate (Q) | `Q` | Character-specific Ult (if unlocked) |
+| Item skill | `F` | Use the held wonder item's skill (if it has one) |
+| Switch protagonist | `Tab` | Switch to next protagonist in sequence (12 s CD; §3.3) |
+| Pick up item | Walk over | Wonder items dropped on the ground are auto-picked up to the backpack, or to the held slot if available |
+| Melee / BA | `J` or `LMB` | Character-specific basic attack |
+
+**Item interaction:** wonder items dropped by foes (rare) or spawned by mission
+mechanics lie on the arena ground. Walking over an item picks it up — to the held
+slot if the current protagonist has an empty slot, otherwise to the backpack. Press
+`F` to activate the held item's skill (if any). See `ITEMS.gdd` for the full item system.
 
 ---
 
@@ -250,8 +332,10 @@ available **regardless of whether the shelter is Blessed or Mundane** — the Bl
 only gates Rest/Train/Wish (§5.5). Availability ends when the NPC departs (5-day
 window from first entry; see departure rules in §5.3 and §5.4):
 
-- **Plantation** (per-shelter chance, TBD): the player may plant seeds in 1–3 slots
-  (varies by shelter). Detailed mechanics are in the separate **Plantation GDD**.
+- **Plantation** (50% chance per shelter): the player may plant seeds in **2 slots**
+  (subject to change and randomness). Drag a seed from inventory onto a slot to plant.
+  Every 2 days the player can return to **water** the plants, accelerating growth by
+  +1 day per watering. Harvest yields resources (TBD; see separate **Plantation GDD**).
 
   > **Design note:** plantations on outer rings are devoured early by the VOID
   > (e.g., a 1-A plantation is gone by day 10). This is intentional — the player
@@ -271,12 +355,14 @@ The generator guarantees **at least 3 traders** across the entire world (if fewe
 3 shelters roll a trader naturally, random shelters are force-upgraded until the
 minimum is met).
 
-A VOID trader barters for:
-- **Wonder cores** (the currency collected in Collection combat nodes)
-- **Wonder items** (the player's own items from inventory)
+A VOID trader always offers **5 options**:
+- **3 to 5 options** are traded for **wonder cores** (the currency collected in
+  Collection combat nodes). One of these is always at a **75% discount** (pay 25% of
+  the listed price, rounded up).
+- **The remaining options** (if any) are **1 wonder item for 1 wonder item** trades.
 
-In exchange, the trader offers goods — other wonder items, rare consumables, or
-information (TBD; defined in the Wonder Item GDD).
+**Default item price:** 10 wonder cores per item (subject to per-item overrides in
+the Wonder Item GDD).
 
 **Departure:** traders do not stay forever. A trader remains at a shelter for **5 days**
 from the day the player first enters that shelter, then leaves. If the shelter's
@@ -285,15 +371,25 @@ Blessing has faded before the 5 days are up, the trader still leaves at the
 
 ### 5.4 Jousting
 
-A wanderer protagonist may appear at a shelter (per-shelter chance, TBD). Wanderers
-share the same purpose as the player — to find the cause of the VOID — and will join
-if proven worthy.
+A wanderer protagonist may appear at a shelter (**15% chance**; TODO: more complex
+generation rules based on world and shelter position). Wanderers share the same
+purpose as the player — to find the cause of the VOID — and will join if proven worthy.
 
-- The player may **challenge** the wanderer to a joust (1v1 combat in the arena).
-- **Time limit:** 3 minutes. If neither fighter is KO'd, the joust is a draw (no
-  reward, no penalty).
-- **No penalty for losing** — the Blessing is not consumed, the day does not
-  advance, no resources are lost.
+- The shelter displays the wanderer's **name** and **days remaining** before departure.
+- The player may **challenge** the wanderer to a joust (1v1 combat in a dedicated
+  arena — a simple map for now, world-specific later).
+- **Time limit:** 180 s (3 minutes). If neither fighter is KO'd, the joust is a draw
+  (no reward, no penalty).
+- **Both fighters receive +100% base HP** for the joust (additive with base, does not
+  multiply with foe-level scaling). This makes the fight longer without creating
+  excessive HP pools at high foe levels.
+- **Stats are copied** — the player's real HP, item cooldowns, and other state are
+  snapshot and restored after the joust. No matter the outcome, nothing carries back
+  (no HP lost, no items consumed, no cooldowns used). This is a mock fight.
+- **Wanderer level** follows the same foe-level table as the current day
+  (`FOES.gdd` §2).
+- **No penalty for losing** — the Blessing is not consumed, the day does not advance,
+  no resources are lost. The wanderer remains available until their departure day.
 - **If the player wins:** the wanderer joins the team (added to the bench). The
   wanderer is **AI-controlled** during the joust and may carry a wonder item; if
   they do, the player receives that item as well.
@@ -303,21 +399,30 @@ day the player first enters that shelter, then leave.
 
 ### 5.5 Day-ending actions (consume the Blessing)
 
-A Blessed shelter offers **one** of the following. Choosing one triggers the
-**"Finish the Day?"** confirmation popup. On `Yes`, the Blessing fades
-(this shelter becomes a Mundane visited node), the day ends, and the VOID devour
-clock advances.
+A Blessed shelter offers **one** of the following. Choosing one triggers a
+confirmation popup: **"You will use all your stamina and the Blessing of this
+shelter to make the magic happen."** → `Yes` / `Cancel`.
+
+On `Yes`: the Blessing fades (this shelter becomes a Mundane visited node),
+**all remaining stamina is consumed** (set to 0), the day ends, and the VOID
+devour clock advances.
 
 | Action | Effect |
 |--------|--------|
 | **Rest** | Restore 30% of max HP. 1/3 of any excess healing (above max HP) is converted to **permanent max HP**. |
-| **Train** | Permanently increase ATK by 10% **or** DEF by 10 (player chooses). |
+| **Sharpen Weapon** | Permanently increase **ATK by +10**. ATK scales direct damage: `final_dmg = base_dmg × (100 + ATK) / 100`. |
+| **Sharpen Armor** | Permanently increase **DEF by +10**. DEF reduces damage taken: `final_dmg_received = incoming_dmg × 100 / (100 + DEF)`. |
 | **Wish** | TBD — reserved for a future content pass. |
 
 > **Design note:** the "excess → max HP" rule on Rest means a player who rests at
 > full HP still gains value (10% max HP increase), but a wounded player gets both
 > the heal and a smaller max-HP bump. This rewards resting strategically rather
 > than always at low HP.
+>
+> **ATK/DEF start at 0** (1× multiplier). Each Sharpen adds ~10% effectiveness
+> (diminishing relative returns as the stat grows). ATK and DEF are tracked
+> separately — the player can mix Weapon and Armor sharpens across different
+> shelters.
 
 ---
 
@@ -442,9 +547,9 @@ designed in a future content pass.
   Adventure mode but does not by itself increment the day counter. (MAP.gdd §8 will
   need a light update to reflect this — the arrival-commits model is replaced by
   explicit confirmation.)
-- **Conquer uses waves, not kill-counts.** The old "30–80 kills" spec would take
-  5–8 minutes at a 6-foe arena cap; waves keep the mode tight while the final-wave
-  +1-level spike provides a climax. The +1 is **capped at foe level 8**.
+- **"Slaughter" replaces "Conquer."** Renamed for flavor consistency. Uses waves
+  (2/3/4/—/5 at LV1/2/3/5), not kill-counts. The old "30–80 kills" spec would take
+  5–8 minutes at a 6-foe arena cap. Final-wave +1 foe level is **capped at foe level 8**.
 - **Only BOSS timer = death.** For all other mission types, failing to achieve the
   goal means no reward and the node remains unconquered — the player survives.
   This prevents a single bad RNG roll in Collection/Protect/Destroy from ending a
@@ -464,3 +569,18 @@ designed in a future content pass.
   so the player cannot fully ignore it.
 - **Run performance gates LV5/LV6.** Five tracking dimensions feed into the endgame
   content; specifics TBD.
+- **Switch Protagonist is the core team mechanic.** Tab (12 s CD) cycles through the
+  3-protagonist sequence. HP ratio is inherited; background protagonists' CDs tick at
+  ⅕ speed to prevent cycling abuse. Landing effects give each switch tactical weight.
+- **Universal mission time limit.** All four non-BOSS mission types share the same
+  time limit (base 40 s at LV1, scaled by level multiplier). Previously only Protect
+  had an explicit timer — now Collection, Destroy, and Slaughter all race the clock.
+- **Blessing actions consume stamina.** Rest / Sharpen Weapon / Sharpen Armor set
+  stamina to 0 in addition to consuming the Blessing and ending the day. This prevents
+  "use Blessing, then still explore on remaining stamina."
+- **Jousting is a mock fight.** Stats are copied before the joust and restored after —
+  no HP loss, item CDs, or consumables carry back. Both fighters get 200% HP. The
+  wanderer's level follows the day-based foe-level table.
+- **ATK/DEF are flat additive stats.** Start at 0 (1× multiplier). Sharpen Weapon
+  adds +10 ATK; Sharpen Armor adds +10 DEF. Formula: `dmg = base × (100+ATK)/100`;
+  `received = incoming × 100/(100+DEF)`. Replaces the old percentage-based Train.
