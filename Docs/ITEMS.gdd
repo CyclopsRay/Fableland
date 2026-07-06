@@ -1,0 +1,471 @@
+# Fableland — Wonder Items GDD
+
+Design doc for the wonder-item layer: slots, acquisition, anatomy (passive / skill /
+cooldown), features/tags, lifecycle patterns, and the item catalog.
+
+Implementation target: `Scripts/Items/`. First landing: **v0.6.0**.
+
+---
+
+## 1. Overview
+
+Wonder items are **equipment** that modify stats, grant activatable skills, or provide
+passive effects. They are the primary horizontal-progression layer within a run — more
+items mean more options, but only a few can be active at once.
+
+### 1.1 Slots
+
+| Container | Capacity | Effect |
+|-----------|----------|--------|
+| **Held slot** | 1 per protagonist (3 max with a full party) | Passive is active; skill is usable; cooldown ticks down at day-end resolution. |
+| **Backpack** | Unlimited | Items are carried but **inert** — no passive, skill unavailable, cooldown does **not** tick. |
+
+The player can swap items between backpack and held slots at any **shelter node**
+(Blessed or Mundane; see `NODES.gdd` §5.1). Held slots are per-protagonist.
+
+**Benching rule:** when a protagonist is benched, their held item **auto-returns to
+the backpack**. Team build and item assignment can only be changed at a shelter node,
+so the player cannot bench a protagonist mid-combat or mid-exploration to shuffle items.
+
+> The party cap and held-slot cap can be modified by certain items or mechanisms
+> (e.g., "A Weird Mushroom" outcome f).
+
+### 1.2 Acquisition
+
+| Source | Likelihood |
+|--------|-----------|
+| Combat node — mission reward | Guaranteed for first-successful completion of certain nodes |
+| Foe drop | Very low chance on kill (see `FOES.gdd` §7 loot hooks; **TODO:** add wonder-item row to the FOES loot table) |
+| Question-mark node — story event | Variable, depending on the event |
+| VOID trader | Barter with wonder cores or other items (see `NODES.gdd` §5.3) |
+| Jousting | The wanderer's held item transfers on victory |
+| Plantation harvest | Harvesting a planted item yields its fruit |
+| Item conversion | Some items transform into others after use |
+| **TODO** | Foes may rarely **hold** a wonder item and use it in combat; killing them drops it |
+
+---
+
+## 2. Item anatomy
+
+Every wonder item has up to four components:
+
+| Component | Required? | Description |
+|-----------|-----------|-------------|
+| **Passive** | Optional | Always-on effect while the item is **held** (or always, if it has the `Possession` tag). |
+| **Skill** | Optional | An activatable ability. May be combat-only, map-only, or either. |
+| **Cooldown** | Only if the item has a Skill | How long before the skill can be used again. Two types: day-based and second-based (§3). |
+| **Features / Tags** | Optional | Special behaviours: perishable, convertible, plantable, possession, eternal (§4). |
+
+An item with no passive, no skill, and no features is a **dormant** item (e.g., a
+consumed remnant waiting to be planted). Dormant items still occupy their slot.
+
+---
+
+## 3. Cooldown system
+
+There are **two cooldown axes**, independent of each other:
+
+### 3.1 Day-based cooldown (world-map / exploration skills)
+
+Measured in **days**. At **day-end resolution** (when the player clicks "Finish the Day";
+see `NODES.gdd` §7), every **held** item's cooldown decrements by 1. Items in the
+backpack do **not** tick down.
+
+| CD | Behaviour |
+|----|-----------|
+| 0 (no CD) | Passive only; no skill. |
+| 1 day | Can be used once per day. Resets at day-end resolution. |
+| 2 days | Use → 2 full day-end resolutions must pass → usable again on day 3. |
+| Single-use | Use once → skill is consumed. The item may convert or become dormant. |
+
+Day-based skills can be used **either** during combat **or** on the world map,
+depending on the item's design. Some items specify "combat only" or "map only."
+
+### 3.2 Second-based cooldown (combat skills)
+
+Measured in **real-time seconds** during combat. Functions identically to protagonist
+ability cooldowns — ticks down with the arena clock, unaffected by the day cycle.
+
+| Example CD | Item |
+|------------|------|
+| 15 s | The Forgotten Kashaya (knockback) |
+| 30 s | FanChen's Heart (self-Freeze), Yukai's Rope (grapple) |
+
+An item may have **both** a day-based CD and a second-based CD if it has two skills
+(not currently spec'd, but the architecture supports it).
+
+---
+
+## 4. Feature / tag catalog
+
+Tags modify how the item behaves in the world. An item can carry **multiple** tags.
+
+### 4.1 `Perishable`
+
+If not used within N days, the item is destroyed (or converts to a rotten/expired
+form). The countdown ticks at **day-end resolution regardless of whether the
+item is held or in the backpack**. A perishable item in the backpack will still rot.
+
+| Perish timer | Consequence on expiry |
+|-------------|----------------------|
+| N days | Item is removed from inventory; may be replaced by a "rotten" variant. |
+
+*Example: A Weird Mushroom — 2 days → A Rotten Mushroom.*
+
+### 4.2 `Convertible`
+
+After the item's skill is used (or a condition is met), the item is **replaced** by
+a different item in the same slot. The new item inherits the slot position (held or
+backpack). Convertible items cannot also be `Eternal` — the two tags are mutually
+exclusive (§4.5).
+
+*Examples:*
+- Pome's Bravery → Pome's Seed (after skill use)
+- Pixolotl's Feather → Pixolotl's Wish (after skill use)
+- A Weird Mushroom → A Rotten Mushroom (perish expiry)
+
+### 4.3 `Plantable`
+
+The item can be **planted** in a plantation slot at a shelter node (see `NODES.gdd`
+§5.2 and the separate **Plantation GDD**). Plantable items have:
+
+| Attribute | Description |
+|-----------|-------------|
+| **Harvest time** | Days until the plant bears fruit. |
+| **Fruit** | A list of wonder items produced at harvest (quantity and type). |
+| **Inheritance** | Optional — the fruit's stats may inherit a range (e.g., 60%–140%) of the parent item's attributes, rolled at harvest time. |
+
+*Examples:*
+- Pome's Seed — 4 days, harvests 1–3× Pome's Bravery with random stats
+- Pixolotl's Wish — 7 days, harvests 2× Pixolotl's Feather
+- A Rotten Mushroom — 4 days, generates 4× Weird Mushrooms with inherited HP range + random consequence
+
+### 4.4 `Possession`
+
+The item's **passive is always active**, even when the item is in the backpack (not
+held). The skill still requires the item to be held.
+
+*Example: THE VOID — its phantom-spawning passive works from the backpack.*
+
+The `Possession` tag can also be **added** to another item via certain meta-items
+(e.g., The Blessing of Shieldon's skill). However, `Eternal` items resist this —
+they cannot be enchanted (§4.5).
+
+### 4.5 `Eternal`
+
+The item **cannot** be:
+- Traded (VOID trader rejects it)
+- Enchanted / upgraded (resists modification by meta-items such as Blessing of Shieldon)
+- Deserted / dropped / voluntarily removed from inventory
+- **Converted** into another item (mutually exclusive with the `Convertible` tag)
+
+This is typically a **negative** tag attached to cursed or burdensome items.
+`Eternal` + `Possession` together mean the item is a permanent, inescapable modifier
+for the entire run.
+
+*Example: THE VOID — Eternal + Possession; the phantoms follow you forever.*
+
+---
+
+## 5. Item lifecycle patterns
+
+Items fall into several lifecycle archetypes:
+
+### 5.1 Static
+Held → provides passive ± skill on cooldown → stays the same item forever.
+*Examples: FanChen's Heart, Yukai's Rope, The Forgotten Kashaya, DD.*
+
+### 5.2 Single-use → convert
+Held → skill used → converts to a successor item. The successor may be dormant,
+plantable, or a different static item.
+*Examples: Pome's Bravery → Pome's Seed, Pixolotl's Feather → Pixolotl's Wish,
+The Blessing of Shieldon (consumed on use).*
+
+### 5.3 Perishable → convert
+Held or in backpack → timer expires → converts to rotten/dormant form.
+*Example: A Weird Mushroom → A Rotten Mushroom.*
+
+### 5.4 Plantable → harvest
+Planted at shelter → grows over N days → harvested for fruit items. The planted
+item is consumed (removed from inventory) when planted.
+*Examples: Pome's Seed, Pixolotl's Wish, A Rotten Mushroom.*
+
+### 5.5 Conditional trigger
+Held → condition met (e.g., boss killed) → effect fires → item may be consumed.
+*Example: QiongFeng Emperor of LOONG's Claw — boss kill triggers loot sweep +
+world crack + teleport, then claw faints.*
+
+---
+
+## 6. Classification
+
+### 6.1 By usage domain
+
+| Domain | Description | Examples |
+|--------|-------------|----------|
+| **Combat** | Passive + skill both function inside the arena. Cooldown is second-based. | FanChen's Heart, Yukai's Rope, The Forgotten Kashaya, THE VOID (skill is combat-only) |
+| **Exploration** | Passive and/or skill affect the overworld map. Cooldown is day-based. | QiongFeng Emperor's Claw |
+| **Hybrid** | Combat passive + world-map skill, or vice versa. May have both CD types. | DD (combat passive + day-based skill), Pome's Bravery (combat passive + single-use skill → plantable), Pixolotl's Feather (combat passive + day-rewind skill), A Weird Mushroom (single-use combat buff + next-day world effect) |
+
+### 6.2 By lifecycle archetype
+
+See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harvest, Conditional trigger.
+
+### 6.3 By tag matrix
+
+| Item | Perishable | Convertible | Plantable | Possession | Eternal |
+|------|-----------|-------------|-----------|------------|---------|
+| Blessing of Shieldon | — | — | — | — (grants it) | — |
+| THE VOID | — | — | — | ✓ | ✓ |
+| DD | — | — | — | — | — |
+| Pome's Bravery | — | ✓ (→Seed) | — | — | — |
+| Pome's Seed | — | — | ✓ (4d) | — | — |
+| FanChen's Heart | — | — | — | — | — |
+| Yukai's Rope | — | — | — | — | — |
+| Pixolotl's Feather | — | ✓ (→Wish) | — | — | — |
+| Pixolotl's Wish | — | — | ✓ (7d) | — | — |
+| Forgotten Kashaya | — | — | — | — | — |
+| QiongFeng Emperor's Claw | — | ✓ (on trigger) | — | — | — |
+| A Weird Mushroom | ✓ (2d) | ✓ (→Rotten) | — | — | — |
+| A Rotten Mushroom | — | — | ✓ (4d) | — | — |
+
+> **Rule:** `Eternal` and `Convertible` are mutually exclusive. No item in the catalog
+> carries both, and no future item should.
+
+---
+
+## 7. Item catalog (reference)
+
+### 7.1 The Blessing of Shieldon
+
+| Field | Value |
+|-------|-------|
+| Domain | Exploration (meta-item) |
+| Lifecycle | Single-use → consumed |
+| Passive | +10% SPD |
+| Skill | **Single use.** Enchant the `Possession` tag onto a target wonder item in your inventory. The Blessing is then consumed. Cannot target `Eternal` items. |
+| CD | — (single use) |
+| Tags | — |
+
+### 7.2 THE VOID
+
+| Field | Value |
+|-------|-------|
+| Domain | Hybrid (exploration passive, combat skill) |
+| Lifecycle | Static (permanent burden) |
+| Passive | **`Eternal` `Possession`.** Every 4 days, a **VOID PHANTOM** spawns on the overworld map. The player's vision is shared by all phantoms — they see what you see. Each time the player enters a new node, all phantoms move one step toward the player's position. |
+| Skill | **Combat only.** All foes lose their vision for 10 seconds. |
+| CD | 2 days (day-based) |
+| Tags | `Possession`, `Eternal` |
+
+> **Design note:** THE VOID is a cursed item — once acquired, it cannot be removed.
+> The phantoms create escalating map pressure: the more you explore, the closer they get.
+> When a phantom reaches the player's position, it triggers a **BOSS fight** at that node.
+> (Phantom contact mechanics are deferred to a future content pass — the spawning and
+> movement rules are kept as placeholders.)
+
+### 7.3 DD
+
+| Field | Value |
+|-------|-------|
+| Domain | Hybrid |
+| Lifecycle | Static |
+| Passive | Each time you pick up a wonder core, heal 2% of max HP. |
+| Skill | **Combat.** Release DD — a small bug-like creature that **crouches** on the ground. DD moves along the ground dealing **200 damage** to everything in its path. It turns around on hitting a wall. The player must **reclaim** DD (walk into it) to stow it again. |
+| CD | 2 days (day-based) |
+| Tags | — |
+
+> **Design note:** The game does not pause when a combat node's goal is achieved or
+> the timer expires — DD can still be reclaimed during the post-combat window. If the
+> player leaves the node without reclaiming DD, it is **set free** (lost permanently).
+> The item is removed from inventory. Don't forget to claim it back.
+
+### 7.4 Pome's Bravery
+
+| Field | Value |
+|-------|-------|
+| Domain | Hybrid |
+| Lifecycle | Single-use → Convertible |
+| Passive | OnFire duration +0.2 s. While OnFire: **+5% omni-vamp** (lifesteal on all damage dealt). |
+| Skill | **Single use.** Set oneself on fire (60 OnFire stacks). After use, converts to **Pome's Seed**. |
+| CD | — (single use) |
+| Tags | `Convertible` |
+
+### 7.5 Pome's Seed
+
+| Field | Value |
+|-------|-------|
+| Domain | Exploration (plantable) |
+| Lifecycle | Plantable → harvest |
+| Passive | OnFire duration +0.2 s. While OnFire: +5% omni-vamp. |
+| Skill | — (dormant skill slot) |
+| CD | — |
+| Tags | `Plantable` |
+| Harvest time | **4 days** |
+| Fruit | **1–3× Pome's Bravery** (quantity rolled at harvest). Each Bravery's stats are **randomized** independently — the father's attributes are not inherited; each fruit rolls fresh. |
+
+### 7.6 FanChen's Heart
+
+| Field | Value |
+|-------|-------|
+| Domain | Combat |
+| Lifecycle | Static |
+| Passive | While Frozen: restore **30% of post-mitigation direct damage** received from enemies (effectively: Frozen = lifesteal against incoming hits). |
+| Skill | **Combat.** Grant oneself 60 Frozen stacks. |
+| CD | 30 s (second-based) |
+| Tags | — |
+
+### 7.7 Yukai's Rope
+
+| Field | Value |
+|-------|-------|
+| Domain | Combat |
+| Lifecycle | Static |
+| Passive | While in the air: **+30 DEF**. |
+| Skill | **Combat.** Fire a rope 80 m forward. On hitting an obstacle (wall, ground, platform), the player is **dragged** to the impact point. |
+| CD | 30 s (second-based) |
+| Tags | — |
+
+### 7.8 Pixolotl's Feather
+
+| Field | Value |
+|-------|-------|
+| Domain | Hybrid |
+| Lifecycle | Single-use → Convertible |
+| Passive | Gravity reduced by **20%**. |
+| Skill | **Map — single use.** Flash back to **one day earlier** (undo the current day's consequences: stamina spent, damage taken, node entered — exact undo scope TBD). Then converts to **Pixolotl's Wish**. |
+| CD | — (single use) |
+| Tags | `Convertible` |
+
+> **Design note:** "Flash back one day" is a powerful time-rewind mechanic. The scope
+> of what gets undone (day counter? VOID devour? item cooldowns? foe levels?) needs
+> precise specification before implementation. The safest interpretation: the day
+> counter does **not** rewind (time only flows forward for the VOID), but the player's
+> position, HP, and stamina revert to their start-of-day state.
+
+### 7.9 Pixolotl's Wish
+
+| Field | Value |
+|-------|-------|
+| Domain | Exploration (plantable) |
+| Lifecycle | Plantable → harvest |
+| Passive | Gravity reduced by **20%**. |
+| Skill | — (dormant skill slot) |
+| CD | — |
+| Tags | `Plantable` |
+| Harvest time | 7 days |
+| Fruit | 2× **Pixolotl's Feather** |
+
+### 7.10 The Forgotten Kashaya
+
+| Field | Value |
+|-------|-------|
+| Domain | Combat |
+| Lifecycle | Static |
+| Passive | On a **melee attack hit**: bounce back **50% of post-mitigation damage** dealt to the target (thorns/reflect). |
+| Skill | **Combat.** Knock back all enemies within 4 m. Deals **10 damage**. |
+| CD | 15 s (second-based) |
+| Tags | — |
+
+### 7.11 QiongFeng Emperor of LOONG's Claw
+
+| Field | Value |
+|-------|-------|
+| Domain | Exploration |
+| Lifecycle | Conditional trigger → consumed |
+| Passive | When the player **defeats the current world's LV4 boss**: immediately loot all **unopened chests** in that world. After looting, the world **cracks down** (becomes inaccessible — all its nodes are treated as devoured). The claw then **faints** (is removed from inventory). The player is **teleported to a still-existing shelter node** (one that has not been devoured). If no such shelter exists, the player is teleported to **a level-5 node in zone 6**. |
+| Skill | — |
+| CD | — |
+| Tags | `Convertible` (consumed on trigger) |
+
+> **Design note:** "Chests" and "domain" are future content. For now, "domain" = the
+> current outer world, and "unopened chests" = combat/function nodes the player
+> skipped. The world-crack is a dramatic irreversible action — use wisely.
+
+### 7.12 A Weird Mushroom
+
+| Field | Value |
+|-------|-------|
+| Domain | Hybrid |
+| Lifecycle | Perishable → Convertible, OR Single-use → random outcome |
+| Passive | **`Perishable` (2 days).** If not used within 2 days, converts to **A Rotten Mushroom**. |
+| Skill | **Single use.** Increase max HP and current HP by **20%**. **The next day** (from start to end of that day), one random effect occurs. The player does **not** know the outcome before eating — the effect is revealed the following day. |
+
+| Outcome | Probability | Effect (lasts the entire next day unless stated otherwise) |
+|---------|------------|--------|
+| (a) | 18% | Lose 40% HP (−20% from the original base) |
+| (b) | 18% | Left/right movement controls swap for one day |
+| (c) | 18% | Movement speed +300% for one day |
+| (d) | 18% | Jump height +300% for one day |
+| (e) | 18% | Gain an extra 20% HP (stacks with the initial +20%; permanent) |
+| (f) | 10% | The protagonist who ate it can carry **one extra wonder item** (held slot +1, permanent) |
+
+| CD | — (single use) |
+| Tags | `Perishable`, `Convertible` |
+
+### 7.13 A Rotten Mushroom
+
+| Field | Value |
+|-------|-------|
+| Domain | Exploration (plantable) |
+| Lifecycle | Plantable → harvest |
+| Passive | — |
+| Skill | — |
+| CD | — |
+| Tags | `Plantable` |
+| Harvest time | 4 days |
+| Fruit | 4× **A Weird Mushroom**. Each fruit inherits the father's max-HP modifier in the range **60%–140%**. Unlike the wild mushroom, each fruit has a **clearly labeled consequence** (a–f) visible before eating — the consequence is an **inheritable trait** determined at harvest time, rolled independently per fruit. |
+
+---
+
+## 8. Integration with other GDDs
+
+| Concern | Defined in |
+|---------|-----------|
+| Shelter build-mod UI (swap held/backpack items) | `NODES.gdd` §5.1 |
+| VOID trader barter (buy/sell items) | `NODES.gdd` §5.3 |
+| Jousting item transfer | `NODES.gdd` §5.4 |
+| Plantation slot mechanics (planting, watering, harvesting) | **Plantation GDD** (separate doc; in progress) |
+| Foe loot hooks (item drop chance) | `FOES.gdd` §7 — **TODO:** add wonder-item row |
+| Foes holding + using items in combat | **TODO** — future content pass |
+| Combat-node mission rewards (guaranteed items) | `NODES.gdd` §4 |
+| Question-mark node item events | `NODES.gdd` §6 (TODO) |
+| Day-end resolution (CD tick, perish tick) | `NODES.gdd` §7 |
+| Run-performance tracking (collected items) | `NODES.gdd` §8 |
+
+---
+
+## 9. Decisions log
+
+- **Two cooldown types.** Day-based CDs for world-map skills, second-based CDs for
+  combat skills. An item may conceptually have both if it gains a second skill later.
+- **Backpack is inert.** No passive, no CD tick, no skill access. This prevents the
+  player from hoarding items for their passives and forces build decisions.
+- **Possession is the exception to backpack inertness.** It decouples "where the item
+  lives" from "whether the passive works." THE VOID uses this to be a permanent burden.
+- **Benched protagonist → held item auto-returns to backpack.** Team build can only
+  be changed at a shelter; the player cannot bench someone mid-combat to shuffle items.
+- **Perishable ticks regardless of location.** A perishable item in the backpack still
+  rots. The player can't "freeze" a mushroom by unequipping it.
+- **Eternal is a strictly negative tag.** It locks the item into inventory forever and
+  resists all modification, trading, and conversion. `Eternal` and `Convertible` are
+  mutually exclusive.
+- **Plantable items are consumed on planting.** They leave the inventory and become
+  a world entity at the shelter. Harvest produces new items into inventory.
+- **Convertible items preserve slot position.** If a held item converts, the successor
+  stays held. Same for backpack.
+- **Inheritance uses percentage ranges of the father's attributes** (e.g., 60%–140%
+  of the HP bonus). Exact roll is determined at harvest time. Wild mushroom fruit each
+  get a clearly labeled inheritable trait so the player knows what they're getting.
+- **"Domain" = world.** QiongFeng claw's "domain" is the current outer world (one of
+  the 5 world-fans on the map). "Domain boss" = the world's LV4 boss.
+- **DD is a bug that crouches.** It must be reclaimed before leaving the node or it's
+  set free and lost. The game does not pause on combat end — the reclaim window is real-time.
+- **Pixolotl's Feather time-rewind scope is TBD.** The exact undo semantics need
+  precise specification — particularly whether the day counter and VOID devour are
+  affected. Safest default: position/HP/stamina revert; the clock does not.
+- **Day-end resolution** (replacing "liquidation"): the moment when "Finish the Day"
+  is confirmed, triggering cooldown ticks, perish-countdown ticks, and the VOID
+  devour clock. This is the game's daily housekeeping pass.
+- **VOID Phantom contact = BOSS fight.** Deferred to a future content pass; the
+  spawning/movement rules are placeholders.

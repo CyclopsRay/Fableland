@@ -100,8 +100,11 @@ Named `<edgeLevel>-<letter>` (`4-a`, `4-b`, `3-a`, …). A function node is a **
 2. **Then per remaining edge, by level:** lv4 **100%** (always shelter), lv3 50%, lv2 25%,
    lv1 10%. If it fires, split the edge in two via the node. 80% shelter / 20% question.
 
-- **Shelter** (camp icon): rest / build / upgrade / wish. Surprises TODO: `VOID TRADER`,
-  `Treasure box`, `teleport`.
+- **Shelter** (camp icon): generated **Blessed**. Functions: build mod, item assignment,
+  trade, joust, plantation (if present), and one day-ending action (Rest / Train / Wish).
+  After the Blessing is consumed the shelter becomes **Mundane** — still usable for
+  build mod and plant-tending, but no further Rest/Train/Wish. Full spec: `NODES.gdd` §5.
+  Surprises TODO: `VOID TRADER`, `Treasure box`, `teleport`.
 - **Question mark:** other functions — forbidden / teleport / other — **TODO**.
 
 ## 7. Zone 6 — the dark zone (`XX`)
@@ -129,15 +132,17 @@ lv5 ring → lake → river ring → lv6 core.
 ## 8. Time, stamina, and the VOID
 
 - **Stamina:** 5 per day; traversing one edge = **1 step**.
-- **A day ends automatically** the moment **either** happens:
-  1. you step onto a **new (never-visited) node** — it becomes your camp for the day, or
-  2. you run **stamina to 0** while moving among already-visited nodes.
-  Then the next day begins and stamina refreshes to 5. So stamina is really for
-  *repositioning across explored territory* to choose where to break new ground — you make
-  roughly **one new node of progress per day** (this is what the 45-day clock is scaled to).
-- **Visited nodes render grey.** You may re-walk them freely (costing stamina); stepping to
-  a new node is the day-ending commit.
-- **Rest** manually ends the day (wait in place) — same day-advance + devour + refresh.
+- **Day model:** the day ends when the player clicks **`Finish the Day`** (or a day-ending
+  shelter action triggers it). Stepping onto a **new (never-visited) node** transitions to
+  Adventure mode — the node's content is resolved, then the player confirms "Finish the Day"
+  to advance the clock. When **stamina reaches 0**, movement is **blocked** (no further
+  edge traversal), but the day does not automatically end — the player can still use shelter
+  functions or must complete an in-progress combat node before finishing the day.
+  See `NODES.gdd` §7 for the full day-cycle spec and day-end resolution sequence.
+- **Visited nodes render grey.** You may re-walk them freely (costing stamina).
+- **Rest** (debug harness): the `Rest` button in the current debug build manually ends the day
+  (wait in place) — same day-advance + devour + refresh. In the full game this is replaced by
+  the `Finish the Day` button and shelter Rest/Train/Wish actions (`NODES.gdd` §5.5).
 - **VOID devour schedule** (by day): `1-A`→10, `1-B`→20, `2-A`→30, `2-B`→35, `3`→40,
   `4`→45. On a level's devour day its nodes **flicker**; at the **end** of that day the
   nodes and their edges become unavailable (the VOID has eaten that ring). **Function nodes
@@ -171,10 +176,12 @@ lv5 ring → lake → river ring → lv6 core.
 - **Menu:** a Start button → Map scene.
 - **Map, top-left:** `Dice` button (reroll seed + restart), seed field (type + Enter to
   rebuild), a Day / Stamina readout with a **traversed tracker** (total visited + a
-  fights / camps / ? breakdown), a `Rest` button, and a `Mist` toggle.
+  fights / camps / ? breakdown), a `Rest` button (debug — advances the day), and a `Mist` toggle.
 - Click a highlighted node to move the smiley token: grey **visited** nodes cost stamina to
-  re-walk; a gold-ringed **new** node ends the day. Devoured nodes and the zone-6 one-way
-  rule are respected; under mist, unexplored frontiers show as dim markers.
+  re-walk; a gold-ringed **new** node transitions to Adventure mode (in the full game, the
+  day ends via `Finish the Day` confirmation; the debug harness may auto-advance for now).
+  Devoured nodes and the zone-6 one-way rule are respected; under mist, unexplored frontiers
+  show as dim markers.
 - **Icons:** combat = filled circle, boss = diamond, shelter = triangle, question mark =
   circled `?`. Node content is **not** implemented — icons only, per the current scope.
 

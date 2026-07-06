@@ -1,0 +1,261 @@
+# Pomegraknight — GDD v1.1
+
+## Character Overview
+* **Race:** Pomegranate
+* **Role:** Skirmisher (melee pressure + self-buff)
+* **Realm:** VanillaKindom (VK)
+* **HP:** 200 / 260 / 320 (Levels 1–3)
+* **Personality:** Fierce, hot-headed, impulsive. Quick to ignite — both literally and emotionally. Charges into fights without hesitation.
+
+---
+
+## Visual Design
+
+### Body & Silhouette
+Pomegraknight is a chibi pomegranate character with a fully humanoid body — arms, legs, and torso — in the same character style as Cleopastar. Her head is a pomegranate shape with a small crown-like calyx at the top.
+
+### Color Palette
+| Element | Color |
+|---------|-------|
+| Body / Pomegranate | Deep ruby red |
+| Inner flesh (accents) | Pale pinkish-cream with seeds visible |
+| Hair / Leaf crown | Dark green |
+| Armor / Outfit | Bronze / copper tones |
+| Fire VFX (Blush active) | Orange-yellow flame |
+
+### Face
+* Wide, intense eyes — aggressive and eager
+* Sharp grin during combat
+* Expressions range from fiery determination to frustrated rage
+
+### Accessories & Outfit
+* Leaf-like crown/crest at the top of the head (the pomegranate calyx)
+* Light bronze/copper armor pieces — shoulder guards, gauntlets
+* Wields a short sword for melee slashes
+* When Blush is active, wreathed in flames (particle VFX)
+
+---
+
+## Passive — Pomegranate Shell
+
+Pomegraknight is completely immune to Burning DoT. Fire does not harm her — it empowers her.
+
+**Effects while Burning:**
+1. **1.5× melee damage** — all combo stages deal 50% more damage
+2. **Burning seed projectiles** — E skill launches fire-infused seeds that apply a 2s Burning debuff on contact
+3. **+30% movement speed** — inherited from the base Burning buff
+
+**Burn immunity detail:** The Burning status can still be applied to Pomegraknight (the buff exists, the VFX plays), but the damage-per-second tick is zeroed out. This means external fire sources still trigger her passive without harming her.
+
+---
+
+## Abilities
+
+### Basic Attack — Pome Slash (3-Stage Melee Combo)
+
+Pomegraknight swings her sword in a three-stage combo. Each swing is triggered by pressing LMB while the previous swing is active. After the third swing, the magazine must refill before the combo can restart.
+
+**Magazine:** 3 (one per swing stage)
+
+| | Stage 1 | Stage 2 | Stage 3 |
+|---|---------|---------|---------|
+| Base damage | 15 | 15 | 30 |
+| Burning damage (1.5×) | 22.5 | 22.5 | 45 |
+| Clip duration | 0.5 s | 0.333 s | 0.417 s |
+| Damage event | 0.25 s in | 0.00 s in (instant) | 0.25 s in |
+| Total combo base DMG | — | — | 60 (90 burning) |
+
+**Hit detection:**
+* 4 m radius circle sweep in an 80° cone (40° half-angle) facing the character's direction
+* Each swing tracks hit targets independently — hitting the same target twice in one swing is prevented
+* 3 m/s knockback on hit
+* Hits both enemy players and foes
+
+**Swing penalty:** 30% movement speed reduction for 0.4 s on each swing. Restarts if a new swing is triggered during the penalty.
+
+**Replenish:** After the 3rd swing is consumed, a 0.75 s windup delay begins, then the magazine instantly refills to 3.
+
+**Controls:** Hold LMB to chain swings at the maximum fire rate. Release and re-press to start a new combo.
+
+#### Fire Tornado (Blush follow-up)
+
+When Blush is active, Pomegraknight's next BA input within **3 seconds** of casting Blush is replaced by a single-use **Fire Tornado** instead of the normal Slash1. The tornado consumes 1 ammo and counts as the first stage of the combo — subsequent BA inputs resume the normal Slash2 → Slash3 chain.
+
+| Parameter | Value |
+|-----------|-------|
+| Activation window | 3 s after Blush cast |
+| Damage | 15 per tick |
+| Tick interval | 0.5 s |
+| Duration | 2.5 s (5 ticks) |
+| Total damage | 75 |
+| Hitbox | 3 m (length) × 2 m (height) rectangle |
+| Hitbox position | Centered on Pomegraknight (extends both left and right) |
+| Damage reduction | 40% during the full 2.5 s |
+| External force | 5 m/s radial push outward per tick |
+| Penetration | Hits all enemies in area, no per-target limit |
+
+**Mechanics:**
+* Pomegraknight is the center of the hitbox — the 3×2 m rectangle wraps around her, covering both sides equally.
+* She spins in place for the full 2.5 s, locked in the animation.
+* Every 0.5 s, all valid targets inside the rectangle take 15 damage and are pushed outward at 5 m/s.
+* She gains 40% damage reduction for the entire 2.5 s duration — protecting her from foes that survive the push and get close.
+* The tornado persists for the full 2.5 s even if no targets are present.
+* Once used, the Fire Tornado is consumed — subsequent Blush casts grant a fresh one.
+* If the 3 s window expires without using BA, the Fire Tornado is lost (the normal combo resumes on next BA press).
+
+**Design intent:** This addresses Pomegraknight's weakness against horizontal swarms of minion foes. The 3×2 m centered rectangle gives her a wave-clear tool that hits both sides, the 40% DR keeps her safe during the long animation lock, and the per-tick push outward prevents enemies from simply walking through the tornado to hit her.
+
+---
+
+### Shift — Blush
+
+**Cooldown:** 10 s | **Duration:** 5 s
+
+Pomegraknight ignites herself, bursting into flames. This applies the Burning status effect to herself, which due to her passive:
+
+* Nullifies all incoming Burning DoT (ticks deal 0 damage)
+* Grants +30% movement speed
+* Multiplies all melee combo damage by 1.5×
+* Converts E skill seeds to Burning variants
+
+Blush is Pomegraknight's core loop enabler — it turns her from a moderate-damage skirmisher into a high-threat rushdown character for its duration. The 10 s cooldown creates a rhythm of burst windows.
+
+**Fire Tornado follow-up:** For 3 seconds after casting Blush, Pomegraknight's next BA input triggers a **Fire Tornado** — she spins in place, creating a 3×2 m rectangle centered on herself dealing 15 DMG per 0.5 s for 2.5 s (75 total), with 40% damage reduction and a 5 m/s radial push per tick. Hits both sides. Replaces Slash1 and consumes 1 ammo. If not used within 3 s, the tornado is lost. Only one tornado per Blush cast.
+
+**VFX:** A looping fire particle system activates for the full 5 s duration. The character sprite does not change (no animator branch for burning), but the flames provide a clear visual read.
+
+---
+
+### E — Pome Seed Eruption
+
+**Cooldown:** 9 s
+
+Pomegraknight erupts, launching pomegranate seeds in an upward spray. Seeds are gravity-affected projectiles that arc upward and fall, creating a zoning field.
+
+**Wave pattern:**
+
+| Wave | Delay | Seeds |
+|------|-------|-------|
+| 1 | 0.0 s (instant) | 6 |
+| 2 | +1.0 s | 8 |
+| 3 | +2.5 s | 10 |
+| **Total** | — | **24** |
+
+**Seed parameters:**
+* Launch speed: 10 m/s
+* Lifetime: 6 seconds
+* Cone: 50° to 130° world-space (centered straight up, 80° spread)
+* Spawn offset: 1.4 m above Pomegraknight
+
+**Hit model (per-wave tracking):**
+Seeds within the same wave share a hit registry. The first seed from a wave to hit a target deals 30 damage. Subsequent seeds from the same wave hitting the same target deal 6 damage. Different waves track independently — so a target can take 30 damage from wave 1, then another 30 from wave 2, then another 30 from wave 3.
+
+**Burning variant (during Blush):**
+When Blush is active, seeds are replaced with burning seeds that apply a 2 s Burning debuff on every hit (in addition to normal damage). Against enemy players, this forces them to respect the seed field or risk taking burn DoT.
+
+**Terrain interaction:** Seeds are destroyed on contact with ground, platforms, or terrain — no damage or debuff applied.
+
+---
+
+## Skill Summary Table
+
+| Skill | Name | CD | Key Mechanic |
+|-------|------|----|--------------|
+| Passive | Pomegranate Shell | — | Burn immune; 1.5× melee DMG & burning seeds while Burning |
+| BA | Pome Slash / Fire Tornado | 0.75 s (replenish windup) | 3-stage melee combo, 4 m / 80° cone; Fire Tornado (centered 3×2 m, 15×5 ticks, 40% DR, radial push) on first BA within 3 s of Blush |
+| Shift | Blush | 10 s | Self-ignite for 5 s; enables full passive; grants one Fire Tornado charge |
+| E | Pome Seed Eruption | 9 s | 3 waves (6+8+10 seeds), per-wave hit tracking |
+
+---
+
+## Movement
+
+| Parameter | Value |
+|-----------|-------|
+| Move speed | 8 m/s |
+| Air control | 1 (full) |
+| Jump height | 12 m |
+| Time to apex | 0.8 s |
+| Max jumps | 1 |
+| Coyote time | 0.15 s |
+| Jump buffer | 0.15 s |
+| Max fall speed | -25 m/s |
+
+**Modifiers:**
+* Burning (Blush active): +30% move speed → **10.4 m/s**
+* Swing penalty: −30% move speed for 0.4 s → **5.6 m/s**
+* Frozen (debuff): −20% move speed → **6.4 m/s**
+
+---
+
+## Leveling
+
+| Level | Max HP | WonderPages Needed |
+|-------|--------|-------------------|
+| 1 | 200 | — |
+| 2 | 260 | 4 |
+| 3 | 320 | — |
+
+Level-up triggers a transformation animation (0.5 s control lock), recalculates max HP, and heals a portion of the new HP based on current HP ratio.
+
+Magazine size, fire speed, and other combat parameters are **not** currently scaled with level.
+
+---
+
+## Design Notes
+
+* The Fire Tornado was added to address Pomegraknight's weakness against horizontal swarms of minion foes. Her cone-based melee struggled to clear spread-out enemies; the centered 3×2 m rectangle covers both sides, the 40% DR protects her during the long animation lock, and the per-tick push keeps foes from closing in.
+* Pomegraknight is a snowball character. Blush is her power window — she must commit to a 5 s aggression phase and make it count. Outside Blush, she's a modest-damage skirmisher with above-average HP.
+* The E skill's 3-wave structure creates lingering zone denial. Opponents must path around falling seeds or eat chip damage. During Blush, the burning seeds add a persistent threat — even 6 damage per hit adds up when the Burning DoT is ticking.
+* The BA combo's 3rd stage hits hardest (30 base / 45 burning). Opponents should watch for the third swing wind-up and disengage before it lands.
+* The passive burn immunity makes Pomegraknight a natural counter to fire-based characters and hazards. Conversely, freeze/slow effects are her weakness — they cut into the movement speed that her rushdown playstyle relies on.
+* The 5 s Blush duration vs. 10 s cooldown means 50% uptime — skilled players will time engages around the Blush window.
+* Suggested HP: 200 — above average for a skirmisher, compensating for her need to close distance in a projectile-heavy arena.
+
+---
+
+## Implementation Notes
+
+### Burn Immunity
+`burnDamageRate` is overridden to `0f` in `Start()`. The base `CharacterController` burn system still runs ticks and applies the movement speed buff — only the damage is zeroed. This preserves full compatibility with the base class burn infrastructure.
+
+### BA Combo Flow
+The combo uses the base ammo/magazine system with `magazineSize = 3`. Each swing consumes 1 ammo. The stage is derived as `magazineSize - currentAmmo` (3→stage 0, 2→stage 1, 1→stage 2). `ConsumeAmmo()` deducts ammo and arms the fire-speed timer for the next swing. After all 3 ammo are consumed, the 0.75 s `replenishWindup` begins, then ammo refills to 3 instantly (`replenishSpeed = 0`).
+
+A `_pendingStage` guard prevents stale Animation Events from applying damage for the wrong stage.
+
+### Hit Detection
+`Physics2D.OverlapCircleAll()` at `slashRange` (4 m) centered on the character, filtered by an 80° cone (`Vector2.Angle` < `slashHalfAngle` of 40°) in the character's facing direction. Per-swing hit tracking uses a `HashSet<int>` of instance IDs, cleared at the start of each new swing.
+
+### Seed Projectile
+`PomoSeed.cs` uses `Rigidbody2D` with gravity for parabolic arcs. Each wave passes a shared `HashSet<int>` by reference for per-wave hit deduplication. The burning variant (`PomoSeedBurning.prefab`) uses the same script with a different sprite and calls `ApplyBurning(2f)` on hit.
+
+### Swing Penalty
+A 0.4 s coroutine sets a movement speed multiplier to 0.7×. If a new swing starts during the penalty, the coroutine restarts from zero.
+
+---
+
+## Image Generation Prompts
+
+### Prompt 1: In-Game Chibi Sprite (Reference Sheet)
+*(Feed approved Pomegraknight illustration as reference image. Describe only pose and motion.)*
+
+Chibi pixel art sprite sheet, front-facing full body, isolated on black background. Nine frames arranged in a single row: Idle, Walk, Jump, Slash1, Slash2, Slash3, Blush, SeedErupt, FireTornado. Same character design as the reference. All animations energetic and aggressive — wide stances, fast transitions, visible impact.
+* **Idle:** Feet planted wide, sword held at the ready. Slight bouncing weight shift — eager, impatient energy. Sharp grin.
+* **Walk:** Determined march, sword gripped in both hands. Moderate stride, upper body leans slightly forward. Not a stroll — she's going somewhere.
+* **Jump:** Explosive upward launch, knees pulled up high, sword raised overhead ready to strike downward. No hesitation.
+* **Slash1:** Wide horizontal sweep, sword arcs from right to left across the body, weight shifting into the swing.
+* **Slash2:** Quick reverse slash, backhand return swing, tighter and faster than Slash1.
+* **Slash3:** Heavy two-handed downward cleave, sword raised high then driven down with full body weight. The finisher.
+* **Blush:** Both fists clenched at sides, head thrown back, body engulfed in flames bursting outward. A power-up roar.
+* **SeedErupt:** Arms flung upward, body crouched slightly, seeds spraying outward in an arc from behind/above her.
+* **FireTornado:** A rapid spinning motion — body becomes a blur of rotation, sword extended outward, flames spiraling around her into a vortex. First, she crouches slightly and plants her feet, then her body winds into the spin, sword carving a continuous horizontal circle at waist height. Flames trail the blade seamlessly, forming a full tornado cylinder around her. The last frames show the spin decelerating, flames receding, body settling back into a grounded stance.
+
+### Prompt 2: Character Poster
+*(Feed approved Pomegraknight illustration as reference image. Describe only pose, expression, and composition.)*
+
+Character poster, same design as the reference image. Pomegraknight stands in a wide, grounded combat stance, short sword held in one hand and resting across her shoulder. Her expression is fierce — sharp grin, eyes bright with battle hunger. Flames curl around her shoulders and forearms without consuming her — she is in control of the fire. Behind her, an arc of pomegranate seeds hangs suspended mid-air, some glowing with ember light. Dark background with deep red and orange rim lighting. The overall feeling: a warrior who runs toward danger, not away from it.
+
+---
+
+*Last Updated: May 2026 | Version: 1.1 | Source: Unity CharacterGDD.md*
