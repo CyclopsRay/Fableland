@@ -1,0 +1,361 @@
+# Fableland — Foe System GDD
+
+Design doc for the enemy/foe layer: types, stats, scaling, AI, skills, and evolution.
+Covers everything that makes a fight work, from the moment a foe spawns to the moment it
+dies (and what it leaves behind).
+
+Implementation target: `Scripts/Foes/` (refactor from the current single `Scripts/Enemy.cs`).
+First landed in **v0.4.0**.
+
+---
+
+## 1. Two-axis difficulty
+
+A fight's difficulty is the product of two independent systems:
+
+| Axis | Source | What it controls |
+|------|--------|-----------------|
+| **Map node level** (1–6) | Which node the player chose on the overworld | Objective complexity — wave count, foe count, win conditions, boss presence |
+| **Foe level** (1–8) | How many days have passed (see §2) | Enemy stat scaling + skill access for every foe in every fight |
+
+A player who grinds level-1 nodes still faces escalating foe levels as days pass.
+A player who rushes a level-4 boss node on day 35 faces level-5 foes during a complex
+objective. The two axes multiply: you can't out-grind the clock, and you can't out-rush
+the stats.
+
+---
+
+## 2. Foe levels (day-based scaling)
+
+Foe level is determined **purely by the current day**. It applies to every foe that
+spawns, regardless of which map node the player is on.
+
+| Foe Lv | Days | Skills unlocked | HP mult | ATK mult | SPD mult |
+|--------|------|----------------|---------|----------|----------|
+| 1 | 1–10 | — (patrol only) | ×1 | ×1 | ×1 |
+| 2 | 11–20 | Aggro (sight) | ×1.2 | ×1.2 | ×1.2 |
+| 3 | 21–30 | Sight improved | ×1.5 | ×1.5 | ×1.2 |
+| 4 | 31–35 | Skill 1 | ×2 | ×1.5 | ×1.2 |
+| 5 | 36–40 | Skill 1 | ×3 | ×1.5 | ×1.5 |
+| 6 | 41–45 | Skill 1 + Skill 2 | ×3 | ×2 | ×1.5 |
+| 7 | zone 6 | Skill 1 + Skill 2 | ×4 | ×3 | ×1.5 |
+| 8 | zone 6 | Skill 1 + Skill 2 | ×5 | ×3 | ×2 |
+
+**All multipliers are from base stats, not cumulative.** A level-8 Crab has 5× base HP,
+3× base ATK, and 2× base SPD — calculated directly from the base values defined per foe
+type (§3–4), not chained through previous levels.
+
+"Skills unlocked" gates which abilities the foe has access to (see §3–4 per type).
+Levels 2–3 add the sight/aggro system; levels 4+ unlock active skills one at a time.
+
+---
+
+## 3. Crab Foe
+
+The grounded melee bruiser. A simplified port of the Unity BaseFoe/CrabFoe.
+
+### Base stats
+
+| Stat | Value |
+|------|-------|
+| Base HP | 70 |
+| Base ATK | 18 |
+| Base SPD | 90 px/s |
+| Gravity | 2048 px/s² (Units.Gravity) |
+| Contact range | 44 px |
+| Contact cooldown | 0.9 s |
+| Contact knockback | 260 px/s |
+| Contact stun | 0.25 s |
+| Hit radius | 26 px |
+| External damping | 1200 px/s² |
+| Burn DoT | 14/s |
+
+### Passive — Soft Shell
+
+Receives **200% damage** (2×) from any hit whose source is within a **60° cone above**
+the crab (centered on the upward vertical). This rewards aerial attacks and plunging
+strikes.
+
+### Patrol
+
+Moves horizontally in a random starting direction. On wall contact, turns around.
+
+### Aggro (level 2+)
+
+When the player is detected (see Sight), moves toward the player horizontally.
+
+### Sight (level 2–3)
+
+- **Shape:** 8×3 m rectangle, **ground-anchored** (extends upward from the crab's feet).
+  Centered horizontally on the crab.
+- **Check interval:** every 1 s.
+- **De-aggro:** 3 consecutive misses → return to Patrol.
+
+### Sight improved (level 3+)
+
+- **Shape:** 12×5 m rectangle, same ground-anchored rule.
+
+### Skill 1 — Spawn (level 4+, passive, on death)
+
+On death, spawns **2 crabs** at `current level − 2` (minimum level 1). Spawned crabs
+**cannot themselves spawn** (a foe created by Spawn ignores this skill). This means:
+
+- Levels 1–2: no spawns (level − 2 ≤ 0 → no crabs spawn, or spawns level-1 patrol-only crabs)
+- Level 3: spawns 2 level-1 crabs (patrol only)
+- Level 4: spawns 2 level-2 crabs (aggro)
+- Level 5+: spawns 2 level-(N−2) crabs with their full kit
+
+Spawned crabs appear near the parent's death position (small random offset).
+
+### Skill 2 — Jump (level 6+, 5 s cooldown)
+
+Triggers when **aggro'd** and **either**:
+1. The player jumps, **or**
+2. The player is within 3 m (96 px).
+
+The crab jumps to the **same height as the player's current jump**. Does **not** deal
+landing damage (pure repositioning / anti-kite tool).
+
+---
+
+## 4. Seagull Foe
+
+The aerial harasser. No gravity, momentum-based movement, zoning tools.
+
+### Base stats
+
+| Stat | Value |
+|------|-------|
+| Base HP | 35 |
+| Base ATK | 18 |
+| Base SPD | (accel-based, see Passive) |
+| Gravity | **none** (ignores gravity) |
+| Contact damage | none (does not deal passive contact damage) |
+| Hit radius | 20 px |
+| External damping | 600 px/s² |
+
+### Passive — Flight
+
+- Does **not** receive gravity.
+- Direction-changing **acceleration = 1/3 of the player's** (`PlayerGroundAccel / 3`).
+  This gives the seagull momentum — it can't instantly reverse, creating a window for
+  the player.
+- Turn rate applies horizontally only; vertical position is maintained during patrol
+  and adjusted only by skills.
+
+### Patrol
+
+Flies at a fixed height until it reaches **100 m** (3200 px) from its spawn point, then
+turns around and flies back. Height is set at spawn (configurable, default ~3–5 m above
+ground).
+
+### Aggro (level 2+)
+
+When the player is detected (see Sight), accelerates horizontally toward the player's
+X position. Vertical position is maintained (the seagull doesn't dive during basic aggro).
+
+### Sight (level 2–3)
+
+- **Shape:** 60° cone, 10 m length, facing the **direction of movement**.
+- **When stationary:** retains last facing direction.
+- **Check interval:** every 2 s.
+- **De-aggro:** 3 consecutive misses → return to Patrol.
+
+### Sight improved (level 3+)
+
+- **Shape:** 120° cone, 12 m length.
+
+### Skill 1 — Poop (level 4+, 5 s cooldown)
+
+When **aggro'd**: drops a poop projectile that falls with gravity. On reaching a surface,
+it **lingers for 3 s**, dealing **30 base damage** on contact. The lingering poop is a
+hazard — it zones the player and can stack with multiple seagulls.
+
+Damage: 30 base (× ATK multiplier from foe level). Does the poop deal damage mid-air on
+direct hit? **Yes** — direct hit during the drop also deals 30 base damage.
+
+### Skill 2 — Dash (level 6+, 10 s cooldown)
+
+When **aggro'd**: the seagull **stops moving for 1 s** and **turns red** (telegraph),
+then **dashes 15 m** (480 px) horizontally toward the player's current X position.
+**Pierces through** the player (does not stop on contact). Deals **50 base damage**
+on contact during the dash.
+
+Damage: 50 base (× ATK multiplier from foe level).
+
+---
+
+## 5. Evolution (in-combat)
+
+A foe that is **not eliminated within 25 s** of spawning **evolves** to the next level.
+
+### Rules
+
+- **+1 foe level** (e.g., level 3 → level 4).
+- A foe can evolve **at most once**.
+- Level 8 foes **cannot evolve** (already at cap).
+- **HP scales** to the new level's max, then the foe **heals 30% of its new max HP**.
+- **No interruption** — evolution happens instantly mid-action. The foe does not pause,
+  channel, or reset its current behaviour.
+- **Visual tell** (deferred): the foe grows larger, changes color, or swaps sprite.
+  For now a brief flash or tint change is sufficient.
+
+### Design intent
+
+Evolution punishes passive play — if the player kites indefinitely without committing
+to a kill, the foe escalates. The 30% heal means the player keeps most of their progress
+but the fight gets harder. Combined with spawn-on-death for crabs, an evolved crab that
+dies at level 5 spawns level-3 babies instead of level-2 — the threat cascades.
+
+---
+
+## 6. Sight & aggro system (shared)
+
+All foes share the same sight/aggro state machine:
+
+```
+PATROL ──(player in sight)──▶ AGGRO ──(3 consecutive misses)──▶ PATROL
+```
+
+### Sight check
+
+- Each foe type defines its sight shape, check interval, and improved variant (see §3–4).
+- A sight check runs on a per-foe timer (1 s for Crab, 2 s for Seagull).
+- "Miss" = player is not inside the sight shape.
+- "Hit" = player is inside → immediately enter AGGRO.
+- 3 **consecutive** misses while aggro'd → return to PATROL. A single hit resets the
+  miss counter.
+
+### Aggro behaviour
+
+- Crab: move horizontally toward player's X. Stays on ground.
+- Seagull: accelerate horizontally toward player's X. Maintains patrol height.
+
+### De-aggro
+
+After 3 consecutive misses, the foe resumes its Patrol behaviour from its current
+position. The miss counter resets to 0 on re-aggro.
+
+---
+
+## 7. Loot & drops (hook only — content TBD)
+
+Every foe has a virtual death hook that fires before `QueueFree()`:
+
+```
+OnDeath() → spawn loot (override per type) → QueueFree()
+```
+
+Reserved loot types for future implementation:
+
+| Drop | Trigger | Effect |
+|------|---------|--------|
+| Heal orb | % chance on kill | Restore 15–30 HP |
+| Ult charge orb | % chance on kill | +200–500 ult charge |
+| WonderPage fragment | Boss kill | Counts toward win condition |
+| Status cleanse | Rare drop | Clears OnFire/Frozen |
+
+The architecture supports drops without knowing what they are — each foe type's
+`OnDeath()` override instantiates whatever pickups it needs. Crab's override also
+handles the Spawn skill before calling the base loot logic.
+
+---
+
+## 8. Boss foes (TBD)
+
+Design reserved for a future update. Placeholder notes:
+
+- Bosses use `NodeKind.Boss` map nodes (level 4 world boss, level 6 core boss).
+- Distinct foe types (not just scaled-up crabs/seagulls).
+- Phased behaviour, unique skill sets, arena modifiers.
+- Boss HP bar at top of screen (separate HUD element).
+- Guaranteed loot drop.
+
+---
+
+## 9. Architecture overview
+
+```
+Scripts/Foes/
+├── BaseFoe.cs         // shared: HP, scaling, sight, aggro FSM, evolution, status effects,
+│                      //   defense calc, external velocity, hazard interaction, loot hook,
+│                      //   ult-charge crediting, damage popups
+├── CrabFoe.cs         // ground physics, rectangle sight, Jump, Spawn-on-death
+├── SeagullFoe.cs      // no-gravity flight physics, cone sight, Poop, Dash
+└── FoeStats.cs        // per-level multiplier table, evolution data, helper: StatsForLevel()
+```
+
+`BaseFoe` inherits `CharacterBody2D`. It provides the physics loop, status effect
+handling (fire/frozen/burn), damage reception (defense multiplier, knockback, stun,
+hitflash, camera shake), and the sight/aggro FSM. Subclasses override:
+
+- `InitFoe()` — set base stats, sight shape, patrol behaviour
+- `UpdatePatrol(dt)` / `UpdateAggro(dt)` — movement per state
+- `Skill1()` / `Skill2()` — active skills (guarded by level gating in base)
+- `OnDeath()` — spawn babies, drop loot, then `QueueFree()`
+- `DrawSight()` — debug-draw the current sight shape
+
+The existing `Scripts/Enemy.cs` is replaced by this hierarchy. `Enemy.tscn` is either
+replaced or becomes a generic foe scene with the script swapped per type.
+
+### Level-gating skills
+
+`BaseFoe` checks `CurrentLevel` before allowing skill use. Skills are registered with
+a `minLevel`; the base `_PhysicsProcess` only calls `Skill1()` / `Skill2()` if the foe's
+current level meets the threshold.
+
+### FoeStats lookup
+
+```csharp
+public static class FoeStats
+{
+    public struct LevelStats { public int Level; public float HpMult, AtkMult, SpdMult; }
+    public static LevelStats ForLevel(int level);          // 1–8
+    public static bool HasSkill1(int level);               // level >= 4
+    public static bool HasSkill2(int level);               // level >= 6
+    public static bool HasImprovedSight(int level);        // level >= 3
+    public static bool HasAggro(int level);                // level >= 2
+}
+```
+
+---
+
+## 10. Foe ↔ Map integration
+
+When the player enters a combat node on the map, the arena loads with:
+
+1. **Node level** (1–6) → decides the fight's objective (wave count, foe count, win
+   condition, boss presence). *This is the fight-designer's knob.*
+2. **Current day** (1–45) → decides every spawned foe's **foe level** via the table
+   in §2. *This is the difficulty-curve knob.*
+
+A level-1 combat node on day 35 spawns level-5 foes with a simple objective. A level-4
+boss node on day 12 spawns level-2 foes with a complex objective. The player balances
+pushing deeper nodes against letting days accumulate.
+
+---
+
+## 11. Arena foe cap
+
+- **Hard cap:** 6 foes on screen (raised from the current 4 to accommodate spawn-on-death).
+- **Spawn-on-death ignores the cap** — if a crab dies and the arena is at cap, the 2
+  baby crabs still spawn (otherwise the skill is trivially negated). The cap only gates
+  the GameManager's periodic spawn timer.
+- **Evolution is unaffected by cap** — it modifies an existing foe, not a new spawn.
+
+---
+
+## 12. Decisions log
+
+- **HP scaling uses base-relative multipliers, not cumulative.** A level-8 foe's HP is
+  exactly `baseHP × 5`. This keeps the curve flat enough that combat times stay reasonable.
+- **Crab skills swapped** (Spawn = skill 1 / on-death, Jump = skill 2 / active) so early
+  game doesn't introduce spawn cascades before the player has tools.
+- **Seagull dash pierces** rather than stopping on contact — it's a swoop, not a tackle.
+- **Spawned crabs cannot spawn** — infinite chains are funny exactly once, then they break
+  the game.
+- **Sight shapes:** Crab = ground-anchored rectangle (vertical escape), Seagull = movement
+  cone (positional outplay). Different evasion tactics per foe type.
+- **Evolution heals 30%** (not 100%) so the player's progress isn't erased, only dampened.
+- **Poop lingers 3 s** (up from the initial 0.5 s) — long enough to zone but short enough
+  that the arena doesn't fill permanently.
