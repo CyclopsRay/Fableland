@@ -1,0 +1,188 @@
+# Fableland — Gameplay GDD
+
+Design doc covering the detailed gameplay loop: combat mechanics, shelter UI, team
+building, jousting, trading, planting, and the switch-protagonist system. This is the
+*player-facing* layer that connects the map (`MapGDD.md`), foes (`FOES.gdd`), items
+(`ITEMS.gdd`), and node content (`NODES.gdd`).
+
+Implementation target: alongside `NODES.gdd` (v0.5.0).
+
+---
+
+## A. Combat
+
+### A.1 Data the level needs on entering a combat node
+
+1. **Node Level** and the **foes' level** (from the current day; `FOES.gdd` §2)
+2. **Player's basic stats:** Max HP, current HP, ATK, DEF, SPD, acceleration, etc.
+   (as defined in `CharacterController.cs`)
+3. **Stats from held wonder items** (active protagonists' equipment)
+4. **Stats from backpack items with `Possession`** enchant (`ITEMS.gdd` §4.4)
+5. **World-setting stats** (e.g., if the world is torn apart, the background changes)
+6. **"On Game Start" effects** — some items trigger effects when combat begins
+   (e.g., A Weird Mushroom's next-day outcome; `ITEMS.gdd` §7.12)
+
+### A.2 Combat actions
+
+| Action | Input | Detail |
+|--------|-------|--------|
+| Move | `A`/`D` or `←`/`→` | Left/right movement |
+| Jump | `Space` | Jump (character-specific max jumps) |
+| Drop through platform | `S`/`Down` | Drop through one-way platforms |
+| SoftVolume vertical | `W`/`S` or `↑`/`↓` | Move up/down inside SoftVolumes |
+| Skill 1 (Shift) | `Left Shift` | Character-specific Shift ability |
+| Skill 2 (E) | `E` | Character-specific E ability |
+| Ultimate (Q) | `Q` | Character-specific Ult (if unlocked) |
+| Item skill | `F` | Use the held wonder item's skill (if it has one) |
+| Switch protagonist | `Tab` | Switch to next protagonist in sequence (12 s CD) |
+| Pick up item | Walk over | Wonder items on the ground are auto-picked up |
+| Melee / BA | `J` or `LMB` | Character-specific basic attack |
+
+### A.3 Switch Protagonist (Tab, 12 s CD)
+
+The player controls **one protagonist at a time**. The three active party members form
+a **fixed sequence** set at the shelter. Pressing Tab switches to the next protagonist.
+
+| Rule | Detail |
+|------|--------|
+| HP ratio inheritance | Incoming protagonist inherits the outgoing protagonist's current HP ratio |
+| Cooldown penalty | Background protagonists' CDs tick at **⅕ speed** |
+| Landing effect | Each protagonist triggers a unique landing effect on switch-in |
+| Item CDs | Held items on background protagonists tick at ⅕ speed (combat CDs only) |
+| Death | Active protagonist death = permadeath (bench is not extra lives) |
+| Short party | 2 protagonists = back/forth; 1 protagonist = Tab unavailable |
+| Mid-air switch | Position and velocity preserved |
+| Projectile persistence | All active projectiles survive; owner is the **player**, not the protagonist |
+
+**Global stats:** ATK, DEF, and Max HP improvements from shelter Blessings apply to
+all protagonists equally.
+
+### A.4 Mission types & scaling
+
+Five mission types: Collection (60%), Protect (15%), Destroy (10%), Slaughter (10%),
+BOSS (5%).
+
+**Base requirements (LV1):** Collection 10 cores, Protect 40 s, Destroy 2 objectives,
+Slaughter 2 waves. Higher levels scale by multiplier:
+
+| Node LV | Difficulty | Multiplier | Collection | Protect | Destroy | Slaughter | Boss |
+|---------|-----------|-----------|------------|---------|---------|-----------|------|
+| 1 | Trip (旅程) | 1.0× | 10 | 40 s | 2 | 2 waves | — |
+| 2 | Adventure (冒险) | 1.5× | 15 | 60 s | 3 | 3 waves | — |
+| 3 | March (行军) | 2.0× | 20 | 80 s | 4 | 4 waves | — |
+| 4 | Confrontation (决战) | — | — | — | — | — | Kill world BOSS |
+| 5 | Reincarnation (轮回) | 2.5× | 25 | 100 s | 5 | 5 waves | — |
+| 6 | Rout (溃败) | — | — | — | — | — | Kill final BOSS |
+
+**Universal time limit:** all four non-BOSS types share the Protect duration for that
+level. BOSS time limits: LV4 = 240 s, LV6 = 360 s.
+
+**Combined difficulty name:** when entering a combat node, the display reads
+`<Foe Difficulty> <Node Difficulty>`. The final level is **GOD FORBID ROUT**.
+
+### A.5 On finishing combat
+
+When the goal is achieved (or time expires) and the player clicks "Finish the Day,"
+all stats are saved. Changed stats are archived to the run's save data.
+
+**Failure states:**
+- BOSS timer expiry = immediate permadeath
+- All other failures = no reward, node unconquered, player survives
+
+---
+
+## B. Shelter
+
+For now, the shelter is a **selectable menu** (future: immersive in-world interaction).
+
+### B.1 Build Team
+
+Opens a new menu with three protagonist cards on the left. Each card shows:
+- Protagonist poster
+- Small circle icon for their held item
+- "Change" button below
+
+**Interactions:**
+- **Click card** → view detailed stats on the right (HP, ATK, DEF, SPD, Vamp, lore)
+- **Click held-item circle** → open backpack to swap/remove the held item
+- **Click "Change"** → show protagonist list (benched ones selectable; current spot greyed)
+- **Click backpack icon** → open full wonder-item inventory (6×5 grid with pages, detail panel showing passive/skills/plantability/lore)
+
+### B.2 Blessing
+
+Opens a menu with three options (fourth TBD):
+
+| Action | Effect |
+|--------|--------|
+| **Rest** | Restore 30% Max HP; ⅓ of excess healing converted to permanent Max HP |
+| **Sharpen Weapon** | +10 ATK (global). Formula: `final_dmg = base_dmg × (100 + ATK) / 100` |
+| **Sharpen Armor** | +10 DEF (global). Formula: `received = incoming × 100 / (100 + DEF)` |
+| **Wish** | TBD — reserved for future |
+
+Confirmation popup: *"You will use all your stamina and the Blessing of this shelter
+to make the magic happen."* On Yes: stamina → 0, Blessing consumed, shelter becomes
+Mundane, day ends.
+
+### B.3 Jousting
+
+**15% chance** a wanderer protagonist appears. Shows name + days before departure.
+Challenge to a 1v1 joust:
+
+- **Time limit:** 180 s
+- **+100% base HP** for both fighters (additive, not multiplicative with foe scaling)
+- **Wanderer level** follows the current day's foe-level table
+- **Stats are copied** — a mock fight. No HP loss, item CDs, or consumables carry back
+- **Win:** wanderer joins the bench; their held item transfers to the player
+- **Lose/draw:** no penalty; wanderer remains until their departure day (5-day window)
+
+### B.4 Plant
+
+**50% chance** a plantation is available (2 slots by default). Drag a seed from
+inventory onto a slot to plant. Every 2 days the player can return to water,
+accelerating growth by +1 day per watering.
+
+### B.5 Trade
+
+A VOID trader always offers **5 options**:
+- 3–5 options traded for wonder cores (one always at 75% discount)
+- Remaining options are 1 wonder item for 1 wonder item
+- Default item price: 10 wonder cores
+
+### B.6 Teleport
+
+Only available if a **teleport shrine** is functioning at this shelter. By default
+unavailable.
+
+---
+
+## C. Foe level scaling
+
+Foe level is determined purely by the current day.
+
+| Lv | Days | Difficulty | Skills | HP | ATK | SPD |
+|----|------|-----------|--------|----|----|----|
+| 1 | 1–10 | Fairytale (童话般的) | Patrol only | ×1 | ×1 | ×1 |
+| 2 | 11–20 | Mundane (平凡的) | Aggro (sight) | ×1.2 | ×1.2 | ×1.2 |
+| 3 | 21–30 | Mundane (平凡的) | Sight improved | ×1.5 | ×1.5 | ×1.2 |
+| 4 | 31–35 | Challenging (崎岖的) | Skill 1 | ×2 | ×1.5 | ×1.2 |
+| 5 | 36–40 | Challenging (崎岖的) | Skill 1 | ×3 | ×1.5 | ×1.5 |
+| 6 | 41–45 | Demonic (险恶的) | Skill 1 + 2 | ×3 | ×2 | ×1.5 |
+| 7 | zone 6 | Hellish (地狱般的) | Skill 1 + 2 | ×4 | ×3 | ×1.5 |
+| 8 | zone 6 | God-Forbid (神惧) | Skill 1 + 2 | ×5 | ×3 | ×2 |
+
+---
+
+## D. Integration
+
+| Concern | Primary doc |
+|---------|------------|
+| Map generation, zones, edges, VOID devour | `MapGDD.md` |
+| Foe types, AI, evolution, loot hooks | `FOES.gdd` |
+| Node content, day cycle, team build, shelter functions | `NODES.gdd` |
+| Wonder items, tags, cooldowns, item catalog | `ITEMS.gdd` |
+| ATK/DEF formulas, engineering conventions | `KNOWLEDGE.md` |
+| Per-character abilities, stats, visuals | `Docs/<CharacterName>.gdd` |
+
+---
+
+*Last Updated: July 2026 | Synthesized from the gameplay GDD draft and discussions*

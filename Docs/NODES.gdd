@@ -84,8 +84,10 @@ For all other mission types, failing to achieve the goal is **not fatal**:
 | Slaughter | Player dies | Permadeath (same as any combat death). |
 | BOSS | Timer expires | **Immediate death** (permadeath). |
 
-A node that is not marked as completed can be **re-attempted** on a future visit
-(stamina permitting). Rewards are granted once, on first success.
+No matter success or failed, upon entering a combat node, deplete all staminas.
+If failed, the player is send back to the previous postion before entering this node.
+A node that is not marked as completed can be **re-attempted** on a future visit 
+Rewards are granted once, on first success.
 
 ### 2.4 Meta-progression
 
