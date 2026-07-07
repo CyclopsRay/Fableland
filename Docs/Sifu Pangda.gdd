@@ -1,11 +1,15 @@
 # Sifu Pangda — GDD v1.0
 
+> **Design-provided GDD** (not a Unity port). Movement derives from `Units.cs`
+> (meters·seconds). **In-run character leveling was removed in v0.3.7** (`NODES.gdd`
+> decisions log) — HP is a flat base; permanent growth comes from the additive
+> HP/ATK/DEF pools, not a level ladder.
+
 ## Character Overview
 * **Race:** Panda
 * **Role:** Tank, Initiator
 * **Realm:** Gui Lin (GL)
-* **HP:** 300
-* **Level-up Rounds:** 0 / 4 / 6
+* **HP:** 300 (flat)
 * **Personality:** Meditating master. Calm, centered, unhurried — until provoked.
   *"Those who interrupt my XiuXing shall embrace the fiercest burn."*
 
@@ -80,6 +84,13 @@ Sifu Pangda maintains a **Chi shield** generated from his own damage output.
 - Throws bottle toward mouse position at **20 m/s**
 - Deals **25 DMG** + **1 s Trapped** on hit
 
+> **Trapped (status — canonical definition, v0.3.7).** For the duration, the target: has
+> **no input movement, jump, or dash**; receives **no new external impulses** and is
+> **knockback-immune** (incoming knockback is ignored while Trapped); **gravity still
+> applies** — an airborne Trapped target falls straight down. **Skills remain castable.**
+> Trapped is thus a movement/root lock, not a full stun. (First introduced here; reused
+> by any future root effect.)
+
 **Zhen Qi buff (6 s after drinking):**
 - Passive's 30% damage → Chi conversion is replaced with **HP recovery**
 - vs. player enemies: **30%** of damage dealt recovered as HP
@@ -131,11 +142,9 @@ expected to be slower than average with standard jump capability.
 
 ## Leveling
 
-| Level | Max HP | Rounds Needed |
-|-------|--------|---------------|
-| 1 | 300 | 0 |
-| 2 | TBD | 4 |
-| 3 | TBD | 6 |
+**No in-run level curve** (in-run character leveling removed in v0.3.7 — `NODES.gdd`
+decisions log). HP is a flat **300**; permanent growth comes from the additive
+HP/ATK/DEF pools (Rest excess, Sharpen), not a level ladder.
 
 ---
 

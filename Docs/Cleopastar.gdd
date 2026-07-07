@@ -1,5 +1,10 @@
 # Cleopastar — GDD v2.0
 
+> **Ported from the Unity `GloryOfFableland` source.** Numbers reflect the shipped Unity
+> kit; Godot movement derives from `Units.cs` (all speeds/distances in meters·seconds).
+> **In-run character leveling was removed in v0.3.7** (`NODES.gdd` decisions log) — HP is a
+> flat base; permanent growth comes from the additive HP/ATK/DEF pools, not a level ladder.
+
 ## Character Overview
 * **Race:** Star Fruit
 * **Role:** Sniper

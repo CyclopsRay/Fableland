@@ -1,5 +1,10 @@
 # PumpKing — GDD v1.0
 
+> **Ported from the Unity `GloryOfFableland` source.** Numbers reflect the shipped Unity
+> kit; Godot movement derives from `Units.cs` (all speeds/distances in meters·seconds).
+> **In-run character leveling was removed in v0.3.7** (`NODES.gdd` decisions log) — HP is a
+> flat base; permanent growth comes from the additive HP/ATK/DEF pools, not a level ladder.
+
 ## Character Overview
 * **Race:** Pumpkin
 * **Role:** Tank / Guard
@@ -160,7 +165,9 @@ in via Tab. See `NODES.gdd` §3.3 (Switch Protagonist).
 
 ## Leveling
 
-**TODO** — level curve not yet implemented in the Unity source. HP is flat 200.
+**No in-run level curve** (in-run character leveling removed in v0.3.7 — `NODES.gdd`
+decisions log). HP is a flat **200**; permanent growth comes from the additive
+HP/ATK/DEF pools (Rest excess, Sharpen), not a level ladder.
 
 ---
 

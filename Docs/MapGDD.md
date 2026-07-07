@@ -28,10 +28,12 @@ The map is a disc cut into **6 zones**: 5 outer worlds + the central **dark zone
 (abbr `XX`)**. Each run picks **5 of 6** defined worlds for the outer ring; each outer
 world is a **72° fan** (1/5 of the disc). Future updates can add more worlds to the pool.
 
-**Every playable character has a home world, and it is always the start zone.** So the
+**Every starter character has a home world, and it is always the start zone.** So the
 home world is guaranteed to be one of the 5, placed at ring index 0 (top); the other 4
 are random. **Pomegraknight's home is VanillaKindom (pink).** When other starting
-characters unlock, they begin in their own home world.
+characters unlock, they begin in their own home world. (Pixolotl is currently a
+**non-starter** — recruit-only; her home world is deliberately unresolved. TBD
+registry #24.)
 
 | World            | Abbr | Palette       |
 |------------------|------|---------------|
@@ -98,12 +100,15 @@ Named `<edgeLevel>-<letter>` (`4-a`, `4-b`, `3-a`, …). A function node is a **
    and replace the 2 edges with 4 into it (those 4 are then "considered"). **40% shelter /
    60% question mark**.
 2. **Then per remaining edge, by level:** lv4 **100%** (always shelter), lv3 50%, lv2 25%,
-   lv1 10%. If it fires, split the edge in two via the node. 80% shelter / 20% question.
+   lv1 10%. If it fires, split the edge in two via the node. Same **40% shelter /
+   60% question** split as crossings (the code has always rolled 40/60 here — an
+   earlier 80/20 note was stale; see §10).
 
 - **Shelter** (camp icon): generated **Blessed**. Functions: build mod, item assignment,
-  trade, joust, plantation (if present), and one day-ending action (Rest / Train / Wish).
-  After the Blessing is consumed the shelter becomes **Mundane** — still usable for
-  build mod and plant-tending, but no further Rest/Train/Wish. Full spec: `NODES.gdd` §5.
+  trade, joust, plantation (if present), and one day-ending action (Rest / Sharpen
+  Weapon / Sharpen Armor / Wish). After the Blessing is consumed the shelter becomes
+  **Mundane** — still usable for build mod and plant-tending, but no further day-ending
+  actions. Full spec: `NODES.gdd` §5.
   Surprises TODO: `VOID TRADER`, `Treasure box`, `teleport`.
 - **Question mark:** other functions — forbidden / teleport / other — **TODO**.
 
@@ -123,6 +128,12 @@ within the VOID, not out on the rim next to the boss rooms). From the disc edge 
 lv5 ring → lake → river ring → lv6 core.
 - **Level 5:** 5 nodes around the circular **lake of the VOID** (`XX-5-1..5`), inside the
   zone-6 disc. Each links to one world's `4-1` with a **shelter** in between.
+  The `XX-S` shelters are zone-6 nodes: **stepping onto one already crosses the
+  singularity** (intended — they are the last camps before the abyss), and they are
+  Blessed with the **basics only** (no plantations/traders/wanderers — `NODES.gdd` §5.2).
+- **Foe levels inside:** the five `XX-5` fights are level 7, the `XX-6-1` core is
+  level 8 (`FOES.gdd` §2). The hidden day counter keeps advancing in-void (item CDs,
+  perish timers, stamina all normal) — only the display is `???` (`NODES.gdd` §7.4).
 - **River of the VOID:** every lv5 node connects to the river, so the player can hop
   between lv5 nodes in one step. It's a shelter-and-beyond, drawn as a shining dark ring
   wrapping level 6, with a **selectable node marker on the ring** (you route lv5 → river →
@@ -140,14 +151,21 @@ lv5 ring → lake → river ring → lv6 core.
   functions or must complete an in-progress combat node before finishing the day.
   See `NODES.gdd` §7 for the full day-cycle spec and day-end resolution sequence.
 - **Visited nodes render grey.** You may re-walk them freely (costing stamina).
+- **Pathing:** movement is shortest-path within stamina; **only the destination node
+  triggers content**. Paths may not pass *through* unvisited nodes or unconquered
+  combat nodes — those are destination-only (`NODES.gdd` §1.3). Entering any combat
+  node depletes all stamina (`NODES.gdd` §2.3).
 - **Rest** (debug harness): the `Rest` button in the current debug build manually ends the day
   (wait in place) — same day-advance + devour + refresh. In the full game this is replaced by
-  the `Finish the Day` button and shelter Rest/Train/Wish actions (`NODES.gdd` §5.5).
+  the `Finish the Day` button and shelter Rest/Sharpen/Wish actions (`NODES.gdd` §5.5).
 - **VOID devour schedule** (by day): `1-A`→10, `1-B`→20, `2-A`→30, `2-B`→35, `3`→40,
   `4`→45. On a level's devour day its nodes **flicker**; at the **end** of that day the
   nodes and their edges become unavailable (the VOID has eaten that ring). **Function nodes
   on a devoured ring go too:** once all of a function node's neighbours are eaten it is
   orphaned and the VOID takes it as well (no floating shelters left behind).
+  **If the player's current node is devoured at day-end, the run is over** — the VOID
+  eats the ground and the player with it (`NODES.gdd` §2.2); the `Finish the Day`
+  confirmation warns when standing on flickering ground.
 - Player starts on a **random 1-A node in the home/start world**, day 1, stamina 5.
 
 ### 8a. Mist (fog of war)
@@ -201,6 +219,13 @@ These were resolved to keep the map functional; flag any you want changed:
   nodes sit close together (tightened in v0.2.4 from a wider 6° margin).
 - **Function-node split (v0.2.4):** shelter/question ratio is **40/60** (was 80/20);
   lv4-edge shelters and the zone-6 in-between shelters remain forced shelters.
+  *(v0.3.7: the stale 80/20 line in §6 was corrected — the code has rolled 40/60 for
+  both crossings and mid-edge nodes since v0.2.4.)*
+- **(v0.3.7) Devour kills:** a player standing on a devoured ring at day-end loses the
+  run (`NODES.gdd` §2.2).
+- **(v0.3.7) Destination-only content triggers;** unvisited and unconquered-combat
+  nodes cannot be pathed through (`NODES.gdd` §1.3).
+- **(v0.3.7) Pixolotl is a non-starter** until her home world exists (TBD registry #24).
 
 ## 11. Rendered map (atlas view) — v0.3.2
 

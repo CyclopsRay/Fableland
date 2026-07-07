@@ -9,6 +9,19 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.3.7** — *Docs-only design-sync commit* (no runtime code changed). Resolved the last
+  batch of pre-implementation design questions (Q22–32) and swept the docs to match:
+  **in-run character leveling removed** across all 5 character GDDs — HP is now a flat base,
+  permanent growth is the additive HP/ATK/DEF pools (Rest excess → max-HP pp, Sharpen → +10
+  ATK/DEF), and **WonderPages renamed *wonder cores***; **Pomegraknight's Burning speed buff
+  corrected +30% → +20%** to match the base OnFire status (code was already +20%); canonized
+  the **Trapped** status (root: no input move/jump/dash, knockback-immune, gravity still
+  applies, skills castable) in Sifu Pangda's GDD; added a Unity-port/Units provenance header
+  to each character GDD. Instructions: added a `Gameplay.gdd` row to the 10-DESIGN ownership
+  map, extended the TBD registry (#21 Ult model, #22 landing effects, #23 per-type victory
+  loot, #24 Pixolotl realm), and fixed stale `Train`/`Conquer` terms in T30 and IDEAS. The
+  GDD suite + `Instructions/` + `Tech/` are now cross-referenced and decision-logged, ready
+  to drive the v0.4.0 foe build. (Verification: static/prose review only — no toolchain.)
 - **0.2.1** — Damage mitigation now flows through **defense only**: removed the flat
   `DamageTakenMult` "damage reduction" multiplier (was only used by Fire Tornado's 0.6x); Fire
   Tornado now grants +66.7 defense via the same aggregatable `SetDefenseSource`/

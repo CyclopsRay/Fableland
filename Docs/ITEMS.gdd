@@ -145,6 +145,11 @@ The item can be **planted** in a plantation slot at a shelter node (see `NODES.g
 The item's **passive is always active**, even when the item is in the backpack (not
 held). The skill still requires the item to be held.
 
+**Scope:** a `Possession` passive applies to **every protagonist in the active team
+build** (party-scope). A held item's normal passive applies to its holder only; if a
+held item also carries `Possession`, the passive is applied once party-wide, never
+twice to the holder.
+
 *Example: THE VOID — its phantom-spawning passive works from the backpack.*
 
 The `Possession` tag can also be **added** to another item via certain meta-items
@@ -389,16 +394,20 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | Domain | Hybrid |
 | Lifecycle | Perishable → Convertible, OR Single-use → random outcome |
 | Passive | **`Perishable` (2 days).** If not used within 2 days, converts to **A Rotten Mushroom**. |
-| Skill | **Single use.** Increase max HP and current HP by **20%**. **The next day** (from start to end of that day), one random effect occurs. The player does **not** know the outcome before eating — the effect is revealed the following day. |
+| Skill | **Single use.** Increase max HP and current HP by **20%** (eater-only, permanent — a +20 pp max-HP multiplier). **The next day** (from start to end of that day), one random effect occurs. The player does **not** know the outcome before eating — the effect is revealed the following day. |
 
 | Outcome | Probability | Effect (lasts the entire next day unless stated otherwise) |
 |---------|------------|--------|
-| (a) | 18% | Lose 40% HP (−20% from the original base) |
+| (a) | 18% | Max-HP multiplier **−40 pp for that day** (net −20% vs the original base while active; current HP clamps ratio-preserved; restored at the next day-end) |
 | (b) | 18% | Left/right movement controls swap for one day |
 | (c) | 18% | Movement speed +300% for one day |
 | (d) | 18% | Jump height +300% for one day |
 | (e) | 18% | Gain an extra 20% HP (stacks with the initial +20%; permanent) |
 | (f) | 10% | The protagonist who ate it can carry **one extra wonder item** (held slot +1, permanent) |
+
+> All mushroom effects — the initial +20% and every outcome — apply to the **eater
+> only**. Outcomes (b)/(c)/(d) last the entire next day and are intended at full
+> strength: **+300% really means ×4** — this is a maniac item by design.
 
 | CD | — (single use) |
 | Tags | `Perishable`, `Convertible` |
@@ -469,3 +478,10 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
   devour clock. This is the game's daily housekeeping pass.
 - **VOID Phantom contact = BOSS fight.** Deferred to a future content pass; the
   spawning/movement rules are placeholders.
+- **(v0.3.7) Possession is party-scope:** the passive applies to all protagonists in
+  the active build (applied once — never doubled on the holder).
+- **(v0.3.7) Mushroom semantics pinned:** all effects are eater-only; the initial +20%
+  is a permanent +20 pp max-HP multiplier; outcome (a) is a one-day −40 pp max-HP
+  debuff (net −20% vs original that day); (c)/(d) really are ×4 — maniac by design.
+- **(v0.3.7) Permanent stat pools are additive** (max-HP percentage points, flat ATK,
+  flat DEF) — see `30-DATA-AND-BALANCE.md` §3 and `NODES.gdd` §5.5.

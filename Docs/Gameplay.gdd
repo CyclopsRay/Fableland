@@ -13,14 +13,26 @@ Implementation target: alongside `NODES.gdd` (v0.5.0).
 
 ### A.1 Data the level needs on entering a combat node
 
-1. **Node Level** and the **foes' level** (from the current day; `FOES.gdd` §2)
-2. **Player's basic stats:** Max HP, current HP, ATK, DEF, SPD, acceleration, etc.
-   (as defined in `CharacterController.cs`)
+1. **Node Level** and the **foes' level** (from the current day — or fixed per node in
+   zone 6; `FOES.gdd` §2)
+2. **Player's basic stats:** Max HP, current HP, ATK, DEF, SPD, Vamp, acceleration,
+   etc. (as defined in `CharacterController.cs`)
 3. **Stats from held wonder items** (active protagonists' equipment)
 4. **Stats from backpack items with `Possession`** enchant (`ITEMS.gdd` §4.4)
 5. **World-setting stats** (e.g., if the world is torn apart, the background changes)
 6. **"On Game Start" effects** — some items trigger effects when combat begins
    (e.g., A Weird Mushroom's next-day outcome; `ITEMS.gdd` §7.12)
+
+**Base-stat notes:** ATK and DEF start at 0 (formulas in `KNOWLEDGE.md`). **Vamp**
+(omni-vamp) is a base stat starting at 0 — an additive % pool fed by items/buffs
+(e.g., Pome's Bravery +5%); on every hit, the attacker heals
+`Vamp% × post-mitigation damage dealt`. Permanent max-HP growth is an additive
+percentage-point multiplier pool (two full-HP Rests → ×1.10 then ×1.20; `NODES.gdd`
+§5.5).
+
+**Standard arena** (current `Arena.tscn`): ≈ **62.5 m wide × 22 m tall** (2000 × 710 px)
+between the side walls. Per-level arena sizing is TODO. (Note: the Seagull's 100 m
+patrol turnaround exceeds this width — patrolling gulls wall-turn in practice.)
 
 ### A.2 Combat actions
 
@@ -55,27 +67,21 @@ a **fixed sequence** set at the shelter. Pressing Tab switches to the next prota
 | Projectile persistence | All active projectiles survive; owner is the **player**, not the protagonist |
 
 **Global stats:** ATK, DEF, and Max HP improvements from shelter Blessings apply to
-all protagonists equally.
+all protagonists equally. (Canonical spec of the switch system: `NODES.gdd` §3.3.)
 
 ### A.4 Mission types & scaling
 
-Five mission types: Collection (60%), Protect (15%), Destroy (10%), Slaughter (10%),
-BOSS (5%).
+Five mission types. For LV1/2/3/5 nodes the type is rolled at map generation at ratio
+**60 : 15 : 10 : 10** (Collection : Protect : Destroy : Slaughter). **LV4 and LV6 nodes
+are always BOSS** — structural, never rolled.
 
-**Base requirements (LV1):** Collection 10 cores, Protect 40 s, Destroy 2 objectives,
-Slaughter 2 waves. Higher levels scale by multiplier:
+The canonical scaling table (base requirements, per-level multipliers, universal time
+limits, node difficulty names, victory loot) lives in **`NODES.gdd` §4** — this doc
+does not duplicate it. Highlights: all four non-BOSS types share the Protect duration
+as their time limit; BOSS limits are 240 s (LV4) / 360 s (LV6).
 
-| Node LV | Difficulty | Multiplier | Collection | Protect | Destroy | Slaughter | Boss |
-|---------|-----------|-----------|------------|---------|---------|-----------|------|
-| 1 | Trip (旅程) | 1.0× | 10 | 40 s | 2 | 2 waves | — |
-| 2 | Adventure (冒险) | 1.5× | 15 | 60 s | 3 | 3 waves | — |
-| 3 | March (行军) | 2.0× | 20 | 80 s | 4 | 4 waves | — |
-| 4 | Confrontation (决战) | — | — | — | — | — | Kill world BOSS |
-| 5 | Reincarnation (轮回) | 2.5× | 25 | 100 s | 5 | 5 waves | — |
-| 6 | Rout (溃败) | — | — | — | — | — | Kill final BOSS |
-
-**Universal time limit:** all four non-BOSS types share the Protect duration for that
-level. BOSS time limits: LV4 = 240 s, LV6 = 360 s.
+**Stamina:** entering any combat node depletes all stamina — at most one combat per
+day (`NODES.gdd` §2.3).
 
 **Combined difficulty name:** when entering a combat node, the display reads
 `<Foe Difficulty> <Node Difficulty>`. The final level is **GOD FORBID ROUT**.
@@ -85,9 +91,14 @@ level. BOSS time limits: LV4 = 240 s, LV6 = 360 s.
 When the goal is achieved (or time expires) and the player clicks "Finish the Day,"
 all stats are saved. Changed stats are archived to the run's save data.
 
+On failure (timer expiry / core destroyed), the player is returned to the previous map
+position with 0 stamina and must finish the day (`NODES.gdd` §2.3).
+
 **Failure states:**
 - BOSS timer expiry = immediate permadeath
-- All other failures = no reward, node unconquered, player survives
+- All other failures = node unconquered, player survives (Collection keeps the cores
+  already grabbed — details in `NODES.gdd` §2.3)
+- Standing on ground the VOID devours at day-end = run over (`NODES.gdd` §2.2)
 
 ---
 
@@ -129,9 +140,13 @@ Mundane, day ends.
 Challenge to a 1v1 joust:
 
 - **Time limit:** 180 s
-- **+100% base HP** for both fighters (additive, not multiplicative with foe scaling)
+- **×2 max HP** for both sides (a joust-only multiplier, applied on top of the
+  wanderer's foe-level scaling)
 - **Wanderer level** follows the current day's foe-level table
-- **Stats are copied** — a mock fight. No HP loss, item CDs, or consumables carry back
+- **Party fight:** Tab switching is allowed (12 s CD as usual) — your active build vs
+  the wanderer
+- **Stats are copied** — a mock fight. No HP loss, item CDs, or consumables carry
+  back; a joust KO is **not** permadeath
 - **Win:** wanderer joins the bench; their held item transfers to the player
 - **Lose/draw:** no penalty; wanderer remains until their departure day (5-day window)
 
@@ -157,18 +172,12 @@ unavailable.
 
 ## C. Foe level scaling
 
-Foe level is determined purely by the current day.
+Foe level is determined purely by the current day. **In zone 6 it is fixed by the node
+instead** (LV5 fights → level 7 "Hellish", the LV6 core → level 8 "God-Forbid"),
+because the day is unknowable past the singularity.
 
-| Lv | Days | Difficulty | Skills | HP | ATK | SPD |
-|----|------|-----------|--------|----|----|----|
-| 1 | 1–10 | Fairytale (童话般的) | Patrol only | ×1 | ×1 | ×1 |
-| 2 | 11–20 | Mundane (平凡的) | Aggro (sight) | ×1.2 | ×1.2 | ×1.2 |
-| 3 | 21–30 | Mundane (平凡的) | Sight improved | ×1.5 | ×1.5 | ×1.2 |
-| 4 | 31–35 | Challenging (崎岖的) | Skill 1 | ×2 | ×1.5 | ×1.2 |
-| 5 | 36–40 | Challenging (崎岖的) | Skill 1 | ×3 | ×1.5 | ×1.5 |
-| 6 | 41–45 | Demonic (险恶的) | Skill 1 + 2 | ×3 | ×2 | ×1.5 |
-| 7 | zone 6 | Hellish (地狱般的) | Skill 1 + 2 | ×4 | ×3 | ×1.5 |
-| 8 | zone 6 | God-Forbid (神惧) | Skill 1 + 2 | ×5 | ×3 | ×2 |
+The canonical 8-level table (days, difficulty names, skill unlocks, HP/ATK/SPD
+multipliers) lives in **`FOES.gdd` §2** — this doc does not duplicate it.
 
 ---
 

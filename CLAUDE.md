@@ -10,6 +10,15 @@ live in `Migration.md` (see §0 for the delivered prototype).
   a mistake we've already hit and fixed.
 - `Migration.md` §0 — what's built, how to run (Godot 4.7 .NET, F5 → `Scenes/Arena.tscn`),
   controls, and how each simplification maps to the full port.
+- **`Docs/Instructions/00-OVERVIEW.md`** — the studio operating manual: roadmap, golden
+  rules, and the change workflow, with per-department docs alongside it (design,
+  engineering, data/balance, QA, art/audio, production, merchandising). Follow its
+  change workflow when adding any feature.
+- **`Docs/Tech/T00-INDEX.md`** — the technical law: module dependency layers, contracts,
+  extensibility rules, feature blueprints (RunState, foes, missions, items, save),
+  and performance budgets. Read the relevant T-doc before building a new system.
+- `Docs/IDEAS.md` — the design idea ledger (non-canon). New content ideas land there
+  first and graduate into GDDs via the change workflow.
 
 ## Mandatory workflow
 - **After fixing ANY bug, add a caveat to `KNOWLEDGE.md`** (symptom → rule → why) under
