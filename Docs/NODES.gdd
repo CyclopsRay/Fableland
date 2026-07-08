@@ -677,3 +677,29 @@ designed in a future content pass.
   full-HP Rests → ×1.10 then ×1.20, not compounding).
 - **(v0.3.7) XX-S shelters are basics-only.** Blessed with build mod + item assignment
   + one day-ending action; never plantation/trader/wanderer.
+- **(v0.5.0) Reward delivery = instant.** Combat rewards apply the moment the goal is
+  achieved (with a HUD toast); §1.2's "delivery TBD" resolved as the prototype default.
+  Collection credits each core ON PICKUP (so they're kept on a timer failure, per §2.3)
+  and its success bundle carries zero cores — no double-count.
+- **(v0.5.0) Collection pacing prototype default:** 3 cores on the field at once; an
+  untouched core despawns after 12 s and respawns elsewhere (all placement from the
+  mission's DetRandom sub-stream); on goal, foes die and a 10 s grace window lets the
+  player grab leftovers.
+- **(v0.5.0) Destroy objectives prototype default:** stationary targets, HP = 60 ×
+  (1/1.5/2/2.5 per LV1/2/3/5), placed from the mission sub-stream on platforms/ground.
+  Objectives are hittable like foes but never count toward the ambient spawn cap.
+- **(v0.5.0) Protect core aggro (Q10 default):** foes keep chasing the player, but any
+  foe within contact range of the Condensed Wonder Core chips it on the core's own
+  0.9 s cooldown (per-hit = 18 × the foe level's ATK mult) — ignoring the fight still
+  loses the core. Core is not healable (healing stays TBD).
+- **(v0.5.0) No in-Adventure Map button yet** (§1.1/§1.2): the map is a separate scene,
+  so a view-only overlay needs a SubViewport/snapshot — deferred for combat AND "?"
+  events. Finish-the-Day gating (locked until the goal / terminal event choice
+  resolves) IS implemented; shelters keep their free "Back to Map" (that's movement,
+  not a map view).
+- **(v0.5.0) "?" events run through a generic EventRunner** (T30 §7): authored
+  `EventDef` pages of choices → composed verb effects (grant cores / heal / grant item /
+  nothing); the event for a node is picked deterministically from the run seed. Three
+  placeholder events ship as the pipeline proof.
+- **(v0.5.0) Day-end visibility:** the map shows a one-shot toast summarizing the
+  day-end pipeline's effects (new day, what the VOID devoured, stamina restored).

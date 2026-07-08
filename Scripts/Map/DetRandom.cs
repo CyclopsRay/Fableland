@@ -12,18 +12,27 @@ namespace Fableland.Map;
 public sealed class DetRandom
 {
     private ulong _state;
+    private readonly string _seed;
 
     public DetRandom(string seed)
     {
+        _seed = seed ?? "";
         ulong h = 1469598103934665603UL; // FNV offset basis
-        seed ??= "";
-        foreach (char c in seed)
+        foreach (char c in _seed)
         {
             h ^= (byte)c;
             h *= 1099511628211UL; // FNV prime
         }
         _state = h == 0 ? 0x9E3779B97F4A7C15UL : h;
     }
+
+    /// <summary>
+    /// A derived, independent stream for a subsystem — deterministic from this stream's seed
+    /// plus a tag (e.g. <c>Rng.Sub("items")</c>). Deriving by seed string (not by advancing the
+    /// parent) means one subsystem consuming numbers never shifts another's — the whole reason
+    /// map layout stays identical when a new subsystem is added (KNOWLEDGE: determinism rule).
+    /// </summary>
+    public DetRandom Sub(string tag) => new(_seed + ":" + tag);
 
     private ulong NextU()
     {
@@ -36,6 +45,10 @@ public sealed class DetRandom
 
     /// <summary>Uniform double in [0, 1).</summary>
     public double NextDouble() => (NextU() >> 11) * (1.0 / 9007199254740992.0);
+
+    /// <summary>Next raw 64-bit draw — used to seed per-foe <c>RandomNumberGenerator</c>s
+    /// deterministically from this stream (Phase 3 arena plumbing).</summary>
+    public ulong NextULong() => NextU();
 
     /// <summary>True with probability p (p in [0,1]).</summary>
     public bool Chance(double p) => NextDouble() < p;

@@ -65,7 +65,7 @@ public partial class PomeSeed : Area2D
 
     private void OnBodyEntered(Node2D body)
     {
-        if (body is Enemy e)
+        if (body is BaseFoe e)
         {
             ulong id = e.GetInstanceId();
             float dmg;
@@ -80,7 +80,7 @@ public partial class PomeSeed : Area2D
             }
 
             Vector2 knock = (_velocity.LengthSquared() > 0.01f ? _velocity.Normalized() : Vector2.Down) * 80f;
-            e.TakeHit(new HitInfo(dmg * _dmgMult, knock, 0.1f));   // small gain-no for seeds
+            e.TakeHit(new HitInfo(dmg * _dmgMult, knock, 0.1f), GlobalPosition);   // small gain-no for seeds
             if (_burning) e.SetBurning(BurnDuration);
             QueueFree();
             return;

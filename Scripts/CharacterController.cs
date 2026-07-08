@@ -177,6 +177,25 @@ public partial class CharacterController : CharacterBody2D
     /// <summary>Override for per-character stats, immunities, ammo config.</summary>
     protected virtual void InitCharacter() { }
 
+    /// <summary>
+    /// Hydrate the live character from its run-state (T30 §1) — called by GameManager after
+    /// spawn. MaxHP scales by the permanent additive max-HP percentage points; current HP is
+    /// the carried ratio; run ATK/DEF fold into the existing aggregatable source dictionaries
+    /// keyed "run:atk" / "run:def" (ATK → +BonusAtk/100 damage-dealt, DEF → flat defense).
+    /// Additive Phase-3 hook. Purely additive to the status pools, so OnFire/Frozen still stack.
+    /// </summary>
+    public void HydrateRun(float baseMaxHp, int maxHpPercentPoints, float hpRatio, int bonusAtk, int bonusDef)
+    {
+        MaxHP = baseMaxHp * (1f + maxHpPercentPoints / 100f);
+        CurrentHP = Mathf.Clamp(hpRatio, 0f, 1f) * MaxHP;
+        if (bonusAtk != 0) _dealtDmgBonuses["run:atk"] = bonusAtk / 100f;
+        if (bonusDef != 0) _defenseBonuses["run:def"] = bonusDef;
+        HpChanged?.Invoke(CurrentHP, MaxHP);
+    }
+
+    /// <summary>Current HP as a fraction of max — written back to ProtagonistState on scene exit.</summary>
+    public float HpRatio => MaxHP > 0f ? CurrentHP / MaxHP : 0f;
+
     public override void _Process(double delta)
     {
         float dt = (float)delta;
@@ -431,7 +450,7 @@ public partial class CharacterController : CharacterBody2D
 
         foreach (Node n in GetTree().GetNodesInGroup("enemy"))
         {
-            if (n is not Enemy e) continue;
+            if (n is not BaseFoe e) continue;
 
             // Treat the foe as a circle of radius HitRadius and test whether the
             // cone overlaps it at all — so a glancing clip still counts, not just
@@ -448,7 +467,7 @@ public partial class CharacterController : CharacterBody2D
             }
 
             Vector2 knock = new Vector2(Facing, -0.35f).Normalized() * knockbackSpeed;
-            e.TakeHit(new HitInfo(scaledDamage, knock, stun));
+            e.TakeHit(new HitInfo(scaledDamage, knock, stun), origin);   // origin feeds crab Soft Shell
             if (applyBurn) e.SetBurning(burnDuration);
             hits++;
         }

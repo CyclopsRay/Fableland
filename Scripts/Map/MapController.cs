@@ -1,32 +1,32 @@
 using System.Collections.Generic;
 using Godot;
 using Fableland.Map;
+using Fableland.Run;
 
 /// <summary>
-/// Root of the Map scene. Owns the generated <see cref="MapGraph"/>, draws it, and
-/// runs the debug loop: seed entry / dice reroll, day + stamina, Rest, Mist toggle, and
-/// click-to-move for the player token. The VOID devours the outer rings on a schedule.
+/// Root of the Map scene — the <b>Exploration-mode view + input layer</b> (v0.5.0). All run
+/// state (day, stamina, visited/completed nodes, VOID latch, the graph) is OWNED BY
+/// <see cref="RunState"/>; this class reads it, draws it, and turns clicks into moves. It keeps
+/// thin local caches (_graph/_current/_visited/_revealed), rebuilt from RunState on scene load.
 ///
-/// Day / movement rule: you spend stamina walking across nodes you've ALREADY visited;
-/// the day ends the moment you step onto a NEW node (it becomes your camp) OR when you
-/// run stamina to 0 among visited nodes. Either way the next day refreshes stamina to 5.
-/// Visited nodes render grey.
+/// Movement (NODES §1.3/§7.1): moving between visited nodes costs 1 stamina/edge; entering an
+/// unvisited node — or re-entering an unconquered combat node, a shelter, or an unresolved "?" —
+/// hands off to <see cref="RunState.BeginAdventure"/> (which swaps to the Adventure scene). The
+/// day ends only via the "Finish the Day" button → <see cref="RunState.EndDay"/> (no longer on
+/// node arrival). Paths cannot pass through unvisited nodes or unconquered combat nodes.
 ///
-/// Mist (fog of war): when on, you only see worlds you've entered — plus the bridge edges
-/// out of them and any function node sitting on a bridge. Unentered worlds and the VOID
-/// stay dark until you set foot in them.
+/// Mist (fog of war): when on, you only see worlds you've entered — plus the bridge edges out of
+/// them and any function node sitting on a bridge. Unentered worlds and the VOID stay dark.
 ///
-/// Prototype/debug harness — nodes only differ by icon; node CONTENT is not implemented.
-/// See Docs/MapGDD.md.
+/// Prototype/debug harness — see Docs/MapGDD.md / Docs/NODES.gdd.
 /// </summary>
 public partial class MapController : Node2D
 {
-    // The day each outer sublevel is eaten by the VOID (spec: dawns 10,20,30,35,40,45).
-    private static readonly Dictionary<string, int> DevourDay = new()
-    {
-        ["1-A"] = 10, ["1-B"] = 20, ["2-A"] = 30, ["2-B"] = 35, ["3"] = 40, ["4"] = 45,
-    };
-    private const int MaxStamina = 5;
+    // The VOID devour schedule now lives on the map layer as VoidSchedule.DevourDay (shared with
+    // RunState's day-end pipeline). Kept here as an alias so view code reads it unchanged.
+    private static Dictionary<string, int> DevourDay => VoidSchedule.DevourDay;
+
+    private const int MaxStamina = RunState.MaxStamina;
     private const float NodeRadius = 11f;
     private const float ClickRadius = 18f;
     private const float WedgeDeg = 62f;    // world background wedge width (< 72° so worlds show a gap)
@@ -36,10 +36,16 @@ public partial class MapController : Node2D
 
     private MapGraph _graph;
     private MapNode _current;
-    private int _day = 1;
-    private int _stamina = MaxStamina;
-    private bool _inVoid;        // passed the zone-6 singularity: outer ring devoured, time unknowable
 
+    // Day / stamina / void latch are OWNED BY RunState now (one-owner rule). These read-only
+    // aliases keep the view code (and the atlas partial) reading them unchanged, and stay
+    // null-tolerant so the map is still launchable straight from F5 before the run inits.
+    private int _day => RunState.Instance?.Day ?? 1;
+    private int _stamina => RunState.Instance?.Stamina ?? MaxStamina;
+    private bool _inVoid => RunState.Instance?.InVoid ?? false;
+
+    // Local view caches, rebuilt from RunState on scene load (SyncFromRunState). MapController is
+    // the only writer of visited/current DURING exploration, always writing through to RunState.
     private readonly HashSet<MapNode> _visited = new();
     private readonly HashSet<string> _revealed = new();  // regions entered: world abbrs and "XX"
     private bool _mist;
@@ -77,6 +83,12 @@ public partial class MapController : Node2D
     private Button _renderButton;
     private Button _viewModeButton;
 
+    // Day-end summary toast (T30 §5 residual, v0.5.0): shown once on scene load if RunState left a
+    // LastDayEndSummary, auto-hides after ToastDuration or on the next click (whichever first).
+    private Label _toastLabel;
+    private float _toastTimer;
+    private const float ToastDuration = 5f;
+
     public override void _Ready()
     {
         _seedEdit = GetNode<LineEdit>("UI/SeedEdit");
@@ -85,7 +97,7 @@ public partial class MapController : Node2D
         _mistButton = GetNode<Button>("UI/MistButton");
         _renderButton = GetNode<Button>("UI/RenderButton");
         GetNode<Button>("UI/DiceButton").Pressed += OnDice;
-        GetNode<Button>("UI/RestButton").Pressed += OnRest;
+        GetNode<Button>("UI/FinishDayButton").Pressed += OnFinishDay;
         _mistButton.Pressed += OnToggleMist;
         _renderButton.Pressed += OnToggleRender;
         _seedEdit.TextSubmitted += OnSeedSubmitted;
@@ -97,7 +109,51 @@ public partial class MapController : Node2D
         UpdateViewModeButton();
         FitZoom();
 
-        Restart(DetRandom.NewSeed());
+        _toastLabel = GetNode<Label>("UI/ToastLabel");
+        _toastLabel.Visible = false;
+
+        // Null-tolerant boot: if no run is in progress (e.g. F5 straight into Map.tscn), start one
+        // so the map stays directly launchable. Otherwise adopt the run RunState already holds.
+        var rs = RunState.Instance;
+        if (rs == null || rs.Graph == null) rs?.NewRun(DetRandom.NewSeed());
+        SyncFromRunState();
+        _seedEdit.Text = rs?.Seed ?? "";
+        UpdateInfo();
+        ShowDayEndToastIfAny();
+        QueueRedraw();
+    }
+
+    /// <summary>
+    /// Show RunState.LastDayEndSummary as a transient toast, once (cleared immediately so a
+    /// re-sync — e.g. Restart — doesn't repeat it). Null-tolerant: no run / no summary = no-op.
+    /// </summary>
+    private void ShowDayEndToastIfAny()
+    {
+        var rs = RunState.Instance;
+        string msg = rs?.LastDayEndSummary;
+        if (string.IsNullOrEmpty(msg)) return;
+        _toastLabel.Text = msg;
+        _toastLabel.Visible = true;
+        _toastTimer = ToastDuration;
+        rs.LastDayEndSummary = ""; // shows once
+    }
+
+    /// <summary>Rebuild the local view caches (_graph, _current, _visited, _revealed) from RunState.</summary>
+    private void SyncFromRunState()
+    {
+        var rs = RunState.Instance;
+        if (rs?.Graph == null) return;
+        _graph = rs.Graph;
+        _render = MapRenderModel.Build(_graph);
+        _current = rs.FindNode(rs.CurrentNodeId) ?? _graph.StartNode;
+        _tokenPos = _current.Pos;
+
+        _visited.Clear();
+        foreach (var n in _graph.Nodes)
+            if (rs.VisitedNodeIds.Contains(n.Id)) _visited.Add(n);
+
+        _revealed.Clear();
+        foreach (var n in _visited) AddRevealed(n);
     }
 
     /// <summary>Zoom so the whole map fits the viewport (Flat mode default).</summary>
@@ -163,28 +219,41 @@ public partial class MapController : Node2D
         QueueRedraw();
     }
 
+    /// <summary>Start a fresh run on this seed (debug dice / seed entry), then re-sync the view.</summary>
     private void Restart(string seed)
     {
-        seed = string.IsNullOrWhiteSpace(seed) ? DetRandom.NewSeed() : seed.Trim().ToUpperInvariant();
-        _graph = MapGenerator.Generate(seed);
-        _render = MapRenderModel.Build(_graph);
-        _current = _graph.StartNode;
-        _tokenPos = _current.Pos;
-        _day = 1;
-        _stamina = MaxStamina;
-        _inVoid = false;
-        _visited.Clear();
-        _revealed.Clear();
-        _visited.Add(_current);
-        AddRevealed(_current);
-        _seedEdit.Text = seed;
+        var rs = RunState.Instance;
+        rs?.NewRun(seed);
+        SyncFromRunState();
+        _seedEdit.Text = rs?.Seed ?? "";
         UpdateInfo();
         QueueRedraw();
     }
 
     private void OnDice() => Restart(DetRandom.NewSeed());
     private void OnSeedSubmitted(string text) => Restart(text);
-    private void OnRest() { EndDay(); QueueRedraw(); }
+
+    /// <summary>
+    /// Exploration-mode day ending (replaces the old debug "Rest" button). Confirmation popup,
+    /// warning when the current node devours tonight (NODES §7.4), routed through RunState.EndDay
+    /// which runs the ordered pipeline and swaps back to the map (or to RunOver on VOID death).
+    /// </summary>
+    private void OnFinishDay()
+    {
+        var rs = RunState.Instance;
+        if (rs == null) return;
+        bool flickers = _current != null
+                        && DevourDay.TryGetValue(_current.LevelTag, out int d) && d == rs.Day;
+        string text = flickers
+            ? "Finish the Day?\n\nWARNING: you are standing on flickering ground — the VOID\n" +
+              "devours it tonight. Finishing the day here ENDS THE RUN."
+            : "Finish the Day?";
+        var dlg = new ConfirmationDialog { DialogText = text, Title = "Finish the Day" };
+        AddChild(dlg);
+        dlg.Confirmed += () => { dlg.QueueFree(); rs.EndDay(); };
+        dlg.Canceled += dlg.QueueFree;
+        dlg.PopupCentered();
+    }
 
     private void OnToggleMist()
     {
@@ -198,27 +267,21 @@ public partial class MapController : Node2D
 
     private void AddRevealed(MapNode n) { var r = Region(n); if (r != null) _revealed.Add(r); }
 
-    /// <summary>End the current day: apply the VOID devour, advance the day, refresh stamina.</summary>
-    private void EndDay()
+    /// <summary>A combat node whose goal was achieved (RunState truth) — safe to pass through.</summary>
+    private bool IsCompleted(MapNode n) => RunState.Instance?.CompletedNodeIds.Contains(n.Id) ?? false;
+
+    /// <summary>Whether a "?" node's event has been resolved (revisits are then inert, NODES §1.3).</summary>
+    private bool IsResolvedEvent(MapNode n) => RunState.Instance?.ResolvedEventIds.Contains(n.Id) ?? false;
+
+    /// <summary>
+    /// Can a shortest path CONTINUE through this node? Unvisited nodes and unconquered combat
+    /// nodes are destination-only — a path may reach them but not cross them (NODES §1.3).
+    /// </summary>
+    private bool IsPassThrough(MapNode n)
     {
-        foreach (var n in _graph.Nodes)
-            if (DevourDay.TryGetValue(n.LevelTag, out int d) && d == _day)
-                n.Devoured = true;
-
-        // Function nodes sit on edges between combat nodes; once every neighbour is eaten
-        // the function node is orphaned, so the VOID takes it too (no floating shelters).
-        foreach (var n in _graph.Nodes)
-        {
-            if (n.Devoured || n.WorldIndex != -2) continue; // -2 == function node
-            bool anyAlive = false;
-            foreach (var e in _graph.EdgesOf(n))
-                if (!e.Other(n).Devoured) { anyAlive = true; break; }
-            if (!anyAlive) n.Devoured = true;
-        }
-
-        _day++;
-        _stamina = MaxStamina;
-        UpdateInfo();
+        if (!_visited.Contains(n)) return false;
+        if (n.IsCombat && !IsCompleted(n)) return false;
+        return true;
     }
 
     private void UpdateInfo()
@@ -248,6 +311,9 @@ public partial class MapController : Node2D
         while (q.Count > 0)
         {
             var cur = q.Dequeue();
+            // Expand only from the start node or a pass-through-able node: an unconquered combat
+            // node is reachable as a DESTINATION but a path cannot continue past it (NODES §1.3).
+            if (cur != _current && !IsPassThrough(cur)) continue;
             foreach (var e in _graph.EdgesOf(cur))
             {
                 var nxt = e.Other(cur);
@@ -270,6 +336,9 @@ public partial class MapController : Node2D
         {
             var n = e.Other(u);
             if (n.Devoured || !vdist.TryGetValue(n, out int d)) continue;
+            // You must be able to stand at n and step out — you can't launch a new-node entry
+            // from an unconquered combat node (reaching it ends there).
+            if (n != _current && !IsPassThrough(n)) continue;
             if (n.WorldIndex == -1 && u.WorldIndex != -1) continue; // one-way out of the VOID
             if (d + 1 < best) best = d + 1;
         }
@@ -286,45 +355,61 @@ public partial class MapController : Node2D
         return c > 0 && c <= _stamina;
     }
 
+    /// <summary>
+    /// Commit a move to <paramref name="target"/> (Exploration input). Deducts stamina, updates
+    /// RunState position, then either triggers the destination's content (unvisited node, combat
+    /// re-attempt, shelter, or unresolved "?") via RunState.BeginAdventure — which swaps scene —
+    /// or, for an inert visited destination, just repositions the token. Day-ending is NOT here
+    /// anymore (NODES decision log: the day ends on the Finish-the-Day button, not on arrival).
+    /// </summary>
     private void TryMove(MapNode target, Dictionary<MapNode, int> vdist)
     {
-        if (target == null || target == _current) return;
-        var from = _current.Pos;
+        var rs = RunState.Instance;
+        if (rs == null || target == null || target == _current) return;
 
-        if (_visited.Contains(target))
+        bool visited = _visited.Contains(target);
+        int cost;
+        if (visited)
         {
             if (!CanRevisit(target, vdist)) return;
-            _current = target;
-            _stamina -= vdist[target];
-            if (_stamina <= 0) EndDay(); else UpdateInfo();
+            cost = vdist[target];
         }
         else
         {
-            int c = ExploreCost(target, vdist);
-            if (c <= 0 || c > _stamina) return;
-            _current = target;
-            _stamina -= c;
-            _visited.Add(target);
-            AddRevealed(target);
-            EndDay(); // reaching a NEW node ends the day
+            cost = ExploreCost(target, vdist);
+            if (cost <= 0 || cost > rs.Stamina) return;
         }
-        _lastMoveDir = target.Pos - from;   // heading-up mode spins this step to the top
-        if (!_inVoid && _current.WorldIndex == -1) EnterVoid();
-        QueueRedraw();
-    }
 
-    /// <summary>
-    /// Cross the zone-6 singularity: a black hole that eats information. There's no turning back
-    /// (movement is already one-way in), and outside, the world evolves so fast that the whole
-    /// outer ring (zones 1-5) is devoured at once. Time becomes unknowable — the day reads "???".
-    /// See Docs/MapGDD.md §7.
-    /// </summary>
-    private void EnterVoid()
-    {
-        _inVoid = true;
-        foreach (var n in _graph.Nodes)
-            if (n.WorldIndex != -1) n.Devoured = true; // everything outside zone 6
+        // Commit movement cost + position (RunState is the owner of truth).
+        var fromNode = _current;
+        rs.Stamina -= cost;
+        rs.PreviousNodeId = fromNode.Id;
+        _current = target;
+        rs.CurrentNodeId = target.Id;
+        _lastMoveDir = target.Pos - fromNode.Pos;   // heading-up mode spins this step to the top
+
+        // Crossing the zone-6 singularity devours the whole outer ring at once (one-way in).
+        if (!rs.InVoid && target.WorldIndex == -1) rs.EnterVoid();
+
+        // Does the destination trigger Adventure content? (NODES §1.3)
+        bool triggers =
+            (!visited && target.Kind != NodeKind.River)                  // any brand-new node w/ content
+            || (target.IsCombat && !IsCompleted(target))                 // failed combat re-attempt
+            || target.Kind == NodeKind.Shelter                           // shelter always opens
+            || (target.Kind == NodeKind.QuestionMark && !IsResolvedEvent(target)); // unresolved "?"
+
+        if (triggers)
+        {
+            rs.BeginAdventure(target.Id); // snapshots + swaps scene (drains all stamina for combat)
+            return;
+        }
+
+        // Inert destination (conquered combat / resolved "?" / river): just move the token.
+        rs.MarkNodeVisited(target.Id); // no-op if already visited (covers the unvisited River hub)
+        _visited.Add(target);          // keep the local view cache consistent
+        AddRevealed(target);
         UpdateInfo();
+        QueueRedraw();
     }
 
     public override void _Process(double delta)
@@ -335,6 +420,13 @@ public partial class MapController : Node2D
         float k = Mathf.Min(1f, (float)delta * 6f);
         _rot = Mathf.LerpAngle(_rot, _rotTarget, k);
         _tilt = Mathf.Lerp(_tilt, _mode == ViewMode.Flat ? 1f : TiltFactor, k);
+
+        if (_toastLabel != null && _toastLabel.Visible)
+        {
+            _toastTimer -= (float)delta;
+            if (_toastTimer <= 0f) _toastLabel.Visible = false;
+        }
+
         QueueRedraw();
     }
 
@@ -365,6 +457,10 @@ public partial class MapController : Node2D
 
         if (@event is not InputEventMouseButton mb || !mb.Pressed || mb.ButtonIndex != MouseButton.Left)
             return;
+
+        // Dismiss-on-click: any left click clears the day-end toast (doesn't consume the click —
+        // the same click still resolves as a move below).
+        if (_toastLabel != null && _toastLabel.Visible) _toastLabel.Visible = false;
 
         // Hit-test in SCREEN space: compare the cursor to each node's PROJECTED position.
         MapNode target = null;

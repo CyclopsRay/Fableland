@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Fableland.Run;
 
 namespace Fableland.Map;
 
@@ -111,8 +112,42 @@ public static class MapGenerator
         // start: a random 1-A node in the first world; guarantee its cross-world lv1 link
         g.StartNode = rng.Pick(byWorld[0]["1-A"]);
 
+        // --- (6) mission roll (NODES §4.1) ---
+        RollMissions(g, seed);
+
         g.BuildAdjacency();
         return g;
+    }
+
+    // ---- mission roll -----------------------------------------------------------
+
+    /// <summary>
+    /// Assign a <see cref="MissionType"/> to every combat node (NODES §4.1). LV4/LV6/Boss-kind
+    /// nodes are structurally Boss (never rolled); LV1/2/3/5 combat nodes roll 60:15:10:10
+    /// Collection:Protect:Destroy:Slaughter.
+    ///
+    /// Rolls from a DEDICATED sub-stream (<c>DetRandom(seed+"M")</c>) — it never touches the
+    /// layout stream, so a given seed's map geometry is byte-for-byte UNCHANGED (same trick the
+    /// atlas uses with seed+"R"). Iteration over g.Nodes is deterministic (insertion order).
+    /// </summary>
+    private static void RollMissions(MapGraph g, string seed)
+    {
+        var mrng = new DetRandom(seed + "M");
+        foreach (var n in g.Nodes)
+        {
+            if (!n.IsCombat) continue;
+            if (n.Kind == NodeKind.Boss || n.Level == 4 || n.Level == 6)
+            {
+                n.Mission = MissionType.Boss; // structural
+                continue;
+            }
+            // 60:15:10:10 over Collection/Protect/Destroy/Slaughter (weights sum to 95).
+            int r = mrng.Range(0, 94);
+            n.Mission = r < 60 ? MissionType.Collection
+                      : r < 75 ? MissionType.Protect
+                      : r < 85 ? MissionType.Destroy
+                               : MissionType.Slaughter;
+        }
     }
 
     // ---- combat-node placement --------------------------------------------------

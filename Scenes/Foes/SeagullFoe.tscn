@@ -1,0 +1,22 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Foes/SeagullFoe.cs" id="1"]
+[ext_resource type="Texture2D" path="res://Sprites/seagull_placeholder.svg" id="2"]
+[ext_resource type="PackedScene" path="res://Scenes/Foes/Poop.tscn" id="3"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(40, 28)
+
+[node name="SeagullFoe" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 4
+script = ExtResource("1")
+PoopScene = ExtResource("3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]

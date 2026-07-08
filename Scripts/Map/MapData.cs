@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Godot;
+using Fableland.Run;
 
 namespace Fableland.Map;
 
@@ -51,6 +52,9 @@ public sealed class MapNode
     public Vector2 Pos;
     public Color Color;
     public bool Devoured;      // eaten by the VOID (unavailable)
+
+    /// <summary>Combat goal, rolled ONCE at map generation (NODES §4.1). Meaningless for non-combat nodes.</summary>
+    public MissionType Mission;
 
     public bool IsCombat => Kind == NodeKind.Combat || Kind == NodeKind.Boss;
 }

@@ -30,7 +30,7 @@ public abstract partial class Hazard : Area2D
 
     private void OnBodyEntered(Node2D body)
     {
-        if (body is not CharacterController && body is not Enemy) return;
+        if (body is not CharacterController && body is not BaseFoe) return;
         _timers[body] = 0f;   // tick immediately on first contact
     }
 
@@ -70,7 +70,7 @@ public abstract partial class Hazard : Area2D
             if (fireStack > 0f) c.AddFireStack(fireStack);
             if (frozenStack > 0f) c.AddFrozenStack(frozenStack);
         }
-        else if (body is Enemy e)
+        else if (body is BaseFoe e)
         {
             if (damage > 0f || knockback != Vector2.Zero) e.ApplyHazard(damage, knockback);
             if (fireStack > 0f) e.AddFireStack(fireStack);

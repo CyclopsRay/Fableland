@@ -18,6 +18,7 @@ run/main_scene="res://Scenes/Menu.tscn"
 [autoload]
 
 DamageNumberManager="*res://Scripts/DamageNumberManager.cs"
+RunState="*res://Scripts/Run/RunState.cs"
 
 [display]
 

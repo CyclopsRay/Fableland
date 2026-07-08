@@ -52,7 +52,7 @@ public partial class TsunamiHazard : Area2D
         float damping = body switch
         {
             CharacterController c => c.ExternalDamping,
-            Enemy e => e.ExternalDamping,
+            BaseFoe e => e.ExternalDamping,
             _ => 900f,
         };
         // Solve v0 from d = v0² / (2·damping) so the shove travels ~15m before the
@@ -62,8 +62,8 @@ public partial class TsunamiHazard : Area2D
 
         if (body is CharacterController cc)
             cc.TakeHit(new HitInfo(cc.MaxHP * DamagePercentMaxHP, impulse, NoControlDuration));
-        else if (body is Enemy en)
-            en.TakeHit(new HitInfo(en.MaxHP * DamagePercentMaxHP, impulse, NoControlDuration));
+        else if (body is BaseFoe en)
+            en.TakeHit(new HitInfo(en.MaxHP * DamagePercentMaxHP, impulse, NoControlDuration), GlobalPosition);
     }
 
     public override void _Draw()

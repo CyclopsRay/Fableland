@@ -29,13 +29,13 @@ public partial class SoftVolume : Area2D
     private void OnBodyEntered(Node2D body)
     {
         if (body is CharacterController c) c.EnterSoftVolume(this);
-        else if (body is Enemy e) e.EnterSoftVolume(this);
+        else if (body is BaseFoe e) e.EnterSoftVolume(this);
     }
 
     private void OnBodyExited(Node2D body)
     {
         if (body is CharacterController c) c.ExitSoftVolume(this);
-        else if (body is Enemy e) e.ExitSoftVolume(this);
+        else if (body is BaseFoe e) e.ExitSoftVolume(this);
     }
 
     /// <summary>

@@ -91,6 +91,64 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A debug-override export must be gated behind "no run exists", not behind its own value (v0.5.0)
+- **Symptom:** `GameManager.FoeLevel` used `DebugFoeLevel > 0 ? DebugFoeLevel : LevelForDay(day)`
+  unconditionally. The export's *default* is 1 (so direct-F5 arenas work out of the box), which
+  means every REAL run's fight would silently spawn level-1 foes forever — the debug knob's
+  convenient default clamped live gameplay.
+- **Rule:** any debug override that ships with a non-zero/enabled default must be consulted
+  **only when no run exists** (`CurrentAdventure == null`), not merely when it's "set" — a
+  default value is indistinguishable from an intentional one. Pattern:
+  `value = hasRun ? realFormula : (DebugKnob > 0 ? DebugKnob : realFormula)`.
+- **Why:** debug knobs default to values that make F5-on-a-scene pleasant; real runs must never
+  read them. The same fix also added the zone-6 per-node override (LV5 → foe level 7, LV6 → 8,
+  FOES §2) that a plain day-formula misses.
+
+### Group membership is load-bearing — a BaseFoe subclass inherits cap/sweep semantics (v0.5.0)
+- **Symptom:** `DestroyObjective` subclasses `BaseFoe` (so player attacks hit it), which
+  auto-joins groups `"enemy"` AND `"foe"` in `BaseFoe._Ready`. `FoeSpawner.LiveFoeCount()`
+  counts group `"foe"` against the ambient cap (6) — so a LV5 Destroy mission's 5 objectives
+  left room for exactly 1 hostile foe, starving the mission of its harassment pressure.
+- **Rule:** groups are semantic contracts, not tags: `"enemy"` = "player attacks iterate me",
+  `"foe"` = "I count against the spawn cap / mission foe sweeps". A subclass that wants one
+  semantic but not the other must `RemoveFromGroup` in `_Ready` **after** `base._Ready()`.
+  When adding any new BaseFoe subclass or any new `GetNodesInGroup` consumer, check both
+  groups' meanings first.
+- **Why:** inheritance buys the hit-test integration for free but silently buys every
+  group-based behavior too; the cap dilution had no error, just wrong difficulty.
+
+### Never hand-write `uid="uid://…"` in a `.tscn` (v0.5.0, from the Phase 2 review)
+- **Symptom:** new scene files were authored with invented `uid://` strings on `ext_resource`
+  lines. Godot generates real UIDs on import; fabricated ones risk collisions and editor
+  warnings/re-writes.
+- **Rule:** when writing `.tscn` files by hand on a host with no Godot editor, omit `uid`
+  entirely and use the numeric-id `ext_resource` style the repo's existing scenes use; let the
+  editor add UIDs when the project is next opened.
+- **Why:** UIDs are an editor-managed identity namespace, not documentation — inventing them
+  is the one way to make two scenes claim the same identity.
+
+### A self-spawning scene can't hold its own PackedScene ext_resource (v0.4.0)
+- **Symptom:** wiring `CrabFoe.tscn`'s Spawn-on-death `BabyCrabScene` export to
+  `CrabFoe.tscn` itself would make the scene reference itself as an `ext_resource` —
+  Godot rejects that as a **cyclic resource** at load, and the whole scene fails to open.
+- **Rule:** a foe (or any node) that instantiates copies of its *own* scene must NOT get
+  that `PackedScene` from its own `.tscn`. Inject it from outside instead: `GameManager`
+  owns `CrabScene` and assigns `crab.BabyCrabScene = CrabScene` after `AddChild`, and the
+  crab **propagates the ref to its babies** (`baby.BabyCrabScene = BabyCrabScene`) so the
+  chain survives without any self-reference. Same pattern applies to any future
+  self-replicating entity. If the injected ref is null (e.g. a foe dropped straight into a
+  scene for debugging), the spawn is skipped gracefully rather than crashing.
+
+### Capture spawn-relative anchors on the first physics frame, not in _Ready (v0.4.0)
+- **Symptom:** a seagull read its patrol home/height from `GlobalPosition` in `_Ready`, but
+  spawners set `GlobalPosition` **after** `AddChild` (i.e. after `_Ready`), so it anchored
+  to (0,0)/the scene-file position and patrolled around the wrong point.
+- **Rule:** anything that depends on the *final* spawn position (patrol origin, fixed flight
+  height, home range) must be captured **after** the spawner has placed the node. `BaseFoe`
+  latches `SpawnOrigin` on its first `_PhysicsProcess` tick and calls `OnSpawnPlaced()` then —
+  don't read spawn position in `_Ready`. (Same family as the "call `Init(...)` after
+  `AddChild`" reference note below.)
+
 ### Hit tests must use the target's radius, not just its center (v0.1.5)
 - **Symptom:** a melee/AoE that visibly clips a foe dealt no damage — the check only tested
   the foe's center point against the range/cone.
@@ -238,3 +296,32 @@ compiler surfaces below.
   static `Instance` in `_EnterTree`. Autoloads persist across `ReloadCurrentScene`, so a
   manager (e.g. `DamageNumberManager`) that parents nodes into `GetTree().CurrentScene`
   stays valid across restarts.
+
+### `ChangeSceneToFile` is deferred — guard against a second swap in the same frame (v0.5.0)
+- **Symptom (designed-around, no toolchain to hit it live):** `RunState.EndDay()` runs the
+  day-end pipeline, and the VOID-devour step can call `EndRun()` (scene → `RunOver.tscn`) when the
+  player's node is eaten. The Adventure scene / map button that invoked `EndDay()` then also wants
+  to `ReturnToMap()` (scene → `Map.tscn`). `ChangeSceneToFile` is **deferred to end-of-frame**, so
+  the *last* call wins — `ReturnToMap` would silently clobber the RunOver swap and the death would
+  vanish.
+- **Rule:** a single `bool RunFinished` latch, set in `EndRun`. `ReturnToMap`, `BeginAdventure`,
+  `EndRun`, and the pipeline all early-out when it's set; `EndDay` only calls `ReturnToMap` if the
+  run didn't just end. One owner decides the terminal scene per frame. Any future code that ends
+  the run mid-transition must respect this latch, not issue its own `ChangeSceneToFile`.
+
+### Determinism: add a subsystem via `DetRandom.Sub`/a fresh seed-derived stream, never the shared one (v0.5.0)
+- **Rule (reinforced):** mission types are rolled in `MapGenerator.RollMissions` from a **dedicated**
+  `DetRandom(seed+"M")` stream, mirroring the atlas's `seed+"R"`. Deriving a stream from the seed
+  string (`Rng.Sub("tag")` → `new DetRandom(seed+":"+tag)`) instead of consuming from the layout
+  `rng` means the new subsystem draws its own numbers and **does not shift** what any other pass
+  reads — so a given seed's map geometry stays byte-for-byte identical when you bolt on a new
+  roll. If you ever add a mapgen pass, give it its own sub-stream or you will silently reshuffle
+  every existing seed's world.
+
+### RunState owns run truth; the map is a view (v0.5.0)
+- Day / stamina / visited / completed / VOID-latch / the graph live on the `RunState` autoload
+  (one-owner rule, T00). `MapController` keeps only *view caches* (`_graph/_current/_visited/
+  _revealed`), rebuilt from RunState in `SyncFromRunState()` on every scene load, and exposes
+  `_day/_stamina/_inVoid` as **read-only computed aliases** so the existing view + atlas code
+  reads them unchanged. Never write these back locally — write through RunState. The map remains
+  directly launchable (F5): `_Ready` calls `RunState.NewRun(...)` itself when no run exists.

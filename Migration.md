@@ -9,6 +9,25 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.5.0** — **The run loop is playable end-to-end** (lands both roadmap milestones:
+  v0.4.0 foe system + v0.5.0 node content; built per `IMPLEMENTATION_REPORT.md`, phases
+  reviewed individually). **Foes** (`Scripts/Foes/`): BaseFoe FSM (patrol/sight/aggro),
+  CrabFoe (Soft Shell, jump, spawn-on-death), SeagullFoe (patrol height, dive, Poop
+  projectile/hazard), 8-level day-based scaling + evolution (`FoeStats`); old
+  `Enemy.cs/.tscn` deleted. **Run layer** (`Scripts/Run/`): `RunState` autoload owns all
+  run truth (day/stamina/visited/devour/party/cores/items), `BeginAdventure → scene →
+  ReportGoal → EndDay` handshake, ordered `DayEndPipeline` (T30 §5), run-over/victory
+  screen; `MapController` reduced to a view. **Missions** (`Scripts/Missions/`):
+  Collection/Protect/Destroy/Slaughter rolled at mapgen (60:15:10:10) + structural Boss
+  (LV4/LV6, placeholder scaled crab, 240/360 s permadeath timer), `GameManager` rebuilt
+  as the arena integrator (procedural `ArenaBuilder` platforms/hazards, deterministic
+  `FoeSpawner`, mission HUD with timer/progress/secondary bar/reward choice/Finish-the-
+  Day, player HP carried through `ProtagonistState`). **Nodes**: Shelter Blessing
+  actions (Rest / Sharpen ±10 ATK/DEF), generic `?`-EventRunner over authored
+  `EventDef` verb data (`Scripts/Data/`), day-end summary toast on the map. WonderPage →
+  wonder-core pickup. F9 = QA force-complete cheat (debug builds). All randomness
+  through per-subsystem `DetRandom` sub-streams. (Verification: static only — no
+  toolchain this session; run `dotnet build` at the next opportunity.)
 - **0.3.7** — *Docs-only design-sync commit* (no runtime code changed). Resolved the last
   batch of pre-implementation design questions (Q22–32) and swept the docs to match:
   **in-run character leveling removed** across all 5 character GDDs — HP is now a flat base,

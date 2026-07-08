@@ -376,3 +376,19 @@ pushing deeper nodes against letting days accumulate.
   capped at new max (see §5).
 - **(v0.3.7) WonderPage → wonder core.** The loot hook drops the run currency; the old
   page-based win condition was prototype-0 history.
+- **(v0.5.0) Skill dispatch implemented as per-frame `UpdateSkills(dt, player)` with
+  `Skill1Ready`/`Skill2Ready` gates**, not the §9 parameterless `Skill1()/Skill2()`
+  calls — trigger conditions need per-skill state (telegraphs, cooldowns), so the base
+  loop hands control to the subclass each frame instead of invoking blindly. Level
+  gating (`FoeStats.HasSkill1/2`) is unchanged and still authoritative inside the
+  Ready gates. Functionally equivalent to §9; recorded so the doc matches the code.
+- **(v0.5.0) Seagull top flight speed = 160 px/s (5 m/s)** — the GDD was silent;
+  tuning placeholder, revisit on a feel pass.
+- **(v0.5.0) Wave/arena composition prototype defaults** (per-world composition tables
+  still TBD): every ambient/wave slot rolls 60% crab / 40% seagull; ambient cap 6 with
+  a 3 s trickle (the cap gates only the trickle, per §11); Slaughter wave size =
+  3 + node level, final wave at foe level +1 capped at 8.
+- **(v0.5.0) Placeholder boss = scaled-up Crab** (HP ×8, ~×2 footprint, beefier
+  contact; one add-wave of 2 foes at foe level −1 when the boss hits 50% HP) until the
+  §8 boss kits are designed. LV4 boss win grants a placeholder wonder item — no
+  recruitable boss protagonists yet.

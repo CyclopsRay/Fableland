@@ -42,33 +42,50 @@ text = "Day 1   Stamina 5/5
 Traversed 1
 fights 1  camps 0  ? 0"
 
-[node name="RestButton" type="Button" parent="UI"]
+[node name="FinishDayButton" type="Button" parent="UI"]
 offset_left = 8.0
-offset_top = 118.0
-offset_right = 92.0
-offset_bottom = 148.0
-text = "Rest"
-
-[node name="MistButton" type="Button" parent="UI"]
-offset_left = 98.0
 offset_top = 118.0
 offset_right = 190.0
 offset_bottom = 148.0
-text = "Mist: off"
+text = "Finish the Day"
 
-[node name="RenderButton" type="Button" parent="UI"]
+[node name="MistButton" type="Button" parent="UI"]
 offset_left = 8.0
 offset_top = 154.0
 offset_right = 190.0
 offset_bottom = 184.0
-text = "View: atlas"
+text = "Mist: off"
 
-[node name="ViewModeButton" type="Button" parent="UI"]
+[node name="RenderButton" type="Button" parent="UI"]
 offset_left = 8.0
 offset_top = 190.0
 offset_right = 190.0
 offset_bottom = 220.0
+text = "View: atlas"
+
+[node name="ViewModeButton" type="Button" parent="UI"]
+offset_left = 8.0
+offset_top = 226.0
+offset_right = 190.0
+offset_bottom = 256.0
 text = "Cam: flat"
+
+[node name="ToastLabel" type="Label" parent="UI"]
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_right = -24.0
+offset_top = -64.0
+offset_bottom = -16.0
+mouse_filter = 2
+horizontal_alignment = 1
+autowrap_mode = 3
+visible = false
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(1, 0.92, 0.7, 1)
+text = ""
 
 [node name="VersionLabel" type="Label" parent="UI"]
 anchor_left = 1.0
