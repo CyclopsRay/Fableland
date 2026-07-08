@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using Fableland.Map;
+using Fableland.Debug;
 
 namespace Fableland.Run;
 
@@ -177,6 +178,7 @@ public partial class RunState : Node
             if (node != null)
             {
                 bool newlyDone = CompletedNodeIds.Add(node.Id);
+                DebugManager.Instance?.LogMission($"Goal {CurrentAdventure?.Mission} at {CurrentAdventure?.NodeId} {(newlyDone ? "SUCCEEDED" : "re-completed")} (total goals: {GoalsSucceeded + (newlyDone ? 1 : 0)})");
                 if (newlyDone && node.IsCombat) GoalsSucceeded++;
             }
             ApplyRewards(rewards);
@@ -196,6 +198,7 @@ public partial class RunState : Node
     private void ApplyRewards(RewardBundle r)
     {
         if (r == null) return;
+        DebugManager.Instance?.LogMission($"Rewards: cores={r.WonderCores} atk={r.AtkBonus} def={r.DefBonus} items={r.ItemDefIds?.Count ?? 0}");
         if (r.WonderCores != 0) WonderCores += r.WonderCores;
         foreach (var id in r.ItemDefIds) AddItem(id);
         if (r.AtkBonus != 0) AddAtk(r.AtkBonus);
@@ -286,8 +289,8 @@ public partial class RunState : Node
     }
 
     // Global stat Blessings (NODES §3.3: ATK/DEF/MaxHP are global — applied to every protagonist).
-    public void AddAtk(int amount) { foreach (var p in Owned) p.BonusAtk += amount; }
-    public void AddDef(int amount) { foreach (var p in Owned) p.BonusDef += amount; }
+    public void AddAtk(int amount) { foreach (var p in Owned) p.BonusAtk += amount; DebugManager.Instance?.LogBuff("ATK", amount, Owned.Count > 0 ? Owned[0].BonusAtk : 0); }
+    public void AddDef(int amount) { foreach (var p in Owned) p.BonusDef += amount; DebugManager.Instance?.LogBuff("DEF", amount, Owned.Count > 0 ? Owned[0].BonusDef : 0); }
 
     /// <summary>
     /// Rest Blessing (NODES §5.5): heal 30% max HP; 1/3 of any excess above 100% becomes a
@@ -295,6 +298,7 @@ public partial class RunState : Node
     /// </summary>
     public void RestBlessing()
     {
+        DebugManager.Instance?.LogSystem("Rest Blessing applied to " + Owned.Count + " protagonists");
         foreach (var p in Owned)
         {
             float healed = p.HpRatio + 0.30f;
@@ -310,15 +314,17 @@ public partial class RunState : Node
     /// <summary>Heal the party by a HP ratio, no excess conversion (used by "?" events).</summary>
     public void HealParty(float ratio)
     {
+        DebugManager.Instance?.LogHeal(ratio * 100f, $"party heal {ratio*100f:F0}%");
         foreach (var p in Owned) p.HpRatio = Mathf.Min(1f, p.HpRatio + ratio);
     }
 
-    public void AddWonderCores(int amount) => WonderCores += amount;
+    public void AddWonderCores(int amount) { WonderCores += amount; DebugManager.Instance?.LogCores(amount, WonderCores); }
 
     public void AddItem(string defId)
     {
         Items.Add(new ItemInstance(defId));
         ItemsCollected++;
+        DebugManager.Instance?.LogItem(defId, ItemsCollected);
     }
 
     public void GrantProtagonist(string id)

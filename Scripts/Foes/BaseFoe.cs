@@ -1,4 +1,5 @@
 using Godot;
+using Fableland.Debug;
 using System.Collections.Generic;
 
 /// <summary>
@@ -373,6 +374,7 @@ public partial class BaseFoe : CharacterBody2D
         if (_dead) return;
 
         float dealt = hit.Damage * DefenseMultiplier * IncomingDamageMult(sourcePos);
+        DebugManager.Instance?.LogPlayerDmgDealt(dealt, GetType().Name);
         _hp -= dealt;
         AddImpulse(hit.Knockback);
         float stun = hit.ResolveStun();
@@ -402,7 +404,7 @@ public partial class BaseFoe : CharacterBody2D
     public void ApplyHazard(float damage, Vector2 knockback)
     {
         if (_dead) return;
-        if (damage > 0f) { float d = damage * DefenseMultiplier; _hp -= d; PopNumber(d); }
+        if (damage > 0f) { float d = damage * DefenseMultiplier; DebugManager.Instance?.LogHazardDmg(d, GetType().Name); _hp -= d; PopNumber(d); }
         if (knockback != Vector2.Zero) AddImpulse(knockback);
         if (_hp <= 0f) Die();
     }

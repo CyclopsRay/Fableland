@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Godot;
 using Fableland.Map;
 using Fableland.Run;
+using Fableland.Debug;
 
 /// <summary>
 /// Root of the Map scene — the <b>Exploration-mode view + input layer</b> (v0.5.0). All run
@@ -366,6 +367,28 @@ public partial class MapController : Node2D
     {
         var rs = RunState.Instance;
         if (rs == null || target == null || target == _current) return;
+
+        // ---- Debug mode: jump to any non-devoured node (bypasses all checks) ----
+        if (DebugManager.Instance?.Enabled == true && !target.Devoured)
+        {
+            var fromNode = _current;
+            rs.PreviousNodeId = fromNode.Id;
+            _current = target;
+            rs.CurrentNodeId = target.Id;
+            _lastMoveDir = target.Pos - fromNode.Pos;
+            if (!rs.InVoid && target.WorldIndex == -1) rs.EnterVoid();
+            bool trig = (!_visited.Contains(target) && target.Kind != NodeKind.River)
+                     || (target.IsCombat && !IsCompleted(target))
+                     || target.Kind == NodeKind.Shelter
+                     || (target.Kind == NodeKind.QuestionMark && !IsResolvedEvent(target));
+            if (trig) { rs.BeginAdventure(target.Id); return; }
+            rs.MarkNodeVisited(target.Id);
+            _visited.Add(target);
+            AddRevealed(target);
+            UpdateInfo();
+            QueueRedraw();
+            return;
+        }
 
         bool visited = _visited.Contains(target);
         int cost;

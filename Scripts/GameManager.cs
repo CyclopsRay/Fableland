@@ -2,6 +2,7 @@ using Godot;
 using Fableland.Map;
 using Fableland.Missions;
 using Fableland.Run;
+using Fableland.Debug;
 
 /// <summary>
 /// The arena's integrator (T30 §3, NODES §4). Owns the "Entities"/foe-spawn plumbing the
@@ -108,7 +109,7 @@ public partial class GameManager : Node2D
 
         _mission = CreateMission(_missionType);
         _mission.Setup(this, _nodeLevel, _rng.Sub("mission"));
-
+        DebugManager.Instance?.LogMission($"Mission start: {MissionName(_missionType)} LV{_nodeLevel} foeLV{FoeLevel} day{day} node{nodeId}");
         SetupPlayer(rs);
         SetupHud();
     }
@@ -153,6 +154,7 @@ public partial class GameManager : Node2D
         _hud.ConfigureFinishDay(_hasRun);
         _hud.SetFinishDayEnabled(false);
         _hud.FinishDayPressed += OnFinishDayPressed;
+        DebugManager.Instance.SkipRequested += OnSkipRequested;
         _hud.RewardChoicePressed += OnRewardChoicePressed;
         _hud.HideBanner();
         PushMissionHud();
@@ -261,6 +263,34 @@ public partial class GameManager : Node2D
     private void OnRewardChoicePressed(bool atk)
     {
         _mission?.ChooseReward(atk);
+    }
+
+    private void OnSkipRequested()
+    {
+        if (_mission == null) return;
+        if (_mission.Status == MissionStatus.Running)
+        {
+            _mission.DebugForceComplete();
+            return;
+        }
+        if (_mission.Status == MissionStatus.Failed && _goalResolved)
+        {
+            _mission.DebugForceComplete();
+            WriteBackHp();
+            if (!_hasRun)
+            {
+                EndGameDebug("SKIPPED!\nPress R to play again");
+                return;
+            }
+            RunState.Instance.ReportGoal(true, _mission.Reward());
+            if (_mission.IsFinalBoss)
+            {
+                RunState.Instance.EndRun(RunEndKind.Victory);
+                return;
+            }
+            _hud.ShowToast("Skipped — marked as victory!");
+            _hud.SetFinishDayEnabled(true);
+        }
     }
 
     private void WriteBackHp()
