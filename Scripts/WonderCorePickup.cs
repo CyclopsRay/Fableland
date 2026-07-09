@@ -1,21 +1,21 @@
 using Godot;
 
 /// <summary>
-/// A collectible WonderPage. When the player overlaps it, it notifies the
-/// GameManager and frees itself. Bobs gently so it reads as a pickup.
+/// A collectible wonder core on the arena floor (replaces the old WonderPage pickup). Bobs
+/// gently, and when the player overlaps it emits <see cref="Collected"/> and frees itself.
+/// Placement + lifetime (despawn/respawn) are owned by <see cref="Fableland.Missions.CollectionMission"/>;
+/// this node is a dumb bobbing pickup.
 /// </summary>
-public partial class WonderPage : Area2D
+public partial class WonderCorePickup : Area2D
 {
     [Signal] public delegate void CollectedEventHandler();
 
-    private Sprite2D _sprite;
     private float _baseY;
     private float _t;
     private bool _collected;
 
     public override void _Ready()
     {
-        _sprite = GetNode<Sprite2D>("Sprite2D");
         _baseY = Position.Y;
         BodyEntered += OnBodyEntered;
     }

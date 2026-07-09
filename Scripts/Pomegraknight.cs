@@ -38,10 +38,10 @@ public partial class Pomegraknight : CharacterController
     [Export] public float TornadoDuration = 2.5f;
     [Export] public float TornadoTick = 0.5f;
     [Export] public float TornadoDamage = 15f;
-    [Export] public float TornadoHalfW = 48f;      // 3m wide
-    [Export] public float TornadoHalfH = 32f;      // 2m tall
-    [Export] public float TornadoPush = 160f;      // ~5 m/s
-    [Export] public float TornadoDamageReduction = 0.6f;
+    [Export] public float TornadoHalfW = 128f;     // 8m wide — much bigger than her sideways
+    [Export] public float TornadoHalfH = 40f;      // 2.5m tall — slightly bigger than her (2m)
+    [Export] public float TornadoPush = 64f;       // ~2 m/s — a slight knockoff, not a launch
+    [Export] public float TornadoDefense = 66.7f;  // dmg mult 100/(100+66.7) ≈ 0.6 while active
 
     [ExportGroup("Pome Seed Eruption (Skill 2)")]
     [Export] public PackedScene PomeSeedScene;
@@ -70,9 +70,14 @@ public partial class Pomegraknight : CharacterController
     private float _eCd;
     private float _eTelegraph;
 
+    // HUD skill-icon cooldowns: Shift = Blush, E = Pome Seed Eruption.
+    public override (float Remaining, float Max) ShiftCooldown => (_blushCd, BlushCooldown);
+    public override (float Remaining, float Max) ESkillCooldown => (_eCd, ECooldown);
+
     protected override void InitCharacter()
     {
         BurnImmune = true;            // Pomegranate Shell
+        MaxJumps = 1;                 // Pomegraknight: single jump
         _ammo = MagazineSize;
     }
 
@@ -134,7 +139,7 @@ public partial class Pomegraknight : CharacterController
     {
         _tornadoActive = TornadoDuration;
         _tornadoTickTimer = 0f;            // tick on the next frame
-        DamageTakenMult = TornadoDamageReduction;
+        SetDefenseSource("FireTornado", TornadoDefense);
     }
 
     private void UpdateTornado(float dt)
@@ -147,7 +152,7 @@ public partial class Pomegraknight : CharacterController
             _tornadoTickTimer = TornadoTick;
             TornadoHit();
         }
-        if (_tornadoActive <= 0f) DamageTakenMult = 1f;
+        if (_tornadoActive <= 0f) ClearDefenseSource("FireTornado");
     }
 
     private void TornadoHit()
@@ -155,11 +160,11 @@ public partial class Pomegraknight : CharacterController
         Vector2 origin = GlobalPosition;
         foreach (Node n in GetTree().GetNodesInGroup("enemy"))
         {
-            if (n is not Enemy e) continue;
+            if (n is not BaseFoe e) continue;
             Vector2 to = e.GlobalPosition - origin;
             if (Mathf.Abs(to.X) > TornadoHalfW || Mathf.Abs(to.Y) > TornadoHalfH) continue;
             Vector2 push = (to.LengthSquared() > 0.01f ? to.Normalized() : Vector2.Up) * TornadoPush;
-            e.TakeDamage(TornadoDamage, push);
+            e.TakeHit(new HitInfo(TornadoDamage * DamageDealtMultiplier, push), origin);
             e.SetBurning(2f);
         }
     }
@@ -207,7 +212,7 @@ public partial class Pomegraknight : CharacterController
             var seed = PomeSeedScene.Instantiate<PomeSeed>();
             container.AddChild(seed);
             seed.GlobalPosition = origin;
-            seed.Init(vel, waveHits, burning);
+            seed.Init(vel, waveHits, burning, DamageDealtMultiplier);
         }
     }
 

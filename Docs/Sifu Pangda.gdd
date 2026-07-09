@@ -1,0 +1,184 @@
+# Sifu Pangda — GDD v1.0
+
+> **Design-provided GDD** (not a Unity port). Movement derives from `Units.cs`
+> (meters·seconds). **In-run character leveling was removed in v0.3.7** (`NODES.gdd`
+> decisions log) — HP is a flat base; permanent growth comes from the additive
+> HP/ATK/DEF pools, not a level ladder.
+
+## Character Overview
+* **Race:** Panda
+* **Role:** Tank, Initiator
+* **Realm:** Gui Lin (GL)
+* **HP:** 300 (flat)
+* **Personality:** Meditating master. Calm, centered, unhurried — until provoked.
+  *"Those who interrupt my XiuXing shall embrace the fiercest burn."*
+
+---
+
+## Visual Design
+
+**TODO** — visual design and image prompts are deferred to a future art pass.
+Key elements: panda martial artist, Chi-based VFX (shield glow, bottle, field).
+
+---
+
+## Passive — 气定神闲 (Qì Dìng Shén Xián)
+
+Sifu Pangda maintains a **Chi shield** generated from his own damage output.
+
+- **30% of all damage Pangda deals** converts to Chi shield (cap: **60**)
+- Shield depletes at **10/s** at all times
+- At ~70 DPS, passive generation (~21/s) outpaces depletion (10/s), sustaining the shield during active combat
+
+**Damage immunity + CC immunity** is active during:
+- 破竹 (Shift) — for the full dash duration
+- 独酌 (E) — for the full 1.5 s drink
+- 归一 (Ult) — during the 0.5 s windup
+
+---
+
+## Abilities
+
+### Basic Attack — 降龙伏虎 (Xiáng Lóng Fú Hǔ)
+
+3-stack combo. Resets 3 s after the last hit.
+
+**Stack 1 & 2 — Palm Push:**
+- Pangda lunges **0.5 m** forward during the strike
+- Hitbox: **4 × 2.5 m** in front
+- Damage: **45** each
+- Cast time: **0.8 s** per hit
+- Effect: **10 m/s** external force forward on enemies hit
+
+**Stack 3 — Leaping Grab (prototype-scoped):**
+- **0.5 s** windup, then leaps **8 m/s** horizontally toward the mouse (left or right only)
+- Detection zone: **2 × 4 m** in front during leap
+- On catching an enemy: both enter a carried state — move together, neither can act, until Pangda lands on terrain
+- On landing: enemy takes **60 DMG** + **15 m/s** force away from the surface hit
+- Prototype: enemy adopts Pangda's velocity and is stunned; surface normal force direction deferred to v2
+
+---
+
+### Shift — 破竹 (Pò Zhú)
+
+**Cooldown:** 12 s
+
+- Hold Shift to dash forward at **12 m/s**, maximum **2 s** (24 m)
+- During dash: cannot jump; **damage immunity + CC immunity** active
+- Dash ends on key release, terrain collision, or 2 s maximum
+- On stop: checks a **5 × 2.5 m** zone in front — deals **65 DMG** and **10 m/s** force forward to all enemies within
+
+---
+
+### E — 独酌 (Dú Zhuó)
+
+**Cooldown:** 14 s
+
+**Phase 1 — Drink (1.5 s total):**
+- **Damage immunity + CC immunity** active throughout
+- Movement speed reduced by **60%** during drinking
+- At 0.8 s: **60 Chi shield** granted immediately
+- Drinking animation continues to 1.5 s
+
+**Phase 2 — Bottle Throw (automatic at 1.5 s):**
+- Throws bottle toward mouse position at **20 m/s**
+- Deals **25 DMG** + **1 s Trapped** on hit
+
+> **Trapped (status — canonical definition, v0.3.7).** For the duration, the target: has
+> **no input movement, jump, or dash**; receives **no new external impulses** and is
+> **knockback-immune** (incoming knockback is ignored while Trapped); **gravity still
+> applies** — an airborne Trapped target falls straight down. **Skills remain castable.**
+> Trapped is thus a movement/root lock, not a full stun. (First introduced here; reused
+> by any future root effect.)
+
+**Zhen Qi buff (6 s after drinking):**
+- Passive's 30% damage → Chi conversion is replaced with **HP recovery**
+- vs. player enemies: **30%** of damage dealt recovered as HP
+- vs. NPC foes: **70% efficiency** (21% of damage dealt)
+- Chi shield does **not** regenerate from damage during this window
+
+---
+
+### Ultimate — 归一 (Guī Yī)
+
+**Cooldown:** TBD
+
+- **0.5 s** windup (damage immunity + CC immunity active)
+- Deploys a **9 × 9 m** Chi field anchored to and moving with Pangda, lasting **6 s**
+- Cannot be interrupted once deployed
+- All enemies within the field:
+  - **−40%** movement speed
+  - **6 m/s** continuous pull force toward Pangda
+  - **5 DMG per 0.6 s** (~8.3 DMG/s; ~50 DMG at full duration)
+  - If enemy has a shield: damage **doubled** (10 DMG per 0.6 s)
+
+---
+
+## Skill Summary Table
+
+| Skill | Name | CD | Key Mechanic |
+|-------|------|----|--------------|
+| Passive | 气定神闲 | — | 30% damage → Chi shield (cap 60); 10/s depletion; immunity during Shift/E/Ult windup |
+| BA | 降龙伏虎 | 3 s (combo reset) | 3-stack: Palm Push (45×2) → Leaping Grab (60 + carry) |
+| Shift | 破竹 | 12 s | 12 m/s dash (max 2 s / 24 m); 65 DMG + 10 m/s force on stop |
+| E | 独酌 | 14 s | 1.5 s drink (60 shield + immunity) → bottle throw (25 DMG + 1 s Trapped); 6 s Zhen Qi lifesteal buff |
+| Ult | 归一 | TBD | 9×9 m Chi field (6 s): −40% speed, 6 m/s pull, 5 DMG/0.6 s (2× vs shielded) |
+
+---
+
+
+---
+
+### Protagonist Landing Effect
+
+**TODO** — define the landing effect triggered when this protagonist is switched
+in via Tab. See `NODES.gdd` §3.3 (Switch Protagonist).
+## Movement
+
+**TODO** — movement parameters not specified in the source GDD. Pangda is a tank —
+expected to be slower than average with standard jump capability.
+
+---
+
+## Leveling
+
+**No in-run level curve** (in-run character leveling removed in v0.3.7 — `NODES.gdd`
+decisions log). HP is a flat **300**; permanent growth comes from the additive
+HP/ATK/DEF pools (Rest excess, Sharpen), not a level ladder.
+
+---
+
+## Design Notes
+
+* Pangda is a **sustained-engagement tank**. His Chi shield rewards continuous aggression — at ~70 DPS the shield sustains itself; drop below that and it bleeds out at 10/s.
+* The **immunity windows** on Shift, E, and Ult windup give Pangda tools to bypass burst damage if timed correctly. A skilled Pangda cycles these to stay nearly untouchable.
+* **独酌 (E)** is a dual-phase skill: the drink phase is a defensive reset (shield + immunity), the bottle throw is an offensive poke (ranged damage + CC), and the Zhen Qi buff transforms Pangda from shield-tank to lifesteal-bruiser for 6 s.
+* **破竹 (Shift)** is both engage and escape. The 24 m max range crosses most of the arena. The end-of-dash AoE (5 × 2.5 m, 65 DMG) punishes clumped enemies.
+* **归一 (Ult)** is a team-fight anchor. The 9×9 m field is enormous — it controls an entire screen quadrant. The continuous pull + slow creates a "quicksand" effect: enemies can fight it but not ignore it. Double damage vs. shields makes Pangda a counter-pick to other shield tanks.
+* **Leaping Grab (BA stack 3)** is prototype-scoped. The carry-and-throw mechanic has high skill-ceiling potential but needs polish before it ships as a core ability.
+
+---
+
+## Implementation Notes
+
+### Chi Shield
+Managed via `currentShield` on the base `CharacterController`. The 30% damage-to-shield conversion is calculated in `TakeDamage` and added via `GrantShield()`. Shield cap is 60. Depletion at 10/s runs in `Update()`.
+
+### Immunity Windows
+`isInvincible` is set true during Shift dash, E drink, and Ult windup. Cleared on skill end. CC immunity uses the stun/freeze resistance flags during the same windows.
+
+### BA Combo
+Uses the base ammo/magazine system with `magazineSize = 3`. Resets 3 s after the last hit (combo timer). Stack 3's Leaping Grab uses a dedicated collision check during the leap — `Physics2D.OverlapBox` in a 2×4 m detection zone.
+
+### E — Zhen Qi Buff
+A 6 s timer after drinking where damage-to-Chi conversion is replaced by HP recovery. Implemented as a flag checked in the damage-dealt pipeline: if `_zhenQiActive`, heal instead of grant shield.
+
+---
+
+## Image Generation Prompts
+
+**TODO** — deferred to future art pass.
+
+---
+
+*Last Updated: July 2026 | Version: 1.0 | Source: Docs/Sifu Pangda.gdd (user-provided)*

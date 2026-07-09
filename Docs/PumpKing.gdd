@@ -1,0 +1,228 @@
+# PumpKing — GDD v1.0
+
+> **Ported from the Unity `GloryOfFableland` source.** Numbers reflect the shipped Unity
+> kit; Godot movement derives from `Units.cs` (all speeds/distances in meters·seconds).
+> **In-run character leveling was removed in v0.3.7** (`NODES.gdd` decisions log) — HP is a
+> flat base; permanent growth comes from the additive HP/ATK/DEF pools, not a level ladder.
+
+## Character Overview
+* **Race:** Pumpkin
+* **Role:** Tank / Guard
+* **Realm:** Kingdom of Horror
+* **HP:** 200
+* **Personality:** Stoic, protective, implacable. A silent guardian who speaks through action. Detaching his own head is not a party trick — it's a tactical decision.
+
+---
+
+## Visual Design
+
+**TODO** — visual design and image prompts are deferred to a future art pass.
+Key elements from the code: head detaches as a rolling projectile, scales with pump
+stacks (5 sizes), neck head child GameObject with its own Animator.
+
+---
+
+## State Machine
+
+PumpKing operates in three states:
+
+| State | Description | Entry |
+|-------|-------------|-------|
+| **Normal** | Default state. Shield active. Can pump up or fire head. | Start of game; after head explosion |
+| **Rolling** | Head is detached and rolling autonomously. BA detonates head. | After firing head (BA in Normal) |
+| **Soul** | Free-flying ghost form. Head continues rolling if already fired. | Shift (Soul Form) |
+
+```
+Normal  → Rolling : BA (fire head)
+Rolling → Normal  : head explodes (still timer, lifetime, contact, or manual detonate)
+Normal  → Soul    : Shift (0.5 s windup)
+Rolling → Soul    : Shift (0.5 s windup, head becomes autonomous)
+Soul    → Normal  : soul form ends, head gone
+Soul    → Rolling : soul form ends, head still rolling
+```
+
+---
+
+## Passive — Pumpkin Shell
+
+PumpKing builds a **shield pool** by pumping up (E). The shield is active only in
+**Normal** state. Entering Rolling or Soul clears the shield.
+
+- **Max shield:** 100 (5 pump stacks × 20 per stack)
+- **Speed penalty:** each pump stack slows movement linearly from 0% (0 stacks) to
+  **40%** (5 stacks). Base move speed is reduced by `t × 0.4` where `t = stacks / 5`.
+- **Head scale:** the head grows with each pump stack, from 1.0× at 0 stacks to 1.5×
+  at 5 stacks. Larger head = larger explosion radius feel (visual only; explosion
+  radius is fixed at 3 m).
+
+---
+
+## Abilities
+
+### Basic Attack — Fire Head / Detonate Head
+
+**Magazine:** 1 (one head). **Replenish windup:** 0.5 s after explosion (instant refill).
+
+**In Normal state — Fire Head:**
+PumpKing launches his head as a rolling projectile in the aimed direction. The head:
+- Launches at **12 m/s** initial impulse
+- Bounces off terrain with **85% speed retention**
+- Has mouse steering (optional in inspector; off by default — pure physics bounce)
+- Horizontal speed capped at **6 m/s**, vertical at **15 m/s**
+- Deals **30 contact damage** on hitting an enemy, then explodes
+- **Auto-explodes** after **10 s** lifetime or after sitting still (< 0.1 m/s) for **0.5 s**
+
+On fire: pump stacks reset to 0, shield is removed, neck head hidden, state → Rolling.
+
+**In Rolling state — Detonate Head:**
+Manual detonation via BA press. The head explodes immediately.
+
+**Explosion (any cause):**
+- **3 m radius** AoE
+- **50 damage** to all enemies in range
+- **9 m/s knockback** outward from center
+- Spawns explosion VFX (prefab, auto-scaled to match radius)
+- Starts the 0.5 s head reload windup
+- State returns to Normal (or Soul → Normal/Rolling if soul form ended)
+
+**Firing segments:** head can be aimed in two cones — front (−60° to 60°) and back
+(120° to 240°). This allows launching the head behind PumpKing without turning around.
+
+> **Design note:** the head is PumpKing's primary damage tool but also his risk — while
+> Rolling, he has no shield, no head, and must survive until detonation or the head's
+> natural explosion. The 10 s lifetime and still-timer auto-detonate prevent soft-locks.
+
+---
+
+### Shift — Soul Form
+
+**Cooldown:** 12 s | **Windup:** 0.5 s | **Duration:** 6 s
+
+PumpKing enters a ghostly soul form. During Soul Form:
+- **Free-flying** — full 2D movement including vertical (Space = up, S/Down = down)
+- **Move speed:** 5 m/s (independent of pump-stack penalty)
+- **No shield** (cleared on entry)
+- If a head was rolling, it becomes **autonomous** — continues bouncing and will
+  auto-explode on its own; PumpKing can still manually detonate after Soul ends
+- Head can still be fired before entering Soul (Normal → Rolling → Soul path)
+
+On exit: returns to Normal (if head gone) or Rolling (if head still out). If head is
+gone and ammo is empty, reload begins automatically.
+
+> **Design note:** Soul Form is PumpKing's repositioning and evasion tool. The 6 s
+> free-flight lets him cross the arena, dodge hazards, or set up a better angle for
+> the next head launch. The 0.5 s windup adds commitment — it's not a panic button.
+
+---
+
+### E — Pump Up
+
+**Inner CD:** 0.5 s between pumps | **Max stacks:** 5
+
+PumpKing inflates his head, gaining one pump stack. Each stack:
+- Grants **+20 shield** (up to 100 at 5 stacks)
+- Grows the head visually (1.0× → 1.5× local scale)
+- Applies stacking movement speed penalty (0% → 40% at max)
+
+Only usable in **Normal** state. Pumps persist until the head is fired (BA resets
+stacks to 0) or Soul Form is entered (shield cleared, stacks reset).
+
+> **Design note:** Pump Up is a risk-reward commitment. More stacks = more shield and
+> a bigger head, but slower movement. The player balances survivability against mobility.
+> A fully-pumped head detonation is devastating but leaves PumpKing slow and vulnerable
+> until the head is fired.
+
+---
+
+## Skill Summary Table
+
+| Skill | Name | CD | Key Mechanic |
+|-------|------|----|--------------|
+| Passive | Pumpkin Shell | — | Shield pool (max 100); speed penalty per pump stack (0–40%) |
+| BA | Fire/Detonate Head | 0.5 s (reload windup) | Launch rolling head (30 contact DMG); detonate for 3 m / 50 DMG AoE |
+| Shift | Soul Form | 12 s | 6 s free-flight, 5 m/s speed, 0.5 s windup |
+| E | Pump Up | 0.5 s (inner CD) | +20 shield/stack, max 5; head grows; speed penalty |
+
+---
+
+
+---
+
+### Protagonist Landing Effect
+
+**TODO** — define the landing effect triggered when this protagonist is switched
+in via Tab. See `NODES.gdd` §3.3 (Switch Protagonist).
+## Movement
+
+| Parameter | Value |
+|-----------|-------|
+| Base move speed | 8 m/s (scaled down by pump stacks, min 4.8 at 5 stacks) |
+| Soul Form speed | 5 m/s (fixed) |
+| Air control | 1 (full) |
+| Max jumps | 1 |
+
+---
+
+## Leveling
+
+**No in-run level curve** (in-run character leveling removed in v0.3.7 — `NODES.gdd`
+decisions log). HP is a flat **200**; permanent growth comes from the additive
+HP/ATK/DEF pools (Rest excess, Sharpen), not a level ladder.
+
+---
+
+## Design Notes
+
+* PumpKing is a two-phase character: build phase (pump up, stack shield, position)
+  and release phase (fire head, detonate, repeat). The rhythm is pump → fire → detonate
+  → survive → pump again.
+* The head is both weapon and liability. While Rolling, PumpKing has no shield and
+  reduced combat presence. Skilled play means timing the detonation for maximum AoE
+  value while minimizing vulnerable time.
+* Soul Form bridges the gap — it provides evasion during the vulnerable Rolling phase
+  or lets PumpKing cross the arena to retrieve positioning after a head launch.
+* The back-facing firing segment (120°–240°) enables retreating head launches without
+  turning — fire behind you while running away, then detonate when enemies cluster.
+* The 0.5 s pump inner CD means reaching 5 stacks takes at least 2.5 s of sustained
+  pumping — a significant commitment during combat.
+
+---
+
+## Implementation Notes
+
+### State Machine
+Three states (`PKState` enum: Normal, Rolling, Soul). State transitions are gated —
+BA does nothing in Soul; Pump Up only works in Normal; firing head only works in
+Normal with ammo available.
+
+### Head Physics
+`PumpKingHead` is a separate MonoBehaviour on the `rollingBallPrefab`. It handles:
+- Rigidbody2D physics (gravity, bouncing, speed caps)
+- Mouse steering (optional, off by default — pure physics)
+- Bounce reflection using pre-collision velocity snapshot (`_prevVelocity`)
+- Four explode conditions: still-timer, lifetime, manual (BA), contact with enemy
+- Own Animator (`PK_Head_Projectile_AC`) with `HeadStage` (int 0–5) and `Explode` trigger
+
+### Shield
+Shield pool is managed via `currentShield`/`maxShield` from the base `CharacterController`.
+`hasShield` bool is kept in sync. Shield clears on entering Rolling or Soul.
+
+### Neck Head Visibility
+The neck head child GameObject (`NeckHead`) has its own SpriteRenderer and Animator
+(`PK_Head_Neck_AC`). It's hidden when the head is fired, shown again on reload
+completion (`OnHeadReloaded()`). AutoTriggerReplenishOnShot = false — reload is
+triggered manually by the explosion callback.
+
+### Ammo
+Magazine size = 1. Reload begins when the head explodes (0.5 s windup, instant refill).
+The neck head reappears when ammo reaches full.
+
+---
+
+## Image Generation Prompts
+
+**TODO** — deferred to future art pass.
+
+---
+
+*Last Updated: July 2026 | Version: 1.0 | Generated from Unity source PumpKing.cs + PumpKingHead.cs*

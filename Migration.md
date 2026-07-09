@@ -8,6 +8,87 @@
 
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
+### Changelog
+- **0.5.0** — **The run loop is playable end-to-end** (lands both roadmap milestones:
+  v0.4.0 foe system + v0.5.0 node content; built per `IMPLEMENTATION_REPORT.md`, phases
+  reviewed individually). **Foes** (`Scripts/Foes/`): BaseFoe FSM (patrol/sight/aggro),
+  CrabFoe (Soft Shell, jump, spawn-on-death), SeagullFoe (patrol height, dive, Poop
+  projectile/hazard), 8-level day-based scaling + evolution (`FoeStats`); old
+  `Enemy.cs/.tscn` deleted. **Run layer** (`Scripts/Run/`): `RunState` autoload owns all
+  run truth (day/stamina/visited/devour/party/cores/items), `BeginAdventure → scene →
+  ReportGoal → EndDay` handshake, ordered `DayEndPipeline` (T30 §5), run-over/victory
+  screen; `MapController` reduced to a view. **Missions** (`Scripts/Missions/`):
+  Collection/Protect/Destroy/Slaughter rolled at mapgen (60:15:10:10) + structural Boss
+  (LV4/LV6, placeholder scaled crab, 240/360 s permadeath timer), `GameManager` rebuilt
+  as the arena integrator (procedural `ArenaBuilder` platforms/hazards, deterministic
+  `FoeSpawner`, mission HUD with timer/progress/secondary bar/reward choice/Finish-the-
+  Day, player HP carried through `ProtagonistState`). **Nodes**: Shelter Blessing
+  actions (Rest / Sharpen ±10 ATK/DEF), generic `?`-EventRunner over authored
+  `EventDef` verb data (`Scripts/Data/`), day-end summary toast on the map. WonderPage →
+  wonder-core pickup. F9 = QA force-complete cheat (debug builds). All randomness
+  through per-subsystem `DetRandom` sub-streams. (Verification: static only — no
+  toolchain this session; run `dotnet build` at the next opportunity.)
+- **0.3.7** — *Docs-only design-sync commit* (no runtime code changed). Resolved the last
+  batch of pre-implementation design questions (Q22–32) and swept the docs to match:
+  **in-run character leveling removed** across all 5 character GDDs — HP is now a flat base,
+  permanent growth is the additive HP/ATK/DEF pools (Rest excess → max-HP pp, Sharpen → +10
+  ATK/DEF), and **WonderPages renamed *wonder cores***; **Pomegraknight's Burning speed buff
+  corrected +30% → +20%** to match the base OnFire status (code was already +20%); canonized
+  the **Trapped** status (root: no input move/jump/dash, knockback-immune, gravity still
+  applies, skills castable) in Sifu Pangda's GDD; added a Unity-port/Units provenance header
+  to each character GDD. Instructions: added a `Gameplay.gdd` row to the 10-DESIGN ownership
+  map, extended the TBD registry (#21 Ult model, #22 landing effects, #23 per-type victory
+  loot, #24 Pixolotl realm), and fixed stale `Train`/`Conquer` terms in T30 and IDEAS. The
+  GDD suite + `Instructions/` + `Tech/` are now cross-referenced and decision-logged, ready
+  to drive the v0.4.0 foe build. (Verification: static/prose review only — no toolchain.)
+- **0.2.1** — Damage mitigation now flows through **defense only**: removed the flat
+  `DamageTakenMult` "damage reduction" multiplier (was only used by Fire Tornado's 0.6x); Fire
+  Tornado now grants +66.7 defense via the same aggregatable `SetDefenseSource`/
+  `ClearDefenseSource` mechanism Frozen uses, so there's a single damage-taken lever
+  (`100/(100+defense)`) everywhere. Fixed the player rendering as a square: the placeholder
+  sprite (`player_placeholder.svg`) was a 64×64 square regardless of the 44-wide collision
+  box; both are now 48×64 (3:4 w:h). Bonfire/frozen-pit test hazards resized to match.
+- **0.2.0** — Jump coyote time (0.2s grace after leaving a surface before a jump is forfeited,
+  so 1-jump characters can edge-jump but not air-jump). Bumped `GroundAccel`/`AirAccel` ~20% for
+  snappier control. Fire Tornado reshaped into a wide-and-short rectangle with a slight knockback
+  instead of a launch. Screen shake now fires on every hit taken (player) or dealt (foe), via a
+  static `ShakeCamera2D.Instance` so non-owning scripts (Enemy) can trigger it. **Hazard system:**
+  `Hazard` base (Area2D, box collision built from `BoxSize` so it always matches the telegraph) +
+  **FireHazard** (bonfire — 20pt OnFire stack + slight knockback every 0.25s), **FreezeHazard**
+  (frozen pit — 20pt Frozen stack every 0.25s), **DamageHazard** (flat 20 dmg every 0.25s, no
+  debuff). **TsunamiHazard** — one-shot pyramid sweep, 35% max-HP damage, a big leftward shove
+  (delta-v solved from a 15 m target displacement), and a fixed 1s no-control window; spawned by
+  **TsunamiTrigger** (a walk-into button). New stackable, self-decaying `DecayingDebuff`
+  (10%/0.2s, integer, rounds up) backs **OnFire** (+20% move accel/speed, +0.2 aggregatable
+  damage-dealt bonus) and **Frozen** (−20% move, +20% damage resistance) on both
+  `CharacterController` and `Enemy`. 3 hazards placed on the arena's left edge for testing.
+- **0.1.6** — Movement/combat core reconstruction. Velocity split into `intentVel` (input/gravity/
+  jump/field) + `externalVel` (decaying impulses) so knockback finally works on players too;
+  horizontal now has momentum (accel/friction). Per-skill `HitInfo` = damage + delta-v knockback +
+  gain-no window (default 0.005·dmg; frozen control + animation). SoftVolume damps external impulses
+  (viscous). Enemy rebuilt on the same model.
+- **0.1.5** — Melee now hits when the cone overlaps a foe's body (radius-aware), not only its
+  center. Per-character jump count (`MaxJumps`; Pomegraknight = 1) refreshed on ground/platform/
+  SoftVolume, with a universal 0.3 s jump cooldown. Test tree made bigger and moved far right.
+- **0.1.4** — Docs: added `KNOWLEDGE.md` (conventions + running Godot/C# caveats) and
+  `CLAUDE.md` (read-first pointers + mandatory workflow: log every bug fix as a caveat,
+  bump version per commit).
+- **0.1.3** — Build fixes: Godot 4 has no `Label2D` (damage numbers rebuilt as Node2D+Label);
+  `PomeSeed.Gravity` → `FallGravity` (was hiding `Area2D.Gravity`).
+- **0.1.2** — Two platform kinds. The thin one-way **platform** (land/cross/drop-through) now has
+  a sibling **SoftVolume** (`SoftVolume.cs`) — the go-inside "tree" archetype: stand on its one-way
+  top or press-down to sink in; inside, falling halts and up/down move like left/right, capped by a
+  **stagnation index** (0.5·maxSpeed) with a constant **gravity index** drift (0.1·maxSpeed). Applies
+  to players *and* foes. A placeholder tree is placed in the arena.
+- **0.1.1** — Standard units model (`Units.cs`: 2 m player / 8 m jump / 1 s ground jump ⇒
+  g = 2048 px/s², 32 px/m). Named collision layers (Player/Foes/Ground/Platform/Projectile/
+  Hazard). One-way platforms with **press-down drop-through** (hold = fall further; ground stays
+  solid). Pome seeds **linger** where they land. Attack feedback: **camera shake**, enemy
+  **blink**, real **knockback bounce**. **Damage-number** popups (red damage / green heal, size
+  scales 20→100). **Version stamp** top-left; patch auto-bumps +0.0.1 per commit.
+- **0.1.0** — Initial playable slice + Pomegraknight on a `CharacterController` base.
+
+
 A **self-contained, playable vertical slice** now ships in this repo. The goal here was
 *playability*, not feature parity — it proves out the core loop (arena + character +
 skills + enemies + collectibles + win/lose) end-to-end so the fuller port below has a
@@ -26,6 +107,7 @@ skeleton to grow into. It is intentionally simpler than the full architecture in
 | Melee combo (3-stage 15/15/30, mag 3, reload) | `J` or **Left Mouse** |
 | Blush → self-ignite + Fire Tornado charge | `Left Shift` |
 | Pome Seed Eruption (3 waves of gravity seeds) | `E` |
+| Drop through platform (hold = fall further) | `S` / `Down` |
 | Restart after win/lose | `R` |
 
 Affected-range lines are drawn on-screen: the yellow **BA cone** (brightens on each
@@ -50,7 +132,15 @@ Scripts/Enemy.cs                Crab foe: patrol/chase/contact damage + burn DoT
 Scripts/WonderPage.cs           Overlap pickup with bob
 Scripts/GameManager.cs          Match loop: enemy/page spawners, score, lives, win/lose, restart
 Scripts/Hud.cs                  HP bar, lives, page count, banner
-Scenes/Arena.tscn               Ground + 3 platforms + walls, spawn markers, HUD, player
+Scripts/DecayingDebuff.cs       Stackable, self-decaying "points" debuff (10%/0.2s, rounds up);
+                                backs the OnFire/Frozen hazard statuses
+Scripts/Hazard.cs               Base for a stationary periodic hazard box (collision built from
+                                BoxSize; per-body tick timer; dispatches to Character/Enemy)
+Scripts/{Fire,Freeze,Damage}Hazard.cs  Bonfire / frozen pit / plain damage hazard
+Scripts/TsunamiHazard.cs        One-shot moving pyramid sweep (35% max HP, big shove, 1s stun)
+Scripts/TsunamiTrigger.cs       Walk-into button that spawns a TsunamiHazard
+Scenes/Arena.tscn               Ground + 3 platforms + walls, spawn markers, HUD, player,
+                                3 test hazards (bonfire/frozen pit/tsunami button) on the left
 Scenes/Pomegraknight.tscn       Player (CharacterBody2D + Camera2D + FirePoint + empty AnimationPlayer)
 Scenes/{Enemy,WonderPage,PomeSeed,Hud}.tscn
 Sprites/*.svg                   Placeholder art (player, enemy, page, seed, platform)

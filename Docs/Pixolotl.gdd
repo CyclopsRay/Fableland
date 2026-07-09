@@ -1,0 +1,254 @@
+# Pixolotl — GDD v1.0
+
+> **Ported from the Unity `GloryOfFableland` source.** Numbers reflect the shipped Unity
+> kit; Godot movement derives from `Units.cs` (all speeds/distances in meters·seconds).
+> **In-run character leveling was removed in v0.3.7** (`NODES.gdd` decisions log) — HP is a
+> flat base; permanent growth comes from the additive HP/ATK/DEF pools, not a level ladder.
+
+## Character Overview
+* **Race:** Axolotl
+* **Role:** Ranged Control
+* **Realm:** Not Found (origin unknown / mysterious)
+* **HP:** 150
+* **Personality:** Playful, curious, slightly out of sync with time. Speaks in fragments
+  as if always half a second behind or ahead. The papel picado ghosts are not ominous
+  to her — they're just how she sees the world.
+
+---
+
+## Visual Design
+
+**TODO** — visual design and image prompts are deferred to a future art pass.
+Key elements from the code: floating movement (always hovers), gill-based bubble firing,
+marigold-orange ghost afterimages (Papel Picado theme), particle VFX on SOBRECARGA.
+
+---
+
+## Passive — Tiempo de Papel Picado
+
+Every **1.2 seconds**, Pixolotl stores a **PapelPicadoFrame** in a circular buffer of
+**8 slots**. Each frame records:
+- Position (Vector2)
+- Current HP (float)
+
+A translucent marigold-orange **ghost afterimage** (`PapelPicadoGhost`) is spawned at
+each stored position. Ghosts fade from 70% alpha to 30% alpha over 10 s, then hold at
+30% indefinitely until the corresponding frame is consumed by RANIBOBER (E), at which
+point the ghost does a rapid forced fade (0.3 s) and is destroyed.
+
+When the buffer is full (8 frames), the oldest frame is overwritten and its ghost is
+force-faded.
+
+> **Design note:** the ghosts are both a visual record of Pixolotl's recent path and
+> the ammunition for her E skill. More ghosts = more rewind options. Enemies can see
+> where she's been and anticipate possible rewind destinations.
+
+---
+
+## Abilities
+
+### Basic Attack — Branquias (Gills)
+
+**Magazine:** 3 volleys | **Fire rate:** 0.25 s between volleys | **Reload windup:** 0.75 s
+
+Pixolotl opens her external gills and fires **6 bubbles simultaneously** per volley at
+**fixed world-space angles**. The angles do **not** flip with facing direction — they
+always fire in these absolute directions (degrees CCW from right):
+
+| Gill | Angle | Direction |
+|------|-------|-----------|
+| 1 | 2° | Near-right |
+| 2 | 25° | Low-right |
+| 3 | 65° | Upper-right |
+| 4 | 115° | Upper-left |
+| 5 | 155° | Low-left |
+| 6 | 178° | Near-left |
+
+**Bubble behavior:**
+- Travel along straight-line Bézier curves (control points on the line; effectively
+  straight infinite flight)
+- Endpoint distance: **200 units** (functionally infinite — bubbles fly until they hit
+  something or leave the arena)
+- Bubbles crack on terrain contact (Ground / Platform layers)
+- Bubbles deal **30 base damage** on contact with enemies (Player / Foe layers)
+- All live bubbles register with Pixolotl and query `BulletSpeedMultiplier` each frame
+  — SOBRECARGA instantly accelerates all existing bubbles
+
+Bubble spawning is driven by the **Animation Event** `OnBranquiasFire()` — `HandleBA`
+only gates on ammo and triggers the animator.
+
+> **Design note:** the fixed world-space angles mean Pixolotl's firing pattern is
+> position-dependent, not aim-dependent. She fires in a wide fan that covers both
+> sides equally. This makes her positioning — not her aim — the skill expression.
+> Moving left or right shifts which bubbles reach which parts of the arena.
+
+---
+
+### Shift — SOBRECARGA (Overcharge)
+
+**Cooldown:** 12.8 s | **Duration:** 3.2 s
+
+Pixolotl accelerates her personal time. During SOBRECARGA:
+
+| Parameter | Normal | SOBRECARGA |
+|-----------|--------|------------|
+| Move speed | 4 m/s | **6.4 m/s** (1.6×) |
+| Fire rate (volley interval) | 0.25 s | **0.15 s** (1.67× faster) |
+| Reload windup | 0.75 s | **0.5 s** |
+| Bullet speed | 1.0× | **1.6×** (all live bubbles instantly) |
+| Gravity scale | 1.0 | **0.6** (floaty) |
+
+- **VFX:** looping particle system plays; TrailRenderer enabled for motion smear
+- All live bubbles query `BulletSpeedMultiplier` each frame — activating SOBRECARGA
+  instantly accelerates every bubble currently in flight; deactivating snaps them
+  back to normal speed
+
+> **Design note:** SOBRECARGA is Pixolotl's burst window. The 3.2 s duration creates
+> urgency — reposition, fire all 3 volleys at the faster rate, and use the bullet-speed
+> boost to catch enemies off-guard. The 12.8 s cooldown (4× the duration) means it's
+> available roughly once per combat engagement.
+
+---
+
+### E — RANIBOBER (Rewind)
+
+**Max stacks:** 8 | **Charge time:** 2.5 s per stack | **Inner CD:** 0.25 s
+
+Pixolotl rewinds her personal timeline. Consumes **1 stack + 1 stored PapelPicadoFrame**
+(the newest frame). On activation:
+
+1. **Teleport** — instantly move to the consumed frame's position
+2. **Heal** — recover **50% of HP lost** since that frame was stored
+3. **Invincibility** — 0.1 s on arrival
+4. **AoE burst** at arrival position:
+   - **5 m radius**
+   - **40 damage** to all enemies
+   - **0.3 s stun** to all enemy characters
+5. **Rewind all live bubbles** — each bubble moves backward along its Bézier path by
+   `elapsedPassiveTimer × bubble's current speed` units
+6. **Ghost cleanup** — the consumed frame's ghost does a rapid 0.3 s forced fade
+
+The passive frame timer resets after consumption (set to the gap since the
+second-newest frame, or 0 if no frames remain).
+
+**Requirements:** at least 1 stack AND at least 1 stored frame.
+
+> **Design note:** RANIBOBER is both escape and engage. Rewinding to a frame from 1.2 s
+> ago is a short hop; rewinding to a frame from ~9.6 s ago (full buffer) is a
+> cross-arena teleport. The 50% heal rewards using it after taking damage — the more
+> HP lost since the frame, the more value. The bubble rewind adds zoning complexity:
+> bubbles that passed an enemy fly backward and can hit again.
+
+---
+
+## Skill Summary Table
+
+| Skill | Name | CD / Charge | Key Mechanic |
+|-------|------|-------------|--------------|
+| Passive | Tiempo de Papel Picado | 1.2 s / frame | Circular buffer of 8 position+HP frames; marigold ghost afterimages |
+| BA | Branquias | 0.25 s volley / 0.75 s reload | 3 volleys, 6 bubbles each at fixed world-space angles, 30 DMG |
+| Shift | SOBRECARGA | 12.8 s | 3.2 s time acceleration: +60% speed/fire-rate/bullets, 0.6× gravity |
+| E | RANIBOBER | 2.5 s / stack (max 8) | Rewind to stored frame: teleport, 50% heal, 5 m / 40 DMG AoE, bubble rewind |
+
+---
+
+
+---
+
+### Protagonist Landing Effect
+
+**TODO** — define the landing effect triggered when this protagonist is switched
+in via Tab. See `NODES.gdd` §3.3 (Switch Protagonist).
+## Movement
+
+| Parameter | Value |
+|-----------|-------|
+| Base move speed | 4 m/s (6.4 during SOBRECARGA) |
+| Floating | **Always** — hovers at neutral height. Jumps from ground; gravity only applies upward |
+| SOBRECARGA gravity | 0.6× (floaty, reduced jump height) |
+| Air control | Full (isFloating model) |
+| Max jumps | 1 |
+
+---
+
+## Leveling
+
+**No in-run level curve** (in-run character leveling removed in v0.3.7 — `NODES.gdd`
+decisions log). HP is a flat **150**; permanent growth comes from the additive
+HP/ATK/DEF pools (Rest excess, Sharpen), not a level ladder.
+
+---
+
+## Design Notes
+
+* Pixolotl is a **zoning controller**, not a DPS carry. Her damage per bubble is
+  moderate (30), but the 6-bubble fan covers a wide area. She controls space by
+  filling it with persistent projectiles, then manipulates them with SOBRECARGA
+  (speed boost) and RANIBOBER (rewind).
+* The **fixed world-space gill angles** are the core identity mechanic. Unlike
+  every other character whose BA aims toward the cursor, Pixolotl's firing pattern
+  is determined by her position. Moving right shifts the entire fan right; moving
+  left shifts it left. This makes positioning the primary skill expression.
+* **RANIBOBER's heal** creates a risk-reward tension: do you rewind early for
+  positioning (small heal) or wait until you've taken damage (big heal, but risk
+  dying before you can press E)?
+* **SOBRECARGA's bullet-speed multiplier** is live — all existing bubbles instantly
+  speed up. This means a skilled Pixolotl fires 2 volleys at normal speed, activates
+  SOBRECARGA, and the 12 already-flying bubbles suddenly accelerate into the enemy
+  from unexpected angles.
+* Pixolotl is **fragile** (150 HP, lowest of the roster). She relies on floating
+  mobility, ghost confusion, and RANIBOBER's heal+teleport for survival. A caught
+  Pixolotl dies fast.
+* The **Papel Picado** (perforated paper) theme ties to Día de Muertos imagery —
+  the ghosts are marigold-colored afterimages, not sinister specters. Pixolotl's
+  relationship with time is cultural, not traumatic.
+
+---
+
+## Implementation Notes
+
+### Floating Movement
+Pixolotl uses `isFloating = true` — she hovers at a neutral height by default.
+Jumping works from ground; gravity is inverted (only applies upward toward neutral
+height). During SOBRECARGA, `gravityMultiplier = 0.6` gives a floatier feel.
+
+### Bubble System
+`PixelBubble` is a separate MonoBehaviour. Each bubble:
+- Follows a cubic Bézier curve with straight-line control points
+- Queries `Pixolotl.BulletSpeedMultiplier` each frame for live speed changes
+- Has `Rewind(float distance)` for RANIBOBER — moves backward along its path
+- Cracks on terrain contact (LayerMask: Ground + Platform)
+- Deals damage on character/foe contact (LayerMask: Player + Foe)
+- Registers/unregisters with Pixolotl's `_liveBubbles` list
+
+### Circular Frame Buffer
+Implemented with head/tail pointers and a count. `StoreFrame()` writes at the next
+slot (overwriting oldest if full). `TryConsumeNewestFrame()` reads from tail.
+The passive timer (`_passiveTimer`) tracks elapsed time since the last frame store;
+RANIBOBER uses this to calculate bubble rewind distance.
+
+### PapelPicadoGhost
+A purely visual GameObject with `SpriteRenderer` — no Rigidbody, no Collider.
+Fades from `startAlpha` (0.7) to `minAlpha` (0.3) over `lifetime` (10 s), then
+holds. `ForceFade(duration)` is called when RANIBOBER consumes the frame — it
+captures the current alpha and fades to 0 over `duration` seconds, then self-destroys.
+
+### Ammo
+Magazine = 3 (baVolleyCount). `AutoTriggerReplenishOnShot` = true (default). Reload
+begins when magazine empties — 0.75 s windup, instant refill to 3. During SOBRECARGA,
+`fireSpeedArray` and `replenishWindup` are swapped to faster values.
+
+### RANIBOBER Stacks
+Separate from the base cooldown system (`eCooldown = 0`). Stacks charge passively at
+2.5 s per stack. `HandleSkill2()` gates on `_raniboberStacks > 0 && _frameCount > 0`
+plus a 0.25 s inner CD to prevent double-presses.
+
+---
+
+## Image Generation Prompts
+
+**TODO** — deferred to future art pass.
+
+---
+
+*Last Updated: July 2026 | Version: 1.0 | Generated from Unity source Pixolotl.cs + PapelPicadoGhost.cs*

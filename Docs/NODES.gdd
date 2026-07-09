@@ -1,0 +1,705 @@
+# Fableland — Nodes GDD
+
+Design doc for the overworld node content layer: combat goals, function nodes
+(shelter + question mark), the day cycle, team building, and the run structure.
+This is the *content* that lives inside the map graph defined by `MapGDD.md`;
+the foes that populate combat nodes are defined by `FOES.gdd`.
+
+Implementation target: `Scripts/Nodes/`. First landing: **v0.5.0**.
+
+---
+
+## 1. The two game modes
+
+The game plays in alternating modes:
+
+| Mode | When | What happens |
+|------|------|-------------|
+| **Exploration** | On the overworld map | Player inspects the map, chooses a destination, spends stamina to move between visited nodes or onto a new node. |
+| **Adventure** | Inside a node | Player engages with the node's content (combat mission, shelter interaction, question-mark event). |
+
+**Loop:** Explore → enter a node → Adventure (resolve it) → Finish the Day → Explore → …
+
+### 1.1 HUD buttons
+
+Two buttons live in the top-right corner during Adventure mode:
+
+| Button | Behaviour |
+|--------|-----------|
+| **Map** | Opens the overworld map. The game **pauses** while the map is open. |
+| **Finish the Day** | Ends the current day and returns to Exploration mode (§7). Availability depends on node type and state (see below). |
+
+### 1.2 Per-node-type rules
+
+**Combat node (in progress — goal not yet achieved):**
+- `Finish the Day` is **greyed out / unavailable**.
+- `Map` can be opened (game pauses), but the player **cannot move** on the map.
+- The player is locked in until the mission goal is achieved.
+
+**Combat node (goal achieved):**
+- `Map` opens the overworld map (view only — combat entry drained all stamina (§2.3),
+  so no movement is possible anyway).
+- `Finish the Day` is available; pressing it opens the confirmation popup:
+  **"Finish the Day?"** → `Yes` / `Cancel`.
+- `Yes` → day ends, mode switches to Exploration.
+- Reward is delivered when the goal is achieved (delivery mechanism TBD).
+
+**Shelter node:**
+- Both buttons are always available.
+- The player may open the map and **move to other nodes** as long as stamina remains
+  (entering a shelter does not automatically end the day).
+- Clicking `Finish the Day` ends the day immediately and returns to Exploration mode.
+- Day-ending actions (Rest / Sharpen / Wish — §5.5) also trigger the "Finish the Day?"
+  confirmation.
+
+**Question-mark node (story/event):**
+- The player must **complete all choices** in the event before finishing the day.
+- `Map` can be opened but the player **cannot move** until the day is finished.
+- Once choices are made, `Finish the Day` becomes available and ends the day.
+
+### 1.3 Entering vs passing through (movement rules)
+
+Map movement is shortest-path to a chosen destination; intermediate nodes are crossed
+without stopping. The rules:
+
+- **Only the destination node triggers content.** Passing through a node en route
+  triggers nothing — no menus, no fights, no NPC windows.
+- **Paths cannot pass through unvisited nodes or unconquered combat nodes.** Those can
+  only be chosen as destinations; a path reaching one ends there.
+- Effects when a **visited** node is the destination:
+
+| Destination | Effect |
+|-------------|--------|
+| Conquered combat node | Nothing — safe ground. |
+| Unconquered (failed) combat node | The fight re-triggers — a full combat entry, all stamina drained (§2.3). |
+| Shelter (Blessed or Mundane) | The shelter menu always opens (§5). |
+| Resolved `?` node | Nothing — inert. If the event converted the node into a shelter (Sanctuary), it behaves as a shelter thereafter. |
+
+- NPC 5-day windows (§5.3, §5.4) start on the player's **first entry as destination**,
+  never on pass-through (which is impossible for unvisited nodes anyway).
+
+---
+
+## 2. Run goal & fail state
+
+### 2.1 Victory
+
+Reach the **level-6 node** (`XX-6-1`) in zone 6 and defeat the **final BOSS**
+(the dark leader — name TBD; see `FOES.gdd` §8).
+
+### 2.2 Permadeath
+
+This is a **rogue-like**. If the player **dies in combat**, the run is over — permadeath,
+no continue, no restart-from-shelter. A new run starts from scratch with a fresh seed.
+
+Additionally, **running out of time in a BOSS fight** (LV4 or LV6) is **immediate death**
+(§4.5).
+
+The VOID is the third death source: **if the node the player is standing on is devoured
+at day-end** (§7.4, `MapGDD.md` §8), the run is over — the ground itself is gone.
+(Corollary: a player who has not entered zone 6 when the last outer ring is devoured at
+the end of day 45 is consumed with it.)
+
+### 2.3 Non-death failure
+
+For all other mission types, failing to achieve the goal is **not fatal**:
+
+| Mission type | Failure condition | Consequence |
+|-------------|-------------------|-------------|
+| Collection | Timer expires, not enough cores collected | **Collected cores are kept.** No completion reward. Node is **not** marked as completed. Player survives. |
+| Protect | Condensed Wonder Core destroyed | The mission ends **immediately**. No victory loot. Player survives. Node is **not** marked as completed. |
+| Destroy | Timer expires, objectives not all destroyed | No reward. Node is **not** marked as completed. Player survives. |
+| Slaughter | Timer expires, waves not all cleared | No reward. Node is **not** marked as completed. Player survives. |
+| BOSS | Timer expires | **Immediate death** (permadeath). |
+
+(Dying during *any* mission is permadeath, as always — the table lists the non-death
+failure conditions.)
+
+No matter success or failure, **entering a combat node depletes all stamina** (§7.1) —
+at most one combat per day. On failure, the player is sent back to the previous
+position (the node they moved from) with 0 stamina and must then finish the day.
+A node that is not marked as completed can be **re-attempted** by entering it again on
+a future day (a full combat entry — all stamina drained again; §1.3).
+Rewards are granted once, on first success.
+
+### 2.4 Meta-progression
+
+What persists between runs (unlocked protagonists, etc.) is **TBD** and will be
+covered in a future persistence/account GDD.
+
+---
+
+## 3. Team & build
+
+### 3.1 Protagonists
+
+The player initially controls a **single protagonist** (the one whose home world starts
+the run; see `MapGDD.md` §2). Over the course of a run, additional protagonists can be
+recruited:
+
+| Source | How |
+|--------|-----|
+| **Jousting** | Win a joust against a wanderer at a shelter node (§5.4) |
+| **LV4 BOSS** | Defeat the world boss in a level-4 combat node (§4.5) |
+| **Question-mark event** | Some `?` nodes may grant a protagonist |
+
+- **Party cap:** 3 protagonists in the active build by default (some mechanisms or
+  wonder items may change this).
+- **Bench:** the player may own more than 3 protagonists, but only 3 can be fielded.
+- **Build changes:** at any shelter node, Blessed or Mundane (§5.1).
+
+### 3.2 Wonder items
+
+Each protagonist can hold **one wonder item** by default (also subject to change by
+mechanisms or other wonder items). Wonder items are equipment that modify stats, grant
+abilities, or provide passive effects. The full item system is defined in
+**`ITEMS.gdd`**.
+
+- The player may carry more wonder items than they can equip; the excess stay in
+  inventory.
+- Item assignment is changed at shelter nodes alongside the team build (§5.1).
+- Wonder items can be acquired from: Collection combat nodes (§4.1); trading with
+  VOID traders (§5.3); jousting (the wanderer's held item; §5.4); question-mark nodes.
+
+### 3.3 Switch Protagonist (in combat)
+
+The player controls **one protagonist at a time** during combat. The three active
+party members form a **fixed sequence** (e.g., Pomegraknight → PumpKing → Pixolotl,
+set at the shelter). Pressing **Tab** (12 s cooldown) switches control to the next
+protagonist in the sequence.
+
+| Rule | Detail |
+|------|--------|
+| **HP ratio inheritance** | The incoming protagonist inherits the outgoing protagonist's **current HP ratio** (current HP / max HP), applied to their own max HP. |
+| **Cooldown penalty** | Protagonists in the background have their skill cooldowns tick at **⅕ speed** (e.g., a 10 s CD takes 50 real seconds to refresh while benched). This prevents cycling through protagonists to spam skills. |
+| **Landing effect** | When a protagonist is switched **in**, they trigger their unique **Protagonist Landing Effect** (defined per-character; see character GDDs). |
+| **Item CDs** | Held items on background protagonists tick at the same ⅕ speed (day-based CDs are unaffected — only combat second-based CDs are penalized). |
+| **Death** | If the active protagonist dies, the run is over (permadeath; §2.2) — the bench does not serve as extra lives. |
+| **Short party** | With 2 protagonists, Tab switches back and forth. With 1 protagonist, Tab is **unavailable** (greyed out). |
+| **Mid-air switch** | Position and velocity are **preserved** — the incoming protagonist appears exactly where the outgoing one was, continuing any existing trajectory. No reset, no ground-snap. |
+
+**Projectile persistence:** all active projectiles (seeds, stars, bubbles, heads, etc.)
+survive a switch and continue their natural lifetime. The **projectile owner is the
+player**, not any specific protagonist — so damage reflection bounces back to the
+currently-active protagonist, and the player retains control of steerable projectiles
+(e.g., PumpKing's head) after switching. This enables inter-protagonist combos (e.g.,
+Pomegraknight fires seeds → switch to Pixolotl and SOBRECARGA accelerates them).
+
+> **Implementation note:** each projectile must be sourced to the correct **player**
+> (not protagonist) to support potential future multiplayer. A player-level projectile
+> handler should track all live projectiles across protagonist switches.
+
+**Global stats:** ATK, DEF, and Max HP improvements from shelter Blessings
+(Rest / Sharpen Weapon / Sharpen Armor) are **global** — they apply to all
+protagonists equally. Once improved, every protagonist benefits.
+
+The switch protagonist mechanic is the core team-play feature. It lets the player
+adapt to different combat situations (e.g., switch to a tank when pressured, switch
+to a sniper when the boss is vulnerable) while the ⅕ background CD and 12 s switch
+CD prevent degenerate cycling.
+
+---
+
+## 4. Combat nodes
+
+A combat node is the primary Adventure-mode content. When the player enters one, the
+arena loads with a **mission** (goal). The mission is **picked at map-generation time**
+and is fixed for that node for the entire run.
+
+### 4.1 Mission types
+
+| # | Type | Frequency | Goal | Reward |
+|---|------|-----------|------|--------|
+| 1 | **Collection** | 60 | Collect wonder cores that appear on the map. When one is collected, another spawns. Cores may disappear if not collected in time. | The wonder cores collected (+ a 10 s grace window on completion, below) |
+| 2 | **Protect** | 15 | Resist enemy waves for a fixed duration and protect the **Condensed Wonder Core** (or another objective) from being destroyed. | The Condensed Wonder Core + **1 random wonder item** (victory-loot design TODO) |
+| 3 | **Destroy** | 10 | Destroy several objectives placed on the map within the time limit. | **1 random wonder item** (victory-loot design TODO) |
+| 4 | **Slaughter** | 10 | Survive and clear a set number of enemy waves within the time limit. | Player's choice: **+10 ATK** or **+10 DEF** (same as a Sharpen Blessing, §5.5) |
+| 5 | **BOSS** | LV4/LV6 only | Kill the BOSS within the time limit. | A new protagonist (LV4) / run victory (LV6) |
+
+Mission type is rolled **at map generation** for LV1/2/3/5 nodes at ratio
+**60 : 15 : 10 : 10** (Collection : Protect : Destroy : Slaughter). **LV4 and LV6 nodes
+are always BOSS** — boss missions are structural, never rolled. Ratios may later be
+tuned per world/level.
+
+**Collection completion:** the instant the required core count is reached, **all
+remaining foes die** and a fixed **10-second grace window** begins (the mission timer
+stops) during which the player may collect any cores still on the field. Then
+`Finish the Day` becomes available as usual.
+
+**Failure states** — see §2.3. Only BOSS timer expiry = death. All other failures =
+no reward, node unconquered, player survives.
+
+### 4.2 Node level → goal scaling
+
+The parameters of each mission are determined by the node's level (1–6 on the map).
+The **foe level** is determined separately by the current day (see `FOES.gdd` §2).
+These two axes multiply: a high-level node on a late day is doubly hard.
+
+**Base requirements (LV1):** Collection 10 cores, Protect 40 s, Destroy 2 objectives,
+Slaughter 2 waves. Higher levels scale by multiplier:
+
+| Node LV | Difficulty | Multiplier | Collection (cores) | Protect (duration) | Destroy (objectives) | Slaughter (waves) | Boss |
+|---------|-----------|-----------|--------------------|--------------------|----------------------|-------------------|------|
+| **1** | **Trip** (旅程) | 1.0× | 10 | 40 s | 2 | 2 waves | — |
+| **2** | **Adventure** (冒险) | 1.5× | 15 | 60 s | 3 | 3 waves | — |
+| **3** | **March** (行军) | 2.0× | 20 | 80 s | 4 | 4 waves | — |
+| **4** | **Confrontation** (决战) | — | — | — | — | — | Kill the world BOSS |
+| **5** | **Reincarnation** (轮回) | 2.5× | 25 | 100 s | 5 | 5 waves | — |
+| **6** | **Rout** (溃败) | — | — | — | — | — | Kill the final BOSS |
+
+**Combined difficulty name:** when entering a combat node, the difficulty display
+combines the foe difficulty (from `FOES.gdd` §2, based on the current day) with the
+node difficulty: `<Foe Difficulty> <Node Difficulty>`. Examples:
+- Day 5, LV1 node → "Fairytale Trip" (童话般的旅程)
+- Day 35, LV3 node → "Challenging March" (崎岖的行军)
+- Zone 6, LV5 node → **"Hellish Reincarnation"** (地狱般的轮回)
+- Zone 6, LV6 node → **"GOD FORBID ROUT"** (神惧溃败)
+
+> **Zone 6:** past the singularity the day is unknowable (`???`), so foe level is fixed
+> by the node instead of the day: the five `XX-5` fights spawn **level-7** foes, the
+> `XX-6-1` core spawns **level-8** foes (`FOES.gdd` §2).
+
+**Universal time limit:** all four non-BOSS mission types (Collection, Protect, Destroy,
+Slaughter) share the same time limit — the Protect duration for that node level. If the
+timer expires before the goal is achieved, the mission is failed (see §2.3 for failure
+consequences). Some larger arenas may use a longer base time limit; the values above
+are the standard.
+
+**Level multiplier formula:** `requirement = base × multiplier`. The table above
+is the canonical reference; the multiplier is a design guide for future tuning.
+For now, use the authored values directly.
+
+### 4.3 Slaughter waves
+
+Slaughter spawns enemies in discrete waves. The player must clear all enemies in the
+current wave before the next one begins. The **last wave is always fought at +1 foe
+level** (e.g., if the current day produces level-3 foes, the final wave spawns
+level-4 foes), **capped at foe level 8** (if the current day already produces
+level-8 foes, the final wave stays at level 8).
+
+Wave composition (foe types, counts, mix) is TBD and should be tuned per world.
+
+### 4.4 Protect — objective stats
+
+The Condensed Wonder Core (or other protect objective) has its own HP pool. It is
+a stationary entity placed in the arena; foes may target it or the player depending
+on aggro rules (detailed AI TBD). If its HP reaches 0, the mission is failed
+**immediately** — the fight ends on the spot (player survives — see §2.3; no core
+reward).
+
+| Node LV | Core HP | Notes |
+|---------|---------|-------|
+| 1 | 150 | |
+| 2 | 200 | |
+| 3 | 250 | |
+| 5 | 300 | Foes are level 5+; core is tankier |
+
+The core does **not** regenerate between waves. If the player has healing abilities
+that affect allies, they may work on the core (TBD per ability).
+
+### 4.5 Boss fights
+
+- **LV4 BOSS:** the world boss of the current world. **Time limit: 240 s (4 min).**
+  Defeating it recruits that BOSS as a playable protagonist (added to the bench; does
+  not exceed the party cap — the player may swap at the next shelter). The boss
+  character has a full player kit (movement, abilities, animations) in addition to
+  its boss-kit used during the fight.
+
+  > **Scope note:** boss-as-protagonist doubles the design burden — each LV4 boss
+  > needs both a boss encounter kit and a balanced player-character kit. This is a
+  > major feature, not a line item.
+
+- **LV6 BOSS:** the final BOSS of the run (the dark leader in zone 6). **Time limit:
+  360 s (6 min).** Defeating it **wins the run**. This boss is not recruitable.
+
+- **Timer expiry in any BOSS fight = immediate death** (permadeath; §2.2).
+
+Boss design details (phases, arenas, unique skills) belong to `FOES.gdd` §8.
+
+### 4.6 Combat actions
+
+During combat (Adventure mode inside a combat node), the player can:
+
+| Action | Input | Detail |
+|--------|-------|--------|
+| Move | `A`/`D` or `←`/`→` | Left/right movement |
+| Jump | `Space` | Jump (character-specific max jumps) |
+| Drop through platform | `S`/`Down` | Drop through one-way platforms |
+| SoftVolume vertical | `W`/`S` or `↑`/`↓` | Move up/down inside SoftVolumes |
+| Skill 1 (Shift) | `Left Shift` | Character-specific Shift ability |
+| Skill 2 (E) | `E` | Character-specific E ability |
+| Ultimate (Q) | `Q` | Character-specific Ult (if unlocked) |
+| Item skill | `F` | Use the held wonder item's skill (if it has one) |
+| Switch protagonist | `Tab` | Switch to next protagonist in sequence (12 s CD; §3.3) |
+| Pick up item | Walk over | Wonder items dropped on the ground are auto-picked up to the backpack, or to the held slot if available |
+| Melee / BA | `J` or `LMB` | Character-specific basic attack |
+
+**Item interaction:** wonder items dropped by foes (rare) or spawned by mission
+mechanics lie on the arena ground. Walking over an item picks it up — to the held
+slot if the current protagonist has an empty slot, otherwise to the backpack. Press
+`F` to activate the held item's skill (if any). See `ITEMS.gdd` for the full item system.
+
+---
+
+## 5. Shelter nodes
+
+A shelter node (camp icon) is generated **Blessed** — it has a pool of functions
+available. See `MapGDD.md` §6 for generation rules (edge crossings, per-level
+probabilities, 40/60 shelter-to-? split).
+
+When the player enters a shelter, the day does **not** automatically end. The player
+may take any available free actions (§5.1, §5.2) in any order. Afterwards, the player
+may either:
+
+- **Leave** for another node via the map (if stamina remains), or
+- **Click `Finish the Day`** to end the day and return to Exploration mode, or
+- **Choose a day-ending action** (Rest / Sharpen / Wish — §5.5), which consumes the
+  Blessing and ends the day.
+
+Day-ending actions can be taken **after** free actions — the player can trade, joust,
+or modify their build and then still Rest/Sharpen before leaving.
+
+### 5.1 Always available (any shelter, Blessed or Mundane)
+
+These actions can be taken freely at **any** shelter — including Mundane ones the
+player backtracks to — without advancing the day:
+
+- **Modify team build** — swap protagonists between the bench and the active party
+  (up to the party cap of 3).
+- **Modify wonder items** — reassign held wonder items among the active party
+  (one per protagonist by default).
+- **Tend plantations** — water plants at this shelter's plantation slots (§5.2),
+  if any were previously planted.
+- **Continue the journey** — open the map and move to another node (requires
+  remaining stamina).
+
+### 5.2 Sometimes available (if present at generation; any shelter, Blessed or Mundane)
+
+These are present only if the shelter rolled them at map-generation time. They are
+available **regardless of whether the shelter is Blessed or Mundane** — the Blessing
+only gates Rest/Sharpen/Wish (§5.5). Availability ends when the NPC departs (5-day
+window from first entry; see departure rules in §5.3 and §5.4):
+
+- **Plantation** (50% chance per shelter): the player may plant seeds in **2 slots**
+  (subject to change and randomness). Drag a seed from inventory onto a slot to plant.
+  Every 2 days the player can return to **water** the plants, accelerating growth by
+  +1 day per watering. Harvest yields resources (TBD; see separate **Plantation GDD**).
+
+  > **Design note:** plantations on outer rings are devoured early by the VOID
+  > (e.g., a 1-A plantation is gone by day 10). This is intentional — the player
+  > must choose between securing a higher-level node for a longer-lived plantation,
+  > or watering more frequently to harvest before devour. After the shelter's
+  > Blessing fades, the player can still return to water existing plants.
+
+- **VOID trader** (see §5.3).
+- **Jousting** (see §5.4).
+- **Other functions** — teleport to another shelter, a tunnel to a secret map,
+  or something unspeakable (TBD; rare).
+
+> **Zone-6 shelters (`XX-S`)** are generated Blessed with the **basics only** — build
+> mod, item assignment, and one day-ending action. They never roll plantations,
+> traders, or wanderers: there are no NPCs inside the VOID.
+
+### 5.3 VOID traders
+
+A shelter node has a **15% chance** to host a VOID trader, assigned at map generation.
+The generator guarantees **at least 3 traders across the entire map** (all five worlds
+combined — not per world; if fewer than 3 shelters roll a trader naturally, random
+shelters are force-upgraded until the minimum is met).
+
+A VOID trader always offers **5 options**:
+- **3 to 5 options** are traded for **wonder cores** (the currency collected in
+  Collection combat nodes). One of these is always at a **75% discount** (pay 25% of
+  the listed price, rounded up).
+- **The remaining options** (if any) are **1 wonder item for 1 wonder item** trades.
+
+**Default item price:** 10 wonder cores per item (subject to per-item overrides in
+`ITEMS.gdd`).
+
+**Departure:** traders do not stay forever. A trader remains at a shelter for **5 days**
+from the day the player first enters that shelter, then leaves. If the shelter's
+Blessing has faded before the 5 days are up, the trader still leaves at the
+5-day mark.
+
+### 5.4 Jousting
+
+A wanderer protagonist may appear at a shelter (**15% chance**; TODO: more complex
+generation rules based on world and shelter position). Wanderers share the same
+purpose as the player — to find the cause of the VOID — and will join if proven worthy.
+
+- The shelter displays the wanderer's **name** and **days remaining** before departure.
+- The player may **challenge** the wanderer to a joust (1v1 combat in a dedicated
+  arena — a simple map for now, world-specific later).
+- **Time limit:** 180 s (3 minutes). If neither side is KO'd, the joust is a draw
+  (no reward, no penalty).
+- **Both sides receive a ×2 max-HP multiplier** for the joust (applied on top of the
+  wanderer's foe-level scaling), removed when it ends. This makes the fight longer.
+- **The joust is a party fight:** the player fields their active build and **Tab
+  switching is allowed** (12 s switch CD as usual) against the single wanderer.
+- **Stats are copied** — the player's real HP, item cooldowns, and other state are
+  snapshot and restored after the joust. No matter the outcome, nothing carries back
+  (no HP lost, no items consumed, no cooldowns used). This is a mock fight.
+- **A joust KO is not permadeath** — the fighters are copies; being knocked out just
+  loses the joust.
+- **Wanderer level** follows the same foe-level table as the current day
+  (`FOES.gdd` §2).
+- **No penalty for losing** — the Blessing is not consumed, the day does not advance,
+  no resources are lost. The wanderer remains available until their departure day.
+- **If the player wins:** the wanderer joins the team (added to the bench). The
+  wanderer is **AI-controlled** during the joust and may carry a wonder item; if
+  they do, the player receives that item as well.
+
+**Departure:** like traders, wanderers remain at a shelter for **5 days** from the
+day the player first enters that shelter, then leave.
+
+### 5.5 Day-ending actions (consume the Blessing)
+
+A Blessed shelter offers **one** of the following. Choosing one triggers a
+confirmation popup: **"You will use all your stamina and the Blessing of this
+shelter to make the magic happen."** → `Yes` / `Cancel`.
+
+On `Yes`: the Blessing fades (this shelter becomes a Mundane visited node),
+**all remaining stamina is consumed** (set to 0), the day ends, and the VOID
+devour clock advances.
+
+| Action | Effect |
+|--------|--------|
+| **Rest** | Restore 30% of max HP (HP is tracked as a **ratio**, shared party-wide via switch inheritance). 1/3 of any excess healing above 100% converts into a **permanent max-HP multiplier**, in additive percentage points, applied globally — e.g. resting at full HP: 30 pp excess → +10 pp ⇒ ×1.10 (a second full-HP Rest ⇒ ×1.20). |
+| **Sharpen Weapon** | Permanently increase **ATK by +10**. ATK scales direct damage: `final_dmg = base_dmg × (100 + ATK) / 100`. |
+| **Sharpen Armor** | Permanently increase **DEF by +10**. DEF reduces damage taken: `final_dmg_received = incoming_dmg × 100 / (100 + DEF)`. |
+| **Wish** | TBD — reserved for a future content pass. |
+
+> **Design note:** the "excess → max HP" rule on Rest means a player who rests at
+> full HP still gains value (10% max HP increase), but a wounded player gets both
+> the heal and a smaller max-HP bump. This rewards resting strategically rather
+> than always at low HP.
+>
+> **ATK/DEF start at 0** (1× multiplier). Each Sharpen adds ~10% effectiveness
+> (diminishing relative returns as the stat grows). ATK and DEF are tracked
+> separately — the player can mix Weapon and Armor sharpens across different
+> shelters.
+
+---
+
+## 6. Question-mark nodes
+
+Question-mark nodes (`?`) are the unpredictable element of the overworld. They are
+generated alongside shelters at edge crossings and mid-edge placements (see
+`MapGDD.md` §6 for the 40/60 shelter-to-? split and per-level probabilities).
+
+When the player enters a `?` node:
+- If it is a **story/event** type, the player must complete all choices before
+  `Finish the Day` becomes available. The map can be opened (game pauses) but the
+  player **cannot move** to other nodes.
+- Once all choices are made, the player clicks `Finish the Day` → confirmation →
+  day ends → Exploration mode.
+
+### 6.1 Design space (TODO)
+
+The following categories are reserved. Specific events, rewards, and probabilities
+are **TBD** and will be fleshed out in a future content pass.
+
+| Category | Examples |
+|----------|----------|
+| **Movement** | Teleporter (randomly sends the player to another node on the map); tunnel (secret sub-map with challenges and grand prizes) |
+| **Resource** | Treasure cache (wonder cores or items); VOID shrine (trade HP for a permanent buff) |
+| **Story** | Narrative choice — a prize or a trouble depending on the player's decision; character backstory vignettes |
+| **Hazard** | Ambush (unexpected combat with no reward except survival); curse (temporary debuff for the next N combats) |
+| **Sanctuary** | Just another shelter node (already Mundane or still Blessed, depending on the roll) |
+
+---
+
+## 7. Day cycle
+
+### 7.1 Flow
+
+1. **Exploration mode.** Player has 5 stamina and the current day's map state.
+2. Player moves across the map. Moving between visited nodes costs 1 stamina per edge.
+   Stepping onto a **new (unvisited) node** costs 1 stamina and transitions to
+   Adventure mode. **Entering any combat node (new or re-attempt) additionally
+   depletes all remaining stamina** (§2.3) — at most one combat per day. Paths cannot
+   pass through unvisited nodes or unconquered combat nodes, and only the destination
+   triggers content (§1.3).
+3. **Adventure mode.** Player engages with the node's content (combat / shelter / ?).
+4. Player clicks **`Finish the Day`** (or a day-ending shelter action triggers it).
+   Confirmation popup → `Yes` → day counter increments, VOID devour clock advances
+   (see `MapGDD.md` §8), stamina refreshes to 5.
+5. Back to step 1.
+
+If the player runs **stamina to 0** while moving among already-visited nodes, movement
+is **blocked** — the player can no longer traverse edges. However, the day does **not**
+automatically end. If the player is at a shelter, they can still take free actions and
+then choose a day-ending action. If at a combat node, they must still complete the goal.
+The player must click `Finish the Day` (or use a day-ending shelter action) to end the day.
+
+### 7.2 Special cases
+
+- **Shelter free actions** (§5.1) do not end the day. The player can enter a shelter,
+  modify their build, tend plants, trade, or joust, then leave for another node —
+  all within the same day, as long as stamina holds out.
+- **Shelter day-ending actions** (§5.5) end the day and consume the Blessing.
+- **Combat nodes** lock the player in until the goal is achieved (or they die).
+  Once the goal is achieved, `Finish the Day` becomes available.
+- **? nodes** lock the player in until all event choices are resolved.
+
+### 7.3 Clock pressure
+
+The VOID devours map rings on a fixed schedule (days 10/20/30/35/40/45; see
+`MapGDD.md` §8). Foe levels increase with the day (`FOES.gdd` §2). Both clocks push
+the player forward — stalling means stronger enemies and less map to work with.
+
+### 7.4 Day-end resolution
+
+When `Finish the Day` is confirmed, the following housekeeping runs in order:
+
+1. **Day counter** increments.
+2. **VOID devour** — any ring whose devour day has arrived is consumed (see `MapGDD.md`
+   §8). **If the player's current node is devoured, the run is over** (§2.2). The
+   `Finish the Day` confirmation therefore warns when the player is standing on
+   flickering (devours-tonight) ground.
+3. **Item cooldowns** — every held wonder item's day-based cooldown decrements by 1
+   (see `ITEMS.gdd` §3.1).
+4. **Perish timers** — every perishable item (held or in backpack) decrements by 1;
+   items reaching 0 expire (see `ITEMS.gdd` §4.1).
+5. **NPC departure** — traders and wanderers whose 5-day window has elapsed leave
+   (§5.3, §5.4).
+6. **Stamina** refreshes to 5.
+
+This collective process is called **day-end resolution**.
+
+**Inside zone 6 (`???`):** the hidden day counter keeps advancing — item day-based CDs,
+perish timers, and the 5-stamina refresh all run normally. There are no plantations or
+NPCs in the VOID, and devour is moot (the outer ring is already consumed). Only the day
+*display* is unknowable.
+
+---
+
+## 8. Level 5 & 6 (TODO)
+
+The content and reward structure of level-5 nodes and the level-6 final BOSS
+depend on the player's performance across the run. The following five elements
+are tracked:
+
+1. **Nodes traversed** — total visited (combat + shelter + ?)
+2. **Worlds visited** — which of the 5 outer worlds the player set foot in
+3. **Successful goals** — combat nodes marked as completed (§2.3)
+4. **Collected protagonists** — total recruited (on bench + in party)
+5. **Collected wonder items** — total acquired (equipped + in inventory)
+
+How these elements gate or modify the LV5/LV6 experience is **TBD** and will be
+designed in a future content pass.
+
+---
+
+## 9. Integration with other GDDs
+
+| Concern | Defined in |
+|---------|-----------|
+| Map generation (zones, nodes, edges, function-node placement) | `MapGDD.md` |
+| Foe types, stats, day-based scaling, sight/aggro, evolution, loot hooks | `FOES.gdd` |
+| Wonder items, cores, trader economy, equipment slots | `ITEMS.gdd` |
+| Plantation mechanics (slot counts, seed types, growth, harvest) | **Plantation GDD** (separate doc) |
+| Boss design (phases, arenas, unique skills) | `FOES.gdd` §8 (TBD) |
+| Question-mark event content | This doc §6 (TODO) |
+| Level 5 & 6 content / run-performance gating | This doc §8 (TODO) |
+| Meta-progression (persistent unlocks between runs) | TBD — future GDD |
+
+---
+
+## 10. Decisions log
+
+- **Day ends on button press, not on node entry.** The player clicks `Finish the Day`
+  (or a shelter day-ending action triggers it). Entering a node transitions to
+  Adventure mode but does not by itself increment the day counter. (MAP.gdd §8 will
+  need a light update to reflect this — the arrival-commits model is replaced by
+  explicit confirmation.)
+- **"Slaughter" replaces "Conquer."** Renamed for flavor consistency. Uses waves
+  (2/3/4/—/5 at LV1/2/3/5), not kill-counts. The old "30–80 kills" spec would take
+  5–8 minutes at a 6-foe arena cap. Final-wave +1 foe level is **capped at foe level 8**.
+- **Only BOSS timer = death.** For all other mission types, failing to achieve the
+  goal means no reward and the node remains unconquered — the player survives.
+  This prevents a single bad RNG roll in Collection/Protect/Destroy from ending a
+  run, while the BOSS timer preserves high-stakes drama for the fights that matter.
+- **Plantation stays despite VOID devour.** The tension between "secure a deeper
+  node for longevity" and "water aggressively before it's eaten" is intentional,
+  not a bug. Mundane shelters still allow plant-tending.
+- **Traders & wanderers leave after 5 days.** The player can't hoard NPCs
+  indefinitely; there's a window to trade/recruit, then they're gone.
+- **Permadeath.** This is a rogue-like. Death = run over. No continues.
+- **Boss recruitment is a major feature.** LV4 bosses double as playable protagonists.
+  Each needs both a boss encounter kit and a balanced player-character kit. Scope
+  accordingly.
+- **Wish is deferred.** The shelter's third day-ending action is reserved; the
+  Rest/Sharpen pair covers the immediate needs (survival vs. power).
+- **Protect objective has its own HP.** The core does not regenerate between waves,
+  so the player cannot fully ignore it.
+- **Run performance gates LV5/LV6.** Five tracking dimensions feed into the endgame
+  content; specifics TBD.
+- **Switch Protagonist is the core team mechanic.** Tab (12 s CD) cycles through the
+  3-protagonist sequence. HP ratio is inherited; background protagonists' CDs tick at
+  ⅕ speed to prevent cycling abuse. Landing effects give each switch tactical weight.
+- **Universal mission time limit.** All four non-BOSS mission types share the same
+  time limit (base 40 s at LV1, scaled by level multiplier). Previously only Protect
+  had an explicit timer — now Collection, Destroy, and Slaughter all race the clock.
+- **Blessing actions consume stamina.** Rest / Sharpen Weapon / Sharpen Armor set
+  stamina to 0 in addition to consuming the Blessing and ending the day. This prevents
+  "use Blessing, then still explore on remaining stamina."
+- **Jousting is a mock fight.** Stats are copied before the joust and restored after —
+  no HP loss, item CDs, or consumables carry back. Both fighters get 200% HP. The
+  wanderer's level follows the day-based foe-level table.
+- **ATK/DEF are flat additive stats.** Start at 0 (1× multiplier). Sharpen Weapon
+  adds +10 ATK; Sharpen Armor adds +10 DEF. Formula: `dmg = base × (100+ATK)/100`;
+  `received = incoming × 100/(100+DEF)`. Replaces the old percentage-based Train.
+- **(v0.3.7) BOSS is structural, not rolled.** Mission types roll 60:15:10:10 over
+  Collection/Protect/Destroy/Slaughter for LV1/2/3/5 nodes; LV4 and LV6 are always
+  BOSS. (The old "~5%" was a share estimate that T30 mistook for a roll weight.)
+- **(v0.3.7) Combat entry costs the whole day.** Entering any combat node (new or
+  re-attempt) depletes all stamina; failure bounces the player back to the previous
+  position with 0 stamina. One combat per day — matches the ≤90-min run budget.
+- **(v0.3.7) Only destinations trigger content** (§1.3). Pass-through is inert; paths
+  cannot cross unvisited nodes or unconquered combat nodes; NPC windows start on
+  first entry as destination.
+- **(v0.3.7) The VOID kills.** A player whose node is devoured at day-end dies — the
+  third death source alongside combat death and boss-timer expiry. The Finish-the-Day
+  confirmation warns on flickering ground.
+- **(v0.3.7) Zone-6 foe levels are per-node** (LV5 → 7, LV6 core → 8); the day-based
+  table stops at the singularity. In-void, the hidden day still advances (CDs, perish,
+  stamina normal; no NPCs or plantations inside).
+- **(v0.3.7) Victory-loot demo:** Collection = cores kept + 10 s grace (all foes die on
+  goal); Protect/Destroy = 1 random wonder item; Slaughter = choose +10 ATK or +10 DEF.
+  Per-type loot design is TODO (TBD registry). Collection failure keeps collected cores.
+- **(v0.3.7) Joust is a party fight with copied stats.** Tab allowed; both sides get a
+  ×2 max-HP multiplier (on top of the wanderer's foe-level scaling — supersedes the
+  old "additive, not multiplicative" note); a joust KO is not permadeath.
+- **(v0.3.7) In-run character leveling removed.** WonderPages are renamed **wonder
+  cores** — the single run currency, not an XP track. Protagonist growth = Blessings +
+  items. Permanent HP/ATK/DEF pools are additive (max HP in percentage points: two
+  full-HP Rests → ×1.10 then ×1.20, not compounding).
+- **(v0.3.7) XX-S shelters are basics-only.** Blessed with build mod + item assignment
+  + one day-ending action; never plantation/trader/wanderer.
+- **(v0.5.0) Reward delivery = instant.** Combat rewards apply the moment the goal is
+  achieved (with a HUD toast); §1.2's "delivery TBD" resolved as the prototype default.
+  Collection credits each core ON PICKUP (so they're kept on a timer failure, per §2.3)
+  and its success bundle carries zero cores — no double-count.
+- **(v0.5.0) Collection pacing prototype default:** 3 cores on the field at once; an
+  untouched core despawns after 12 s and respawns elsewhere (all placement from the
+  mission's DetRandom sub-stream); on goal, foes die and a 10 s grace window lets the
+  player grab leftovers.
+- **(v0.5.0) Destroy objectives prototype default:** stationary targets, HP = 60 ×
+  (1/1.5/2/2.5 per LV1/2/3/5), placed from the mission sub-stream on platforms/ground.
+  Objectives are hittable like foes but never count toward the ambient spawn cap.
+- **(v0.5.0) Protect core aggro (Q10 default):** foes keep chasing the player, but any
+  foe within contact range of the Condensed Wonder Core chips it on the core's own
+  0.9 s cooldown (per-hit = 18 × the foe level's ATK mult) — ignoring the fight still
+  loses the core. Core is not healable (healing stays TBD).
+- **(v0.5.0) No in-Adventure Map button yet** (§1.1/§1.2): the map is a separate scene,
+  so a view-only overlay needs a SubViewport/snapshot — deferred for combat AND "?"
+  events. Finish-the-Day gating (locked until the goal / terminal event choice
+  resolves) IS implemented; shelters keep their free "Back to Map" (that's movement,
+  not a map view).
+- **(v0.5.0) "?" events run through a generic EventRunner** (T30 §7): authored
+  `EventDef` pages of choices → composed verb effects (grant cores / heal / grant item /
+  nothing); the event for a node is picked deterministically from the run seed. Three
+  placeholder events ship as the pipeline proof.
+- **(v0.5.0) Day-end visibility:** the map shows a one-shot toast summarizing the
+  day-end pipeline's effects (new day, what the VOID devoured, stamina restored).

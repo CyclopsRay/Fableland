@@ -1,0 +1,335 @@
+# Cleopastar — GDD v2.0
+
+> **Ported from the Unity `GloryOfFableland` source.** Numbers reflect the shipped Unity
+> kit; Godot movement derives from `Units.cs` (all speeds/distances in meters·seconds).
+> **In-run character leveling was removed in v0.3.7** (`NODES.gdd` decisions log) — HP is a
+> flat base; permanent growth comes from the additive HP/ATK/DEF pools, not a level ladder.
+
+## Character Overview
+* **Race:** Star Fruit
+* **Role:** Sniper
+* **Realm:** Palace of LOOING (PL)
+* **HP:** 180
+* **Personality:** Condescending, arrogant, unbothered. Never raises her voice or overreacts. Her contempt is expressed through silence and precision.
+
+---
+
+## Visual Design
+
+### Body & Silhouette
+Cleopastar is a chibi star fruit character with a fully humanoid body — arms, legs, and torso — in the style of Pomegraknight. Her star fruit shape forms her head and upper body, with five prominent spikes:
+- **Top spike (forehead):** Points upward like a unicorn horn. A golden decorative snake coils around its base as a crown piece.
+- **Two mid spikes (ear level):** One on each side. Small golden hoop earrings hang from each.
+- **Two bottom spikes:** Flow downward on both sides like long hair. Same golden-yellow as the body — they are not hair, but behave visually like it.
+
+### Color Palette
+| Element | Color |
+|---------|-------|
+| Body / Star fruit | Warm golden-yellow |
+| Hair | Deep purple, hime cut |
+| Accent | Teal (liner, gem details, skill glow) |
+| Accessories | Gold |
+| Skirt | White with gold belt |
+
+### Hair
+Deep purple hime cut — straight blunt bangs across the forehead, straight side pieces framing the face. The two golden bottom spikes peek out beneath the hair, distinguishable by color.
+
+### Face
+* Heavy-lidded eyes, permanently unimpressed expression
+* Teal cat-eye liner
+* Small teal gemstone detail near the eye or brow
+* No exaggerated expressions — subtle and cold at all times
+
+### Accessories & Outfit
+* Golden snake headpiece coiled at the base of the horn spike
+* Golden hoop earrings on the ear-level spikes
+* Golden bangles on both wrists
+* Ankh-shaped golden cane held in one hand — her casting weapon (stylized, not historically accurate)
+* Usekh-inspired collar — simplified, gold and teal, sits at the neck
+* White wrap skirt with a gold belt
+* Golden sandals
+* Skin tone: Slightly golden-tinted on arms and legs to harmonize with the star fruit body
+
+---
+
+## Resource System — Glows
+
+Cleopastar's primary resource. Every **1.5 seconds**, she generates 1 Glow on one of her star spikes, stacking up to **5 Glows maximum**. Glows are lost on death. Each Glow is spent by BA to launch one star.
+
+Glow generation is continuous and independent of the current count — the timer always ticks, pausing only at the 5-Glow cap.
+
+---
+
+## Star States
+
+Each star has two **independent, aggregatable** statuses that combine freely:
+
+| | **Normal effect** | **Blackhole effect** |
+|---|-------------------|---------------------|
+| **Stationary** | Immature (hover / fall / platform) | Stationary Blackhole |
+| **Gliding** | Gliding star | Gliding Blackhole |
+
+**Nut's Decree (Shift)** controls the movement axis: Stationary → Gliding.
+**Apep's Maw (E)** controls the effect axis: Normal ↔ Blackhole.
+Neither skill affects the other axis. A Gliding Blackhole keeps flying; a Stationary Blackhole stays put.
+
+---
+
+### Movement Status
+
+#### Stationary
+A star is Stationary when first launched (Immature) and remains so unless Nut's Decree is cast.
+
+**Flight phase:** The star flies in a **straight line** at **12 m/s** in the aimed direction for a minimum of **6 m** (the release input is buffered until this threshold is met). It can hit enemies during this phase.
+
+**Hover phase:** Once the flight phase ends, the star stops in place and **hovers for 1 second**.
+
+**Fall phase:** After the hover, the star begins falling:
+- Falls at **0.5 m/s** (unoccupied)
+- Falls at **1 m/s** while Cleopastar is standing on it
+- Acts as a **one-way platform** for Cleopastar only — she can land, stand, jump off, and drop through by pressing down
+- Cleopastar cannot stand on Gliding stars or stars with Blackhole effect active
+- Standing on a star does not consume it
+
+* **Lifetime:** 15 seconds from launch
+
+#### Gliding
+A star enters Gliding when **Nut's Decree** is cast, regardless of its current effect status. It flies in the chosen direction:
+
+* **Speed:** 12 m/s → 30 m/s, accelerating linearly over **1.5 seconds**
+* Speed and damage scaling share the same `t` value
+* **Lifetime:** 10 seconds from entering Gliding
+
+---
+
+### Effect Status
+
+#### Normal
+The star's default effect. On collision (contact within the trigger radius):
+
+* **Stationary star:** 40 DMG in a **2 m radius** explosion, then vanishes. Applies StarSicking.
+* **Gliding star:** scaled DMG **40→100** (same `t` as speed), knockback **0→6 m/s** radially outward, then vanishes. Applies StarSicking.
+
+#### Blackhole
+Applied by **Apep's Maw**, regardless of movement status. The Blackhole effect is a larger, slower star with a gravity pull:
+
+* **Collision radius:** expanded to **3 m** (from 2 m)
+* **Contact damage:** 0 — the Blackhole deals no direct hit damage
+* **Passive pull (always active):** Enemies and foes within **6 m** are continuously pulled toward the star at **15 m/s**
+* **On collision (within 3 m) or ground/platform contact — 4-tick sequence (0.8 s, one tick every 0.2 s):**
+  * Applies to all enemies within **6 m** per tick:
+    * 10 DMG
+    * 15 m/s pull toward center
+    * 0.2 s Stun
+    * **Execute** any target with HP below 10% of their max
+* After the 4th tick the star vanishes
+* The passive pull continues throughout the tick sequence
+* Does **not** apply StarSicking
+
+If the star also has Gliding status, it continues moving at its current speed while the passive pull and tick sequence are active.
+
+**Toggling back to Normal:**
+Apep's Maw cast on a Blackhole star restores the Normal effect. The star's movement status is unchanged — a Stationary Blackhole becomes a Stationary Normal star (resuming its hover/fall phase); a Gliding Blackhole becomes a Gliding star continuing at its current speed.
+
+---
+
+## Abilities
+
+### Passive — Starlight Charge
+- Generates 1 Glow every **1.5 seconds**, up to 5 maximum
+- Glows are displayed on Cleopastar's star spikes (visual only — no numeric HUD)
+- Lost on death; timer resets and begins again on respawn
+
+**StarSicking (stackable buff, applied to enemies):**
+Every direct damage hit from a CleoStar — Immature explosion or Gliding impact — first deals its damage, then attempts to apply one stack of **StarSicking** to the target:
+- **Effect per stack:** Reduce all star damage received by **35%**
+- **Max stacks:** 2 (70% reduction at full stacks)
+- **Timer:** A **single shared timer** counts down from **1.5 seconds**. When it expires, one stack is removed and the timer resets to 1.5 s for the remaining stack (if any). Any hit that adds or would add a stack also **resets the timer to 1.5 s**.
+- **On hit with 2 stacks already active:** no stack added, timer reset to 1.5 s
+- Blackhole tick damage does **not** apply or refresh StarSicking
+
+*Note: This single-timer-per-buff model is the intended universal pattern for all stackable buffs in the game. The timer always belongs to the buff instance, not to individual stacks.*
+
+**Consecutive Gliding hit reduction:**
+The StarSicking buff is the primary gate on repeated star damage. A target hit by one Gliding star at 1 stack takes 65% DMG on the next hit; at 2 stacks, 30% DMG. The buff refreshes on each hit, so sustained fire keeps the target at maximum reduction.
+
+*Balance intent: 3 Gliding stars at max damage, target at 0 stacks → 100 + 65 + 30 = 195 DMG (survives 200 HP). 4 stars → 225 DMG (lethal).*
+
+---
+
+### Basic Attack — Star Shot
+
+**Resource:** 1 Glow per shot
+
+Cleopastar extends her free hand and flicks a star in the aimed direction. The star flies in a **straight line** at a fixed speed. Holding LMB extends how far the star travels before stopping; releasing LMB (or reaching the 6 m minimum) ends the flight phase.
+
+* **Launch speed:** Fixed **12 m/s**, no charge variation
+* **Minimum flight distance:** **6 m** — even a single click guarantees the star travels at least 6 m before stopping
+* **Hover:** After the flight phase ends, the star stops in place for **1 second** before entering its fall phase
+* Stars fly in a **direct line** — no arc, no gravity during flight
+* If fired with 0 Glows, the input is ignored silently
+* The star immediately enters **Immature** state on spawn
+
+---
+
+### Shift — Nut's Decree
+
+**Cooldown:** 3 s
+
+*Named for Nut, Egyptian goddess of the star-filled sky who arches over all creation and governs the stars.*
+
+Cleopastar raises her ankh cane and points it in a chosen direction. All **Stationary** stars simultaneously enter **Gliding** movement, flying in that exact direction — regardless of their current effect status. A Stationary Blackhole becomes a Gliding Blackhole.
+
+* **Direction input:** Mouse/Keyboard: angle from Cleopastar's position to mouse cursor | Gamepad: right analog stick
+* Already-Gliding stars are unaffected by this cast
+* **Tactical geometry:**
+  * Stars arranged perpendicular to Shift direction → spread across a wide area
+  * Stars arranged parallel to Shift direction → clustered burst on a single point
+* The 3 s cooldown reflects a minimum delay between volleys rather than a meaningful resource gate — star availability (Glows) is the primary constraint
+
+---
+
+### E — Apep's Maw
+
+**Cooldown:** 12 s
+
+*Named for Apep (Apophis), the Egyptian chaos-serpent who devours stars and opposes the ordered sky — the natural mythological opposite of Nut.*
+
+Cleopastar collapses a target star's effect into a **Blackhole** — this is a **two-way toggle** (Normal ↔ Blackhole). Movement status is unchanged.
+
+**Target selection:** The star with the smallest angle from the vector (Cleopastar's position → mouse cursor) is selected. Ties broken by proximity.
+
+* **Normal → Blackhole:** star's collision radius expands to 3 m, direct damage becomes 0, passive 6 m pull activates. Movement continues unchanged.
+* **Blackhole → Normal:** restores the star to Normal effect. Movement continues unchanged.
+* Works as both a zone-denial tool (plant a Stationary Blackhole to block pursuit) and a combo finisher (send a Gliding Blackhole through a group to pull them in, letting the ticks fire mid-flight)
+
+---
+
+### Ultimate — Constellation Reign
+
+**Duration:** 6 seconds
+
+Cleopastar raises her ankh cane, entering a regal stance. During this period:
+
+* All airborne **Immature** stars stop falling — they hang suspended, zone-controlling the battlefield
+* All cooldowns (Shift, E) and the passive Glow generation interval are reduced by **50%**
+  * Shift: 3 s → 1.5 s
+  * E: 12 s → 6 s
+  * Glow generation: 1.5 s → 0.75 s
+* When the Ult ends, all suspended stars resume falling at their normal 0.5 m/s
+* Suspended stars **glow brighter** while frozen — a visible warning to the opponent that a mass drop is coming
+* Stars that enter Gliding or Blackhole state during the Ult are not frozen
+
+---
+
+## Skill Summary Table
+
+| Skill | Name | CD | Key Mechanic |
+|-------|------|----|--------------|
+| Passive | Starlight Charge | 1.5 s / Glow | Trickle generation up to 5; StarSicking debuff (−35% star DMG/stack, max 2) |
+| BA | Star Shot | — (Glow-gated) | Fixed 12 m/s straight line, min 6 m, hover then fall |
+| Shift | Nut's Decree | 3 s | All Stationary stars → Gliding in chosen direction |
+| E | Apep's Maw | 12 s | Normal ↔ Blackhole toggle (two-way) |
+| Ult | Constellation Reign | — | Freeze Immature stars; 50% CDR on Shift, E, Glow gen for 6 s |
+
+---
+
+## Star State Combination Map
+
+```
+                    NORMAL EFFECT              BLACKHOLE EFFECT
+                 ┌─────────────────────┬──────────────────────────┐
+  STATIONARY     │  Hover → Fall       │  Stationary gravity well │
+  (Immature)     │  2 m radius         │  6 m pull aura           │
+                 │  40 DMG on hit      │  3 m trigger → 4-tick seq│
+                 │  Applies StarSicking│  No direct DMG           │
+                 ├─────────────────────┼──────────────────────────┤
+  GLIDING        │  12→30 m/s          │  12→30 m/s (keeps flying)│
+                 │  2 m radius         │  6 m pull aura           │
+                 │  40→100 DMG on hit  │  3 m trigger → 4-tick seq│
+                 │  0→6 m/s knockback  │  No direct DMG           │
+                 │  Applies StarSicking│  Ticks fire mid-flight   │
+                 └─────────────────────┴──────────────────────────┘
+
+Nut's Decree  → moves any star from Stationary row to Gliding row (effect unchanged)
+Apep's Maw    → moves any star from Normal column to Blackhole column, or back (movement unchanged)
+```
+
+---
+
+### Protagonist Landing Effect
+
+**TODO** — define the landing effect triggered when this protagonist is switched
+in via Tab. See `NODES.gdd` §3.3 (Switch Protagonist).
+
+---
+
+## Design Notes
+
+* Cleopastar rewards patience and spatial positioning. Her power scales with how many Immature stars she has arranged before committing a Shift.
+* Apep's Maw creates genuine tension in the opposing player: engaging her risks walking into a Blackhole's passive pull. The 6 m pull radius relative to the 3 m trigger means the opponent must act from farther away than feels natural.
+* Nut's Decree's 3 s cooldown is intentionally low — it is not the resource gate. Glows are. This lets skilled play feel fluid and expressive.
+* The Gliding consecutive-hit reduction prevents one Shift cast from trivially deleting a target with 5 stacked stars, while still making 4-star volleys lethal.
+* The Nut / Apep naming pair carries genuine mythological weight: Nut commands the stars, Apep devours them. Cleopastar *is* Nut; Apep's Maw is the weapon she wields against her enemies.
+* Suggested HP: 180 — lower than average, reinforcing the need for self-defense tools (Blackhole zone denial, star platform mobility) and careful positioning.
+
+---
+
+## Implementation Notes
+
+### Ammo System
+Glows use `currentAmmo` / `magazineSize` from the base `CharacterController` ammo system. `magazineSize = 5`. Trickle regeneration is implemented by overriding `UpdateAmmo()` with a 1.5 s delta timer that increments `currentAmmo` by 1. `AutoTriggerReplenishOnShot` is overridden to `false` to suppress the base reload coroutine. This ensures full compatibility with future roguelite ammo modifiers.
+
+### BA Flight & Hover
+The star is launched at fixed 12 m/s in a straight line using `rb.linearVelocity` (no gravity during flight). A distance accumulator tracks how far the star has traveled. Once LMB is released AND the 6 m minimum is met, the star enters the hover phase: velocity is zeroed and a 1-second coroutine begins. After the coroutine, the star enters its fall phase at 0.5 m/s. The minimum 6 m is enforced by delaying the release-response until the threshold is crossed — a release before 6 m is buffered and applied when 6 m is reached.
+
+### Star Platform Collision
+Immature stars use two colliders on the prefab root:
+- `CircleCollider2D (Is Trigger: true)` — enemy and ground hit detection
+- `BoxCollider2D (Is Trigger: false)` + `PlatformEffector2D (useOneWay: true)` — platform for Cleopastar only
+
+On star spawn, `Physics2D.IgnoreCollision(platformCollider, nonOwnerCollider, true)` is called for all non-owner characters. When the star enters Gliding or Blackhole state, the platform collider is disabled entirely.
+
+Drop-through (pressing down while standing on a star) is deferred to post-prototype.
+
+### Blackhole Pull vs. CharacterController
+The base `CharacterController` overwrites `rb.linearVelocity` every `FixedUpdate` via `HandleMovement()`, which means `AddForce` has no effect on player characters. The Blackhole applies its pull via an `externalForce` field added to `CharacterController`:
+
+```csharp
+// CharacterController.cs — new field
+public Vector2 externalForce = Vector2.zero;
+
+// Inside HandleMovement(), after normal velocity is applied:
+rb.linearVelocity += externalForce;
+externalForce = Vector2.zero; // consumed each frame
+```
+
+The CleoStar Blackhole sets `cc.externalForce += pullDir * 15f` each `FixedUpdate`. `BaseFoe` characters have no such constraint — `rb.linearVelocity` can be set directly.
+
+This base class change is minimal and non-breaking for existing characters.
+
+---
+
+## Image Generation Prompts
+
+### Prompt 1: In-Game Chibi Sprite (Reference Sheet)
+*(Feed the approved Cleopastar illustration as reference image. Describe only pose and motion.)*
+
+Chibi pixel art sprite sheet, front-facing full body, isolated on black background. Six frames arranged in a single row: Idle, Walk, Jump, BA (Basic Attack), Shift, E Skill. Same character design as the reference. All animations restrained and elegant — no exaggerated limb swings, no wide stances.
+- **Idle:** Standing upright, one hand resting lightly on the ankh cane. Subtle slow breathing motion only. Expression neutral and cold.
+- **Walk:** Small measured steps, upright posture maintained at all times. Cane carried at her side, not swinging. Head does not bob. She glides more than she walks.
+- **Jump:** Legs draw up slightly and neatly beneath her. Free hand remains close to the body. No flailing. Composed mid-air posture, as if she is being lifted rather than jumping.
+- **BA (Basic Attack):** A single, precise outward gesture of the free hand — as if flicking something away dismissively. No wind-up, no follow-through. Economy of motion.
+- **Shift (Nut's Decree):** She raises the ankh cane forward in a deliberate, slow-extended point. One fluid motion. Posture unchanged. Like issuing a quiet royal command.
+- **E Skill (Apep's Maw):** She glances downward with mild disdain, raises her free hand slightly palm outward. A restrained, minimal gesture. No dramatic pose.
+
+Consistent pixel art style across all frames, bold outlines, clean limited color palette.
+
+### Prompt 2: Character Poster
+*(Feed the approved Cleopastar illustration as reference image. Describe only pose, expression, and composition.)*
+
+Character poster, same design as the reference image. Cleopastar stands in a three-quarter front pose, weight shifted slightly onto one leg, ankh cane held loosely at her side — neither gripping it tightly nor brandishing it. Her chin is tilted just slightly upward. Eyes half-lidded, gaze directed downward and to the side as if the viewer is barely worth acknowledging. No smile, no frown — the expression of someone who has already decided they are the most important person in the room. Her posture is completely still, composed, regal. Multiple glowing five-pointed stars float at different heights around her — some golden-teal (Immature), one deep violet with a radial distortion haze (Blackhole). Dark starry background with subtle golden light. Dramatic lighting from slightly below, casting a soft upward glow on her face. The overall feeling: a queen who does not need to prove anything.
+
+---
+
+*Last Updated: May 2026 | Version: 2.0 | Source: Unity CharacterGDD.md*
