@@ -127,6 +127,28 @@ compiler surfaces below.
 - **Why:** UIDs are an editor-managed identity namespace, not documentation — inventing them
   is the one way to make two scenes claim the same identity.
 
+### Hand-authored `Animation` value tracks: update mode lives INSIDE the keys dict (v0.6.0-anim)
+- **Symptom (caught pre-commit):** the generated `Pomegraknight.tscn` animations carried a
+  standalone `tracks/0/update = 1` property line. That is not a property Godot's `Animation`
+  text loader recognizes — editor-saved files express a value track's discrete/continuous
+  mode ONLY as the `"update": 1` entry inside the `tracks/0/keys = { ... }` dictionary.
+- **Rule:** when generating/hand-writing `Animation` sub_resources, emit exactly
+  `tracks/N/type`, `tracks/N/path`, and `tracks/N/keys` (with `"times"`, `"transitions"`,
+  `"update"`, `"values"`); optional editor niceties (`interp`, `loop_wrap`, `imported`,
+  `enabled`) can be omitted (defaults apply), and a discrete track needs its **first key
+  clamped to t=0** so the value is defined from the start. Loop via `loop_mode = 1` on the
+  Animation itself.
+- **Why:** unknown `tracks/…` properties risk load errors/warnings and are silently dropped
+  by the editor on re-save, so the file would churn the first time anyone opens it.
+- **Related (same phase):** Pomegraknight's sprite art is uniform across all 11 sheets
+  (~227 px character height per cell, center pivot), so ONE `Sprite2D.scale` (64/227 ≈ 0.2819)
+  serves every animation — don't add per-animation scale keys. Facing flips via
+  `Sprite2D.FlipH`, so animation tracks must never key `scale`/`flip_h`. The gain-no
+  "animation frozen" canon is implemented as `Anim.SpeedScale = 0` while `_stunTimer > 0`
+  (idempotent, self-restoring) — the authored `stun` clip is deliberately NOT driven, and
+  Godot clears `CurrentAnimation` to "" when a non-loop clip ends, which is why the automata
+  tracks `LastAnim` itself (see `CharacterController.PlayAnim`).
+
 ### A self-spawning scene can't hold its own PackedScene ext_resource (v0.4.0)
 - **Symptom:** wiring `CrabFoe.tscn`'s Spawn-on-death `BabyCrabScene` export to
   `CrabFoe.tscn` itself would make the scene reference itself as an `ext_resource` —

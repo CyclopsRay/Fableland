@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 /// <summary>
-/// Pomegraknight — Skirmisher. Port of the Unity character, minus animation
-/// (hooks are left in <see cref="UpdateAnimator"/> and the swing/wave timing so
-/// AnimationPlayer "call method" tracks can drive damage later).
+/// Pomegraknight — Skirmisher. Port of the Unity character. Sprite animations
+/// are wired via <see cref="UpdateAnimator"/> and the AnimationLibrary baked into
+/// Pomegraknight.tscn; BA/seed damage still fires inline (see the
+/// NOTE(animation) comment in HandleBA) rather than off an AnimationPlayer
+/// call-method track — a later pass can move it.
 ///
 /// PASSIVE  Pomegranate Shell — immune to burn DoT. While burning: combo deals
 ///          1.5x and E fires burning seeds.
@@ -55,6 +57,32 @@ public partial class Pomegraknight : CharacterController
     // Combo (15/15/30) — passive multiplies by 1.5 while burning.
     private static readonly float[] ComboDamage = { 15f, 15f, 30f };
     private const float BurnComboMult = 1.5f;
+
+    // Animation automata (mirror of the Unity "Pomegraknight 1" animator, minus
+    // the states we deliberately don't drive — see UpdateAnimator below).
+    //
+    // One-shot clips: once triggered, they play to completion and are not
+    // interrupted by the idle/walk/jump fallback while still IsPlaying(). "dead"
+    // and "jump" are NOT in this set — they're state-held instead (PlayAnim's
+    // same-name guard keeps them from restarting, and the sprite just holds
+    // their final frame once the non-looping clip runs out).
+    //
+    // "stun" and "levelup" are authored in the library (Deliverable 1) but are
+    // NOT driven here: stun because the gain-no canon freezes the current frame
+    // in place instead of playing a dedicated stun clip (CharacterController
+    // handles this via Anim.SpeedScale), and levelup because in-run leveling was
+    // dropped in v0.3.7 (see KNOWLEDGE/GDD history) — there is no trigger left
+    // to fire it from.
+    private static readonly HashSet<string> OneShots = new()
+    {
+        "slash1", "slash2", "slash3",
+        "slash1_burning", "slash2_burning", "slash3_burning",
+        "ignite", "erupt", "levelup",
+    };
+
+    // Unity used Speed > 0.1 (m/s) as the walk threshold; derive the equivalent
+    // in px/s from Units rather than hardcoding a raw pixel constant.
+    private const float WalkSpeedThresholdMps = 0.25f;
 
     private int _ammo;
     private int _comboStage;
@@ -110,11 +138,12 @@ public partial class Pomegraknight : CharacterController
 
         float mult = IsBurning ? BurnComboMult : 1f;   // passive
         float dmg = ComboDamage[_comboStage % ComboDamage.Length] * mult;
+        int stage = (_comboStage % 3) + 1;             // captured before _comboStage++ below
 
-        // NOTE: with animation, move this MeleeCone call onto the Slash clip's
-        // damage-event frame instead of firing it immediately here.
+        // NOTE(animation): with call-method tracks, move this MeleeCone call onto
+        // the Slash clip's damage-event frame instead of firing it immediately here.
         MeleeCone(SlashRange, SlashHalfAngle, dmg, SlashKnockback, applyBurn: false, 0f);
-        // Anim?.Play($"Slash{(_comboStage % 3) + 1}");
+        PlayAnim($"slash{stage}" + (IsBurning ? "_burning" : ""), restart: true);
 
         ApplyMovePenalty(SwingPenaltyMult, SwingPenaltyDur);
         _baTelegraph = 0.15f;
@@ -133,6 +162,7 @@ public partial class Pomegraknight : CharacterController
         SetBurning(BlushDuration);         // ignites passive (no self-damage; immune)
         _tornadoCharge = TornadoChargeWindow;
         _blushCd = BlushCooldown;
+        PlayAnim("ignite", restart: true);
     }
 
     private void ActivateTornado()
@@ -175,6 +205,9 @@ public partial class Pomegraknight : CharacterController
         if (_eCd > 0f || PomeSeedScene == null) return;
         _eCd = ECooldown;
         _eTelegraph = 2.6f;
+        // Erupt is a 1s idle-frame hold — Unity's erupt clip was empty (showed
+        // the default sprite), so this is a faithful port, not a placeholder.
+        PlayAnim("erupt", restart: true);
         _ = FireEruption();
     }
 
@@ -216,11 +249,25 @@ public partial class Pomegraknight : CharacterController
         }
     }
 
-    // ── Animation hook (left intentionally empty for now) ──────────────────
+    // ── Animation automata ───────────────────────────────────────────────
+    // Mirror of the Unity "Pomegraknight 1" animator. Runs only while not
+    // stunned — CharacterController freezes Anim.SpeedScale during a gain-no
+    // window instead of calling in here, so the current frame just holds.
     protected override void UpdateAnimator(float dt)
     {
-        // TODO(animation): drive Anim state (Idle/Run/Jump/Slash1-3/Blush) here,
-        // and move BA/seed damage onto AnimationPlayer call-method tracks.
+        if (Dead) { PlayAnim("dead"); return; }              // holds last frame when done
+
+        // A latched one-shot (slash/ignite/erupt) keeps playing to completion
+        // before the state machine falls back to movement/idle.
+        if (OneShots.Contains(LastAnim) && Anim != null && Anim.IsPlaying()) return;
+
+        if (_tornadoActive > 0f) { PlayAnim("tornado"); return; }   // loops
+
+        if (!IsOnFloor()) { PlayAnim("jump"); return; }             // non-loop; holds last frame airborne
+
+        float walkEpsilon = Units.Px(WalkSpeedThresholdMps);        // ~8 px/s
+        if (Mathf.Abs(Velocity.X) > walkEpsilon) PlayAnim("walk");
+        else PlayAnim("idle");
     }
 
     // ── Range telegraphs ──────────────────────────────────────────────────
