@@ -371,11 +371,11 @@ public partial class MapController : Node2D
         // ---- Debug mode: jump to any non-devoured node (bypasses all checks) ----
         if (DebugManager.Instance?.Enabled == true && !target.Devoured)
         {
-            var fromNode = _current;
-            rs.PreviousNodeId = fromNode.Id;
+            var debugFrom = _current;
+            rs.PreviousNodeId = debugFrom.Id;
             _current = target;
             rs.CurrentNodeId = target.Id;
-            _lastMoveDir = target.Pos - fromNode.Pos;
+            _lastMoveDir = target.Pos - debugFrom.Pos;
             if (!rs.InVoid && target.WorldIndex == -1) rs.EnterVoid();
             bool trig = (!_visited.Contains(target) && target.Kind != NodeKind.River)
                      || (target.IsCombat && !IsCompleted(target))

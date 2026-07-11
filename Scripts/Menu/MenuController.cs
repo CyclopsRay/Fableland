@@ -11,7 +11,13 @@ public partial class MenuController : Control
 {
     public override void _Ready()
     {
-        GetNode<Button>("Center/StartButton").Pressed += OnStart;
+        GetNode<Button>("Center/VBox/MapCreationButton").Pressed += OnMapCreation;
+        GetNode<Button>("Center/VBox/StartButton").Pressed += OnStart;
+    }
+
+    private void OnMapCreation()
+    {
+        GetTree().ChangeSceneToFile("res://Scenes/MapCreation/MapBrowser.tscn");
     }
 
     private void OnStart()
