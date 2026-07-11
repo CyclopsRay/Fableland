@@ -136,7 +136,8 @@ The item can be **planted** in a plantation slot at a shelter node (see `NODES.g
 | **Inheritance** | Optional — the fruit's stats may inherit a range (e.g., 60%–140%) of the parent item's attributes, rolled at harvest time. |
 
 *Examples:*
-- Pome's Seed — 4 days, harvests 1–3× Pome's Bravery with random stats
+- Pome's Seed — 7 days, harvests 1–3× Pome's Bravery, each inheriting 60%–140% of the
+  father's rolled stats
 - Pixolotl's Wish — 7 days, harvests 2× Pixolotl's Feather
 - A Rotten Mushroom — 4 days, generates 4× Weird Mushrooms with inherited HP range + random consequence
 
@@ -224,7 +225,7 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | THE VOID | — | — | — | ✓ | ✓ |
 | DD | — | — | — | — | — |
 | Pome's Bravery | — | ✓ (→Seed) | — | — | — |
-| Pome's Seed | — | — | ✓ (4d) | — | — |
+| Pome's Seed | — | — | ✓ (7d) | — | — |
 | FanChen's Heart | — | — | — | — | — |
 | Yukai's Rope | — | — | — | — | — |
 | Pixolotl's Feather | — | ✓ (→Wish) | — | — | — |
@@ -306,8 +307,8 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | Skill | — (dormant skill slot) |
 | CD | — |
 | Tags | `Plantable` |
-| Harvest time | **4 days** |
-| Fruit | **1–3× Pome's Bravery** (quantity rolled at harvest). Each Bravery's stats are **randomized** independently — the father's attributes are not inherited; each fruit rolls fresh. |
+| Harvest time | **7 days** |
+| Fruit | **1–3× Pome's Bravery** (quantity rolled at harvest). Each Bravery **inherits 60%–140%** of the father's rolled stats (same inheritance model as Pixolotl's Wish / A Rotten Mushroom, §4.3). |
 
 ### 7.6 FanChen's Heart
 
@@ -485,3 +486,8 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
   debuff (net −20% vs original that day); (c)/(d) really are ×4 — maniac by design.
 - **(v0.3.7) Permanent stat pools are additive** (max-HP percentage points, flat ATK,
   flat DEF) — see `30-DATA-AND-BALANCE.md` §3 and `NODES.gdd` §5.5.
+- **(v0.6.0) Pome's Seed harvest revised to match the inheritance model.** Was 4 days /
+  independently-randomized fruit; now **7 days / 60%–140% inheritance** of the father's
+  rolled stats, same as Pixolotl's Wish and A Rotten Mushroom. This also resolves a
+  pre-existing conflict with `T30-FEATURE-BLUEPRINTS.md` §4, whose `ItemInstance.RolledStats`
+  comment already assumed a "60–140% rolls" inheritance model project-wide.

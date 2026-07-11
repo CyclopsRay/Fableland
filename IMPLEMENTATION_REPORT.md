@@ -1,12 +1,13 @@
 # IMPLEMENTATION_REPORT.md — Fableland full-project build
 
-> Orchestration log for implementing the GDD suite (v0.4.0 foes → v0.5.0 node content)
-> on top of prototype 0 (v0.3.7). Maintained by the orchestrating session; updated after
-> every phase so a fresh session can resume from here. Companion docs: `KNOWLEDGE.md`
-> (caveats), `Docs/Tech/T30-FEATURE-BLUEPRINTS.md` (blueprints this build follows).
+> Orchestration log for implementing the GDD suite (v0.4.0 foes → v0.5.0 node content →
+> v0.6.0 items) on top of prototype 0 (v0.3.7). Maintained by the orchestrating session;
+> updated after every phase so a fresh session can resume from here. Companion docs:
+> `KNOWLEDGE.md` (caveats), `Docs/Tech/T30-FEATURE-BLUEPRINTS.md` (blueprints this build
+> follows).
 
-**Status: ALL PHASES COMPLETE & REVIEWED (2026-07-08) — v0.5.0 in working tree, UNCOMMITTED (no commit authorized this session). Next session: get user commit authorization; run `dotnet build` when a toolchain exists.**
-**Started:** 2026-07-07, from v0.3.7 (commit 8315b4f), branch `prototype-0-playable`.
+**Status: v0.6.0 (Wonder Items) IN PROGRESS on branch `ver0.6.0-items` — see §7. v0.5.0/v0.5.1 landed and merged to main (04b8843).**
+**v0.4.0–v0.5.0 record:** started 2026-07-07 from v0.3.7 (8315b4f); §§1–6 below are the closed v0.5.0 log.
 
 ---
 
@@ -326,3 +327,102 @@ Phase 5 checklist state:
 - [ ] **Real `dotnet build`** (C4 carry-forward) — first action whenever a session has a
   toolchain; also the `EvolveHp` unit test and the T30 §8 gating-function unit tests
   remain open.
+
+---
+
+## 7. v0.6.0 — Wonder Items (started 2026-07-10, branch `ver0.6.0-items` off main@04b8843)
+
+Scope per user brief: item system core (`Scripts/Items/`), 3 catalog items (Pome's
+Bravery / Pome's Seed / FanChen's Heart), Vamp stat + F item-skill input, minimum
+plantation slice, Build Team + Backpack UI. Save/load (T30 §6) explicitly out of scope.
+`Docs/ITEMS.gdd` was pre-edited on this branch (Pome's Seed 7d/60–140% inheritance fix,
+§9 v0.6.0 decisions entry) — treated as approved canon, folds into the milestone commit.
+
+### 7.1 Phase table
+
+| Phase | Scope | Agent | Status |
+|-------|-------|-------|--------|
+| I1 | Item model + data: ItemDef/Catalog/Registry, ItemInstance rebuild, Inventory on RunState, day-end steps (ItemCds/Perish/PlantationGrow), ShelterState plantation roll, reward-pool wiring | engineer | REVIEWED, APPROVED (3 fixes) |
+| I2 | Combat side: Vamp pool + on-hit heal hook, OnFire duration mechanism, conditional item passives on CharacterController, F input action, GameManager held-item runner (skill exec, sec-CD tick, mid-combat convert) | engineer | REVIEWED, APPROVED (2 fixes) |
+| I3 | UI: BackpackPanel (6×5 grid + detail), BuildTeamPanel (cards/stats/change/swap), ShelterController integration + Plant UI | engineer | REVIEWED, APPROVED (3 fixes) |
+| I4 | Ship: full-diff static verification, doc-sync, KNOWLEDGE caveats, version trio 0.6.0, Migration changelog, commit | orchestrator | DONE (committed) |
+
+### 7.2 Integration contract (locked before code)
+
+```
+Inventory (field on RunState, created in NewRun) is the ONE owner of item location:
+  AddToBackpack(defId) → ItemInstance (RolledStats seeded from def base values)
+  Hold(inst, protagonistId)   — swaps out the current held item (auto back to backpack)
+  Unhold(inst) / Plant(inst, shelterId, slot) / Convert(inst, newDefId) / Remove(inst)
+  Remove & Convert pass through CanRemove(inst) (Eternal gate — no Eternal items yet)
+RunState.BenchProtagonist(id) — the ONLY place benching auto-returns a held item (T30 §4)
+Arena: GameManager (after HydrateRun) applies held-item passives to the live character,
+  sources keyed "item:<defId>#<instanceId>"; CharacterController raises ItemSkillRequested
+  on F; GameManager gates domain → cooldown → executes data-driven effect; single-use ⇒
+  Inventory.Convert + live passive re-application; GameManager._Process ticks the active
+  holder's SecCdRemaining (arena clock only).
+Day-end (T30 §5): step 3 ItemCds (held only) → step 4 Perish (held+backpack) →
+  NEW step 4b PlantationGrow (before NpcWindows) → harvest rolls into backpack.
+All item randomness: RunState.ItemsRng — a DetRandom created ONCE in NewRun as
+  Rng.Sub("items") and consumed across the run (a fresh Sub("items") per call would
+  replay the same sequence — see decision D-RNG below).
+```
+
+### 7.3 Locked decisions (doc-sync targets at ship time)
+
+- **D-RNG.** `DetRandom.Sub(tag)` derives from the seed *string*, so calling
+  `Rng.Sub("items")` repeatedly returns identical streams. RunState stores one
+  `ItemsRng` at NewRun; every item roll consumes from it.
+- **D-FIRE (OnFire "+0.2 s duration").** No duration field exists — OnFire is stack-decay
+  (10%/0.2 s tick, `DecayingDebuff`). Mechanism: an aggregatable-by-source
+  `_onFireDurationBonuses` dict on CharacterController; the summed bonus is handed to
+  `DecayingDebuff` as a **decay-grace window applied once per activation** (inactive →
+  active transition): decay ticking (and its self-damage) is suspended for that many
+  seconds, extending the active window by exactly the bonus. Applied at activation, not
+  per AddStack, so standing in a fire hazard can't re-arm it indefinitely. → ITEMS.gdd
+  decisions log + KNOWLEDGE.md.
+- **D-PERISH.** Perish ticks Held+Backpack only; Planted items grow, they don't rot.
+  (No catalog item is both Plantable and Perishable; rule recorded for the future.)
+- **D-HARVEST.** Fruit quantity rolled first (1–3); then ONE inheritance multiplier per
+  fruit in [0.60, 1.40], applied to all inherited RolledStats (a "good" fruit is good
+  overall). ITEMS §4.3 is ambiguous per-stat vs per-fruit; per-fruit chosen for coherence.
+- **D-ROLLED.** `RolledStats` = absolute effective values keyed by modifier key; fresh
+  instances copy the def's base passive values; Convert preserves the dict (this is how
+  the Seed carries its father Bravery's stats). Readers fall back to def base when a key
+  is missing.
+- **D-PLANT.** Plantation availability derived deterministically per shelter:
+  `new DetRandom(seed+":shelter:"+nodeId)` → 50% chance, 2 slots (constants in item
+  data). Zone-6 XX shelters never have plantations (NODES §5.2). Watering/acceleration
+  (Gameplay §B.4 "+1 day per watering") **deferred** to the Plantation GDD milestone —
+  logged as TBD in ITEMS.gdd; the slice is plant → day-counted growth → auto-harvest to
+  backpack at day-end.
+- **D-VAMP.** Vamp heal hook lives where post-mitigation damage dealt is already
+  attributed: `BaseFoe.TakeHit` (single-player attribution, same as ult-charge credit).
+  Direct hits only — DoT/hazard damage does not vamp ("on every hit", Gameplay §A.1).
+- **D-HEART.** FanChen's Heart heal triggers in `CharacterController.TakeHit` only
+  (direct enemy hits) — not ApplyHazard, not DoT ("direct damage received from
+  enemies"). Death check runs before the heal (0 HP = dead, no rescue).
+- **D-F-KEY.** F wired in the arena only this milestone (no catalog item has a map
+  skill); the def's domain flag is enforced (combat-gated). Map-side firing = TBD.
+- **D-BGCD.** The ⅕-speed background CD tick for Tab-switched protagonists (Gameplay
+  §A.3) deferred — party of one exists. TBD logged.
+- **D-REWARD.** Mission/event `"placeholder"` item grants replaced: missions roll from
+  `ItemRegistry.RewardPool` (Bravery, FanChen's Heart) using their own mission DetRandom;
+  the abandoned-cart event grants a fixed `pome_bravery` (authored data).
+- **D-FILES.** `ItemInstance.cs` stays at `Scripts/Run/` (run-layer state, namespace
+  `Fableland.Run`), rebuilt in place; def/registry/inventory/passive types live in
+  `Scripts/Items/` (namespace `Fableland.Items`).
+
+### 7.4 Open questions (prototype defaults picked, review later)
+
+- **Q11.** Item-skill CD display on the HUD — deferred (no HUD slot for the held item
+  yet); the F press is silently ignored while on CD. Add an item icon + CD ring later.
+- **Q12.** Build Team "poster" art — placeholder mugshot/player sprite reused; real
+  posters per character GDD merch prompts later.
+- **Q13.** Stat panel shows unconditional stats only; conditional passives (+5% vamp
+  while OnFire) render in the item detail text, not the stat numbers.
+
+### 7.5 Phase log
+
+(appended as phases complete)
+

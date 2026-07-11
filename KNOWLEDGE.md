@@ -127,6 +127,28 @@ compiler surfaces below.
 - **Why:** UIDs are an editor-managed identity namespace, not documentation — inventing them
   is the one way to make two scenes claim the same identity.
 
+### Generating Animation sub_resources from an extracted frame table: derive per-frame texture from the row's own clip name, not a hand-counted segment length (v0.6.0-anim, PumpKing)
+- **Symptom (caught pre-commit):** a python generator for `PumpKing.tscn`'s `idle` clip
+  assigned each row's source texture by hand-counted segment lengths (`[IDLE1]*17 +
+  [SQUEEZE]*11 + [IDLE2]*15`) instead of reading the clip name already present in each
+  extracted row. The real boundary was 16/11/16, not 17/11/15 — an off-by-one at the
+  first boundary (miscounting the Unity clip's dup-hold frame at `t=1.25` as still
+  `Pump_idle_1`) that happened to still sum to the same total row count (43), so a
+  naive "does the total match" check would NOT have caught it; only cross-checking the
+  per-clip breakdown against the source rows did.
+- **Rule:** when generating `AtlasTexture`/`Animation` blocks from an extracted
+  frame table that already carries a clip/segment name per row, key the
+  texture-selection off **that row's own name field**, never off a manually counted
+  span — spans are exactly the kind of number that's easy to miscount by one and whose
+  bug is invisible if you only check the grand total. Print a per-clip breakdown
+  (`clip name → row count`) and eyeball it against the source `===` sections before
+  trusting the output.
+- **Why:** a texture mismatch at one boundary silently renders the wrong sprite sheet
+  for a stretch of frames — no load error, no crash, just wrong pixels — and the only
+  static check available on a no-toolchain host (region-within-texture-bounds) still
+  passes because the wrong texture can easily be big enough to contain the (wrong)
+  region.
+
 ### Hand-authored `Animation` value tracks: update mode lives INSIDE the keys dict (v0.6.0-anim)
 - **Symptom (caught pre-commit):** the generated `Pomegraknight.tscn` animations carried a
   standalone `tracks/0/update = 1` property line. That is not a property Godot's `Animation`
