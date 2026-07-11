@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 
 namespace Fableland.MapCreation;
@@ -101,7 +102,7 @@ public sealed class CustomMap
 
     // ---- helpers for the editor (in-memory only) ----
 
-    public int Width => Grid.Count > 0 ? Grid[0].Count : 0;
+    public int Width => Grid.Count > 0 ? Grid.Max(r => r.Count) : 0;
     public int Height => Grid.Count;
 
     public TileKind GetKind(int x, int y) => CellAt(x, y)?.Kind ?? TileKind.Empty;
@@ -134,6 +135,29 @@ public sealed class CustomMap
         if (x < 0 || x >= row.Count) return;
         row[x] = new MapCellData { Kind = "Empty", Variant = 0 };
     }
+
+    /// <summary>Strip trailing empty rows and trailing empty cells from each row. Keeps the grid compact in JSON.</summary>
+    public void TrimGrid()
+    {
+        // Trim trailing empty rows
+        while (Grid.Count > 0 && Grid[^1].TrueForAll(c => IsEmpty(c)))
+            Grid.RemoveAt(Grid.Count - 1);
+
+        // Trim each row's trailing empty cells
+        int maxX = 0;
+        foreach (var row in Grid)
+        {
+            while (row.Count > 0 && IsEmpty(row[^1]))
+                row.RemoveAt(row.Count - 1);
+            if (row.Count > maxX) maxX = row.Count;
+        }
+
+        Meta.GridWidth = maxX;
+        Meta.GridHeight = Grid.Count;
+    }
+
+    private static bool IsEmpty(MapCellData c) =>
+        c == null || c.Kind == "Empty" || string.IsNullOrEmpty(c.Kind);
 
     /// <summary>Create a new empty map with the given dimensions.</summary>
     public static CustomMap CreateEmpty(int w, int h, string name)

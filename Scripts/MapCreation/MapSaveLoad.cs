@@ -27,10 +27,11 @@ public static class MapSaveLoad
         return string.IsNullOrWhiteSpace(safe) ? "untitled" : safe;
     }
 
-    /// <summary>Save a map. Returns the file path used.</summary>
+    /// <summary>Save a map. Trims trailing empty rows/cols, then writes JSON. Returns the file path used.</summary>
     public static string Save(CustomMap map)
     {
         EnsureDir();
+        map.TrimGrid();
         map.Meta.FileName = Sanitise(map.Meta.Name);
         map.Meta.SavedAt = System.DateTime.UtcNow.ToString("O");
 
