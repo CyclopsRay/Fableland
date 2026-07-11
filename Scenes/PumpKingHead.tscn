@@ -1,0 +1,125 @@
+[gd_scene load_steps=23 format=3]
+
+[ext_resource type="Script" path="res://Scripts/PumpKingHead.cs" id="1"]
+[ext_resource type="Texture2D" path="res://Assets/Sprites/Characters/PumpKing/Pump_head/roll_pump_head_final.png" id="2"]
+[ext_resource type="Texture2D" path="res://Assets/Sprites/Characters/PumpKing/Pump_head_explode/Pump_explode_2.png" id="3"]
+
+[sub_resource type="CircleShape2D" id="1"]
+radius = 22.0
+
+[sub_resource type="AtlasTexture" id="2"]
+atlas = ExtResource("2")
+region = Rect2(0, 0, 204, 204)
+
+[sub_resource type="AtlasTexture" id="3"]
+atlas = ExtResource("2")
+region = Rect2(204, 1, 204, 204)
+
+[sub_resource type="AtlasTexture" id="4"]
+atlas = ExtResource("2")
+region = Rect2(408, 0, 204, 204)
+
+[sub_resource type="AtlasTexture" id="5"]
+atlas = ExtResource("2")
+region = Rect2(0, 204, 204, 204)
+
+[sub_resource type="AtlasTexture" id="6"]
+atlas = ExtResource("2")
+region = Rect2(204, 204, 204, 204)
+
+[sub_resource type="AtlasTexture" id="7"]
+atlas = ExtResource("2")
+region = Rect2(408, 204, 204, 204)
+
+[sub_resource type="AtlasTexture" id="8"]
+atlas = ExtResource("3")
+region = Rect2(0, 0, 384, 384)
+
+[sub_resource type="AtlasTexture" id="9"]
+atlas = ExtResource("3")
+region = Rect2(384, 0, 384, 384)
+
+[sub_resource type="AtlasTexture" id="10"]
+atlas = ExtResource("3")
+region = Rect2(768, 0, 384, 384)
+
+[sub_resource type="AtlasTexture" id="11"]
+atlas = ExtResource("3")
+region = Rect2(1152, 0, 384, 384)
+
+[sub_resource type="AtlasTexture" id="12"]
+atlas = ExtResource("3")
+region = Rect2(0, 384, 384, 384)
+
+[sub_resource type="AtlasTexture" id="13"]
+atlas = ExtResource("3")
+region = Rect2(384, 384, 384, 384)
+
+[sub_resource type="AtlasTexture" id="14"]
+atlas = ExtResource("3")
+region = Rect2(768, 384, 384, 384)
+
+[sub_resource type="AtlasTexture" id="15"]
+atlas = ExtResource("3")
+region = Rect2(1152, 384, 384, 384)
+
+[sub_resource type="Animation" id="16"]
+resource_name = "RESET"
+length = 0.001
+tracks/0/type = "value"
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [SubResource("2")]
+}
+
+[sub_resource type="Animation" id="17"]
+resource_name = "roll"
+length = 0.5
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/keys = {
+"times": PackedFloat32Array(0.0, 0.0833, 0.1667, 0.25, 0.3333, 0.4167),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1),
+"update": 1,
+"values": [SubResource("2"), SubResource("3"), SubResource("4"), SubResource("5"), SubResource("6"), SubResource("7")]
+}
+
+[sub_resource type="Animation" id="18"]
+resource_name = "explode"
+length = 0.6667
+tracks/0/type = "value"
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/keys = {
+"times": PackedFloat32Array(0.0, 0.0833, 0.1667, 0.25, 0.3333, 0.4167, 0.5, 0.5833),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1, 1),
+"update": 1,
+"values": [SubResource("8"), SubResource("9"), SubResource("10"), SubResource("11"), SubResource("12"), SubResource("13"), SubResource("14"), SubResource("15")]
+}
+
+[sub_resource type="AnimationLibrary" id="19"]
+_data = {
+"RESET": SubResource("16"),
+"roll": SubResource("17"),
+"explode": SubResource("18")
+}
+
+[node name="PumpKingHead" type="CharacterBody2D"]
+collision_layer = 16
+collision_mask = 14
+script = ExtResource("1")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = SubResource("2")
+scale = Vector2(0.225, 0.225)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+"": SubResource("19")
+}

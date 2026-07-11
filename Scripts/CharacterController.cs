@@ -144,6 +144,7 @@ public partial class CharacterController : CharacterBody2D
 	private bool _coyoteConsumed;      // whether the coyote-time jump loss already fired
 	private bool _jumpedSinceGrounded; // whether a manual jump has used the grace window
 	private bool _dead;
+	protected bool Dead => _dead;
 	private bool _dropping;
 	private float _dropReleaseTimer;
 	private float _jumpCdTimer;
@@ -206,6 +207,12 @@ public partial class CharacterController : CharacterBody2D
 		UpdateTimers(dt);
 		UpdateStatus(dt);
 		if (!Frozen) HandleAbilities();
+
+		// Gain-no canon: the animation itself freezes on the current frame during
+		// a stun window (knockback/gravity still move the body). Idempotent, so
+		// it also auto-restores the instant the stun timer clears — and Die()
+		// zeroes _stunTimer, so the death animation is never left frozen.
+		if (Anim != null) Anim.SpeedScale = _stunTimer > 0f ? 0f : 1f;
 		if (_stunTimer <= 0f) UpdateAnimator(dt);   // animation frozen during gain-no
 
 		if (ShowDebugRanges) QueueRedraw();
@@ -432,6 +439,37 @@ public partial class CharacterController : CharacterBody2D
 	/// <summary>No-op until real animations exist; override and drive Anim here.</summary>
 	protected virtual void UpdateAnimator(float dt) { }
 
+	/// <summary>Subclass hook: absorb incoming damage (e.g. a shield pool) after the
+	/// defense multiplier, before HP loss. Returns the damage that remains.</summary>
+	protected virtual float AbsorbDamage(float damage) => damage;
+
+	/// <summary>Last animation name requested via <see cref="PlayAnim"/>. Godot clears
+	/// <c>AnimationPlayer.CurrentAnimation</c> back to "" once a non-looping clip
+	/// finishes, so the automata needs its own memory of what it last asked for
+	/// (e.g. to hold jump/dead's final frame without replaying, or to know a
+	/// one-shot is still "in flight").</summary>
+	protected string LastAnim { get; private set; } = "";
+
+	/// <summary>Request an animation by library name. No-ops on scenes without an
+	/// AnimationPlayer/library (keeps characters without authored animations valid).
+	/// <paramref name="restart"/> forces a replay even if it's already the current
+	/// clip (Play() alone won't restart a same-name animation); otherwise it only
+	/// switches when the requested clip differs from what's already playing.</summary>
+	protected void PlayAnim(string name, bool restart = false)
+	{
+		if (Anim == null || !Anim.HasAnimation(name)) return;
+		if (restart)
+		{
+			Anim.Stop();
+			Anim.Play(name);
+		}
+		else if (Anim.CurrentAnimation != name)
+		{
+			Anim.Play(name);
+		}
+		LastAnim = name;
+	}
+
 	// ── Shared combat helpers ─────────────────────────────────────────────
 
 	/// <summary>
@@ -501,6 +539,7 @@ public partial class CharacterController : CharacterBody2D
 		if (_dead || _invulnTimer > 0f) return;
 
 		float dealt = hit.Damage * DefenseMultiplier;
+		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogPlayerDmgReceived(hit.Damage, dealt, "foe");
 		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
 		HpChanged?.Invoke(CurrentHP, MaxHP);
@@ -529,6 +568,7 @@ public partial class CharacterController : CharacterBody2D
 		if (damage > 0f)
 		{
 			float dealt = damage * DefenseMultiplier;
+			dealt = AbsorbDamage(dealt);
 			DebugManager.Instance?.LogHazardDmg(dealt, "player");
 			CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
 			HpChanged?.Invoke(CurrentHP, MaxHP);
@@ -563,6 +603,7 @@ public partial class CharacterController : CharacterBody2D
 	{
 		if (_dead) return;
 		float dealt = amount * DefenseMultiplier;
+		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogDotDmg(dealt, IsBurning ? "Burn" : _fire.Active ? "OnFire" : "Frozen");
 		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
 		HpChanged?.Invoke(CurrentHP, MaxHP);
@@ -612,6 +653,15 @@ public partial class CharacterController : CharacterBody2D
 		_defenseBonuses.Clear();
 		Died?.Invoke();
 	}
+
+	/// <summary>
+	/// Re-anchor the respawn point after an external spawner/swapper has placed this body.
+	/// _Ready latches _spawnPoint, but _Ready runs synchronously inside AddChild — BEFORE the
+	/// caller sets GlobalPosition — so anything that instances a character at runtime (debug
+	/// protagonist swap) must call this after positioning, or Respawn() teleports to the
+	/// character scene's own origin. Same bug class as the seagull patrol anchor (KNOWLEDGE.md).
+	/// </summary>
+	public void SetSpawnPoint(Vector2 point) => _spawnPoint = point;
 
 	/// <summary>Brought back by GameManager after a death (if lives remain).</summary>
 	public void Respawn()

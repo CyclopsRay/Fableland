@@ -91,6 +91,103 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A "display-bypass" debug source must not round-trip into real owned state (v0.6.0, caught in review)
+- **Symptom:** the v0.6.0 shelter Team Build menu, in debug mode, lists every `ItemCatalog`
+  entry as assignable even when it isn't really in `RunState.Items` ("all wonder items available
+  for testing"). `RunState.HoldItem` correctly skipped removing such a not-really-owned item from
+  the backpack, but `UnholdItem` (and the bump-out branch) unconditionally did `Items.Add(...)` —
+  so holding a debug-conjured item then returning it **materialized a brand-new real `ItemInstance`
+  into `RunState.Items`**, which then survived toggling debug mode back off. One click-pair = a
+  permanent item granted outside the real economy, on a real `Owned` protagonist.
+- **Rule:** when a display/debug overlay shows content the real economy hasn't granted, any
+  mutation path it shares with real content must **track provenance** so the debug item can't
+  leak back as real state. Here: `ProtagonistState.HeldItemFromBackpack` records whether the held
+  item came from `Items`; only a `true` item returns to `Items` on unhold/bump-out — a conjured
+  (`false`) item vanishes. The "add back" and the "remove on take" must be symmetric and gated by
+  the same flag. Same family as the v0.5.0 "debug knob's convenient default leaks into live
+  gameplay" caveat: a debug affordance's *outputs* must be as carefully gated as its *inputs*.
+- **Why:** the take-side skip (don't remove what isn't there) and the return-side add (always put
+  it back) look individually correct but are asymmetric — the asymmetry is a net source of new
+  real items. Provenance makes the pair symmetric so the round-trip is conservative (no creation),
+  which is the invariant "the full catalog is never written into `RunState.Items` for real"
+  actually requires.
+
+### A scene-lifetime node must unsubscribe from an autoload's C# event in `_ExitTree` (v0.5.4)
+- **Symptom:** `GameManager.SetupHud` did `DebugManager.Instance.SkipRequested += OnSkipRequested`
+  and never unsubscribed. `DebugManager` is an autoload that outlives every arena scene, so each
+  arena visit leaked a handler pointing at a disposed `GameManager`; a later SKIP press would
+  invoke the dead handler(s) first (touching freed HUD/mission nodes → `ObjectDisposedException`
+  risk), and an exception there blocks the *live* arena's handler too — SKIP breaks after the
+  first arena visit.
+- **Rule:** any node whose lifetime is shorter than the publisher's (scene node → autoload event)
+  must pair `+=` with a `-=` in `_ExitTree`. Plain C# `event Action` has no Godot object-liveness
+  awareness (unlike Godot signals, which disconnect freed objects). Prefer a direct, pull-style
+  call (`GetTree().CurrentScene is GameManager gm && gm.Method(...)`) over adding a new autoload
+  event when the flow is debug-tooling → scene — that's how the v0.5.4 protagonist page applies
+  its swap, precisely to avoid creating another instance of this leak.
+- **Why:** the autoload's event field holds a strong delegate reference; `QueueFree` frees the
+  Godot object but not the C# subscription, so the handler list only ever grows.
+
+### Runtime-instanced player bodies: re-anchor `_spawnPoint` after placing the node (v0.5.4, caught in review)
+- **Symptom:** the debug protagonist swap instanced a character scene, `AddChild`-ed it, then set
+  `GlobalPosition` — but `CharacterController._Ready` (which runs *inside* `AddChild`) had already
+  latched `_spawnPoint = GlobalPosition` at the character scene-file's own origin (`(0,0)`; the
+  real arena spot exists only as `Arena.tscn`'s instance override). Next debug-lives `Respawn()`
+  would teleport the swapped-in body to `(0,0)`. Silent — no crash, just a wrong respawn.
+- **Rule:** anything that instantiates a `CharacterController` at runtime must call
+  `SetSpawnPoint(pos)` right after positioning it. Same bug class as the v0.4.0 "capture
+  spawn-relative anchors on the first physics frame, not in `_Ready`" caveat (seagull patrol
+  anchor) — `_Ready`-latched position state always predates the spawner's placement.
+- **Why:** authored scenes get the right value for free (the node sits at its final position
+  before `_Ready`), which is exactly what makes the runtime-instancing path easy to miss.
+
+### Protagonist migration playbook — porting a character from the Unity `GloryOfFableland` project (reference; Pomegraknight v0.5.2, PumpKing v0.5.3)
+Read this before porting the next character (Cleopastar / Pixolotl / Pangda). Each point
+is a mistake already paid for once.
+- **Sprites are already migrated.** The v0.5.2 bulk copy put every character's images in
+  `Assets/Sprites/Characters/{Name}/` (images only, sanitized filenames; `.anim`/`.controller`/
+  `.DS_Store` excluded). Do NOT re-copy from the old project. They are Unity **multi-sprite
+  sheets**, not one-frame files — slice them into `AtlasTexture` regions. Get the grid from the
+  old `.meta` (`TextureImporter` sprite rects) / `.anim` files, and **flip Y** (Unity's rect
+  origin is bottom-left; Godot's is top-left).
+- **The Godot base `CharacterController` is deliberately leaner than Unity's.** It does NOT
+  provide: a shield pool, ammo/magazine/replenish, firing segments, or soul/free-flight. Any
+  character that needs those implements them in its own subclass. When the base genuinely must
+  participate (e.g. a shield that intercepts incoming damage), add a **`protected virtual`
+  pass-through hook** (see `AbsorbDamage(float) => damage`, used at the 3 damage sites) rather
+  than baking one character's state into the base — the default keeps every other character
+  byte-for-byte unaffected.
+- **Ability mapping is fixed:** Unity `HandleBA`→`HandleBA`, Shift→`HandleSkill1`, E→
+  `HandleSkill2`, Ult→`HandleSkillUlt`. Override `ShiftCooldown`/`ESkillCooldown` for the HUD
+  icons. BA that should fire on press (not hold) just gates inside `HandleBA`.
+- **Derive every distance/speed from `Units` (32 px/m); never hardcode Unity metres.** Unity
+  `x` m/s → `Units.Px(x)`; gravity/jump come from `Units`.
+- **Scene: mirror `Scenes/Pomegraknight.tscn`.** CharacterBody2D (layer 1, mask 12) + Collision
+  Shape2D + body Sprite2D + FirePoint(Marker2D) + AnimationPlayer(AnimationLibrary) + Camera2D
+  (+ ShakeCamera2D script). **Multi-part characters** (e.g. PumpKing's `NeckHead`) add child
+  Sprite2D(s) driven entirely in code — sync FlipH / Scale / Visible / SelfModulate to the body
+  in `UpdateAnimator` (or a helper it calls), because the base only flips the body sprite.
+- **`UpdateAnimator(dt)` runs from base `_Process`, not `_PhysicsProcess`,** and only while not
+  stunned; `_Process` early-returns when dead. So overriding `_PhysicsProcess` for a special
+  movement mode (PumpKing's Soul free-flight) does NOT suppress animation, and a `Dead` branch in
+  `UpdateAnimator` is effectively unreachable.
+- **If code mutates an `AtlasTexture.Region` at runtime** (per-stage head sprite, etc.),
+  `.Duplicate()` the texture in `InitCharacter` first — the scene's sub_resource is shared across
+  every instance and in-place mutation corrupts them all.
+- **Animation authoring:** obey the two value-track caveats below (update mode inside the keys
+  dict; first key at t=0; include a `RESET`). You don't need a clip for every Unity state — omit
+  `dead`/`stun` when there's no art (the base freezes the frame via `Anim.SpeedScale` for stun and
+  a gray tint reads as death).
+- **Projectiles:** call `Init(...)` **after** `AddChild`; damage foes via
+  `GetTree().GetNodesInGroup("enemy")` → cast `BaseFoe` → `TakeHit(new HitInfo(dmg, knockback), origin)`;
+  hit tests subtract `BaseFoe.HitRadius`; projectile scene uses `collision_layer = 16` (layer 5),
+  `collision_mask = 14` (Foe+Ground+Platform).
+- **Ship discipline:** keep the character self-contained — do NOT change the default protagonist
+  (`Arena.tscn` / `RunState.Owned[0]`) unless asked. Version-bump the trio, add caveats here,
+  doc-sync the character GDD, and **commit with explicit paths — never `git add -A`/`.`** (an
+  agent run swept unrelated in-progress files, `Docs/ITEMS.gdd` + `IMPLEMENTATION_REPORT.md`, into
+  the PumpKing commit; it had to be reset and re-committed).
+
 ### A debug-override export must be gated behind "no run exists", not behind its own value (v0.5.0)
 - **Symptom:** `GameManager.FoeLevel` used `DebugFoeLevel > 0 ? DebugFoeLevel : LevelForDay(day)`
   unconditionally. The export's *default* is 1 (so direct-F5 arenas work out of the box), which
@@ -126,6 +223,50 @@ compiler surfaces below.
   editor add UIDs when the project is next opened.
 - **Why:** UIDs are an editor-managed identity namespace, not documentation — inventing them
   is the one way to make two scenes claim the same identity.
+
+### Generating Animation sub_resources from an extracted frame table: derive per-frame texture from the row's own clip name, not a hand-counted segment length (v0.6.0-anim, PumpKing)
+- **Symptom (caught pre-commit):** a python generator for `PumpKing.tscn`'s `idle` clip
+  assigned each row's source texture by hand-counted segment lengths (`[IDLE1]*17 +
+  [SQUEEZE]*11 + [IDLE2]*15`) instead of reading the clip name already present in each
+  extracted row. The real boundary was 16/11/16, not 17/11/15 — an off-by-one at the
+  first boundary (miscounting the Unity clip's dup-hold frame at `t=1.25` as still
+  `Pump_idle_1`) that happened to still sum to the same total row count (43), so a
+  naive "does the total match" check would NOT have caught it; only cross-checking the
+  per-clip breakdown against the source rows did.
+- **Rule:** when generating `AtlasTexture`/`Animation` blocks from an extracted
+  frame table that already carries a clip/segment name per row, key the
+  texture-selection off **that row's own name field**, never off a manually counted
+  span — spans are exactly the kind of number that's easy to miscount by one and whose
+  bug is invisible if you only check the grand total. Print a per-clip breakdown
+  (`clip name → row count`) and eyeball it against the source `===` sections before
+  trusting the output.
+- **Why:** a texture mismatch at one boundary silently renders the wrong sprite sheet
+  for a stretch of frames — no load error, no crash, just wrong pixels — and the only
+  static check available on a no-toolchain host (region-within-texture-bounds) still
+  passes because the wrong texture can easily be big enough to contain the (wrong)
+  region.
+
+### Hand-authored `Animation` value tracks: update mode lives INSIDE the keys dict (v0.6.0-anim)
+- **Symptom (caught pre-commit):** the generated `Pomegraknight.tscn` animations carried a
+  standalone `tracks/0/update = 1` property line. That is not a property Godot's `Animation`
+  text loader recognizes — editor-saved files express a value track's discrete/continuous
+  mode ONLY as the `"update": 1` entry inside the `tracks/0/keys = { ... }` dictionary.
+- **Rule:** when generating/hand-writing `Animation` sub_resources, emit exactly
+  `tracks/N/type`, `tracks/N/path`, and `tracks/N/keys` (with `"times"`, `"transitions"`,
+  `"update"`, `"values"`); optional editor niceties (`interp`, `loop_wrap`, `imported`,
+  `enabled`) can be omitted (defaults apply), and a discrete track needs its **first key
+  clamped to t=0** so the value is defined from the start. Loop via `loop_mode = 1` on the
+  Animation itself.
+- **Why:** unknown `tracks/…` properties risk load errors/warnings and are silently dropped
+  by the editor on re-save, so the file would churn the first time anyone opens it.
+- **Related (same phase):** Pomegraknight's sprite art is uniform across all 11 sheets
+  (~227 px character height per cell, center pivot), so ONE `Sprite2D.scale` (64/227 ≈ 0.2819)
+  serves every animation — don't add per-animation scale keys. Facing flips via
+  `Sprite2D.FlipH`, so animation tracks must never key `scale`/`flip_h`. The gain-no
+  "animation frozen" canon is implemented as `Anim.SpeedScale = 0` while `_stunTimer > 0`
+  (idempotent, self-restoring) — the authored `stun` clip is deliberately NOT driven, and
+  Godot clears `CurrentAnimation` to "" when a non-loop clip ends, which is why the automata
+  tracks `LastAnim` itself (see `CharacterController.PlayAnim`).
 
 ### A self-spawning scene can't hold its own PackedScene ext_resource (v0.4.0)
 - **Symptom:** wiring `CrabFoe.tscn`'s Spawn-on-death `BabyCrabScene` export to

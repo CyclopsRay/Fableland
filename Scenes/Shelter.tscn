@@ -48,6 +48,11 @@ layout_mode = 2
 custom_minimum_size = Vector2(0, 40)
 text = "Sharpen Armor (+10 DEF)"
 
+[node name="TeamBuildButton" type="Button" parent="Center/Box"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 40)
+text = "Team Build"
+
 [node name="FinishDayButton" type="Button" parent="Center/Box"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 40)

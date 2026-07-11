@@ -80,6 +80,20 @@ public partial class GameManager : Node2D
         _hazards = GetNode<Node2D>(HazardsPath);
         _hud = GetNode<Hud>(HudPath);
         _player = GetTree().GetFirstNodeInGroup("player") as CharacterController;
+
+        // Debug-mode protagonist override (D1): apply BEFORE any RunState/mission/SetupPlayer
+        // wiring below, so nothing has to be re-wired — SetupPlayer(rs) further down wires the
+        // swapped-in body with zero extra code. Byte-for-byte no-op when debug is off or no
+        // selection exists.
+        if (DebugManager.Instance != null && DebugManager.Instance.Enabled
+            && DebugManager.Instance.SelectedProtagonistId is string selId
+            && _player != null && selId != _player.Name.ToString())
+        {
+            var scene = ProtagonistRoster.GetScene(selId);
+            if (scene != null)
+                _player = ReplacePlayerNode(_player, scene);
+        }
+
         _foeSpawnMarkers = GetTree().GetNodesInGroup("enemy_spawn");
 
         var rs = RunState.Instance;
@@ -114,6 +128,15 @@ public partial class GameManager : Node2D
         SetupHud();
     }
 
+    public override void _ExitTree()
+    {
+        // DebugManager is an autoload and outlives this arena scene; without this the
+        // subscription added in SetupHud() leaks a handler pointing at a disposed GameManager,
+        // and a later SKIP press (from a different arena visit) would invoke it.
+        if (DebugManager.Instance != null)
+            DebugManager.Instance.SkipRequested -= OnSkipRequested;
+    }
+
     private static Mission CreateMission(MissionType type) => type switch
     {
         MissionType.Protect => new ProtectMission(),
@@ -145,6 +168,63 @@ public partial class GameManager : Node2D
             _hud.SetLivesVisible(true);
             _hud.SetLives(_player.LivesRemaining);
         }
+    }
+
+    /// <summary>
+    /// Debug-mode mid-combat protagonist swap (D1), driven by <see cref="DebugManager"/>'s
+    /// protagonist page. Never touches run economy: HP write-back still targets
+    /// <c>RunState.Owned[0]</c> regardless of which debug body is currently worn. Returns false
+    /// (no-op) on any guard failure.
+    /// </summary>
+    public bool DebugSwapProtagonist(string id)
+    {
+        if (DebugManager.Instance == null || !DebugManager.Instance.Enabled) return false;
+        if (_player == null || !IsInstanceValid(_player)) return false;
+        if (_ended) return false;                       // debug match already over
+        if (_player.HpRatio <= 0f) return false;         // dead body awaiting respawn/run-end
+        if (_player.Name.ToString() == id) return false; // already worn
+        var scene = ProtagonistRoster.GetScene(id);
+        if (scene == null) return false;
+
+        WriteBackHp();   // in-run: carry HP ratio into the new body via Owned[0]
+
+        _player.HpChanged -= OnPlayerHpChanged;
+        _player.Died -= OnPlayerDied;
+
+        _player = ReplacePlayerNode(_player, scene);
+
+        SetupPlayer(RunState.Instance);   // re-subscribes signals, re-wires HUD, hydrates/lives
+
+        DebugManager.Instance.LogSystem($"Protagonist swap → {id}");
+        return true;
+    }
+
+    /// <summary>
+    /// Physically replace the current player body with a fresh instance of <paramref name="scene"/>
+    /// at the same world position. Caller owns unsubscribing any signals on <paramref name="old"/>
+    /// first.
+    /// </summary>
+    private CharacterController ReplacePlayerNode(CharacterController old, PackedScene scene)
+    {
+        Vector2 pos = old.GlobalPosition;
+        Node parent = old.GetParent();
+
+        // Foes poll GetFirstNodeInGroup("player") every tick — QueueFree alone leaves the dying
+        // node in the group until end of frame, so pull it out of the group immediately.
+        old.RemoveFromGroup("player");
+        old.SetProcess(false);
+        old.SetPhysicsProcess(false);
+        old.QueueFree();
+
+        var np = scene.Instantiate<CharacterController>();
+        parent.AddChild(np);              // _Ready runs here — configure after
+        np.GlobalPosition = pos;
+        // _Ready already latched _spawnPoint at the scene-file origin (it runs inside AddChild,
+        // before the line above) — re-anchor it or a debug-lives Respawn() teleports to (0,0).
+        np.SetSpawnPoint(pos);
+        np.GetNodeOrNull<Camera2D>("Camera2D")?.MakeCurrent();
+
+        return np;
     }
 
     private void SetupHud()
