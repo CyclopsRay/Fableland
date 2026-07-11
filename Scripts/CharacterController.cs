@@ -523,6 +523,9 @@ public partial class CharacterController : CharacterBody2D
 	{
 		if (_dead) return;
 
+		// Respawn invincibility also blocks hazard damage
+		if (_invulnTimer > 0f) return;
+
 		if (damage > 0f)
 		{
 			float dealt = damage * DefenseMultiplier;
@@ -618,7 +621,7 @@ public partial class CharacterController : CharacterBody2D
 		GlobalPosition = _spawnPoint;
 		Velocity = _intentVel = _externalVel = Vector2.Zero;
 		_stunTimer = 0f;
-		_invulnTimer = 1.2f;
+		_invulnTimer = 2f;
 		_fire.Clear();
 		_frozenDebuff.Clear();
 		_dealtDmgBonuses.Clear();

@@ -249,7 +249,7 @@ public partial class MapEditor : Control
 
     #region Input
 
-    public override void _GuiInput(InputEvent @event)
+    public override void _Input(InputEvent @event)
     {
         if (@event is InputEventMouseButton mb)
         {
@@ -266,24 +266,24 @@ public partial class MapEditor : Control
                 return;
             }
 
-            // Don't process grid painting if we're in the palette or top bar
-            if (InUIChrome(mb.Position)) return;
+            // Always process mouse RELEASES regardless of position — prevents stuck
+            // drawing/erasing/panning state when releasing in the chrome area.
+            bool inChrome = InUIChrome(mb.Position);
 
             // Middle button → pan
             if (mb.ButtonIndex == MouseButton.Middle)
             {
-                _panning = mb.Pressed;
+                _panning = mb.Pressed && !inChrome;
                 _lastMouse = mb.Position;
                 return;
             }
 
-            // Left click → start painting (also handles single clicks)
+            // Left click → start painting
             if (mb.ButtonIndex == MouseButton.Left)
             {
-                bool wasPressed = mb.Pressed;
-                _drawing = wasPressed;
+                _drawing = mb.Pressed && !inChrome;
                 _erasing = false;
-                if (wasPressed)
+                if (_drawing)
                     PaintAt(mb.Position);
                 return;
             }
@@ -292,8 +292,8 @@ public partial class MapEditor : Control
             if (mb.ButtonIndex == MouseButton.Right)
             {
                 _drawing = false;
-                _erasing = mb.Pressed;
-                if (mb.Pressed)
+                _erasing = mb.Pressed && !inChrome;
+                if (_erasing)
                     EraseAt(mb.Position);
                 return;
             }
@@ -320,12 +320,8 @@ public partial class MapEditor : Control
             }
         }
 
-        // Keyboard shortcuts (also handled via _UnhandledInput for keys)
-    }
-
-    public override void _UnhandledInput(InputEvent @event)
-    {
-        if (@event is InputEventKey key && key.Pressed)
+        // Keyboard shortcuts
+        if (@event is InputEventKey key && key.Pressed && !key.Echo)
         {
             switch (key.Keycode)
             {
@@ -382,9 +378,31 @@ public partial class MapEditor : Control
         float cs = CellSize * _zoom;
         int w = LoadedMap.Width;
         int h = LoadedMap.Height;
+        var vpSize = GetViewport().GetVisibleRect().Size;
+
+        // Map bounds in screen space
+        var mapTopLeft = _pan;
+        var mapSize = new Vector2(w * cs, h * cs);
+        var mapRect = new Rect2(mapTopLeft, mapSize);
+
+        // ---- Draw grey "outside map" areas ----
+        // Top strip
+        DrawRect(new Rect2(0, 0, vpSize.X, mapTopLeft.Y),
+            new Color(0.25f, 0.25f, 0.28f, 0.7f));
+        // Bottom strip
+        float mapBottom = mapTopLeft.Y + mapSize.Y;
+        DrawRect(new Rect2(0, mapBottom, vpSize.X, vpSize.Y - mapBottom),
+            new Color(0.25f, 0.25f, 0.28f, 0.7f));
+        // Left strip
+        DrawRect(new Rect2(0, mapTopLeft.Y, mapTopLeft.X, mapSize.Y),
+            new Color(0.25f, 0.25f, 0.28f, 0.7f));
+        // Right strip (only if map doesn't fill viewport)
+        float mapRight = mapTopLeft.X + mapSize.X;
+        if (mapRight < vpSize.X)
+            DrawRect(new Rect2(mapRight, mapTopLeft.Y, vpSize.X - mapRight, mapSize.Y),
+                new Color(0.25f, 0.25f, 0.28f, 0.7f));
 
         // Only draw visible cells
-        var vpSize = GetViewport().GetVisibleRect().Size;
         int startX = Mathf.Max(0, Mathf.FloorToInt(-_pan.X / cs) - 1);
         int startY = Mathf.Max(0, Mathf.FloorToInt(-_pan.Y / cs) - 1);
         int endX = Mathf.Min(w, Mathf.CeilToInt((vpSize.X - _pan.X) / cs) + 1);
@@ -404,11 +422,11 @@ public partial class MapEditor : Control
 
                 if (kind == TileKind.Empty)
                 {
-                    // Subtle checkerboard-like grid
+                    // Subtle checkerboard-like grid inside the map area
                     bool light = (x + y) % 2 == 0;
                     DrawRect(rect, light
-                        ? new Color(0.12f, 0.12f, 0.15f, 0.5f)
-                        : new Color(0.10f, 0.10f, 0.13f, 0.5f));
+                        ? new Color(0.15f, 0.15f, 0.18f, 0.6f)
+                        : new Color(0.12f, 0.12f, 0.15f, 0.6f));
                 }
                 else
                 {
@@ -438,9 +456,12 @@ public partial class MapEditor : Control
             }
         }
 
-        // Grid bounds outline
+        // Grid bounds — prominent double border
         var bounds = new Rect2(_pan, new Vector2(w * cs, h * cs));
-        DrawRect(bounds, new Color(0.5f, 0.5f, 0.5f, 0.7f), false, 1.5f);
+        // Outer glow
+        DrawRect(bounds.Grow(4f), new Color(0.9f, 0.85f, 0.2f, 0.5f), false, 3f);
+        // Inner crisp border
+        DrawRect(bounds, new Color(0.9f, 0.85f, 0.2f, 0.85f), false, 2f);
     }
 
     private string GetCellLabel(TileKind kind, int variant)

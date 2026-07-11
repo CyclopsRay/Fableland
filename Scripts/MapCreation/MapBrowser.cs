@@ -40,14 +40,7 @@ public partial class MapBrowser : Control
         backBtn.Pressed += () => GetTree().ChangeSceneToFile("res://Scenes/Menu.tscn");
         AddChild(backBtn);
 
-        // Create button (top right)
-        _createButton = new Button();
-        _createButton.Text = "+ Create New Map";
-        _createButton.CustomMinimumSize = new Vector2(180, 40);
-        _createButton.Pressed += OnCreateNew;
-        AddChild(_createButton);
-
-        // Scrollable map list
+        // Scrollable map list (added before the create button so it renders behind)
         _scroll = new ScrollContainer();
         _scroll.Position = new Vector2(40, 90);
         _scroll.HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled;
@@ -58,6 +51,13 @@ public partial class MapBrowser : Control
         _listContainer = new VBoxContainer();
         _listContainer.AddThemeConstantOverride("separation", 8);
         _scroll.AddChild(_listContainer);
+
+        // Create button (top right) — added last so it renders ON TOP of the scroll area
+        _createButton = new Button();
+        _createButton.Text = "+ Create New Map";
+        _createButton.CustomMinimumSize = new Vector2(180, 40);
+        _createButton.Pressed += OnCreateNew;
+        AddChild(_createButton);
 
         RefreshList();
     }

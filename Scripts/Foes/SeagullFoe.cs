@@ -13,10 +13,15 @@ public partial class SeagullFoe : BaseFoe
     // fallback when no player instance is available to query the live value from.
     private const float PlayerGroundAccelDefault = 3200f;
 
-    // Skill numbers (FOES §4).
+    // Skill numbers (FOES §4). Poop is available from level 1 (the seagull's basic
+    // attack); Dash unlocks at level 6 per the standard skill gate.
     private const float PoopCooldown = 5f;
     private const float PoopBaseDamage = 30f;
     private const float DashCooldown = 10f;
+
+    // Override: Poop (skill 1) is the seagull's basic attack — available at all levels.
+    private bool PoopReady => _poopCd <= 0f;
+    private float _poopCd;
     private const float DashTelegraph = 1f;                 // stop + red tint
     private const float DashDuration = 0.5f;                // 15 m at 30 m/s
     private static readonly float DashSpeed = Units.Px(30f);// 960 px/s
@@ -126,6 +131,9 @@ public partial class SeagullFoe : BaseFoe
 
         if (!CanAct || !IsAggro || player == null) return;
 
+        // Tick the local poop cooldown (available from level 1, unlike standard Skill1 gate)
+        if (_poopCd > 0f) _poopCd -= dt;
+
         // Skill 2 — Dash (priority when ready): telegraph then swoop.
         if (Skill2Ready)
         {
@@ -138,10 +146,10 @@ public partial class SeagullFoe : BaseFoe
             return;
         }
 
-        // Skill 1 — Poop: drop a falling projectile that lingers as a micro-hazard.
-        if (Skill1Ready)
+        // Skill 1 — Poop: basic attack available at all levels.
+        if (PoopReady)
         {
-            StartSkill1Cooldown(PoopCooldown);
+            _poopCd = PoopCooldown;
             DropPoop();
         }
     }

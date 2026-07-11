@@ -149,6 +149,9 @@ public partial class DebugManager : CanvasLayer
             FitContent = true,
             ScrollFollowing = true,
         };
+        // Ensure text is visible on the dark panel background
+        _logContent.AddThemeColorOverride("default_color", new Color(0.9f, 0.9f, 0.9f));
+        _logContent.AddThemeFontSizeOverride("normal_font_size", 14);
         scroll.AddChild(_logContent);
         vbox.AddChild(scroll);
 
@@ -285,7 +288,7 @@ public partial class DebugManager : CanvasLayer
                 "SYSTEM" => "#aaaaaa",
                 _ => "#cccccc",
             };
-            sb.Append($"[color={color}][{e.Time}] [{e.Category}][/color] {e.Message}\n");
+            sb.Append($"[color={color}][{e.Time}] [{e.Category}] {e.Message}[/color]\n");
         }
         _logContent.Text = sb.ToString();
         _logTitle.Text = $"Debug Log  ({_entries.Count} lines, 5/Esc to close)";
@@ -295,8 +298,10 @@ public partial class DebugManager : CanvasLayer
     {
         var vp = GetViewport().GetVisibleRect().Size;
         float right = vp.X - BtnW - BtnMargin;
-        _toggleBtn.Position = new Vector2(right, BtnMargin);
-        _skipBtn.Position = new Vector2(right, BtnMargin + BtnH + 4f);
+        // Centered vertically on the right edge
+        float midY = (vp.Y - BtnH) / 2f;
+        _toggleBtn.Position = new Vector2(right, midY);
+        _skipBtn.Position = new Vector2(right, midY + BtnH + 4f);
     }
 
     private void OpenLogFile()
