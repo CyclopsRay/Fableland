@@ -6,7 +6,7 @@
 > `KNOWLEDGE.md` (caveats), `Docs/Tech/T30-FEATURE-BLUEPRINTS.md` (blueprints this build
 > follows).
 
-**Status: v0.6.0 landing as a DELIBERATELY-REDUCED STUB (minimal Team Build menu + item-catalog stub) — see §9. Working tree carries the uncommitted v0.5.4 debug-protagonist work (§8); this milestone builds on top of it and bumps the trio to 0.6.0. v0.5.0/v0.5.1 landed and merged to main (04b8843); HEAD is v0.5.3 (8a3b73f).**
+**Status: v0.6.0 landed as a DELIBERATELY-REDUCED STUB (debug protagonist selector §8 + minimal Team Build menu/item-catalog stub §9). v0.5.0/v0.5.1 landed and merged to main (04b8843).**
 
 > **CORRECTION (2026-07-11):** §7 below describes the FULL wonder-items system as a
 > planned build and its I1–I4 phase table shows "REVIEWED/APPROVED/DONE (committed)".
@@ -729,4 +729,3 @@ to **0.6.0** (`GameVersion.cs`/`VERSION`/Hud `VersionLabel` in sync), `Migration
 0.6.0 entry. **Not committed — no user authorization this session.** The uncommitted v0.5.4
 debug-mode WIP (§8) is carried into the same working tree; when a commit is authorized, both
 land together as v0.6.0 with explicit `git add` paths (never `git add -A`, per the v0.5.3 caveat).
-
