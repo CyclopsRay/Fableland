@@ -20,6 +20,13 @@ public partial class DebugManager : CanvasLayer
     // ---- state ----
     public bool Enabled { get; private set; }
 
+    /// <summary>
+    /// Debug-layer protagonist override (null = scene default). Persists across scenes since
+    /// this is an autoload; not saved. Never touches <c>RunState</c> — see
+    /// <see cref="ProtagonistRoster"/> for why this is a separate registry.
+    /// </summary>
+    public string SelectedProtagonistId { get; private set; }
+
     /// <summary>Fired when the Skip button is pressed (GameManager handles it).</summary>
     public event Action SkipRequested;
 
@@ -37,6 +44,13 @@ public partial class DebugManager : CanvasLayer
     private RichTextLabel _logContent;
     private Label _logTitle;
     private bool _logVisible;
+
+    // ---- protagonist page UI ----
+    private Panel _protagonistPanel;
+    private Label _protagonistTitle;
+    private Label _protagonistStatus;
+    private readonly List<Button> _protagonistButtons = new();
+    private bool _protagonistPageVisible;
 
     // ---- layout constants ----
     private const float BtnW = 56f;
@@ -83,6 +97,9 @@ public partial class DebugManager : CanvasLayer
 
         // ---- log viewer panel (hidden until key 5) ----
         BuildLogPanel();
+
+        // ---- protagonist page (hidden until key 4, only while debug is on) ----
+        BuildProtagonistPanel();
 
         RepositionButtons();
     }
@@ -159,6 +176,79 @@ public partial class DebugManager : CanvasLayer
         AddChild(_logPanel);
     }
 
+    /// <summary>
+    /// Build the protagonist-selection overlay: one button per <see cref="ProtagonistRoster"/>
+    /// entry, a "Clear override" button, and a status label. Mirrors <see cref="BuildLogPanel"/>'s
+    /// construction style (hand-built Panel + StyleBoxFlat + VBoxContainer + title/close row).
+    /// </summary>
+    private void BuildProtagonistPanel()
+    {
+        _protagonistPanel = new Panel
+        {
+            Visible = false,
+            // Sized + positioned in RepositionProtagonistPanel each time it opens.
+        };
+        var style = new StyleBoxFlat
+        {
+            BgColor = new Color(0.05f, 0.05f, 0.08f, 0.92f),
+            BorderWidthLeft = 2,
+            BorderWidthRight = 2,
+            BorderWidthTop = 2,
+            BorderWidthBottom = 2,
+            BorderColor = new Color(0.3f, 0.3f, 0.5f),
+            CornerRadiusTopLeft = 8,
+            CornerRadiusTopRight = 8,
+            CornerRadiusBottomLeft = 8,
+            CornerRadiusBottomRight = 8,
+        };
+        _protagonistPanel.AddThemeStyleboxOverride("panel", style);
+
+        var vbox = new VBoxContainer();
+        vbox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _protagonistPanel.AddChild(vbox);
+
+        // Title bar row
+        var titleRow = new HBoxContainer();
+        _protagonistTitle = new Label
+        {
+            Text = "Protagonists (4 to toggle, Esc to close)",
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        _protagonistTitle.AddThemeFontSizeOverride("font_size", 16);
+        titleRow.AddChild(_protagonistTitle);
+
+        var closeBtn = new Button
+        {
+            Text = "X",
+            CustomMinimumSize = new Vector2(32, 28),
+        };
+        closeBtn.Pressed += ToggleProtagonistPage;
+        titleRow.AddChild(closeBtn);
+        vbox.AddChild(titleRow);
+
+        // One button per roster entry.
+        _protagonistButtons.Clear();
+        foreach (var entry in ProtagonistRoster.Entries)
+        {
+            string id = entry.Id;   // captured per-iteration for the closure
+            var btn = new Button { Text = id };
+            btn.Pressed += () => SelectProtagonist(id);
+            vbox.AddChild(btn);
+            _protagonistButtons.Add(btn);
+        }
+
+        // Clear-override button.
+        var clearBtn = new Button { Text = "Clear override (scene default)" };
+        clearBtn.Pressed += ClearProtagonistOverride;
+        vbox.AddChild(clearBtn);
+
+        // Status feedback label.
+        _protagonistStatus = new Label { Text = "" };
+        vbox.AddChild(_protagonistStatus);
+
+        AddChild(_protagonistPanel);
+    }
+
     public override void _Process(double delta)
     {
         // Reposition on every frame so buttons keep hugging the right edge after resize.
@@ -169,9 +259,17 @@ public partial class DebugManager : CanvasLayer
         if (Input.IsActionJustPressed("debug_log_viewer"))
             ToggleLogViewer();
 
-        // Escape: close log viewer
-        if (_logVisible && Input.IsActionJustPressed("ui_cancel"))
-            ToggleLogViewer();
+        // Key 4: toggle the protagonist page, but ONLY while debug mode is on — unlike the log
+        // viewer, this must do nothing at all when debug is off.
+        if (Enabled && Input.IsActionJustPressed("debug_protagonist_page"))
+            ToggleProtagonistPage();
+
+        // Escape: close whichever debug overlay is open (one panel per press).
+        if (Input.IsActionJustPressed("ui_cancel"))
+        {
+            if (_protagonistPageVisible) ToggleProtagonistPage();
+            else if (_logVisible) ToggleLogViewer();
+        }
 
         // Keep log viewer up to date while visible.
         if (_logVisible)
@@ -239,6 +337,7 @@ public partial class DebugManager : CanvasLayer
         _toggleBtn.Text = Enabled ? "DBG*" : "DBG";
         _skipBtn.Visible = Enabled;
         if (Enabled) LogSystem("Debug mode ON");
+        else if (_protagonistPageVisible) ToggleProtagonistPage();   // force-close on debug OFF
     }
 
     private void ToggleLogViewer()
@@ -261,6 +360,62 @@ public partial class DebugManager : CanvasLayer
         float y = (vp.Y - h) / 2f;
         _logPanel.Position = new Vector2(x, y);
         _logPanel.Size = new Vector2(w, h);
+    }
+
+    private void ToggleProtagonistPage()
+    {
+        _protagonistPageVisible = !_protagonistPageVisible;
+        if (_protagonistPageVisible)
+        {
+            RepositionProtagonistPanel();
+            RefreshProtagonistButtons();
+        }
+        _protagonistPanel.Visible = _protagonistPageVisible;
+    }
+
+    private void RepositionProtagonistPanel()
+    {
+        var vp = GetViewport().GetVisibleRect().Size;
+        float w = vp.X * 0.40f;
+        float h = vp.Y * 0.50f;
+        float x = (vp.X - w) / 2f;
+        float y = (vp.Y - h) / 2f;
+        _protagonistPanel.Position = new Vector2(x, y);
+        _protagonistPanel.Size = new Vector2(w, h);
+    }
+
+    /// <summary>Re-label each roster button so the currently selected entry (if any) is visibly marked.</summary>
+    private void RefreshProtagonistButtons()
+    {
+        for (int i = 0; i < ProtagonistRoster.Entries.Length; i++)
+        {
+            string id = ProtagonistRoster.Entries[i].Id;
+            _protagonistButtons[i].Text = id == SelectedProtagonistId ? $"> {id} <" : id;
+        }
+    }
+
+    private void SelectProtagonist(string id)
+    {
+        SelectedProtagonistId = id;
+        RefreshProtagonistButtons();
+
+        if (GetTree().CurrentScene is GameManager gm && gm.DebugSwapProtagonist(id))
+        {
+            _protagonistStatus.Text = $"Swapped to {id}.";
+        }
+        else
+        {
+            _protagonistStatus.Text = $"Selected {id} — applies on next Arena entry (while debug is on).";
+        }
+        LogSystem($"Protagonist selection: {id}");
+    }
+
+    private void ClearProtagonistOverride()
+    {
+        SelectedProtagonistId = null;
+        RefreshProtagonistButtons();
+        _protagonistStatus.Text = "Override cleared — scene default.";
+        LogSystem("Protagonist override cleared");
     }
 
     private void RefreshLogContent()

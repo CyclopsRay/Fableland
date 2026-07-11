@@ -327,6 +327,48 @@ public partial class RunState : Node
         DebugManager.Instance?.LogItem(defId, ItemsCollected);
     }
 
+    /// <summary>
+    /// Move a wonder item into a protagonist's single held slot (v0.6.0 stub — no passive/skill/
+    /// cooldown side effects; that is T30 §4 future work). Signature takes a ProtagonistState by
+    /// reference (not an id) so the shelter Team Build menu can assign to either a real Owned
+    /// protagonist OR an ephemeral debug-only one that is not in Owned — RunState remains the one
+    /// writer of the Items backpack either way. <paramref name="fromBackpack"/> is true for a real
+    /// backpack item (consumed from Items here, and returned to Items on unhold/bump-out) and false
+    /// for a debug Team-Build catalog item that is NOT in Items — that one is a pure display bypass
+    /// and must never materialize into the real economy. Null-tolerant.
+    /// </summary>
+    public void HoldItem(ProtagonistState p, string defId, bool fromBackpack)
+    {
+        if (p == null || string.IsNullOrEmpty(defId)) return;
+        // Bump whatever was previously held back to the backpack — but ONLY if it came from the
+        // backpack. A previously-held debug catalog item vanishes (it was never in the economy).
+        if (!string.IsNullOrEmpty(p.HeldItemDefId) && p.HeldItemFromBackpack)
+            Items.Add(new ItemInstance(p.HeldItemDefId));
+        // Consume the incoming item from the backpack only when it's a real backpack item. A debug
+        // catalog item isn't in Items, so nothing is removed and — crucially — nothing is granted.
+        if (fromBackpack)
+        {
+            int idx = Items.FindIndex(it => it.DefId == defId);
+            if (idx >= 0) Items.RemoveAt(idx);
+        }
+        p.HeldItemDefId = defId;
+        p.HeldItemFromBackpack = fromBackpack;
+        // NOTE(T30 §4): benching a protagonist should auto-return its held item to the backpack;
+        // deferred until party-benching UI lands. No perish/cooldown/passive hooks in this stub.
+    }
+
+    /// <summary>Return a protagonist's held item to the backpack, clearing the slot. A real backpack
+    /// item goes back to Items; a debug-conjured catalog item (HeldItemFromBackpack == false)
+    /// simply vanishes so it never pollutes the real economy. Null-tolerant. No side effects
+    /// (T30 §4 future work).</summary>
+    public void UnholdItem(ProtagonistState p)
+    {
+        if (p == null || string.IsNullOrEmpty(p.HeldItemDefId)) return;
+        if (p.HeldItemFromBackpack) Items.Add(new ItemInstance(p.HeldItemDefId));
+        p.HeldItemDefId = null;
+        p.HeldItemFromBackpack = false;
+    }
+
     public void GrantProtagonist(string id)
     {
         Owned.Add(new ProtagonistState(id));

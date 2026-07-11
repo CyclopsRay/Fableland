@@ -651,6 +651,15 @@ public partial class CharacterController : CharacterBody2D
 		Died?.Invoke();
 	}
 
+	/// <summary>
+	/// Re-anchor the respawn point after an external spawner/swapper has placed this body.
+	/// _Ready latches _spawnPoint, but _Ready runs synchronously inside AddChild — BEFORE the
+	/// caller sets GlobalPosition — so anything that instances a character at runtime (debug
+	/// protagonist swap) must call this after positioning, or Respawn() teleports to the
+	/// character scene's own origin. Same bug class as the seagull patrol anchor (KNOWLEDGE.md).
+	/// </summary>
+	public void SetSpawnPoint(Vector2 point) => _spawnPoint = point;
+
 	/// <summary>Brought back by GameManager after a death (if lives remain).</summary>
 	public void Respawn()
 	{

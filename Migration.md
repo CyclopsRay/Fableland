@@ -9,6 +9,46 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.6.0** — **First Team Build menu + wonder-item stub; PumpKing now testable; debug mode
+  upgraded.** Three landings, all deliberately scoped:
+  - **(a) PumpKing is playable/testable.** The character migrated in 0.5.3 is now actually
+    reachable in the Arena via the 0.5.4 debug protagonist swap (key **4**) — no change to real
+    progression (still Pomegraknight-only).
+  - **(b) Debug mode upgraded.** On top of 0.5.4's key-4 protagonist page + `Docs/DEBUG_MODE.md`
+    manual, the new shelter Team Build menu gains a **debug-mode visibility bypass**: with debug
+    ON it also lists PumpKing and all 13 wonder items (tagged `[DBG]`) for assignment, without
+    touching `RunState.Owned`/`ActiveBuild` or writing the catalog into the real backpack.
+  - **(c) Minimal Team Build + item catalog stub.** New `Scripts/Items/ItemCatalog.cs` (id +
+    display name for 13 items), one `ProtagonistState.HeldItemDefId` held slot, `RunState.
+    HoldItem/UnholdItem` bookkeeping, and a **Team Build** menu at the shelter
+    (`Scripts/Nodes/ShelterController.cs`) to assign a held item to a protagonist (a free
+    management action, works with debug OFF too). Held-item provenance (`HeldItemFromBackpack`)
+    keeps the debug bypass from ever materializing an item into the real economy.
+  - **NOT in this release (still future work — `Docs/ITEMS.gdd` / T30 §4):** the full wonder-items
+    economy — passives, item skills, day- and second-based cooldowns, perish/convert/plant
+    lifecycle, Possession/Eternal tags, RolledStats, day-end item hooks, benching auto-return.
+    Wonder items are inert id+name tokens for now. (Static checks only — no toolchain this
+    session.)
+- **0.5.4** — **Debug protagonist selector + debug manual.** With debug mode ON, key **4**
+  opens a protagonist page on the `DebugManager` autoload (reachable from any scene, like the
+  key-5 log viewer) listing every implemented protagonist from the new debug-layer
+  `Scripts/Debug/ProtagonistRoster.cs` (Pomegraknight, PumpKing). Selecting one swaps the
+  controlled body in-place in the Arena (position/signals/HUD/camera/HP-hydration re-wired via
+  the normal `SetupPlayer` path) or queues the choice for the next Arena entry elsewhere —
+  never touching `RunState.Owned`/`ActiveBuild` (real-run progression unaffected; gate is
+  `DebugManager.Enabled`). New input action `debug_protagonist_page` (key 4). Fixes: the
+  `SkipRequested` autoload-event subscriber leak (`GameManager._ExitTree` now unsubscribes) and
+  a review-caught `_spawnPoint` mis-anchor on runtime-instanced bodies (new
+  `CharacterController.SetSpawnPoint`). New **`Docs/DEBUG_MODE.md`** documents all debug
+  tooling (DBG/SKIP/keys 4+5/F9/R/`DebugFoeLevel`/`DebugDay`), linked from 40-QA §1. (Static
+  checks only — no toolchain this session.)
+- **0.5.3** — PumpKing character migration: body + detachable-head sub-scene
+  (`PumpKingHead.tscn`), full animation set, Soul free-flight kit (commit 8a3b73f).
+- **0.5.2** — Pomegraknight sprite migration + animation automata (Unity sheets →
+  AtlasTexture clips; commit 15e141e).
+- **0.5.1** — Debug mode: DBG toggle, SKIP, live damage log + key-5 viewer, node jumping
+  (`Scripts/Debug/`; commit b065886). *(0.5.1–0.5.3 lines back-filled at 0.5.4 — they
+  originally shipped without changelog entries.)*
 - **0.5.0** — **The run loop is playable end-to-end** (lands both roadmap milestones:
   v0.4.0 foe system + v0.5.0 node content; built per `IMPLEMENTATION_REPORT.md`, phases
   reviewed individually). **Foes** (`Scripts/Foes/`): BaseFoe FSM (patrol/sight/aggro),

@@ -1,12 +1,22 @@
 # IMPLEMENTATION_REPORT.md — Fableland full-project build
 
-> Orchestration log for implementing the GDD suite (v0.4.0 foes → v0.5.0 node content)
-> on top of prototype 0 (v0.3.7). Maintained by the orchestrating session; updated after
-> every phase so a fresh session can resume from here. Companion docs: `KNOWLEDGE.md`
-> (caveats), `Docs/Tech/T30-FEATURE-BLUEPRINTS.md` (blueprints this build follows).
+> Orchestration log for implementing the GDD suite (v0.4.0 foes → v0.5.0 node content →
+> v0.6.0 items) on top of prototype 0 (v0.3.7). Maintained by the orchestrating session;
+> updated after every phase so a fresh session can resume from here. Companion docs:
+> `KNOWLEDGE.md` (caveats), `Docs/Tech/T30-FEATURE-BLUEPRINTS.md` (blueprints this build
+> follows).
 
-**Status: ALL PHASES COMPLETE & REVIEWED (2026-07-08) — v0.5.0 in working tree, UNCOMMITTED (no commit authorized this session). Next session: get user commit authorization; run `dotnet build` when a toolchain exists.**
-**Started:** 2026-07-07, from v0.3.7 (commit 8315b4f), branch `prototype-0-playable`.
+**Status: v0.6.0 landing as a DELIBERATELY-REDUCED STUB (minimal Team Build menu + item-catalog stub) — see §9. Working tree carries the uncommitted v0.5.4 debug-protagonist work (§8); this milestone builds on top of it and bumps the trio to 0.6.0. v0.5.0/v0.5.1 landed and merged to main (04b8843); HEAD is v0.5.3 (8a3b73f).**
+
+> **CORRECTION (2026-07-11):** §7 below describes the FULL wonder-items system as a
+> planned build and its I1–I4 phase table shows "REVIEWED/APPROVED/DONE (committed)".
+> **That does NOT reflect the working tree.** No item runtime was ever built or committed:
+> `Scripts/Items/` does not exist, `Scripts/Run/ItemInstance.cs` is still the v0.5.0 stub
+> (def-id only), nothing calls `RunState.AddItem` for a real item, and there is no
+> shelter item/party UI. §7 is a stale aspirational plan — treat it as design notes, not
+> a record of shipped code. The owner has since chosen to ship a **lightweight stub**
+> instead of the full T30 §4 system for v0.6.0; that reduced milestone is tracked in §9.
+**v0.4.0–v0.5.0 record:** started 2026-07-07 from v0.3.7 (8315b4f); §§1–6 below are the closed v0.5.0 log.
 
 ---
 
@@ -326,3 +336,397 @@ Phase 5 checklist state:
 - [ ] **Real `dotnet build`** (C4 carry-forward) — first action whenever a session has a
   toolchain; also the `EvolveHp` unit test and the T30 §8 gating-function unit tests
   remain open.
+
+---
+
+## 7. v0.6.0 — Wonder Items (started 2026-07-10, branch `ver0.6.0-items` off main@04b8843)
+
+Scope per user brief: item system core (`Scripts/Items/`), 3 catalog items (Pome's
+Bravery / Pome's Seed / FanChen's Heart), Vamp stat + F item-skill input, minimum
+plantation slice, Build Team + Backpack UI. Save/load (T30 §6) explicitly out of scope.
+`Docs/ITEMS.gdd` was pre-edited on this branch (Pome's Seed 7d/60–140% inheritance fix,
+§9 v0.6.0 decisions entry) — treated as approved canon, folds into the milestone commit.
+
+### 7.1 Phase table
+
+| Phase | Scope | Agent | Status |
+|-------|-------|-------|--------|
+| I1 | Item model + data: ItemDef/Catalog/Registry, ItemInstance rebuild, Inventory on RunState, day-end steps (ItemCds/Perish/PlantationGrow), ShelterState plantation roll, reward-pool wiring | engineer | REVIEWED, APPROVED (3 fixes) |
+| I2 | Combat side: Vamp pool + on-hit heal hook, OnFire duration mechanism, conditional item passives on CharacterController, F input action, GameManager held-item runner (skill exec, sec-CD tick, mid-combat convert) | engineer | REVIEWED, APPROVED (2 fixes) |
+| I3 | UI: BackpackPanel (6×5 grid + detail), BuildTeamPanel (cards/stats/change/swap), ShelterController integration + Plant UI | engineer | REVIEWED, APPROVED (3 fixes) |
+| I4 | Ship: full-diff static verification, doc-sync, KNOWLEDGE caveats, version trio 0.6.0, Migration changelog, commit | orchestrator | DONE (committed) |
+
+### 7.2 Integration contract (locked before code)
+
+```
+Inventory (field on RunState, created in NewRun) is the ONE owner of item location:
+  AddToBackpack(defId) → ItemInstance (RolledStats seeded from def base values)
+  Hold(inst, protagonistId)   — swaps out the current held item (auto back to backpack)
+  Unhold(inst) / Plant(inst, shelterId, slot) / Convert(inst, newDefId) / Remove(inst)
+  Remove & Convert pass through CanRemove(inst) (Eternal gate — no Eternal items yet)
+RunState.BenchProtagonist(id) — the ONLY place benching auto-returns a held item (T30 §4)
+Arena: GameManager (after HydrateRun) applies held-item passives to the live character,
+  sources keyed "item:<defId>#<instanceId>"; CharacterController raises ItemSkillRequested
+  on F; GameManager gates domain → cooldown → executes data-driven effect; single-use ⇒
+  Inventory.Convert + live passive re-application; GameManager._Process ticks the active
+  holder's SecCdRemaining (arena clock only).
+Day-end (T30 §5): step 3 ItemCds (held only) → step 4 Perish (held+backpack) →
+  NEW step 4b PlantationGrow (before NpcWindows) → harvest rolls into backpack.
+All item randomness: RunState.ItemsRng — a DetRandom created ONCE in NewRun as
+  Rng.Sub("items") and consumed across the run (a fresh Sub("items") per call would
+  replay the same sequence — see decision D-RNG below).
+```
+
+### 7.3 Locked decisions (doc-sync targets at ship time)
+
+- **D-RNG.** `DetRandom.Sub(tag)` derives from the seed *string*, so calling
+  `Rng.Sub("items")` repeatedly returns identical streams. RunState stores one
+  `ItemsRng` at NewRun; every item roll consumes from it.
+- **D-FIRE (OnFire "+0.2 s duration").** No duration field exists — OnFire is stack-decay
+  (10%/0.2 s tick, `DecayingDebuff`). Mechanism: an aggregatable-by-source
+  `_onFireDurationBonuses` dict on CharacterController; the summed bonus is handed to
+  `DecayingDebuff` as a **decay-grace window applied once per activation** (inactive →
+  active transition): decay ticking (and its self-damage) is suspended for that many
+  seconds, extending the active window by exactly the bonus. Applied at activation, not
+  per AddStack, so standing in a fire hazard can't re-arm it indefinitely. → ITEMS.gdd
+  decisions log + KNOWLEDGE.md.
+- **D-PERISH.** Perish ticks Held+Backpack only; Planted items grow, they don't rot.
+  (No catalog item is both Plantable and Perishable; rule recorded for the future.)
+- **D-HARVEST.** Fruit quantity rolled first (1–3); then ONE inheritance multiplier per
+  fruit in [0.60, 1.40], applied to all inherited RolledStats (a "good" fruit is good
+  overall). ITEMS §4.3 is ambiguous per-stat vs per-fruit; per-fruit chosen for coherence.
+- **D-ROLLED.** `RolledStats` = absolute effective values keyed by modifier key; fresh
+  instances copy the def's base passive values; Convert preserves the dict (this is how
+  the Seed carries its father Bravery's stats). Readers fall back to def base when a key
+  is missing.
+- **D-PLANT.** Plantation availability derived deterministically per shelter:
+  `new DetRandom(seed+":shelter:"+nodeId)` → 50% chance, 2 slots (constants in item
+  data). Zone-6 XX shelters never have plantations (NODES §5.2). Watering/acceleration
+  (Gameplay §B.4 "+1 day per watering") **deferred** to the Plantation GDD milestone —
+  logged as TBD in ITEMS.gdd; the slice is plant → day-counted growth → auto-harvest to
+  backpack at day-end.
+- **D-VAMP.** Vamp heal hook lives where post-mitigation damage dealt is already
+  attributed: `BaseFoe.TakeHit` (single-player attribution, same as ult-charge credit).
+  Direct hits only — DoT/hazard damage does not vamp ("on every hit", Gameplay §A.1).
+- **D-HEART.** FanChen's Heart heal triggers in `CharacterController.TakeHit` only
+  (direct enemy hits) — not ApplyHazard, not DoT ("direct damage received from
+  enemies"). Death check runs before the heal (0 HP = dead, no rescue).
+- **D-F-KEY.** F wired in the arena only this milestone (no catalog item has a map
+  skill); the def's domain flag is enforced (combat-gated). Map-side firing = TBD.
+- **D-BGCD.** The ⅕-speed background CD tick for Tab-switched protagonists (Gameplay
+  §A.3) deferred — party of one exists. TBD logged.
+- **D-REWARD.** Mission/event `"placeholder"` item grants replaced: missions roll from
+  `ItemRegistry.RewardPool` (Bravery, FanChen's Heart) using their own mission DetRandom;
+  the abandoned-cart event grants a fixed `pome_bravery` (authored data).
+- **D-FILES.** `ItemInstance.cs` stays at `Scripts/Run/` (run-layer state, namespace
+  `Fableland.Run`), rebuilt in place; def/registry/inventory/passive types live in
+  `Scripts/Items/` (namespace `Fableland.Items`).
+
+### 7.4 Open questions (prototype defaults picked, review later)
+
+- **Q11.** Item-skill CD display on the HUD — deferred (no HUD slot for the held item
+  yet); the F press is silently ignored while on CD. Add an item icon + CD ring later.
+- **Q12.** Build Team "poster" art — placeholder mugshot/player sprite reused; real
+  posters per character GDD merch prompts later.
+- **Q13.** Stat panel shows unconditional stats only; conditional passives (+5% vamp
+  while OnFire) render in the item detail text, not the stat numbers.
+
+### 7.5 Phase log
+
+(appended as phases complete)
+
+---
+
+## 8. Side-milestone — Debug protagonist selector + debug manual (started 2026-07-11, on `ver0.6.0-items` @ 0.5.3)
+
+Owner-requested, independent of the items milestone. Goal: with debug mode ON, every
+implemented protagonist (Pomegraknight, PumpKing) is playable for testing via a key-4
+"protagonist building page" on the DebugManager autoload — WITHOUT touching the real
+protagonist economy (`RunState.Owned`/`ActiveBuild`/`StartNewRun` seed stay
+Pomegraknight-only). Plus `Docs/DEBUG_MODE.md`, the debug-tooling manual.
+
+### 8.1 Phase table
+
+| Phase | Scope | Agent | Status |
+|-------|-------|-------|--------|
+| D1 | `project.godot` input `debug_protagonist_page` (key 4), `Scripts/Debug/ProtagonistRoster.cs` (new), DebugManager page UI + selection state, GameManager swap/pending-apply + SkipRequested unsubscribe fix | engineer | DONE (2026-07-11) |
+| D2 | Review (fableland-reviewer), orchestrator fixes | reviewer | DONE — APPROVE WITH FIXES; F7 applied |
+| D3 | `Docs/DEBUG_MODE.md` + 40-QA cross-link, KNOWLEDGE caveats, version trio 0.5.4, Migration changelog | orchestrator | DONE except commit (not authorized this session) |
+
+### 8.2 Integration contract (locked before code)
+
+```
+project.godot [input]: debug_protagonist_page = physical key 4 (keycode 52), mirrors
+  debug_log_viewer (53). Handled ONLY while DebugManager.Enabled (unlike key 5).
+ProtagonistRoster (Scripts/Debug/, static): (Id, ScenePath)[] — Pomegraknight,
+  PumpKing; GetScene(id) lazy-loads. Identity key = scene root node Name == Id.
+  Debug-layer registry; graduates/merges when the real protagonist-grant economy lands.
+DebugManager: SelectedProtagonistId (string, null = scene default) persists on the
+  autoload across scenes. Key 4 toggles the page (hand-built panel, BuildLogPanel
+  style, Esc/X close; force-closed when debug toggles off). Selecting an entry stores
+  the id, then tries a live apply: GetTree().CurrentScene is GameManager gm →
+  gm.DebugSwapProtagonist(id) (bool). true ⇒ "swapped now", false/no-GameManager ⇒
+  "queued — applies on next Arena entry". Direct call, NOT a C# event (see 8.3 D-DBG5).
+GameManager:
+  _Ready — after locating the authored player, if DebugManager.Enabled &&
+    SelectedProtagonistId set && != player.Name: physically replace the node BEFORE
+    SetupPlayer (no rewiring needed; SetupPlayer then wires the new body normally).
+  DebugSwapProtagonist(id) — gated on DebugManager.Enabled; false when no live/alive
+    player, unknown id, or debug match already ended (_ended). Mid-combat swap =
+    WriteBackHp() → unsubscribe old HpChanged/Died → physical replace → SetupPlayer(rs)
+    (rewires signals/Hud.SetPlayer/hydration exactly like boot; in-run the new body
+    hydrates from Owned[0]'s ProtagonistState incl. carried HpRatio).
+  Physical replace: capture GlobalPosition/parent; old.RemoveFromGroup("player")
+    IMMEDIATELY (foes poll the group per-tick; QueueFree alone leaves the dying node
+    in-group until frame end); disable old processing; QueueFree; instantiate; AddChild;
+    restore position; new Camera2D.MakeCurrent(). LocalPlayer static self-heals via the
+    existing _EnterTree/_ExitTree guards.
+  _ExitTree — NEW: unsubscribe SkipRequested (pre-existing dangling-handler bug fix).
+RunState: NOT touched by this feature — no read/write of Owned/ActiveBuild, no
+  StartNewRun/GrantProtagonist change. HP write-back keeps targeting Owned[0]
+  regardless of which debug body is worn (documented in DEBUG_MODE.md).
+```
+
+### 8.3 Locked decisions
+
+- **D-DBG1.** Roster lives in `Scripts/Debug/` (debug-layer, not the real economy);
+  scene-root `Name` is the id. Future characters append one line.
+- **D-DBG2.** Outside the Arena, selection is queued on the autoload and applied at the
+  next `GameManager._Ready` while debug is still ON — never an NRE, never a no-feedback
+  silent success (page status label says which happened).
+- **D-DBG3.** In-run debug swap carries current HP ratio (WriteBackHp → HydrateRun into
+  the new body); ProtagonistState write-back still goes to Owned[0]. Debug body choice
+  never leaks into run progression.
+- **D-DBG4.** Turning debug OFF stops future applications (key 4 dead, pending not
+  applied) but does not revert an already-swapped body.
+- **D-DBG5.** Live apply is a direct `CurrentScene is GameManager` call rather than a
+  new autoload C# event — the SkipRequested pattern was found to leak subscribers
+  (scene-lifetime GameManager subscribing to an autoload-lifetime event without
+  unsubscribe); this feature fixes that instance and does not add another.
+
+### 8.4 Phase log
+
+**D1 (engineer, 2026-07-11) — delivered per contract.** Files: `project.godot`
+(`debug_protagonist_page`, physical_keycode 52, byte-mirrors key 5's entry),
+`Scripts/Debug/ProtagonistRoster.cs` (new; lazy-cached `GetScene`, null for unknown,
+no hand-made `.uid`), `Scripts/Debug/DebugManager.cs` (page UI mirroring
+`BuildLogPanel` style, `SelectedProtagonistId`, key-4 gated on `Enabled`, shared Esc
+one-panel-per-press, force-close on debug OFF, direct `CurrentScene is GameManager`
+live-apply per D-DBG5), `Scripts/GameManager.cs` (pending apply at top of `_Ready`
+before any wiring; `DebugSwapProtagonist` with 6 ordered guards →
+WriteBackHp → unsubscribe → `ReplacePlayerNode` → `SetupPlayer(rs)` reuse;
+`RemoveFromGroup("player")`-before-QueueFree; camera `MakeCurrent`; new `_ExitTree`
+`SkipRequested` unsubscribe). Engineer deviations accepted: explicit
+`Name.ToString()` for StringName/string comparison (defensive, no toolchain to
+verify the implicit operator); `"> id <"` selection marker.
+
+**D2 (reviewer, 2026-07-11) — verdict APPROVE WITH FIXES.** One MAJOR confirmed:
+`ReplacePlayerNode` set `GlobalPosition` after `AddChild`, but
+`CharacterController._Ready` (runs inside `AddChild`) had already latched
+`_spawnPoint` at the character scene's own origin — a debug-lives `Respawn()` after
+a swap would teleport to (0,0) (Arena's spawn position exists only as a scene
+instance override). Passed: guard ordering, event hygiene (no double-subscription
+across swaps), group timing vs foe per-tick polls, `LocalPlayer`/camera static
+self-heal ordering, `_ExitTree` fix, determinism grep, RunState untouched, no
+version/`.tscn`/`.uid` churn, ITEMS.gdd/report diffs not enlarged. One NOTE
+(status-label wording deviates from brief's literal strings) — accepted as-is.
+
+**Orchestrator fixes applied:**
+- F7. **Swapped-in body respawn anchor** (reviewer MAJOR): new
+  `CharacterController.SetSpawnPoint(Vector2)` called by `ReplacePlayerNode` right
+  after positioning. KNOWLEDGE.md caveat added (v0.5.4, same class as the v0.4.0
+  spawn-anchor caveat).
+- (D1-scoped, orchestrator-directed) **SkipRequested subscriber leak** fixed in
+  `GameManager._ExitTree`; KNOWLEDGE.md caveat added (v0.5.4).
+
+**D3 (orchestrator, 2026-07-11):** `Docs/DEBUG_MODE.md` written (DBG/SKIP/key 5 log
+viewer + `user://debug_log.txt` + categories/key 4 page/F9/R/`DebugFoeLevel`+
+`DebugDay`/other harnesses), cross-linked from `40-QA.md` §1(4); 2 KNOWLEDGE
+caveats; version trio **0.5.4** in sync (`GameVersion.cs`/`VERSION`/Hud
+`VersionLabel`); `Migration.md` §0 changelog entry (plus back-filled one-liners for
+0.5.1–0.5.3, which had shipped without entries). Static verification: brace/paren
+balance clean on all 4 changed `.cs`; new scene paths resolve; input-action string
+matches; determinism grep clean; no `.uid` invented. **No real build — no toolchain
+on this host** (StringName comparison + `Camera2D.MakeCurrent` flagged for the next
+`dotnet build` window). **Not committed — no user authorization this session**; the
+pre-existing uncommitted `Docs/ITEMS.gdd`/report WIP is untouched and must not be
+swept into any future 0.5.4 commit (`git add` explicit paths only, per the v0.5.3
+caveat).
+
+---
+
+## 9. v0.6.0 — Minimal Team Build + item-catalog stub (started 2026-07-11, on `ver0.6.0-items` @ 0.5.4)
+
+Owner-chosen **lightweight stub** (explicitly NOT the full T30 §4 / ITEMS.gdd wonder-items
+economy). Ships: a small item catalog (id + display name only), a single held-slot on
+`ProtagonistState`, two backpack↔held bookkeeping methods on `RunState`, and a first
+**Team Build** overlay at the shelter — with a debug-mode-only display bypass so all
+protagonists and all catalog items are pickable while testing. **NOT built this milestone
+(remains future work, T30 §4):** passives, item skills, day/second cooldowns,
+perish/convert/plant lifecycle, Possession/Eternal semantics, RolledStats, day-end item
+hooks, bench auto-return, save/load. This is the version that actually lands as v0.6.0
+(the §7 full-system plan is shelved).
+
+### 9.1 Build strategy
+
+One engineer phase (scope is small and cohesive), then reviewer, then an **independent
+orchestrator double-check of the Team Build menu** (owner explicitly asked for
+double-checking), then doc-sync + version trio bump to 0.6.0. No commit (not authorized).
+
+### 9.2 Phase table
+
+| Phase | Scope | Agent | Status |
+|-------|-------|-------|--------|
+| M1 | `Scripts/Items/ItemCatalog.cs` (new dir, 13-item id+name registry, no runtime fields); `ProtagonistState.HeldItemDefId`; `RunState.HoldItem/UnholdItem`; `Scenes/Shelter.tscn` Team Build button + `ShelterController` code-built overlay (roster + backpack, debug display union, assign/unhold) | engineer | DONE (2026-07-11) |
+| M2 | Reviewer pass (GDD/blueprint conformance, KNOWLEDGE caveats, static checks) | reviewer | DONE — APPROVE WITH FIXES; 1 MAJOR (debug item materialization) |
+| M3 | Orchestrator fix F-ITEM1 (provenance flag) + independent Team-Build double-check | orchestrator | DONE — fix applied, double-check PASSED |
+| M4 | Doc-sync (ITEMS.gdd status framing, DEBUG_MODE item-visibility), KNOWLEDGE caveats, version trio 0.6.0, Migration changelog — no commit | orchestrator | DONE except commit (not authorized) |
+
+### 9.3 Integration contract (locked before code)
+
+```
+ItemCatalog  (Scripts/Items/ItemCatalog.cs, NEW dir, namespace Fableland.Items, DOMAIN DATA)
+  static (string Id, string DisplayName)[] Entries — the 13 named ITEMS.gdd §6.3 items.
+  static string DisplayName(string id) → name, fallback to id for an unknown id.
+  NO passive/skill/cooldown/tag/RolledStats fields — comment points at T30 §4 for those.
+  NO `using Godot` (pure data, layer-law clean, matches FoeStats/MissionTable "table lives
+  in its system folder" precedent AND the GDD's stated Scripts/Items/ target).
+
+ProtagonistState (Scripts/Run/ProtagonistState.cs)
+  + public string HeldItemDefId;   // null = empty held slot. ONE held slot (T30 §4 real design).
+
+RunState (ProtagonistState is the held store; RunState is the single owner of `Items`)
+  Items (backpack List<ItemInstance>) and AddItem() UNCHANGED.
+  HoldItem(ProtagonistState p, string defId):
+    - p null → no-op (null-tolerant).
+    - remove ONE matching-DefId ItemInstance from Items IF present (real item leaves backpack);
+      if absent (a debug-only catalog item), Items is left untouched — the display bypass.
+    - if p.HeldItemDefId != null, push that previous defId back to Items (bump-out to backpack).
+    - p.HeldItemDefId = defId.
+  UnholdItem(ProtagonistState p):
+    - p null or p.HeldItemDefId null → no-op.
+    - push p.HeldItemDefId back to Items; p.HeldItemDefId = null.
+  Signature takes a ProtagonistState REF (not an id) so the shelter can pass either a real
+  Owned state OR an ephemeral debug-only state (PumpKing isn't in Owned) — RunState stays the
+  single writer of Items either way, and Owned/ActiveBuild are NEVER mutated by this feature.
+  NO cooldown/passive/perish/day-end side effects. One-line comment: bench auto-return
+  (T30 §4) deferred until party-benching UI exists.
+
+Shelter Team Build overlay (ShelterController, code-built Panel like DebugManager.BuildLogPanel/
+  BuildProtagonistPanel; ONE new "Team Build" Button authored in Shelter.tscn's Box)
+  Always available (free management action — not gated by Blessed/stamina); works debug OFF
+  (the real, permanent shelter feature) and debug ON.
+  Roster shown = RunState.Owned (real ProtagonistStates)
+                 ∪ (DebugManager.Instance?.Enabled == true
+                    ? ProtagonistRoster.Entries whose Id ∉ Owned  (ephemeral debug states)
+                    : none).
+    NEVER mutate RunState.Owned/ActiveBuild — display-layer union only. Debug-only
+    protagonists' held items live in ShelterController-owned ephemeral ProtagonistStates
+    (scene-lifetime; not persisted, never leak into the run economy).
+  Backpack/assignable pool shown:
+    - real section: each ItemInstance in RunState.Items (DisplayName), always assignable.
+    - debug section (debug ON only): each ItemCatalog entry whose Id ∉ Items AND not
+      currently held by any roster protagonist — additive DISPLAY bypass; the full catalog
+      is NEVER bulk-written into RunState.Items.
+  Interaction: select a protagonist (marker "> Name <") → click an assignable item → RunState.
+    HoldItem(selectedState, defId); a per-protagonist "Return held to backpack" → RunState.
+    UnholdItem(state). Panel refreshes from RunState after every action.
+  Null-tolerant: RunState.Instance == null (F5 straight into Shelter) → empty roster/backpack
+    with "(debug)" fallbacks, no NRE — same `rs?.` pattern ShelterController already uses.
+```
+
+### 9.4 Open questions (prototype defaults picked, review later)
+
+- **Q-ITEM1 (RESOLVED — fixed in review, not accepted).** First pass had no real-vs-debug
+  provenance, so a debug-conjured catalog item held-then-returned would materialize a real
+  `ItemInstance` into `RunState.Items` and survive debug-off. The reviewer flagged this as MAJOR
+  and it was fixed (F-ITEM1): `ProtagonistState.HeldItemFromBackpack` gates the return path so
+  only real backpack items go back to `Items`; debug-conjured items vanish. The economy is now
+  never polluted by the debug bypass. (Superseded my initial "accept it, items are inert"
+  disposition — the owner asked for rigor and the invariant is now upheld exactly.)
+- **Q-ITEM2.** Debug-only protagonists (PumpKing, not in `Owned`) get an ephemeral
+  `ProtagonistState` owned by `ShelterController`, alive for the scene visit only. Closing/
+  reopening the panel within the same shelter keeps it; leaving and re-entering the shelter
+  resets debug held selections — acceptable for a debug affordance (never persisted, never
+  in `Owned`).
+- **Q-ITEM3.** Catalog `Id` strings are authored here for the first time (no prior canonical
+  ids). Chose readable snake_case ids (e.g. `pome_bravery`, `the_void`) — a future real
+  item system may re-key; the stub catalog is the only consumer today.
+
+### 9.5 Phase log
+
+**M1 (engineer, 2026-07-11) — delivered per contract.** Five files: NEW
+`Scripts/Items/ItemCatalog.cs` (Godot-free `Fableland.Items` static registry, the 13
+ITEMS.gdd §6.3 ids+names, `DisplayName(id)` id-fallback, `Contains(id)`); `ProtagonistState.
+HeldItemDefId`; `RunState.HoldItem/UnholdItem` right after `AddItem` (Items/AddItem/NewRun/
+ApplyRewards untouched); `Scenes/Shelter.tscn` one `TeamBuildButton` (no `uid=`);
+`ShelterController` code-built Team Build overlay mirroring `DebugManager.BuildLogPanel`
+(roster union of `Owned` + debug-only `ProtagonistRoster` via cached ephemeral states;
+backpack = real `Items` + debug catalog display bypass; select-protagonist → assign → HoldItem,
+per-row Return → UnholdItem; refresh after each; null-guarded throughout). Engineer decisions:
+`[DBG]` label prefix on debug-catalog rows (visual source distinction); fixed row widths;
+F5-no-run assign silently no-ops. Own static check clean (braces/parens balanced, GetNode path
+matches new node).
+
+**M2 (reviewer, 2026-07-11) — verdict APPROVE WITH FIXES.** One MAJOR confirmed: debug
+catalog items materialize a permanent real `ItemInstance` into `RunState.Items` via the
+asymmetric `HoldItem` (skips take-side removal for not-really-owned items) vs `UnholdItem`
+(unconditional return-side `Items.Add`) — reachable in one click-pair on a REAL `Owned`
+protagonist, surviving debug-off. Everything else conformed: pure-data catalog (no `using
+Godot`, 13 names verbatim), single `HeldItemDefId` slot, `Items`/`AddItem`/reward paths
+byte-for-byte unchanged, no T30 §4 machinery (correctly scoped stub), button free/not day-
+ending, roster/backpack union exact, `Owned`/`ActiveBuild` never mutated, closure capture +
+QueueFree-rebuild + `bool?` compare all correct, null-tolerance traced. NOTEs: `ItemCatalog.
+Contains` unused (harmless public helper, kept); Godot-4 API calls precedented in
+`DebugManager` but compile-unverified (no toolchain).
+
+**Orchestrator fix applied:**
+- **F-ITEM1 (reviewer MAJOR).** Added `ProtagonistState.HeldItemFromBackpack` (provenance).
+  `RunState.HoldItem` now takes `bool fromBackpack`: it only removes from `Items` when true, and
+  its bump-out only returns the *previous* held item to `Items` if that item was itself from the
+  backpack. `RunState.UnholdItem` returns to `Items` only when `HeldItemFromBackpack`; a debug-
+  conjured item vanishes and clears the flag. `ShelterController.AssignItem(defId, bool
+  fromBackpack)` passes `true` for real `Items` rows, `false` for `[DBG]` catalog rows. Result:
+  the debug bypass can never create a real item — round-trips are conservative. KNOWLEDGE.md
+  caveat added (v0.6.0). Static re-check: no stale 2-arg call sites; braces/parens balanced on
+  all touched files.
+
+**M3 (orchestrator independent double-check of the Team Build menu, 2026-07-11) — PASSED.**
+Traced by reading the post-fix code (not the reviewer's word):
+- Shelter loads → `TeamBuildButton` (`Center/Box/TeamBuildButton`, wired in `_Ready`, not
+  disabled by `Refresh()`) → `OpenTeamBuild()` positions/refreshes/shows the panel; X = hide.
+- **Debug OFF, fresh run** (`Owned`=[Pomegraknight], `Items`=[]): roster shows Pomegraknight
+  only, held "(empty)", Return disabled; backpack empty; nothing to assign. Correct.
+- **Debug ON, fresh run:** roster = Pomegraknight (real) + PumpKing (ephemeral, from
+  `ProtagonistRoster`, NOT added to `Owned`); backpack = 0 real + 13 `[DBG]` catalog rows.
+- **Assign `[DBG] Pome's Bravery` to Pomegraknight:** `HoldItem(ownedState,"pome_bravery",
+  false)` → nothing removed from/added to `Items`; `HeldItemDefId="pome_bravery"`,
+  `HeldItemFromBackpack=false`. Roster shows it held; catalog now shows 12 (held id excluded).
+  `ProtagonistState.HeldItemDefId` updated, item removed from backpack-display. Correct.
+- **Return it:** `UnholdItem` → `HeldItemFromBackpack==false` ⇒ vanishes, `Items` STILL empty,
+  slot cleared, item reappears in the 13-row `[DBG]` catalog. Perfect reversal, zero economy
+  pollution (this is the F-ITEM1 fix working).
+- **Real backpack item path** (e.g. a reward `Items`=[pome_seed], debug OFF): assign (fromBackpack
+  true) removes it from `Items` → held; Return adds it back to `Items`. Correct round-trip.
+- **Mixed bump-out** (real held, then assign a `[DBG]` item): real item bumped back to `Items`,
+  debug item held without pollution; assigning the real one back vanishes the debug one. Correct.
+- **Close/reopen (same scene):** panel hidden not freed; `_debugStates` + `RunState`/`Owned`
+  persist; refresh rebuilds — no state loss.
+- **F5-direct-into-Shelter:** `RunState` is an autoload (project.godot:21) ⇒ `Instance` non-null,
+  `Owned`/`Items` empty; menu is fully functional (debug items assign to ephemeral states, never
+  touch `Items`); the `?.`/`rs?.` guards additionally make it NRE-safe even if the autoload were
+  ever absent. No NRE on any path (roster/backpack build, assign, unhold, `_nodeId` init).
+- **Non-invasiveness:** grep-confirmed no writes to `RunState.Owned`/`ActiveBuild`; the debug
+  catalog is never bulk-written into `Items`; `RunState` remains the sole `Items` writer.
+Conclusion: the Team Build menu behaves correctly in every enumerated scenario; the single
+review finding is fixed and re-verified. **No real build — no Godot/.NET toolchain on this host**
+(the Godot-4 UI API calls are precedented byte-for-byte in `DebugManager` but remain compile-
+unverified; flagged for the next `dotnet build` window alongside the standing v0.5.4 items).
+
+**M4 (orchestrator, 2026-07-11):** doc-sync (ITEMS.gdd status framing clarified — only the stub
+landed; DEBUG_MODE.md §"item visibility" added), KNOWLEDGE.md v0.6.0 caveat, version trio bumped
+to **0.6.0** (`GameVersion.cs`/`VERSION`/Hud `VersionLabel` in sync), `Migration.md` §0 changelog
+0.6.0 entry. **Not committed — no user authorization this session.** The uncommitted v0.5.4
+debug-mode WIP (§8) is carried into the same working tree; when a commit is authorized, both
+land together as v0.6.0 with explicit `git add` paths (never `git add -A`, per the v0.5.3 caveat).
+

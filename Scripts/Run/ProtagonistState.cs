@@ -20,5 +20,18 @@ public sealed class ProtagonistState
     public int BonusDef;
     public int MaxHpPercentPoints;  // additive percentage points: two full-HP Rests → +10, +20 (NOT compounding)
 
+    /// <summary>The single held wonder-item slot (defId, null = empty). ONE held slot per
+    /// protagonist (ITEMS.gdd §1.1 / T30 §4 — the real design, even in this v0.6.0 stub). No
+    /// passive/skill/cooldown behavior attaches yet — that is future work (T30 §4).</summary>
+    public string HeldItemDefId;
+
+    /// <summary>True when <see cref="HeldItemDefId"/> was drawn from the real backpack (so it must
+    /// return there on unhold / bump-out). False for a debug Team-Build "conjured" catalog item
+    /// that was never in <c>RunState.Items</c> — that one vanishes on return and must NEVER
+    /// materialize into the real economy. In the full item system every held item comes from the
+    /// backpack, so this is always true there; it exists only to keep the v0.6.0 debug display
+    /// bypass honest (see RunState.HoldItem/UnholdItem).</summary>
+    public bool HeldItemFromBackpack;
+
     public ProtagonistState(string id) { Id = id; }
 }

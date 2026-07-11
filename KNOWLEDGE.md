@@ -91,6 +91,56 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A "display-bypass" debug source must not round-trip into real owned state (v0.6.0, caught in review)
+- **Symptom:** the v0.6.0 shelter Team Build menu, in debug mode, lists every `ItemCatalog`
+  entry as assignable even when it isn't really in `RunState.Items` ("all wonder items available
+  for testing"). `RunState.HoldItem` correctly skipped removing such a not-really-owned item from
+  the backpack, but `UnholdItem` (and the bump-out branch) unconditionally did `Items.Add(...)` —
+  so holding a debug-conjured item then returning it **materialized a brand-new real `ItemInstance`
+  into `RunState.Items`**, which then survived toggling debug mode back off. One click-pair = a
+  permanent item granted outside the real economy, on a real `Owned` protagonist.
+- **Rule:** when a display/debug overlay shows content the real economy hasn't granted, any
+  mutation path it shares with real content must **track provenance** so the debug item can't
+  leak back as real state. Here: `ProtagonistState.HeldItemFromBackpack` records whether the held
+  item came from `Items`; only a `true` item returns to `Items` on unhold/bump-out — a conjured
+  (`false`) item vanishes. The "add back" and the "remove on take" must be symmetric and gated by
+  the same flag. Same family as the v0.5.0 "debug knob's convenient default leaks into live
+  gameplay" caveat: a debug affordance's *outputs* must be as carefully gated as its *inputs*.
+- **Why:** the take-side skip (don't remove what isn't there) and the return-side add (always put
+  it back) look individually correct but are asymmetric — the asymmetry is a net source of new
+  real items. Provenance makes the pair symmetric so the round-trip is conservative (no creation),
+  which is the invariant "the full catalog is never written into `RunState.Items` for real"
+  actually requires.
+
+### A scene-lifetime node must unsubscribe from an autoload's C# event in `_ExitTree` (v0.5.4)
+- **Symptom:** `GameManager.SetupHud` did `DebugManager.Instance.SkipRequested += OnSkipRequested`
+  and never unsubscribed. `DebugManager` is an autoload that outlives every arena scene, so each
+  arena visit leaked a handler pointing at a disposed `GameManager`; a later SKIP press would
+  invoke the dead handler(s) first (touching freed HUD/mission nodes → `ObjectDisposedException`
+  risk), and an exception there blocks the *live* arena's handler too — SKIP breaks after the
+  first arena visit.
+- **Rule:** any node whose lifetime is shorter than the publisher's (scene node → autoload event)
+  must pair `+=` with a `-=` in `_ExitTree`. Plain C# `event Action` has no Godot object-liveness
+  awareness (unlike Godot signals, which disconnect freed objects). Prefer a direct, pull-style
+  call (`GetTree().CurrentScene is GameManager gm && gm.Method(...)`) over adding a new autoload
+  event when the flow is debug-tooling → scene — that's how the v0.5.4 protagonist page applies
+  its swap, precisely to avoid creating another instance of this leak.
+- **Why:** the autoload's event field holds a strong delegate reference; `QueueFree` frees the
+  Godot object but not the C# subscription, so the handler list only ever grows.
+
+### Runtime-instanced player bodies: re-anchor `_spawnPoint` after placing the node (v0.5.4, caught in review)
+- **Symptom:** the debug protagonist swap instanced a character scene, `AddChild`-ed it, then set
+  `GlobalPosition` — but `CharacterController._Ready` (which runs *inside* `AddChild`) had already
+  latched `_spawnPoint = GlobalPosition` at the character scene-file's own origin (`(0,0)`; the
+  real arena spot exists only as `Arena.tscn`'s instance override). Next debug-lives `Respawn()`
+  would teleport the swapped-in body to `(0,0)`. Silent — no crash, just a wrong respawn.
+- **Rule:** anything that instantiates a `CharacterController` at runtime must call
+  `SetSpawnPoint(pos)` right after positioning it. Same bug class as the v0.4.0 "capture
+  spawn-relative anchors on the first physics frame, not in `_Ready`" caveat (seagull patrol
+  anchor) — `_Ready`-latched position state always predates the spawner's placement.
+- **Why:** authored scenes get the right value for free (the node sits at its final position
+  before `_Ready`), which is exactly what makes the runtime-instancing path easy to miss.
+
 ### Protagonist migration playbook — porting a character from the Unity `GloryOfFableland` project (reference; Pomegraknight v0.5.2, PumpKing v0.5.3)
 Read this before porting the next character (Cleopastar / Pixolotl / Pangda). Each point
 is a mistake already paid for once.
