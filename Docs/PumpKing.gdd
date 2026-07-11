@@ -190,6 +190,26 @@ HP/ATK/DEF pools (Rest excess, Sharpen), not a level ladder.
 
 ## Implementation Notes
 
+### Godot Port Status (v0.5.3)
+Ported to Godot as `Scripts/PumpKing.cs` + `Scenes/PumpKing.tscn` (body + `NeckHead`
+child) and `Scripts/PumpKingHead.cs` + `Scenes/PumpKingHead.tscn` (rolling head).
+Sprites and body animations (idle/walk/jump/soul) are migrated. Notes/deviations vs.
+the Unity source:
+- **Shield** is implemented in the subclass via a new `CharacterController.AbsorbDamage`
+  hook (default pass-through) — the Godot base has no shield/ammo machinery, unlike Unity.
+- **Head physics** use a manual-kinematic `CharacterBody2D` + `MoveAndCollide` reflect
+  (velocity is naturally pre-collision) plus a floor-rest/roll-friction pass so the
+  still-timer can fire. Mouse steering (off by default in Unity) was not ported.
+- **Soul entry resets pump stacks *and* shield** (GDD canon) — Unity cleared only the
+  shield; resetting both keeps the shield == stacks×20 invariant.
+- **Autonomous heads** (released on Soul entry) play the explode visual but deal no AoE.
+- **No dead/stun body clip** exists in the delivered art — death freezes the frame with
+  the base gray tint; stun uses the base `Anim.SpeedScale` freeze.
+- **Follow-ups:** shield has no HUD binding yet; head 6-stage art is a single sheet sliced
+  per stage + code scale (not distinct per-stage art); PumpKing is not yet a selectable
+  protagonist (Pomegraknight remains the Arena/RunState default); animation frame timings
+  want an in-editor polish pass on a real Godot build.
+
 ### State Machine
 Three states (`PKState` enum: Normal, Rolling, Soul). State transitions are gated —
 BA does nothing in Soul; Pump Up only works in Normal; firing head only works in
@@ -225,4 +245,4 @@ The neck head reappears when ammo reaches full.
 
 ---
 
-*Last Updated: July 2026 | Version: 1.0 | Generated from Unity source PumpKing.cs + PumpKingHead.cs*
+*Last Updated: July 2026 (v0.5.3 Godot port) | Version: 1.1 | Generated from Unity source PumpKing.cs + PumpKingHead.cs*

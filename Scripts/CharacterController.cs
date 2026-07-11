@@ -439,6 +439,10 @@ public partial class CharacterController : CharacterBody2D
 	/// <summary>No-op until real animations exist; override and drive Anim here.</summary>
 	protected virtual void UpdateAnimator(float dt) { }
 
+	/// <summary>Subclass hook: absorb incoming damage (e.g. a shield pool) after the
+	/// defense multiplier, before HP loss. Returns the damage that remains.</summary>
+	protected virtual float AbsorbDamage(float damage) => damage;
+
 	/// <summary>Last animation name requested via <see cref="PlayAnim"/>. Godot clears
 	/// <c>AnimationPlayer.CurrentAnimation</c> back to "" once a non-looping clip
 	/// finishes, so the automata needs its own memory of what it last asked for
@@ -535,6 +539,7 @@ public partial class CharacterController : CharacterBody2D
 		if (_dead || _invulnTimer > 0f) return;
 
 		float dealt = hit.Damage * DefenseMultiplier;
+		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogPlayerDmgReceived(hit.Damage, dealt, "foe");
 		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
 		HpChanged?.Invoke(CurrentHP, MaxHP);
@@ -560,6 +565,7 @@ public partial class CharacterController : CharacterBody2D
 		if (damage > 0f)
 		{
 			float dealt = damage * DefenseMultiplier;
+			dealt = AbsorbDamage(dealt);
 			DebugManager.Instance?.LogHazardDmg(dealt, "player");
 			CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
 			HpChanged?.Invoke(CurrentHP, MaxHP);
@@ -594,6 +600,7 @@ public partial class CharacterController : CharacterBody2D
 	{
 		if (_dead) return;
 		float dealt = amount * DefenseMultiplier;
+		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogDotDmg(dealt, IsBurning ? "Burn" : _fire.Active ? "OnFire" : "Frozen");
 		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
 		HpChanged?.Invoke(CurrentHP, MaxHP);

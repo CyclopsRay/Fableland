@@ -91,6 +91,53 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Protagonist migration playbook — porting a character from the Unity `GloryOfFableland` project (reference; Pomegraknight v0.5.2, PumpKing v0.5.3)
+Read this before porting the next character (Cleopastar / Pixolotl / Pangda). Each point
+is a mistake already paid for once.
+- **Sprites are already migrated.** The v0.5.2 bulk copy put every character's images in
+  `Assets/Sprites/Characters/{Name}/` (images only, sanitized filenames; `.anim`/`.controller`/
+  `.DS_Store` excluded). Do NOT re-copy from the old project. They are Unity **multi-sprite
+  sheets**, not one-frame files — slice them into `AtlasTexture` regions. Get the grid from the
+  old `.meta` (`TextureImporter` sprite rects) / `.anim` files, and **flip Y** (Unity's rect
+  origin is bottom-left; Godot's is top-left).
+- **The Godot base `CharacterController` is deliberately leaner than Unity's.** It does NOT
+  provide: a shield pool, ammo/magazine/replenish, firing segments, or soul/free-flight. Any
+  character that needs those implements them in its own subclass. When the base genuinely must
+  participate (e.g. a shield that intercepts incoming damage), add a **`protected virtual`
+  pass-through hook** (see `AbsorbDamage(float) => damage`, used at the 3 damage sites) rather
+  than baking one character's state into the base — the default keeps every other character
+  byte-for-byte unaffected.
+- **Ability mapping is fixed:** Unity `HandleBA`→`HandleBA`, Shift→`HandleSkill1`, E→
+  `HandleSkill2`, Ult→`HandleSkillUlt`. Override `ShiftCooldown`/`ESkillCooldown` for the HUD
+  icons. BA that should fire on press (not hold) just gates inside `HandleBA`.
+- **Derive every distance/speed from `Units` (32 px/m); never hardcode Unity metres.** Unity
+  `x` m/s → `Units.Px(x)`; gravity/jump come from `Units`.
+- **Scene: mirror `Scenes/Pomegraknight.tscn`.** CharacterBody2D (layer 1, mask 12) + Collision
+  Shape2D + body Sprite2D + FirePoint(Marker2D) + AnimationPlayer(AnimationLibrary) + Camera2D
+  (+ ShakeCamera2D script). **Multi-part characters** (e.g. PumpKing's `NeckHead`) add child
+  Sprite2D(s) driven entirely in code — sync FlipH / Scale / Visible / SelfModulate to the body
+  in `UpdateAnimator` (or a helper it calls), because the base only flips the body sprite.
+- **`UpdateAnimator(dt)` runs from base `_Process`, not `_PhysicsProcess`,** and only while not
+  stunned; `_Process` early-returns when dead. So overriding `_PhysicsProcess` for a special
+  movement mode (PumpKing's Soul free-flight) does NOT suppress animation, and a `Dead` branch in
+  `UpdateAnimator` is effectively unreachable.
+- **If code mutates an `AtlasTexture.Region` at runtime** (per-stage head sprite, etc.),
+  `.Duplicate()` the texture in `InitCharacter` first — the scene's sub_resource is shared across
+  every instance and in-place mutation corrupts them all.
+- **Animation authoring:** obey the two value-track caveats below (update mode inside the keys
+  dict; first key at t=0; include a `RESET`). You don't need a clip for every Unity state — omit
+  `dead`/`stun` when there's no art (the base freezes the frame via `Anim.SpeedScale` for stun and
+  a gray tint reads as death).
+- **Projectiles:** call `Init(...)` **after** `AddChild`; damage foes via
+  `GetTree().GetNodesInGroup("enemy")` → cast `BaseFoe` → `TakeHit(new HitInfo(dmg, knockback), origin)`;
+  hit tests subtract `BaseFoe.HitRadius`; projectile scene uses `collision_layer = 16` (layer 5),
+  `collision_mask = 14` (Foe+Ground+Platform).
+- **Ship discipline:** keep the character self-contained — do NOT change the default protagonist
+  (`Arena.tscn` / `RunState.Owned[0]`) unless asked. Version-bump the trio, add caveats here,
+  doc-sync the character GDD, and **commit with explicit paths — never `git add -A`/`.`** (an
+  agent run swept unrelated in-progress files, `Docs/ITEMS.gdd` + `IMPLEMENTATION_REPORT.md`, into
+  the PumpKing commit; it had to be reset and re-committed).
+
 ### A debug-override export must be gated behind "no run exists", not behind its own value (v0.5.0)
 - **Symptom:** `GameManager.FoeLevel` used `DebugFoeLevel > 0 ? DebugFoeLevel : LevelForDay(day)`
   unconditionally. The export's *default* is 1 (so direct-F5 arenas work out of the box), which
@@ -126,6 +173,28 @@ compiler surfaces below.
   editor add UIDs when the project is next opened.
 - **Why:** UIDs are an editor-managed identity namespace, not documentation — inventing them
   is the one way to make two scenes claim the same identity.
+
+### Generating Animation sub_resources from an extracted frame table: derive per-frame texture from the row's own clip name, not a hand-counted segment length (v0.6.0-anim, PumpKing)
+- **Symptom (caught pre-commit):** a python generator for `PumpKing.tscn`'s `idle` clip
+  assigned each row's source texture by hand-counted segment lengths (`[IDLE1]*17 +
+  [SQUEEZE]*11 + [IDLE2]*15`) instead of reading the clip name already present in each
+  extracted row. The real boundary was 16/11/16, not 17/11/15 — an off-by-one at the
+  first boundary (miscounting the Unity clip's dup-hold frame at `t=1.25` as still
+  `Pump_idle_1`) that happened to still sum to the same total row count (43), so a
+  naive "does the total match" check would NOT have caught it; only cross-checking the
+  per-clip breakdown against the source rows did.
+- **Rule:** when generating `AtlasTexture`/`Animation` blocks from an extracted
+  frame table that already carries a clip/segment name per row, key the
+  texture-selection off **that row's own name field**, never off a manually counted
+  span — spans are exactly the kind of number that's easy to miscount by one and whose
+  bug is invisible if you only check the grand total. Print a per-clip breakdown
+  (`clip name → row count`) and eyeball it against the source `===` sections before
+  trusting the output.
+- **Why:** a texture mismatch at one boundary silently renders the wrong sprite sheet
+  for a stretch of frames — no load error, no crash, just wrong pixels — and the only
+  static check available on a no-toolchain host (region-within-texture-bounds) still
+  passes because the wrong texture can easily be big enough to contain the (wrong)
+  region.
 
 ### Hand-authored `Animation` value tracks: update mode lives INSIDE the keys dict (v0.6.0-anim)
 - **Symptom (caught pre-commit):** the generated `Pomegraknight.tscn` animations carried a
