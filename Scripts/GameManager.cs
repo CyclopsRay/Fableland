@@ -123,7 +123,7 @@ public partial class GameManager : Node2D
         var platformTex = GD.Load<Texture2D>("res://Sprites/platform_placeholder.svg");
         _surfacePoints = ArenaBuilder.Build(_world, _hazards, _rng, platformTex, FireHazardScene, FreezeHazardScene);
 
-        Spawner = new FoeSpawner(this, _rng.Sub("spawn"));
+        Spawner = new FoeSpawner(this, _rng.Sub("spawn")) { Enabled = false }; // armed after grace
 
         _mission = CreateMission(_missionType);
         _mission.Setup(this, _nodeLevel, _rng.Sub("mission"));
@@ -386,27 +386,27 @@ public partial class GameManager : Node2D
             return;
         }
 
-        Spawner?.Tick(dt);
-
         // 3-second pre-combat grace period: no foe spawns, mission timer frozen, countdown
-        // shown so the player can orient before the fight begins.
+        // shown so the player can orient before the fight begins. Must run BEFORE
+        // Spawner.Tick so the spawner is already disabled on the very first frame.
         if (_graceTimer > 0f)
         {
             _graceTimer -= dt;
             _hud.SetProgress(_graceTimer > 0.01f
                 ? $"Get ready... {Mathf.CeilToInt(_graceTimer)}"
                 : "Go!");
-            // Suppress the ambient spawner during grace; the mission timer is also paused
-            // (we skip _mission.Tick below). Foes that were already in the arena (none at
-            // scene start; debug F5 may have pre-placed ones) are unaffected.
+            // Keep the spawner suppressed during grace; the mission timer is also paused
+            // (we skip _mission.Tick below).
             Spawner.Enabled = false;
         }
         else if (_graceTimer != -1f)
         {
             // Grace just ended — arm the spawner and let the mission resume.
             _graceTimer = -1f;
-            Spawner.Enabled = true;
+            if (Spawner != null) Spawner.Enabled = true;
         }
+
+        Spawner?.Tick(dt);
 
         // Tab protagonist switch (NODES §3.3) — available mid-combat, 12s CD, only when
         // party has 2+ members. Tick cooldown every frame.
