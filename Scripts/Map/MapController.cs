@@ -84,6 +84,12 @@ public partial class MapController : Node2D
     private Button _renderButton;
     private Button _viewModeButton;
 
+    // Debug day editor — visible only when DebugManager.Enabled is true.
+    private Control _dayEditor;
+    private LineEdit _dayEdit;
+    private bool _debugWasOn;
+    private int _lastDayShown = -1;
+
     // Day-end summary toast (T30 §5 residual, v0.5.0): shown once on scene load if RunState left a
     // LastDayEndSummary, auto-hides after ToastDuration or on the next click (whichever first).
     private Label _toastLabel;
@@ -108,6 +114,16 @@ public partial class MapController : Node2D
         _viewModeButton.Pressed += OnCycleViewMode;
         _renderButton.Text = _rendered ? "View: atlas" : "View: schematic";
         UpdateViewModeButton();
+
+        // Debug day editor — hidden unless debug is on.
+        _dayEditor = GetNode<Control>("UI/DayEditor");
+        _dayEdit = GetNode<LineEdit>("UI/DayEditor/DayEdit");
+        GetNode<Button>("UI/DayEditor/Minus5").Pressed += () => AdjustDay(-5);
+        GetNode<Button>("UI/DayEditor/Minus1").Pressed += () => AdjustDay(-1);
+        GetNode<Button>("UI/DayEditor/Plus1").Pressed += () => AdjustDay(1);
+        GetNode<Button>("UI/DayEditor/Plus5").Pressed += () => AdjustDay(5);
+        _dayEdit.TextSubmitted += OnDayTextSubmitted;
+
         FitZoom();
 
         _toastLabel = GetNode<Label>("UI/ToastLabel");
@@ -301,6 +317,37 @@ public partial class MapController : Node2D
                           $"fights {fights}  camps {camps}  ? {marks}";
     }
 
+    /// <summary>Adjust the current day by <paramref name="delta"/> (debug only, clamped to ≥1).
+    /// Writes through to <see cref="RunState"/> — the single owner of day truth. Also updates the
+    /// InfoLabel and the DayEditor LineEdit so both stay in sync.</summary>
+    private void AdjustDay(int delta)
+    {
+        var rs = RunState.Instance;
+        if (rs == null) return;
+        rs.Day = Mathf.Max(1, rs.Day + delta);
+        _lastDayShown = -1; // force refresh next frame
+        UpdateInfo();
+        DebugManager.Instance?.LogSystem($"Day → {rs.Day} ({(delta >= 0 ? "+" : "")}{delta})");
+    }
+
+    /// <summary>Handle the user typing a day number and pressing Enter in the debug DayEdit.</summary>
+    private void OnDayTextSubmitted(string text)
+    {
+        var rs = RunState.Instance;
+        if (rs == null) return;
+        if (int.TryParse(text.Trim(), out int val) && val >= 1)
+        {
+            rs.Day = val;
+            _lastDayShown = -1;
+            UpdateInfo();
+            DebugManager.Instance?.LogSystem($"Day → {rs.Day} (manual)");
+        }
+        else
+        {
+            _dayEdit.Text = rs.Day.ToString(); // revert on invalid input
+        }
+    }
+
     // ---- movement --------------------------------------------------------------
 
     /// <summary>Steps from the current node reachable by walking ONLY through already-visited nodes.</summary>
@@ -437,6 +484,20 @@ public partial class MapController : Node2D
 
     public override void _Process(double delta)
     {
+        // Show/hide the debug day editor when debug mode is toggled.
+        bool debugOn = DebugManager.Instance?.Enabled == true;
+        if (debugOn != _debugWasOn)
+        {
+            _debugWasOn = debugOn;
+            _dayEditor.Visible = debugOn;
+            _lastDayShown = -1; // force refresh on toggle
+        }
+        if (debugOn && _day != _lastDayShown)
+        {
+            _lastDayShown = _day;
+            _dayEdit.Text = _day.ToString();
+        }
+
         _time += (float)delta;
         _tokenPos = _tokenPos.Lerp(_current.Pos, Mathf.Min(1f, (float)delta * 12f));
         _rotTarget = RotTarget();

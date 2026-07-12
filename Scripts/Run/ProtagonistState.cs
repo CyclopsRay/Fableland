@@ -33,5 +33,12 @@ public sealed class ProtagonistState
     /// bypass honest (see RunState.HoldItem/UnholdItem).</summary>
     public bool HeldItemFromBackpack;
 
+    // Per-skill cooldown remaining, saved on switch-out and ticked down while benched
+    // at the background CD rate = 1/(2n−2) (NODES §3.3). Max values come from the live
+    // character's exported properties (ShiftCooldown / ESkillCooldown); only the remaining
+    // time is persisted here.
+    public float ShiftCdRemaining;
+    public float ESkillCdRemaining;
+
     public ProtagonistState(string id) { Id = id; }
 }

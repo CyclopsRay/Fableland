@@ -729,3 +729,150 @@ to **0.6.0** (`GameVersion.cs`/`VERSION`/Hud `VersionLabel` in sync), `Migration
 0.6.0 entry. **Not committed — no user authorization this session.** The uncommitted v0.5.4
 debug-mode WIP (§8) is carried into the same working tree; when a commit is authorized, both
 land together as v0.6.0 with explicit `git add` paths (never `git add -A`, per the v0.5.3 caveat).
+
+---
+
+## 10. v0.6.1–v0.6.5 — Protagonist switching + background CD + HUD + debug day + bug fixes (2026-07-12, on `main`)
+
+User session implementing the mid-combat protagonist-switch mechanic (NODES §3.3) plus
+accompanying systems, HUD polish, and bug fixes. All work done by Claude in the IDE;
+five version bumps, each static-verified (no Godot toolchain on this host).
+
+### 10.1 v0.6.1 — Tab protagonist switching
+
+**Input:** `switch_protagonist` action bound to Tab key in `project.godot`.
+
+**RunState.cs:**
+- `ActiveProtagonistIndex` — which party slot is controlled.
+- `NewRun()` now seeds `Owned` + `ActiveBuild` with **both** Pomegraknight and PumpKing.
+- `CycleNextProtagonist()` — wraps the index around; returns null when party < 2.
+- `FindProtagonist(id)` — looks up a `ProtagonistState` from `Owned`.
+
+**CharacterController.cs:**
+- `WriteBackToState(ProtagonistState)` — saves HP ratio to the run copy.
+- `InheritVelocityFrom(CharacterController)` — copies intent+external velocity channels
+  so a mid-air switch continues the trajectory (NODES §3.3).
+- `SaveCooldownsToState` / `LoadCooldownsFromState` — virtual hooks (base no-ops).
+
+**GameManager.cs:**
+- `_activePartyIndex` / `_switchCd` / `SwitchCooldown = 12f`.
+- `SetupPlayer()` resolves the `ProtagonistState` from `ActiveBuild[_activePartyIndex]`
+  instead of hardcoding `Owned[0]`; hydrates HP + ATK + DEF from the correct state.
+- `_Process()` checks `switch_protagonist` input each frame, ticks `_switchCd`.
+- `TrySwitchProtagonist()` — guards (dead, CD, party < 2, no run) → saves outgoing HP
+  ratio → carries it to the incoming state (NODES §3.3 "HP ratio inheritance") →
+  `CycleNextProtagonist` → `ReplacePlayerNode` → `SetupPlayer` → reset CD.
+- `ReplacePlayerNode()` calls `InheritVelocityFrom(old)` before QueueFree.
+- `WriteBackHp()` delegates to `_player.WriteBackToState(_protagonist)`.
+
+**Pomegraknight.cs / PumpKing.cs:**
+- Override `SaveCooldownsToState` / `LoadCooldownsFromState` — persist `_blushCd`/`_eCd`
+  and `_soulCd`/`_pumpCd` respectively.
+
+**Hud.cs:**
+- `SetPlayer()` now **unsubscribes** from the previous player's `UltChargeChanged` before
+  subscribing to the new one (same bug class as the v0.5.4 autoload-event leak).
+
+**Hud.tscn / Hud.cs:**
+- `NextMugshot` TextureRect added below the ItemSlot; `SetNextProtagonist(id)` loads
+  placeholder art (pomegranate SVG for Pomegraknight, pumpkin SVG for PumpKing).
+- `UpdateNextMugshot()` in GameManager pushes the next party member's ID on setup + switch.
+
+### 10.2 v0.6.2 — Background CD formula 1/(2n−2)
+
+Per user spec replacing the flat ⅕-speed penalty: benched protagonists' skill cooldowns
+recover at rate `1/(2n−2)` where n = party size:
+- 2-party → 0.5× (6s CD → 12s real)
+- 3-party → 0.25× (6s → 24s), 4-party → 0.167× (6s → 36s)
+
+**ProtagonistState.cs:** added `ShiftCdRemaining` / `ESkillCdRemaining` fields.
+
+**GameManager.cs:**
+- `TrySwitchProtagonist()` saves outgoing cooldowns via `_player.SaveCooldownsToState()`.
+- `SetupPlayer()` restores incoming cooldowns via `_player.LoadCooldownsFromState()`.
+- `TickBackgroundCooldowns(dt)` — ticks all benched protagonists' stored cooldowns at
+  the reduced rate each frame. Runs regardless of mission state (so CDs recover between
+  mission end and Finish the Day).
+
+**NODES.gdd §3.3:** updated from "⅕ speed" to the new formula.
+
+**Also in v0.6.2:**
+- **Seagull contact damage:** `HasContactDamage = true`, `BaseDamage = 20f` (was 18).
+  Seagulls now deal contact damage on touch using the existing `BaseFoe.TryContactDamage`.
+- **Debug day change (`[` / `]`):** in debug builds, bracket keys decrement/increment
+  `RunState.Day` (in a run) or `GameManager.DebugDay` (no run), with 0.35s debounce.
+  Logged via DebugManager.
+
+### 10.3 v0.6.3 — SwitchSlot CD overlay styling
+
+The flat `NextMugshot` TextureRect was replaced with a proper **SwitchSlot** Control
+matching the Shift/E/Item slot pattern:
+
+```
+SwitchSlot (Control)
+├── Icon (TextureRect)        — next protagonist's mugshot
+├── CooldownOverlay           — radial fill (ui_cd_overlay.svg, fill_mode=4)
+└── CdLabel (Label)           — seconds remaining, centered
+```
+
+**Hud.cs:** `SetSwitchCooldown(remaining, max)` updates the radial overlay, label, and
+**dims the mugshot** (`SelfModulate` → 35% gray) while the CD is active.
+GameManager pushes switch-CD state via new `PushSwitchHud()` every frame.
+
+### 10.4 v0.6.4 — Debug day editor on the map
+
+Replaced the `[`/`]` arena keys (v0.6.2) with a **DayEditor** UI strip on the map view,
+visible only when debug mode is on.
+
+**Map.tscn:** `DayEditor` HBoxContainer added between InfoLabel and FinishDayButton:
+```
+Day: [ 12 ]  [-5] [-1] [+1] [+5]
+```
+A LineEdit shows the current day (press Enter to set), flanked by four compact buttons.
+Subsequent buttons shifted down 34px.
+
+**MapController.cs:** `_Process` checks `DebugManager.Enabled` each frame; toggles
+visibility. `AdjustDay(delta)` writes to `RunState.Day` (clamped ≥1), refreshes both
+InfoLabel and LineEdit. `OnDayTextSubmitted` parses typed input.
+
+**GameManager.cs:** removed the `[`/`]` day-change block and `_dayDebounce` field.
+
+### 10.5 v0.6.5 — Grace period, foe invincibility, seagull dash fix
+
+**3-second grace period:** `GameManager._graceTimer` starts at 3.0s on arena load.
+During grace the HUD shows "Get ready... 3" → "2" → "1" → "Go!"; `Spawner.Enabled`
+is false; `_mission.Tick()` is skipped (mission timers frozen). At the end the
+spawner is armed and the mission clock starts.
+
+**Foe invincibility on mission end:** `BaseFoe.Invincible` (public bool) guards
+`TakeHit()` and `ApplyHazard()` — when set, all damage/knockback/stun/flash/ult-charge
+is suppressed. `GameManager.OnMissionResolved()` sets it on every living foe in group
+`"foe"` so the player can't farm kills after the objective resolves.
+
+**Seagull dash toward player:** `_dashDir` changed from `float` (X-sign only, horizontal
+swoop) to `Vector2` (full direction toward the player, locked at telegraph start).
+The seagull's `collision_mask = 4` (Ground only) already ensures the dash passes through
+platforms and soft volumes; only the ground blocks it. Knockback on hit also uses the
+dash direction vector.
+
+### 10.6 File inventory
+
+| File | Change |
+|------|--------|
+| `project.godot` | +`switch_protagonist` input action (Tab) |
+| `Scripts/Run/RunState.cs` | `ActiveProtagonistIndex`, `CycleNextProtagonist`, `FindProtagonist`, 2-protagonist init |
+| `Scripts/Run/ProtagonistState.cs` | `ShiftCdRemaining` / `ESkillCdRemaining` |
+| `Scripts/CharacterController.cs` | `WriteBackToState`, `InheritVelocityFrom`, `SaveCooldownsToState` / `LoadCooldownsFromState` (virtual) |
+| `Scripts/GameManager.cs` | Tab switching, background-CD ticking, switch-CD HUD push, 3s grace, foe invincibility, `UpdateNextMugshot` |
+| `Scripts/Pomegraknight.cs` | Override `SaveCooldownsToState` / `LoadCooldownsFromState` |
+| `Scripts/PumpKing.cs` | Override `SaveCooldownsToState` / `LoadCooldownsFromState` |
+| `Scripts/Hud.cs` | `SetPlayer` event-leak fix, `SetNextProtagonist`, `SetSwitchCooldown`, SwitchSlot |
+| `Scenes/Hud.tscn` | SwitchSlot (Icon + CooldownOverlay + CdLabel), 2 new ext_resources |
+| `Scripts/Map/MapController.cs` | Debug day editor (DayEditor +/- buttons + LineEdit) |
+| `Scenes/Map.tscn` | DayEditor HBoxContainer, buttons shifted down |
+| `Scripts/Foes/BaseFoe.cs` | `Invincible` property guarding `TakeHit` + `ApplyHazard` |
+| `Scripts/Foes/SeagullFoe.cs` | Contact damage on (20), `_dashDir` → Vector2 (toward player) |
+| `Docs/NODES.gdd` | §3.3 cooldown penalty updated to 1/(2n−2) formula |
+| `Sprites/UI/mugshot_next_pomegraknight.svg` | Placeholder pomegranate mugshot |
+| `Sprites/UI/mugshot_next_pumpking.svg` | Placeholder pumpkin mugshot |
+| `Scripts/GameVersion.cs` / `VERSION` / HUD+Map VersionLabels | 0.6.0 → 0.6.5 |

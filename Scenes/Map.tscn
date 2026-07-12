@@ -42,32 +42,65 @@ text = "Day 1   Stamina 5/5
 Traversed 1
 fights 1  camps 0  ? 0"
 
+[node name="DayEditor" type="HBoxContainer" parent="UI"]
+offset_left = 8.0
+offset_top = 114.0
+offset_right = 260.0
+offset_bottom = 142.0
+visible = false
+theme_override_constants/separation = 3
+
+[node name="DayLabel" type="Label" parent="UI/DayEditor"]
+vertical_alignment = 1
+theme_override_font_sizes/font_size = 14
+text = "Day:"
+
+[node name="DayEdit" type="LineEdit" parent="UI/DayEditor"]
+custom_minimum_size = Vector2(36, 0)
+select_all_on_focus = false
+
+[node name="Minus5" type="Button" parent="UI/DayEditor"]
+custom_minimum_size = Vector2(28, 24)
+text = "-5"
+
+[node name="Minus1" type="Button" parent="UI/DayEditor"]
+custom_minimum_size = Vector2(22, 24)
+text = "-1"
+
+[node name="Plus1" type="Button" parent="UI/DayEditor"]
+custom_minimum_size = Vector2(22, 24)
+text = "+1"
+
+[node name="Plus5" type="Button" parent="UI/DayEditor"]
+custom_minimum_size = Vector2(28, 24)
+text = "+5"
+
 [node name="FinishDayButton" type="Button" parent="UI"]
 offset_left = 8.0
-offset_top = 118.0
+offset_top = 148.0
 offset_right = 190.0
-offset_bottom = 148.0
+offset_bottom = 178.0
 text = "Finish the Day"
 
 [node name="MistButton" type="Button" parent="UI"]
 offset_left = 8.0
-offset_top = 154.0
+offset_top = 184.0
 offset_right = 190.0
-offset_bottom = 184.0
+offset_bottom = 214.0
 text = "Mist: off"
 
 [node name="RenderButton" type="Button" parent="UI"]
 offset_left = 8.0
-offset_top = 190.0
+offset_top = 220.0
 offset_right = 190.0
-offset_bottom = 220.0
+offset_bottom = 250.0
 text = "View: atlas"
 
 [node name="ViewModeButton" type="Button" parent="UI"]
 offset_left = 8.0
-offset_top = 226.0
+offset_top = 256.0
 offset_right = 190.0
-offset_bottom = 256.0
+offset_bottom = 286.0
 text = "Cam: flat"
 
 [node name="ToastLabel" type="Label" parent="UI"]
@@ -96,5 +129,5 @@ offset_right = -8.0
 offset_bottom = 24.0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 12
-text = "v0.3.4"
+text = "v0.6.5"
 horizontal_alignment = 2

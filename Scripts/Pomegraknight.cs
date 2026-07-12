@@ -1,6 +1,7 @@
 using Godot;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Fableland.Run;
 
 /// <summary>
 /// Pomegraknight — Skirmisher. Port of the Unity character. Sprite animations
@@ -107,6 +108,22 @@ public partial class Pomegraknight : CharacterController
         BurnImmune = true;            // Pomegranate Shell
         MaxJumps = 1;                 // Pomegraknight: single jump
         _ammo = MagazineSize;
+    }
+
+    // Background-CD persistence (NODES §3.3): save/load per-skill cooldown remaining
+    // so benched protagonists' cooldowns tick down at the reduced rate.
+    public override void SaveCooldownsToState(ProtagonistState p)
+    {
+        if (p == null) return;
+        p.ShiftCdRemaining = _blushCd;
+        p.ESkillCdRemaining = _eCd;
+    }
+
+    public override void LoadCooldownsFromState(ProtagonistState p)
+    {
+        if (p == null) return;
+        _blushCd = p.ShiftCdRemaining;
+        _eCd = p.ESkillCdRemaining;
     }
 
     public override void _Process(double delta)

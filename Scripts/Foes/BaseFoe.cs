@@ -35,6 +35,11 @@ public partial class BaseFoe : CharacterBody2D
     protected float ContactStun = 0.25f;
     protected bool HasContactDamage = true;
     protected float FootOffset = 22f;          // center→feet (half collision height)
+
+    /// <summary>When true, <see cref="TakeHit"/> and <see cref="ApplyHazard"/> are no-ops —
+    /// set on all living foes when the mission resolves so the player can't farm them after
+    /// the objective completes (NODES §2.3).</summary>
+    public bool Invincible { get; set; }
     public float BurnDamagePerSecond = 14f;
     public float HitRadius = 26f;              // melee/AoE bounding circle (read by attackers)
     public float ExternalDamping = 1200f;      // px/s² decay of knockback (read by TsunamiHazard)
@@ -371,7 +376,7 @@ public partial class BaseFoe : CharacterBody2D
     /// passives (crab Soft Shell). No i-frame gate (parity with the old Enemy).</summary>
     public void TakeHit(HitInfo hit, Vector2 sourcePos)
     {
-        if (_dead) return;
+        if (_dead || Invincible) return;
 
         float dealt = hit.Damage * DefenseMultiplier * IncomingDamageMult(sourcePos);
         DebugManager.Instance?.LogPlayerDmgDealt(dealt, GetType().Name);
@@ -403,7 +408,7 @@ public partial class BaseFoe : CharacterBody2D
     /// <summary>Hazard tick: damage + knockback, no i-frame gate (see Hazard.cs).</summary>
     public void ApplyHazard(float damage, Vector2 knockback)
     {
-        if (_dead) return;
+        if (_dead || Invincible) return;
         if (damage > 0f) { float d = damage * DefenseMultiplier; DebugManager.Instance?.LogHazardDmg(d, GetType().Name); _hp -= d; PopNumber(d); }
         if (knockback != Vector2.Zero) AddImpulse(knockback);
         if (_hp <= 0f) Die();

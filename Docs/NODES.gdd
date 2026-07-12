@@ -171,9 +171,9 @@ protagonist in the sequence.
 | Rule | Detail |
 |------|--------|
 | **HP ratio inheritance** | The incoming protagonist inherits the outgoing protagonist's **current HP ratio** (current HP / max HP), applied to their own max HP. |
-| **Cooldown penalty** | Protagonists in the background have their skill cooldowns tick at **⅕ speed** (e.g., a 10 s CD takes 50 real seconds to refresh while benched). This prevents cycling through protagonists to spam skills. |
+| **Cooldown penalty** | Protagonists in the background have their skill cooldowns tick at rate **1/(2n−2)** where n = party size (n ≥ 2). 2-party: 0.5× (6s CD → 12s real), 3-party: 0.25× (6s → 24s), 4-party: 0.167× (6s → 36s). The active protagonist always ticks at 1×. This prevents cycling through protagonists to spam skills, and scales naturally with party size — larger parties mean slower individual recovery. |
 | **Landing effect** | When a protagonist is switched **in**, they trigger their unique **Protagonist Landing Effect** (defined per-character; see character GDDs). |
-| **Item CDs** | Held items on background protagonists tick at the same ⅕ speed (day-based CDs are unaffected — only combat second-based CDs are penalized). |
+| **Item CDs** | Held items on background protagonists tick at the same 1/(2n−2) rate (day-based CDs are unaffected — only combat second-based CDs are penalized). |
 | **Death** | If the active protagonist dies, the run is over (permadeath; §2.2) — the bench does not serve as extra lives. |
 | **Short party** | With 2 protagonists, Tab switches back and forth. With 1 protagonist, Tab is **unavailable** (greyed out). |
 | **Mid-air switch** | Position and velocity are **preserved** — the incoming protagonist appears exactly where the outgoing one was, continuing any existing trajectory. No reset, no ground-snap. |

@@ -1,4 +1,5 @@
 using Godot;
+using Fableland.Run;
 
 /// <summary>
 /// PumpKing — Tank/Guard. Port of the Unity character (see Docs/PumpKing.gdd).
@@ -111,6 +112,22 @@ public partial class PumpKing : CharacterController
         _neckHead.Texture = _neckAtlas;
 
         RefreshHeadVisual(0);
+    }
+
+    // Background-CD persistence (NODES §3.3): save/load per-skill cooldown remaining
+    // so benched protagonists' cooldowns tick down at the reduced rate.
+    public override void SaveCooldownsToState(ProtagonistState p)
+    {
+        if (p == null) return;
+        p.ShiftCdRemaining = _soulCd;
+        p.ESkillCdRemaining = _pumpCd;
+    }
+
+    public override void LoadCooldownsFromState(ProtagonistState p)
+    {
+        if (p == null) return;
+        _soulCd = p.ShiftCdRemaining;
+        _pumpCd = p.ESkillCdRemaining;
     }
 
     public override void _Process(double delta)

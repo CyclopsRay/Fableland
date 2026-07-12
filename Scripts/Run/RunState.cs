@@ -42,6 +42,7 @@ public partial class RunState : Node
     // ---- party & inventory (stubs beyond the party for now) ----
     public readonly List<ProtagonistState> Owned = new();
     public readonly List<string> ActiveBuild = new();
+    public int ActiveProtagonistIndex;   // zero-based index into ActiveBuild — which party member is controlled
     public int WonderCores;
     public readonly List<ItemInstance> Items = new();
 
@@ -102,8 +103,11 @@ public partial class RunState : Node
 
         Owned.Clear();
         Owned.Add(new ProtagonistState("Pomegraknight"));
+        Owned.Add(new ProtagonistState("PumpKing"));
         ActiveBuild.Clear();
         ActiveBuild.Add("Pomegraknight");
+        ActiveBuild.Add("PumpKing");
+        ActiveProtagonistIndex = 0;
         WonderCores = 0;
         Items.Clear();
 
@@ -367,6 +371,27 @@ public partial class RunState : Node
         if (p.HeldItemFromBackpack) Items.Add(new ItemInstance(p.HeldItemDefId));
         p.HeldItemDefId = null;
         p.HeldItemFromBackpack = false;
+    }
+
+    /// <summary>
+    /// Advance <see cref="ActiveProtagonistIndex"/> to the next party member, wrapping
+    /// around. Returns the new protagonist Id. No-op (returns null) when the active build
+    /// has fewer than 2 members (NODES §3.3: Tab unavailable with 1 protagonist).
+    /// </summary>
+    public string CycleNextProtagonist()
+    {
+        if (ActiveBuild.Count < 2) return null;
+        ActiveProtagonistIndex = (ActiveProtagonistIndex + 1) % ActiveBuild.Count;
+        return ActiveBuild[ActiveProtagonistIndex];
+    }
+
+    /// <summary>Find a protagonist's run state by Id from the Owned roster. Null if not found.</summary>
+    public ProtagonistState FindProtagonist(string id)
+    {
+        if (id == null) return null;
+        foreach (var p in Owned)
+            if (p.Id == id) return p;
+        return null;
     }
 
     public void GrantProtagonist(string id)

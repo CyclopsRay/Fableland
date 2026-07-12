@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Pomegraknight placeholder: pomegranate -->
+  <circle cx="32" cy="34" r="24" fill="#cc3355" stroke="#881133" stroke-width="2"/>
+  <path d="M28 12 C28 6, 36 6, 36 12 L34 16 L30 16 Z" fill="#448822" stroke="#226611" stroke-width="1"/>
+  <circle cx="28" cy="28" r="4" fill="#ee5577" opacity="0.6"/>
+</svg>

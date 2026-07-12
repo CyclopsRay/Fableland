@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using Fableland.Debug;
+using Fableland.Run;
 
 /// <summary>
 /// Base class for playable characters — a Godot port of the Unity
@@ -198,6 +199,42 @@ public partial class CharacterController : CharacterBody2D
 
 	/// <summary>Current HP as a fraction of max — written back to ProtagonistState on scene exit.</summary>
 	public float HpRatio => MaxHP > 0f ? CurrentHP / MaxHP : 0f;
+
+	/// <summary>Write this character's current HP ratio back to a <see cref="ProtagonistState"/>
+	/// (the run copy). Used both on scene exit and on mid-combat protagonist switch (NODES §3.3).</summary>
+	public void WriteBackToState(ProtagonistState p)
+	{
+		if (p != null) p.HpRatio = HpRatio;
+	}
+
+	/// <summary>Save this character's current skill cooldown remaining times to a
+	/// <see cref="ProtagonistState"/> (called on switch-out). The base has no skills —
+	/// subclasses with Shift/E cooldowns override this.</summary>
+	public virtual void SaveCooldownsToState(ProtagonistState p)
+	{
+		if (p == null) return;
+		p.ShiftCdRemaining = 0f;
+		p.ESkillCdRemaining = 0f;
+	}
+
+	/// <summary>Restore this character's skill cooldown remaining times from a
+	/// <see cref="ProtagonistState"/> (called on switch-in, after HydrateRun). The base
+	/// has no skills — subclasses with Shift/E cooldowns override this.</summary>
+	public virtual void LoadCooldownsFromState(ProtagonistState p)
+	{
+		// No-op in the base — no skill cooldowns to restore.
+	}
+
+	/// <summary>Copy the internal velocity channels from another character so the incoming
+	/// protagonist continues the outgoing one's trajectory (mid-air switch — NODES §3.3).
+	/// Must be called while <paramref name="other"/> is still alive (before QueueFree).</summary>
+	public void InheritVelocityFrom(CharacterController other)
+	{
+		if (other == null) return;
+		_intentVel = other._intentVel;
+		_externalVel = other._externalVel;
+		Velocity = _intentVel + _externalVel;
+	}
 
 	public override void _Process(double delta)
 	{

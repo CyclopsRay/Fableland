@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- PumpKing placeholder: pumpkin -->
+  <ellipse cx="32" cy="34" rx="26" ry="22" fill="#ee8833" stroke="#995511" stroke-width="2"/>
+  <rect x="30" y="8" width="4" height="8" rx="2" fill="#558822"/>
+  <path d="M12 26 Q18 20 24 28" fill="none" stroke="#cc6622" stroke-width="2"/>
+  <path d="M40 28 Q46 20 52 26" fill="none" stroke="#cc6622" stroke-width="2"/>
+</svg>

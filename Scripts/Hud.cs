@@ -39,6 +39,13 @@ public partial class Hud : CanvasLayer
     private TextureProgressBar _eCd;
     private Label _eCdLabel;
 
+    // Switch-protagonist slot — same pattern as Shift/E/Item slots: icon + radial CD overlay + label.
+    private Control _switchSlot;
+    private TextureRect _switchIcon;
+    private TextureProgressBar _switchCdOverlay;
+    private Label _switchCdLabel;
+    private string _switchNextId;           // which protagonist the icon shows; null = hidden
+
     private CharacterController _player;
 
     /// <summary>Fired when the player presses Finish the Day.</summary>
@@ -49,6 +56,14 @@ public partial class Hud : CanvasLayer
 
     // Indexed by HP-fraction bucket: full, >70%, 50-70%, 20-50%, <20%, dead.
     private Texture2D[] _mugshotStates;
+
+    // Lazy-loaded next-protagonist mugshot textures (placeholder art until real mugshots land).
+    // Keyed by protagonist Id; only the two implemented characters have entries.
+    private static readonly System.Collections.Generic.Dictionary<string, string> _nextMugshotPaths = new()
+    {
+        {"Pomegraknight", "res://Sprites/UI/mugshot_next_pomegraknight.svg"},
+        {"PumpKing", "res://Sprites/UI/mugshot_next_pumpking.svg"},
+    };
 
     public override void _Ready()
     {
@@ -84,6 +99,10 @@ public partial class Hud : CanvasLayer
         _shiftCdLabel = GetNode<Label>("StatusCluster/ShiftSlot/CdLabel");
         _eCd = GetNode<TextureProgressBar>("StatusCluster/ESlot/CooldownOverlay");
         _eCdLabel = GetNode<Label>("StatusCluster/ESlot/CdLabel");
+        _switchSlot = GetNode<Control>("StatusCluster/SwitchSlot");
+        _switchIcon = GetNode<TextureRect>("StatusCluster/SwitchSlot/Icon");
+        _switchCdOverlay = GetNode<TextureProgressBar>("StatusCluster/SwitchSlot/CooldownOverlay");
+        _switchCdLabel = GetNode<Label>("StatusCluster/SwitchSlot/CdLabel");
 
         _mugshotStates = new Texture2D[]
         {
@@ -118,12 +137,49 @@ public partial class Hud : CanvasLayer
 
     /// <summary>Hook up the player for the parts of the cluster this HUD polls
     /// itself (ult charge via event, cooldowns via per-frame read). HP still
-    /// flows through the existing GameManager -> SetHp wiring.</summary>
+    /// flows through the existing GameManager -> SetHp wiring. Unsubscribes
+    /// any previous player first — C# events don't auto-disconnect freed Godot
+    /// objects (same class as the KNOWLEDGE.md v0.5.4 autoload-event leak).</summary>
     public void SetPlayer(CharacterController player)
     {
+        if (_player != null)
+            _player.UltChargeChanged -= SetUltCharge;
         _player = player;
-        player.UltChargeChanged += SetUltCharge;
-        SetUltCharge(player.UltCharge, player.MaxUltCharge);
+        if (player != null)
+        {
+            player.UltChargeChanged += SetUltCharge;
+            SetUltCharge(player.UltCharge, player.MaxUltCharge);
+        }
+    }
+
+    /// <summary>Show the next protagonist's mugshot in the Switch slot (the one Tab will
+    /// switch to). Pass null or an unrecognized Id to hide the slot. Placeholder art is
+    /// used until real character mugshots land.</summary>
+    public void SetNextProtagonist(string id)
+    {
+        _switchNextId = id;
+        if (id != null && _nextMugshotPaths.TryGetValue(id, out string path))
+        {
+            _switchIcon.Texture = GD.Load<Texture2D>(path);
+            _switchSlot.Visible = true;
+        }
+        else
+        {
+            _switchSlot.Visible = false;
+        }
+    }
+
+    /// <summary>Update the Switch slot's cooldown overlay and label (called each frame by
+    /// GameManager). When the CD is active the icon dims and the label shows remaining
+    /// seconds; when ready the icon is full-bright and the label is cleared.</summary>
+    public void SetSwitchCooldown(float remaining, float max)
+    {
+        bool onCd = remaining > 0.05f && max > 0f;
+        _switchCdOverlay.Value = max > 0f ? Mathf.Clamp(remaining / max, 0f, 1f) : 0f;
+        _switchCdLabel.Text = onCd ? Mathf.CeilToInt(remaining).ToString() : "";
+        // Dim the icon while the switch is on cooldown — same visual language as the
+        // skill slots' radial fill, but on the mugshot itself.
+        _switchIcon.SelfModulate = onCd ? new Color(0.35f, 0.35f, 0.35f, 1f) : Colors.White;
     }
 
     public void SetUltCharge(float cur, float max)

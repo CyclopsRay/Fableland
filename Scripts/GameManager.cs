@@ -62,12 +62,16 @@ public partial class GameManager : Node2D
 
     private DetRandom _rng;
     private Mission _mission;
-    private ProtagonistState _protagonist;   // hydrated protagonist (Owned[0]) for HP write-back
+    private ProtagonistState _protagonist;   // hydrated protagonist for HP write-back
+    private int _activePartyIndex;           // index into RunState.ActiveBuild (NODES §3.3)
+    private float _switchCd;                 // Tab cooldown remaining (12s per NODES §3.3)
+    private const float SwitchCooldown = 12f;
     private bool _hasRun;
     private int _nodeLevel;
     private MissionType _missionType;
     private bool _goalResolved;
 
+    private float _graceTimer = 3f;      // 3s pre-combat grace: no foes, timer frozen, countdown shown
     private bool _ended;   // debug-only local end-of-match latch (banner + restart)
 
     public override void _Ready()
@@ -155,19 +159,52 @@ public partial class GameManager : Node2D
         _hud.SetPlayer(_player);
         _hud.SetHp(_player.CurrentHP, _player.MaxHP);
 
-        if (_hasRun && rs.Owned.Count > 0)
+        if (_hasRun && rs.ActiveBuild.Count > 0)
         {
-            _protagonist = rs.Owned[0];
+            // Find the protagonist state for the active party slot (NODES §3.3).
+            _activePartyIndex = rs.ActiveProtagonistIndex;
+            _protagonist = ResolveProtagonistForSlot(rs, _activePartyIndex);
             float baseMaxHp = _player.MaxHP;   // authored default, captured before hydrating
             _player.HydrateRun(baseMaxHp, _protagonist.MaxHpPercentPoints, _protagonist.HpRatio,
                                 _protagonist.BonusAtk, _protagonist.BonusDef);
+            // Restore saved cooldown remaining from the protagonist's run state (background-CD, NODES §3.3)
+            _player.LoadCooldownsFromState(_protagonist);
             _hud.SetLivesVisible(false);       // permadeath in a run — lives don't apply (NODES §2.2)
+            UpdateNextMugshot();
         }
         else
         {
             _hud.SetLivesVisible(true);
             _hud.SetLives(_player.LivesRemaining);
         }
+    }
+
+    /// <summary>Push the next protagonist's mugshot to the HUD (NODES §3.3).
+    /// Shows the portrait of the party member Tab will switch to, or hides it when
+    /// the party has fewer than 2 members.</summary>
+    private void UpdateNextMugshot()
+    {
+        var rs = RunState.Instance;
+        if (!_hasRun || rs == null || rs.ActiveBuild.Count < 2)
+        {
+            _hud.SetNextProtagonist(null);
+            return;
+        }
+        int nextIdx = (rs.ActiveProtagonistIndex + 1) % rs.ActiveBuild.Count;
+        _hud.SetNextProtagonist(rs.ActiveBuild[nextIdx]);
+    }
+
+    /// <summary>Find the <see cref="ProtagonistState"/> for a party slot, safely.
+    /// Falls back to Owned[0] when ActiveBuild and Owned are out of sync (shouldn't happen,
+    /// but RunState is the truth — Owned always has at least the start protagonist).</summary>
+    private static ProtagonistState ResolveProtagonistForSlot(RunState rs, int slot)
+    {
+        if (slot >= 0 && slot < rs.ActiveBuild.Count)
+        {
+            var p = rs.FindProtagonist(rs.ActiveBuild[slot]);
+            if (p != null) return p;
+        }
+        return rs.Owned.Count > 0 ? rs.Owned[0] : null;
     }
 
     /// <summary>
@@ -200,14 +237,107 @@ public partial class GameManager : Node2D
     }
 
     /// <summary>
+    /// Mid-combat protagonist switch via Tab (NODES §3.3). Writes back the current HP ratio,
+    /// cycles to the next active party member, physically replaces the player body, and applies
+    /// a 12s cooldown. No-op when the party has fewer than 2 members, the cooldown is active, the
+    /// player is dead, or no run exists.
+    /// </summary>
+    private void TrySwitchProtagonist()
+    {
+        // Guards (NODES §3.3: Tab unavailable with 1 protagonist; 12s cooldown)
+        if (!_hasRun) return;
+        if (_switchCd > 0f) return;
+        if (_player == null || !IsInstanceValid(_player)) return;
+        if (_player.HpRatio <= 0f) return; // dead — permadeath, switching won't save you
+        if (_ended) return;
+
+        var rs = RunState.Instance;
+        if (rs.ActiveBuild.Count < 2) return; // short party — nothing to cycle to
+
+        // Capture the outgoing protagonist's HP ratio BEFORE cycling — the incoming
+        // protagonist inherits it (NODES §3.3: "HP ratio inheritance").
+        float carriedRatio = _player.HpRatio;
+
+        // Write back HP and skill cooldowns to the outgoing protagonist's run state
+        WriteBackHp();
+        _player.SaveCooldownsToState(_protagonist);
+
+        // Cycle to the next party member (RunState owns the index)
+        string nextId = rs.CycleNextProtagonist();
+        if (nextId == null) return;
+
+        // Carry the HP ratio into the incoming protagonist's run state
+        var incoming = rs.FindProtagonist(nextId);
+        if (incoming != null) incoming.HpRatio = carriedRatio;
+
+        var scene = ProtagonistRoster.GetScene(nextId);
+        if (scene == null)
+        {
+            DebugManager.Instance?.LogSystem($"Switch protagonist FAILED: no scene for '{nextId}'");
+            return;
+        }
+
+        // Unsubscribe from old player before replacing the body
+        _player.HpChanged -= OnPlayerHpChanged;
+        _player.Died -= OnPlayerDied;
+
+        _player = ReplacePlayerNode(_player, scene);
+
+        // Re-wire everything for the new body: signals, HUD, hydration from the new protagonist's
+        // run state. SetupPlayer reads the updated ActiveProtagonistIndex from RunState.
+        SetupPlayer(rs);
+
+        // Apply the switch cooldown
+        _switchCd = SwitchCooldown;
+
+        UpdateNextMugshot();
+
+        DebugManager.Instance?.LogSystem($"Protagonist switch → {nextId} ({rs.ActiveBuild.Count}-party, {SwitchCooldown}s CD)");
+    }
+
+    /// <summary>
+    /// Tick benched protagonists' skill cooldowns at the reduced background rate
+    /// (NODES §3.3). Rate = 1/(2n−2): 2-party → 0.5×, 3-party → 0.25×, 4-party → 0.167×.
+    /// Only the active protagonist's cooldowns tick at full speed (in their own _Process).
+    /// </summary>
+    private void TickBackgroundCooldowns(float dt)
+    {
+        if (!_hasRun) return;
+        var rs = RunState.Instance;
+        int n = rs.ActiveBuild.Count;
+        if (n < 2) return;
+        float bgRate = 1f / (2f * n - 2f);
+        float bgDt = dt * bgRate;
+        for (int i = 0; i < n; i++)
+        {
+            if (i == _activePartyIndex) continue; // active protagonist ticks at 1× in its own _Process
+            var p = rs.FindProtagonist(rs.ActiveBuild[i]);
+            if (p == null) continue;
+            if (p.ShiftCdRemaining > 0f) p.ShiftCdRemaining = Mathf.Max(0f, p.ShiftCdRemaining - bgDt);
+            if (p.ESkillCdRemaining > 0f) p.ESkillCdRemaining = Mathf.Max(0f, p.ESkillCdRemaining - bgDt);
+        }
+    }
+
+    /// <summary>
     /// Physically replace the current player body with a fresh instance of <paramref name="scene"/>
     /// at the same world position. Caller owns unsubscribing any signals on <paramref name="old"/>
-    /// first.
+    /// first. Preserves velocity so a mid-air switch continues the trajectory (NODES §3.3).
     /// </summary>
     private CharacterController ReplacePlayerNode(CharacterController old, PackedScene scene)
     {
         Vector2 pos = old.GlobalPosition;
         Node parent = old.GetParent();
+
+        var np = scene.Instantiate<CharacterController>();
+        parent.AddChild(np);              // _Ready runs here — configure after
+        np.GlobalPosition = pos;
+        // Carry over velocity BEFORE QueueFree so InheritVelocityFrom can read old's private fields
+        // (mid-air switch — NODES §3.3).
+        np.InheritVelocityFrom(old);
+        // _Ready already latched _spawnPoint at the scene-file origin (it runs inside AddChild,
+        // before the line above) — re-anchor it or a debug-lives Respawn() teleports to (0,0).
+        np.SetSpawnPoint(pos);
+        np.GetNodeOrNull<Camera2D>("Camera2D")?.MakeCurrent();
 
         // Foes poll GetFirstNodeInGroup("player") every tick — QueueFree alone leaves the dying
         // node in the group until end of frame, so pull it out of the group immediately.
@@ -215,14 +345,6 @@ public partial class GameManager : Node2D
         old.SetProcess(false);
         old.SetPhysicsProcess(false);
         old.QueueFree();
-
-        var np = scene.Instantiate<CharacterController>();
-        parent.AddChild(np);              // _Ready runs here — configure after
-        np.GlobalPosition = pos;
-        // _Ready already latched _spawnPoint at the scene-file origin (it runs inside AddChild,
-        // before the line above) — re-anchor it or a debug-lives Respawn() teleports to (0,0).
-        np.SetSpawnPoint(pos);
-        np.GetNodeOrNull<Camera2D>("Camera2D")?.MakeCurrent();
 
         return np;
     }
@@ -266,13 +388,49 @@ public partial class GameManager : Node2D
 
         Spawner?.Tick(dt);
 
+        // 3-second pre-combat grace period: no foe spawns, mission timer frozen, countdown
+        // shown so the player can orient before the fight begins.
+        if (_graceTimer > 0f)
+        {
+            _graceTimer -= dt;
+            _hud.SetProgress(_graceTimer > 0.01f
+                ? $"Get ready... {Mathf.CeilToInt(_graceTimer)}"
+                : "Go!");
+            // Suppress the ambient spawner during grace; the mission timer is also paused
+            // (we skip _mission.Tick below). Foes that were already in the arena (none at
+            // scene start; debug F5 may have pre-placed ones) are unaffected.
+            Spawner.Enabled = false;
+        }
+        else if (_graceTimer != -1f)
+        {
+            // Grace just ended — arm the spawner and let the mission resume.
+            _graceTimer = -1f;
+            Spawner.Enabled = true;
+        }
+
+        // Tab protagonist switch (NODES §3.3) — available mid-combat, 12s CD, only when
+        // party has 2+ members. Tick cooldown every frame.
+        if (_switchCd > 0f) _switchCd -= dt;
+        if (Input.IsActionJustPressed("switch_protagonist"))
+            TrySwitchProtagonist();
+
+        // Background cooldown tick for benched protagonists (NODES §3.3): recover at
+        // rate = 1/(2n−2) — 2-party → 0.5×, 3-party → 0.25×, 4-party → 0.167×.
+        TickBackgroundCooldowns(dt);
+
+        // Push switch-protagonist slot state to the HUD every frame (CD overlay + label).
+        PushSwitchHud();
+
         if (_mission == null) return;
         // QA cheat (40-QA §1): F9 in a debug build force-completes the goal — lets a tester
         // walk the whole run loop without playing out every mission.
         if (OS.IsDebugBuild() && _mission.Status == MissionStatus.Running
             && Input.IsKeyPressed(Key.F9))
             _mission.DebugForceComplete();
-        if (_mission.Status == MissionStatus.Running) _mission.Tick(dt);
+
+        // Don't tick the mission during the grace period — its timer is frozen while the
+        // player gets their bearings (grace = -1f once the 3s countdown finishes).
+        if (_mission.Status == MissionStatus.Running && _graceTimer < 0f) _mission.Tick(dt);
         PushMissionHud();
 
         if (_mission.Status != MissionStatus.Running && !_goalResolved) OnMissionResolved();
@@ -286,12 +444,27 @@ public partial class GameManager : Node2D
         _hud.ShowRewardChoice(_mission.NeedsRewardChoice);
     }
 
+    /// <summary>Push the switch-protagonist slot state to the HUD every frame:
+    /// cooldown overlay fraction and seconds-remaining label.</summary>
+    private void PushSwitchHud()
+    {
+        _hud.SetSwitchCooldown(_switchCd, SwitchCooldown);
+    }
+
     // ── Goal resolution ───────────────────────────────────────────────────────────────────
 
     private void OnMissionResolved()
     {
         _goalResolved = true;
         Spawner.Enabled = false;   // FOES §11: the cap only gates the periodic spawner anyway
+
+        // All living foes become invincible — the mission is over, the player shouldn't
+        // be able to farm kills or take stray damage after the objective resolves.
+        foreach (var node in GetTree().GetNodesInGroup("foe"))
+        {
+            if (node is BaseFoe foe && IsInstanceValid(foe))
+                foe.Invincible = true;
+        }
 
         if (_hasRun)
         {
@@ -375,8 +548,8 @@ public partial class GameManager : Node2D
 
     private void WriteBackHp()
     {
-        if (_hasRun && _protagonist != null && _player != null)
-            _protagonist.HpRatio = _player.HpRatio;
+        if (_hasRun && _player != null)
+            _player.WriteBackToState(_protagonist);
     }
 
     // ── Player death ──────────────────────────────────────────────────────────────────────

@@ -34,20 +34,20 @@ public partial class SeagullFoe : BaseFoe
     private enum DashPhase { None, Telegraph, Dashing }
     private DashPhase _dash = DashPhase.None;
     private float _dashTimer;
-    private float _dashDir = 1f;
+    private Vector2 _dashDir = Vector2.Right;   // direction toward player, locked at telegraph start
     private bool _dashHit;
 
     protected override void InitFoe()
     {
         // FOES §4 base stats.
         BaseHP = 35f;
-        BaseDamage = 18f;
+        BaseDamage = 20f;       // contact damage (also base for skill damage scaling)
         // Base flight top-speed — the GDD leaves the seagull's max speed open (SPD is
         // "accel-based"); 160 px/s (5 m/s) reads as a brisk-but-catchable cruise. Scaled
         // by SpdMult like any foe. (Design decision — see final report.)
         BaseMoveSpeed = 160f;
         UseGravity = false;
-        HasContactDamage = false;
+        HasContactDamage = true;
         HitRadius = 20f;
         ExternalDamping = 600f;
         SightInterval = 2f;
@@ -117,12 +117,12 @@ public partial class SeagullFoe : BaseFoe
         if (_dash == DashPhase.Dashing)
         {
             _dashTimer -= dt;
-            IntentVel = new Vector2(_dashDir * DashSpeed, 0f);   // horizontal swoop
+            IntentVel = _dashDir * DashSpeed;   // dash toward the player
             if (!_dashHit && player != null &&
                 (player.GlobalPosition - GlobalPosition).Length() < HitRadius + 28f)
             {
                 _dashHit = true;   // pierces: one hit per dash, does not stop
-                Vector2 kb = new Vector2(_dashDir, -0.3f).Normalized() * 200f;
+                Vector2 kb = _dashDir * 200f;   // knockback in dash direction
                 player.TakeHit(new HitInfo(EffectiveDamage(DashBaseDamage), kb, 0.2f));
             }
             if (_dashTimer <= 0f) _dash = DashPhase.None;
@@ -140,8 +140,10 @@ public partial class SeagullFoe : BaseFoe
             StartSkill2Cooldown(DashCooldown);
             _dash = DashPhase.Telegraph;
             _dashTimer = DashTelegraph;
-            _dashDir = Mathf.Sign(player.GlobalPosition.X - GlobalPosition.X);
-            if (_dashDir == 0f) _dashDir = FacingDir;
+            // Lock dash direction toward the player at telegraph start — full 2D vector
+            // (passes through platforms/soft-volumes; blocked only by ground per collision mask).
+            Vector2 toPlayer = player.GlobalPosition - GlobalPosition;
+            _dashDir = toPlayer.LengthSquared() > 0.01f ? toPlayer.Normalized() : new Vector2(FacingDir, 0f);
             SetTelegraphTint(new Color(1f, 0.3f, 0.3f));   // red tell
             return;
         }
