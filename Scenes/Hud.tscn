@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://Scripts/Hud.cs" id="1"]
 [ext_resource type="Texture2D" path="res://Sprites/UI/ui_ring_backing.svg" id="2"]
@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" path="res://Sprites/UI/ui_cd_overlay.svg" id="9"]
 [ext_resource type="Texture2D" path="res://Sprites/UI/mugshot_next_pomegraknight.svg" id="10"]
 [ext_resource type="Texture2D" path="res://Sprites/UI/mugshot_next_pumpking.svg" id="11"]
+[ext_resource type="Script" path="res://Scripts/HpBlockBar.cs" id="12"]
 
 [node name="Hud" type="CanvasLayer"]
 script = ExtResource("1")
@@ -21,16 +22,14 @@ offset_top = 2.0
 offset_right = 220.0
 offset_bottom = 20.0
 theme_override_font_sizes/font_size = 12
-text = "v0.6.6"
+text = "v0.6.7"
 
-[node name="HpBar" type="ProgressBar" parent="."]
+[node name="HpBar" type="Control" parent="."]
+script = ExtResource("12")
 offset_left = 20.0
 offset_top = 20.0
 offset_right = 280.0
 offset_bottom = 50.0
-max_value = 200.0
-value = 200.0
-show_percentage = false
 
 [node name="HpLabel" type="Label" parent="HpBar"]
 anchor_right = 1.0

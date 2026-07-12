@@ -53,7 +53,7 @@ public partial class CharacterController : CharacterBody2D
 	[Export] public bool ShowDebugRanges = true;
 
 	// Events — GameManager/Hud subscribe to drive HUD and the life flow.
-	public event Action<float, float> HpChanged;   // (current, max)
+	public event Action<float, float, float, float> HpChanged;   // (curHP, maxHP, shield, tempHP)
 	public event Action<float, float> UltChargeChanged; // (current, max)
 	public event Action Died;
 
@@ -62,6 +62,14 @@ public partial class CharacterController : CharacterBody2D
 	public static CharacterController LocalPlayer { get; private set; }
 
 	public float CurrentHP { get; private set; }
+
+	/// <summary>Subclass hook: expose a shield pool for the HUD. Base returns 0;
+	/// characters with a shield (e.g. PumpKing) override this.</summary>
+	public virtual float Shield => 0f;
+
+	/// <summary>Temporary HP granted by items/buffs. Absorbed before normal HP
+	/// when taking damage. Shown in green on the HP bar.</summary>
+	public float TempHP { get; protected set; }
 	public float UltCharge { get; private set; }
 	public int LivesRemaining { get; private set; }
 	public bool ControlsLocked { get; set; }
@@ -173,7 +181,7 @@ public partial class CharacterController : CharacterBody2D
 
 		InitCharacter();
 		_jumpsRemaining = MaxJumps;
-		HpChanged?.Invoke(CurrentHP, MaxHP);
+		NotifyHpChanged();
 		UltChargeChanged?.Invoke(UltCharge, MaxUltCharge);
 	}
 
@@ -194,7 +202,7 @@ public partial class CharacterController : CharacterBody2D
 		if (bonusAtk != 0) _dealtDmgBonuses["run:atk"] = bonusAtk / 100f;
 		if (bonusDef != 0) _defenseBonuses["run:def"] = bonusDef;
 			DebugManager.Instance?.LogSystem($"HydrateRun HP%+{maxHpPercentPoints} ATK+{bonusAtk} DEF+{bonusDef} hpRatio={hpRatio:F2}");
-					HpChanged?.Invoke(CurrentHP, MaxHP);
+					NotifyHpChanged();
 	}
 
 	/// <summary>Current HP as a fraction of max — written back to ProtagonistState on scene exit.</summary>
@@ -477,8 +485,33 @@ public partial class CharacterController : CharacterBody2D
 	protected virtual void UpdateAnimator(float dt) { }
 
 	/// <summary>Subclass hook: absorb incoming damage (e.g. a shield pool) after the
-	/// defense multiplier, before HP loss. Returns the damage that remains.</summary>
-	protected virtual float AbsorbDamage(float damage) => damage;
+	/// defense multiplier, before HP loss. Returns the damage that remains.
+	/// Base implementation absorbs from TempHP first; subclasses that override this
+	/// should call base.AbsorbDamage() to preserve that ordering.</summary>
+	protected virtual float AbsorbDamage(float damage)
+	{
+		if (TempHP > 0f)
+		{
+			float absorbed = Mathf.Min(TempHP, damage);
+			TempHP -= absorbed;
+			damage -= absorbed;
+			NotifyHpChanged();
+		}
+		return damage;
+	}
+
+	/// <summary>Fire HpChanged with the current values of all four HP-related
+	/// properties. Call this instead of invoking the event directly.</summary>
+	protected void NotifyHpChanged() => HpChanged?.Invoke(CurrentHP, MaxHP, Shield, TempHP);
+
+	/// <summary>Grant temporary HP (green bar). Absorbed before normal HP and shield
+	/// when taking damage. Does not persist across death.</summary>
+	public void GainTempHP(float amount)
+	{
+		if (_dead || amount <= 0f) return;
+		TempHP += amount;
+		NotifyHpChanged();
+	}
 
 	/// <summary>Last animation name requested via <see cref="PlayAnim"/>. Godot clears
 	/// <c>AnimationPlayer.CurrentAnimation</c> back to "" once a non-looping clip
@@ -579,7 +612,7 @@ public partial class CharacterController : CharacterBody2D
 		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogPlayerDmgReceived(hit.Damage, dealt, "foe");
 		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
-		HpChanged?.Invoke(CurrentHP, MaxHP);
+		NotifyHpChanged();
 		PopNumber(dealt, heal: false);
 		GainUltCharge(dealt * UltChargeReceivedRate);
 
@@ -608,7 +641,7 @@ public partial class CharacterController : CharacterBody2D
 			dealt = AbsorbDamage(dealt);
 			DebugManager.Instance?.LogHazardDmg(dealt, "player");
 			CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
-			HpChanged?.Invoke(CurrentHP, MaxHP);
+			NotifyHpChanged();
 			PopNumber(dealt, heal: false);
 			GainUltCharge(dealt * UltChargeReceivedRate);
 		}
@@ -643,7 +676,7 @@ public partial class CharacterController : CharacterBody2D
 		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogDotDmg(dealt, IsBurning ? "Burn" : _fire.Active ? "OnFire" : "Frozen");
 		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
-		HpChanged?.Invoke(CurrentHP, MaxHP);
+		NotifyHpChanged();
 		GainUltCharge(dealt * UltChargeReceivedRate);
 		if (CurrentHP <= 0f) Die();
 	}
@@ -666,7 +699,7 @@ public partial class CharacterController : CharacterBody2D
 		if (_dead || amount <= 0f) return;
 		DebugManager.Instance?.LogHeal(amount, "combat");
 		CurrentHP = Mathf.Min(MaxHP, CurrentHP + amount);
-		HpChanged?.Invoke(CurrentHP, MaxHP);
+		NotifyHpChanged();
 		PopNumber(amount, heal: true);
 	}
 
@@ -688,6 +721,7 @@ public partial class CharacterController : CharacterBody2D
 		_frozenDebuff.Clear();
 		_dealtDmgBonuses.Clear();
 		_defenseBonuses.Clear();
+		TempHP = 0f;
 		Died?.Invoke();
 	}
 
@@ -713,10 +747,11 @@ public partial class CharacterController : CharacterBody2D
 		_frozenDebuff.Clear();
 		_dealtDmgBonuses.Clear();
 		_defenseBonuses.Clear();
+		TempHP = 0f;
 		Sprite.Modulate = Colors.White;
 		Sprite.SelfModulate = _baseTint;
 		Sprite.Visible = true;
-		HpChanged?.Invoke(CurrentHP, MaxHP);
+		NotifyHpChanged();
 	}
 
 	// ── Debug range drawing ───────────────────────────────────────────────

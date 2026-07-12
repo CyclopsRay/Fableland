@@ -81,6 +81,7 @@ public partial class PumpKing : CharacterController
 
     private int _pumpStacks;
     private float _shield;
+    public override float Shield => _shield;
     private float _pumpCd;
     private float _reloadTimer;
     private int _ammo;
@@ -205,6 +206,7 @@ public partial class PumpKing : CharacterController
         _activeHead = head;
         _pumpStacks = 0;
         _shield = 0f;
+        NotifyHpChanged();
         RefreshPassive();
         RefreshHeadVisual(0);
         _neckShown = false;
@@ -255,6 +257,7 @@ public partial class PumpKing : CharacterController
         // reset too, so we follow the GDD to keep the shield == stacks×20 invariant.
         _pumpStacks = 0;
         _shield = 0f;
+        NotifyHpChanged();
         RefreshPassive();
         RefreshHeadVisual(0);
         CurrentState = PKState.Soul;
@@ -292,6 +295,7 @@ public partial class PumpKing : CharacterController
         _pumpCd = PumpInnerCD;
         _pumpStacks++;
         _shield = Mathf.Min(_shield + ShieldPerPump, MaxPumpStacks * ShieldPerPump);
+        NotifyHpChanged();
         RefreshPassive();
         RefreshHeadVisual(_pumpStacks);
     }
@@ -304,13 +308,15 @@ public partial class PumpKing : CharacterController
         MoveSpeed = _baseMoveSpeed * (1f - MaxMoveSpeedPenalty * t);
     }
 
-    /// <summary>Shield absorbs damage after DefenseMultiplier, before HP loss. Only
-    /// ever non-zero in Normal state — Fire/Soul clear it. No HUD binding yet.</summary>
+    /// <summary>Shield absorbs damage after DefenseMultiplier and TempHP, before HP
+    /// loss. Only ever non-zero in Normal state — Fire/Soul clear it.</summary>
     protected override float AbsorbDamage(float damage)
     {
+        damage = base.AbsorbDamage(damage);   // TempHP absorbs first
         if (_shield <= 0f) return damage;
         float absorbed = Mathf.Min(_shield, damage);
         _shield -= absorbed;
+        NotifyHpChanged();
         return damage - absorbed;
     }
 

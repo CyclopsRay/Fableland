@@ -91,6 +91,7 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+<<<<<<< HEAD
 ### `System.Text.Json` ignores public fields — every serialized model class must use properties (v0.6.7, MapCreation rework)
 - **Symptom (root cause of the v0.5.x map builder):** every save in the old `Scripts/MapCreation/`
   module wrote `{}` to disk. The serialized classes (`CustomMapData` and friends) used plain
@@ -109,6 +110,37 @@ compiler surfaces below.
 - **Why:** this is exactly the kind of bug that looks like a totally different failure (map
   browser shows blank names, maps "don't save") because the write path never errors — the
   round-trip test is cheap insurance precisely because there's no other signal.
+=======
+### The HP bar is block-based (25 HP/block) and renders via a custom Control._Draw(); HpChanged now carries 4 args (v0.6.7)
+- **Why:** the old `ProgressBar` couldn't show shield (sky blue) or temp HP (green) as
+  distinct segments alongside normal HP (red). The new `HpBlockBar` Control draws blocks
+  via `_Draw()` with three stacked coloured segments within the same bar, matching the
+  Overwatch/LoL convention of one bar that shows all HP types at a glance.
+- **Rule 1 — `HpChanged` is now `Action<float, float, float, float>` (curHP, maxHP,
+  shield, tempHP).** Any code that subscribes to `CharacterController.HpChanged` must
+  accept 4 arguments, not 2. Use `NotifyHpChanged()` to fire it — don't invoke
+  `HpChanged` directly.
+- **Rule 2 — Shield is a virtual property on the base (`public virtual float Shield => 0f`).**
+  Characters that have a shield (PumpKing) override it and call `NotifyHpChanged()` on
+  every shield change. The HUD reads `.Shield` uniformly regardless of which character
+  is active.
+- **Rule 3 — TempHP lives on the base (`public float TempHP { get; protected set; }`)**
+  and is absorbed by the base `AbsorbDamage` before shields. Subclasses that override
+  `AbsorbDamage` must call `base.AbsorbDamage(damage)` first so TempHP absorbs before
+  their own shield. TempHP is cleared in `Die()` and `Respawn()`.
+- **Rule 4 — `HpBlockBar` uses `Size` from its Control rect (set by the scene's
+  `offset_*` properties) and renders all blocks within that width.** The block count
+  = `ceil(max(MaxHP, curHP+shield+tempHP) / 25)`. Each block is a fixed fraction of
+  the total width with a 2px gap; block dividers are drawn as vertical lines on top.
+- **Rule 5 — the `HpBlockBar` C# type replaces `ProgressBar` in `Hud.cs`.** The
+  `Hud.tscn` node changed from `type="ProgressBar"` to `type="Control"` with
+  `script = ExtResource("12")` (`res://Scripts/HpBlockBar.cs`). The `HpLabel` is
+  still a child of `HpBar` and overlays the drawn blocks.
+- **Related files:** `Scripts/HpBlockBar.cs` (new), `Scripts/CharacterController.cs`
+  (Shield/TempHP/NotifyHpChanged), `Scripts/PumpKing.cs` (override Shield,
+  NotifyHpChanged calls), `Scripts/GameManager.cs` (4-arg handler), `Scripts/Hud.cs`
+  (SetValues delegate), `Scenes/Hud.tscn` (Control with script ref).
+>>>>>>> 3fc1517 (temp HP visual upgrade.)
 
 ### PumpKing head: a per-tick clamp on a fresh Init() eats the whole launch impulse; releasing a reference destroys state-machine memory, not just control (v0.6.1)
 - **Symptom (bug report, 4 linked issues):** the detached head visually sat at PumpKing's
