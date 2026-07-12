@@ -91,6 +91,52 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### PumpKing head: a per-tick clamp on a fresh Init() eats the whole launch impulse; releasing a reference destroys state-machine memory, not just control (v0.6.1)
+- **Symptom (bug report, 4 linked issues):** the detached head visually sat at PumpKing's
+  waist, barely traveled when fired, and read as "exploding on him" after Shift; knockback
+  felt negligible.
+- **Rule 1 — a ported offset doesn't survive a different sprite sheet.** `NeckOffset`/
+  `FirePoint` were copied verbatim from Unity's `headNeckOffset` (0.6 m). Unity's number
+  encoded a pivot/proportion relationship specific to *that* art; the Godot sprites have
+  different padding, so the same number landed at the torso instead of the collar. When
+  porting an attach-point offset, **re-measure it from the delivered art's own alpha
+  bounds** (crop a frame, check the opaque bbox) rather than trusting the source engine's
+  value to transfer — see `PumpKing.cs`'s `NeckOffset` comment for the measurement.
+- **Rule 2 — a per-tick velocity clamp fires on the very first tick after `Init()`, before
+  anything has moved.** `PumpKingHead._PhysicsProcess` clamped `_velocity.X` to
+  `MaxRollSpeed` unconditionally, every tick, with no distinction between "just launched,
+  still flying" and "landed, now rolling." Since `Init()` runs synchronously (same frame,
+  right after `AddChild`), the *very next* physics tick already clamped away the launch
+  impulse before the head had traveled at all — a roll-friction cap silently ate a
+  ballistic-arc design number. **A "resting-state" cap (named for the settled behavior,
+  e.g. `MaxRollSpeed`) must only engage once the entity has actually reached that state**
+  (here: `_grounded`, set on first floor-like collision) — not from frame 0.
+- **Rule 3 — releasing an object's *control* is not the same as releasing the state
+  machine's *memory* of it.** `HandleSkill1` (Shift) called `_activeHead.SetAutonomous(true)`
+  then immediately set `_activeHead = null`. Nulling the reference was meant to say "I no
+  longer control this," but it also erased the only way `ExitSoul()` could tell "the
+  released head is still alive out there" from "there's no head" — so Soul always exited to
+  `Normal` and started a reload, regrowing a visible head on PumpKing's neck while the old
+  autonomous one was still live and unresolved. Fix: keep the reference through the state
+  that depends on it, and null it only where the object's fate is actually resolved
+  (`HandleHeadExplosion`, or `ExitSoul` once confirmed `.Exploded`) — not at the moment
+  control is handed off. Same family as the v0.5.4 "re-anchor after placing the node"
+  caveat: a `null`/reset that's locally correct for one concern (control) can quietly break
+  a different concern (bookkeeping) that was piggybacking on the same field.
+- **Corollary:** fixing Rule 3 made a previously-dead code path reachable again (manual BA
+  detonate on a head that had been marked autonomous), which exposed that `Explode()`
+  suppressed AoE for *any* autonomous head unconditionally — including a deliberate player
+  detonate, not just an unattended self-trigger. Needed a `manual` flag to keep "no AoE
+  when it goes off by itself" from also silently eating "no AoE when the player explicitly
+  detonates it." **When un-nulling/re-enabling a reference to fix a state bug, check what
+  else was implicitly guarded by that reference being unreachable** — the guard may have
+  been hiding a second, independent gap.
+- **Why (radius/VFX audit, no code bug):** also checked whether the 3 m explosion "looks
+  too large" was a sprite-vs-hitbox mismatch — it isn't. The peak VFX frame's opaque bbox is
+  only ~9% wider than `ExplosionRadius`; the 96 px/3 m radius is a real, intentional balance
+  number, not an art illusion. Measure the actual alpha bounds (crop the peak frame, check
+  bbox) before assuming a "feels too big" report is a rendering bug — it may just be big.
+
 ### A "display-bypass" debug source must not round-trip into real owned state (v0.6.0, caught in review)
 - **Symptom:** the v0.6.0 shelter Team Build menu, in debug mode, lists every `ItemCatalog`
   entry as assignable even when it isn't really in `RunState.Items` ("all wonder items available

@@ -52,17 +52,21 @@ public partial class PumpKing : CharacterController
     [Export] public float SoulMoveSpeed = Units.Px(5f);   // 160 px/s
 
     [ExportGroup("Head / Explosion (BA)")]
-    [Export] public float HeadLaunchSpeed = Units.Px(12f);    // 384 px/s
+    [Export] public float HeadLaunchSpeed = Units.Px(16f);    // 512 px/s (was 12 m/s; also PumpKingHead.MaxRollSpeed used to clamp this away on the very first tick — fixed there to only cap once grounded)
     [Export] public float ExplosionRadius = Units.Px(3f);     // 96 px
     [Export] public float ExplosionDamage = 50f;
-    [Export] public float ExplosionKnockback = Units.Px(9f);  // 288 px/s
+    [Export] public float ExplosionKnockback = Units.Px(15f); // 480 px/s ⇒ ~96 px (3 m) travel vs foes' 1200 px/s² ExternalDamping — matches the blast radius
     [Export] public float ReplenishWindup = 0.5f;
 
     // Designer knob: head visual scale per pump-stack count (index = stacks).
     [Export] public float[] HeadScales = { 1.0f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f };
 
-    // ~0.6 m up (Unity headNeckOffset) ⇒ 19 px.
-    [Export] public Vector2 NeckOffset = new Vector2(0f, -19f);
+    // Unity's headNeckOffset (0.6 m ⇒ 19 px) put the head at chest/waist height on
+    // our sprites — the body art's collar sits ~28 px above origin (measured from the
+    // idle frame's alpha bounds) and the head graphic's own half-height (~21.5 px at
+    // scale 0.25) hangs below its anchor, so the neck anchor must sit above the collar
+    // by that much: -48 px puts the chin right at the collar instead of at the waist.
+    [Export] public Vector2 NeckOffset = new Vector2(0f, -48f);
 
     // Neck-head stage sub-sprites on pump_head_static_final.png (612x408), Godot regions.
     private static readonly Rect2[] NeckRegions =
@@ -177,7 +181,7 @@ public partial class PumpKing : CharacterController
                 if (_activeHead == null && _ammo > 0) FireHead(ResolveLaunchDirection());
                 break;
             case PKState.Rolling:
-                if (IsInstanceValid(_activeHead) && !_activeHead.Exploded) _activeHead.Explode();
+                if (IsInstanceValid(_activeHead) && !_activeHead.Exploded) _activeHead.Explode(manual: true);
                 break;
             case PKState.Soul:
                 break;
@@ -194,7 +198,9 @@ public partial class PumpKing : CharacterController
         var head = PumpKingHeadScene.Instantiate<PumpKingHead>();
         GetParent().AddChild(head);
         head.GlobalPosition = FirePoint != null ? FirePoint.GlobalPosition : GlobalPosition + NeckOffset;
-        head.Init(dir * HeadLaunchSpeed, this, scale, DamageDealtMultiplier, HandleHeadExplosion);
+        // Carry PumpKing's own momentum into the throw (a head fired while running
+        // forward should fly farther than one fired standing still).
+        head.Init(dir * HeadLaunchSpeed + Velocity, this, scale, DamageDealtMultiplier, HandleHeadExplosion);
 
         _activeHead = head;
         _pumpStacks = 0;
@@ -236,8 +242,9 @@ public partial class PumpKing : CharacterController
         if (_activeHead != null && IsInstanceValid(_activeHead))
         {
             _activeHead.SetAutonomous(true);
+            // Deliberately NOT nulling _activeHead here: ExitSoul() needs it to tell a
+            // still-live released head apart from "no head" (see KNOWLEDGE.md caveat).
         }
-        _activeHead = null;
         _soulWindup = SoulWindupTime;   // normal control persists during windup
     }
 
@@ -256,13 +263,23 @@ public partial class PumpKing : CharacterController
 
     private void ExitSoul()
     {
-        // In practice always Normal — the head was released as autonomous on Shift
-        // press — but the check is kept as a faithful port of Unity's structure.
+        // A head released autonomous on Shift press keeps rolling/bouncing on its own
+        // for the whole 6 s Soul Form — it may still be live (→ Rolling, BA can detonate
+        // it per the GDD) or may already have auto-exploded via its own still-timer/
+        // lifetime while we were away (→ Normal, safe to start reloading).
         CurrentState = (_activeHead != null && IsInstanceValid(_activeHead) && !_activeHead.Exploded)
             ? PKState.Rolling : PKState.Normal;
 
-        if (CurrentState == PKState.Normal && _ammo < 1 && _reloadTimer <= 0f)
-            _reloadTimer = ReplenishWindup;
+        if (CurrentState == PKState.Normal)
+        {
+            // An autonomous head that self-detonated (still-timer/lifetime) while we were
+            // away skips HandleHeadExplosion (no AoE ⇒ no callback), so _activeHead is
+            // never nulled there — clear the stale reference ourselves or BA's Normal-state
+            // "_activeHead == null" gate would wrongly block firing a fresh head.
+            _activeHead = null;
+            if (_ammo < 1 && _reloadTimer <= 0f)
+                _reloadTimer = ReplenishWindup;
+        }
     }
 
     // ── E — Pump Up ──────────────────────────────────────────────────────────
