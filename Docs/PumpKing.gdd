@@ -65,10 +65,13 @@ PumpKing builds a **shield pool** by pumping up (E). The shield is active only i
 
 **In Normal state — Fire Head:**
 PumpKing launches his head as a rolling projectile in the aimed direction. The head:
-- Launches at **12 m/s** initial impulse
+- Launches at **16 m/s** initial impulse, **plus PumpKing's own current velocity** (a head
+  fired while running carries that momentum into the throw)
+- The **6 m/s horizontal speed cap only applies once the head has touched down** — the
+  initial launch flies free so the impulse actually covers ground before the head settles
+  into a capped roll; vertical speed is capped at **15 m/s** throughout (terminal fall speed)
 - Bounces off terrain with **85% speed retention**
 - Has mouse steering (optional in inspector; off by default — pure physics bounce)
-- Horizontal speed capped at **6 m/s**, vertical at **15 m/s**
 - Deals **30 contact damage** on hitting an enemy, then explodes
 - **Auto-explodes** after **10 s** lifetime or after sitting still (< 0.1 m/s) for **0.5 s**
 
@@ -78,9 +81,12 @@ On fire: pump stacks reset to 0, shield is removed, neck head hidden, state → 
 Manual detonation via BA press. The head explodes immediately.
 
 **Explosion (any cause):**
-- **3 m radius** AoE
+- **3 m radius** AoE — this is the real, mechanical hit region; the VFX sprite reads only
+  ~9% larger at its peak frame (~3.3 m), so the explosion is not oversold by its art —
+  3 m (6 m across, 3 PumpKing-heights) is a genuinely large blast by design
 - **50 damage** to all enemies in range
-- **9 m/s knockback** outward from center
+- **15 m/s knockback** outward from center — against a foe's 1200 px/s² deceleration this
+  travels exactly 3 m, i.e. to the edge of the blast radius itself
 - Spawns explosion VFX (prefab, auto-scaled to match radius)
 - Starts the 0.5 s head reload windup
 - State returns to Normal (or Soul → Normal/Rolling if soul form ended)
@@ -209,6 +215,33 @@ the Unity source:
   per stage + code scale (not distinct per-stage art); PumpKing is not yet a selectable
   protagonist (Pomegraknight remains the Arena/RunState default); animation frame timings
   want an in-editor polish pass on a real Godot build.
+
+### Bug pass (v0.6.1)
+Five issues found and fixed post-port; see the `KNOWLEDGE.md` "PumpKing head" caveat for
+the full write-up:
+- **Neck anchor was at waist height.** `NeckHead`/`FirePoint` sat at `(0, -19)`, ported
+  directly from Unity's `headNeckOffset` (0.6 m) — but that offset doesn't transfer across
+  sprite sheets with different proportions/pivots. Re-measured from the actual delivered
+  art (collar top ≈ 28 px above origin, head graphic's own half-height ≈ 21.5 px) and moved
+  to `(0, -48)` so the head sits on the collar instead of at the torso.
+- **Launch velocity didn't include PumpKing's own movement**, and `PumpKingHead.MaxRollSpeed`
+  unconditionally clamped horizontal speed every tick — including the very first tick right
+  after `Init()`, before the head had moved at all — so the 12 m/s launch impulse was
+  discarded immediately and the head never traveled on the throw. Fixed to (a) add
+  PumpKing's `Velocity` to the launch vector and (b) only apply the roll-speed cap once the
+  head has actually touched a floor (`_grounded`); bumped the launch impulse to 16 m/s.
+- **Explosion radius/VFX audited, not a bug** — the 96 px / 3 m hit radius is real (not a
+  sprite illusion); the VFX oversizes it by only ~9%. See the diagram from the debug session.
+- **Shift nulled `_activeHead` immediately**, so `ExitSoul()` could never tell "released head
+  still alive out there" from "no head," causing a phantom early reload (a fresh head could
+  regrow on PumpKing's neck while the old autonomous one was still live) — contradicting this
+  doc's own "PumpKing can still manually detonate after Soul ends." Fixed by keeping the
+  reference through Soul (only nulling it once the head is confirmed exploded), which also
+  required teaching `Explode()` to still deal AoE on a deliberate manual (BA) detonate even
+  once a head is autonomous — previously that path was unreachable so this gap was hidden.
+- **Knockback increased 9→15 m/s** — against a foe's 1200 px/s² deceleration, 9 m/s only
+  pushed ~1.1 m (about one body length); 15 m/s pushes exactly 3 m, i.e. to the edge of the
+  blast radius.
 
 ### State Machine
 Three states (`PKState` enum: Normal, Rolling, Soul). State transitions are gated —

@@ -575,12 +575,12 @@ texture = SubResource("2")
 scale = Vector2(0.25, 0.25)
 
 [node name="NeckHead" type="Sprite2D" parent="."]
-position = Vector2(0, -19)
+position = Vector2(0, -48)
 scale = Vector2(0.25, 0.25)
 texture = SubResource("125")
 
 [node name="FirePoint" type="Marker2D" parent="."]
-position = Vector2(0, -19)
+position = Vector2(0, -48)
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
 libraries = {

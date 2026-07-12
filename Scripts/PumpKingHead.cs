@@ -8,10 +8,13 @@ using System;
 /// detonating (or on foe contact, or after Lifetime, or via a manual Explode()
 /// call from the owning skill). Mouse steering existed in the Unity source but
 /// was OFF by default there — NOT ported here.
+/// <see cref="MaxRollSpeed"/> only clamps horizontal speed once the head has actually
+/// touched down (<see cref="_grounded"/>) — the initial launch impulse flies free so it
+/// covers real distance before settling into a capped "roll," matching the name.
 /// </summary>
 public partial class PumpKingHead : CharacterBody2D
 {
-    [Export] public float MaxRollSpeed = Units.Px(6f);        // 6 m/s = 192 px/s, horizontal cap
+    [Export] public float MaxRollSpeed = Units.Px(6f);        // 6 m/s = 192 px/s, horizontal cap ONCE GROUNDED (not during the initial flight arc)
     [Export] public float MaxVerticalSpeed = Units.Px(15f);   // 15 m/s = 480 px/s, |vy| cap
     [Export] public float BounceRetention = 0.85f;
     [Export] public float FallGravity = Units.Gravity;        // 2048 px/s² (never "Gravity" — shadows CharacterBody2D)
@@ -33,6 +36,7 @@ public partial class PumpKingHead : CharacterBody2D
 
     private bool _initialized;
     private bool _exploded;
+    private bool _grounded;    // true once the head has touched Ground/Platform at least once
     private float _age;
     private float _stillTimer;
     private float _freeTimer;
@@ -80,7 +84,12 @@ public partial class PumpKingHead : CharacterBody2D
         if (_age >= Lifetime) { Explode(); return; }
 
         _velocity.Y += FallGravity * dt;
-        _velocity.X = Mathf.Clamp(_velocity.X, -MaxRollSpeed, MaxRollSpeed);
+        // MaxRollSpeed models tangential rolling friction, not flight drag — clamping it
+        // unconditionally used to eat the entire launch impulse on the very first tick
+        // (Init() → this runs before the head has moved at all), so the head could never
+        // actually travel on the initial throw. Only cap once it's touched a floor.
+        if (_grounded)
+            _velocity.X = Mathf.Clamp(_velocity.X, -MaxRollSpeed, MaxRollSpeed);
         _velocity.Y = Mathf.Clamp(_velocity.Y, -MaxVerticalSpeed, MaxVerticalSpeed);
 
         var col = MoveAndCollide(_velocity * dt);
@@ -102,8 +111,12 @@ public partial class PumpKingHead : CharacterBody2D
             // into a roll instead of micro-bouncing forever (manual bounce has no built-in
             // "resting" concept the way a RigidBody2D would).
             bool floorLike = col.GetNormal().Y < -0.7f;
-            if (floorLike && Mathf.Abs(reflected.Y) < Units.Px(1.5f))
-                reflected.Y = 0f;
+            if (floorLike)
+            {
+                _grounded = true;
+                if (Mathf.Abs(reflected.Y) < Units.Px(1.5f))
+                    reflected.Y = 0f;
+            }
 
             _velocity = reflected;
 
@@ -126,16 +139,19 @@ public partial class PumpKingHead : CharacterBody2D
     }
 
     /// <summary>Idempotent — safe to call more than once (contact, still-timer, lifetime,
-    /// or an external skill can all race to trigger it).</summary>
-    public void Explode()
+    /// or an external skill can all race to trigger it). <paramref name="manual"/> is true
+    /// only for a player-issued BA detonate.</summary>
+    public void Explode(bool manual = false)
     {
         if (_exploded) return;
         _exploded = true;
 
-        // An autonomous head (e.g. a wandering/loose head) plays the visual but deals NO
-        // area damage — exact port of the Unity behaviour. Only a non-autonomous head
-        // (still owned/aimed by the skill that launched it) invokes the AoE callback.
-        if (!_autonomous) _onExplode?.Invoke(GlobalPosition);
+        // An autonomous head that goes off BY ITSELF (still-timer/lifetime while
+        // PumpKing is off in Soul Form) plays the visual but deals NO area damage —
+        // exact port of the Unity behaviour. A deliberate manual detonate (BA, once
+        // PumpKing is back and Rolling — see ExitSoul) still counts, autonomous or not:
+        // the GDD says he "can still manually detonate after Soul ends."
+        if (!_autonomous || manual) _onExplode?.Invoke(GlobalPosition);
 
         _velocity = Vector2.Zero;
 
