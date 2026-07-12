@@ -111,6 +111,17 @@ appears in your backpack; one is `Perishable(1d)`, guess which).
   Heatwave (OnFire +2 s everywhere — Pomegraknight festival), Ashfall (mist everywhere,
   trader prices drop). One roll, three systems touched: exactly the cross-system
   spice the day loop wants.
+- **Canvas Weather Modes** — the combat map's canvas layer (`Docs/MapCreation.gdd` §1.1,
+  solid skyblue in v1) upgrades to animated "modes" that can also fire battlefield
+  events: *Meteor Night* (meteors glide across, occasional screen flash, rare real
+  falling-star hazard), *Flooding Lava* (rising glow, periodic ember rain), *Deep Sea*
+  (caustic light, drifting bubbles — pairs with Coralline Shoals). Natural merge with
+  the daily **Weather** roll above: the roll picks the canvas mode. Very late version.
+- **Mirage Platforms** — fable-flavored parallax trickery: a battlefield tile whose
+  collider is authored in battlefield space but whose sprite renders in a farview
+  sublayer, so a "distant" mountaintop is impossibly, deterministically standable.
+  Ships the "parallax as gameplay" fantasy without camera-dependent colliders
+  (see `Docs/MapCreation.gdd` §3).
 - **Phantom Chess** — expand THE VOID's phantoms into typed movers (a Rook-phantom
   slides whole rows per step; a Knight-phantom jumps worlds). The map is already a
   board; lean in.

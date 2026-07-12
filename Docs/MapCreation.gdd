@@ -1,0 +1,372 @@
+# MapCreation GDD — Combat-Map Builder & Map Data (rework)
+
+Replaces the broken v0.5.x map builder (`Scripts/MapCreation/`, `Scenes/MapCreation/`).
+Covers: the map data model (layers, cells, tiles), the seeded detail-generation system,
+the editor (browser + canvas UX, tools, shortcuts), persistence, and the runtime
+contract for loading a map into an arena. **Not** the roguelike overworld map — that is
+`Docs/MapGDD.md` / `Scripts/Map/`; the two systems share nothing but the word "map".
+
+Scope of the first build: editor rework + data model + generation preview. Runtime
+arena instantiation (§9) is contract-only here and ships in a later milestone.
+
+## 1. Map anatomy — the layer stack
+
+A map is a stack of layers, drawn back-to-front:
+
+| # | Role | Count | Parallax | Interacts with gameplay | Purpose |
+|---|------|-------|----------|-------------------------|---------|
+| 0 | **Canvas** | exactly 1 | n/a (fills screen) | via future "modes" only | Backdrop: solid color now, animated weather modes later |
+| 1 | **Farview** | 0..8 sublayers | per-layer (≤ 1.0 typical) | only if `collision` and parallax = 1.0 (§3) | Background scenery, decoration, parallax depth |
+| 2 | **Battlefield** | exactly 1 | 1.0 fixed | yes — the game board | Ground, platforms, spawns, hazards, goals |
+| 3 | **Closeview** | 0..2 sublayers | per-layer (> 1.0 typical) | **never** | Foreground occluders: blurry, dark, steady |
+
+**Unified layer model.** Internally every layer (farview sublayer, battlefield,
+closeview sublayer) is the same `MapLayerData` schema with a `role` field; the
+battlefield is the distinguished layer with gameplay semantics and locked parallax.
+One data shape ⇒ one paint pipeline, one renderer, one serializer. List order **is**
+draw order (T00 rule 3: explicit order, no z-index attribute).
+
+### 1.1 Canvas
+
+`{ "type": "solidColor", "color": "#87CEEB" }` (skyblue default). The schema reserves
+`type: "mode"` + `modeId` for animated weather canvases (meteor night, flooding lava,
+deep sea) that can also fire battlefield events — idea marked in `Docs/IDEAS.md` §6
+("Canvas Weather Modes"), graduates in a late version alongside the weather system.
+
+### 1.2 Layer attributes (farview/closeview sublayers)
+
+| Attribute | Type | Default | Notes |
+|-----------|------|---------|-------|
+| `name` | string | "Layer N" | shown in the layer panel |
+| `parallaxX`, `parallaxY` | float | 0.5 / 0.5 (farview), 1.2 (closeview) | 1.0 = moves with battlefield |
+| `loop` | bool | false | horizontally tiles the layer (clouds, hills). Loop layers can never collide (§3) |
+| `collision` | bool | false | only legal when parallax = (1.0, 1.0) — editor disables it otherwise (§3) |
+| `tint` | hex string | none | color modulate; closeview defaults dark (#404050) |
+| `opacity` | float | 1.0 | |
+| `swayAmplitudePx`, `swayPeriodSec` | float | 0 / 4.0 | visual-only sway (§4); forced 0 on closeview ("steady") |
+| `autoScrollX`, `autoScrollY` | float px/s | 0 | drifting clouds/fog independent of camera |
+| `gridW`, `gridH` | int | battlefield dims | per-layer grid size (loop layers are usually narrow) |
+
+Battlefield fixes: parallax (1,1), loop false, collision true, sway 0. Its `gridW/H`
+define the map bounds shown in map properties (default **64 × 36** cells, max 512 × 256).
+
+## 2. Cells and tiles
+
+### 2.1 The cell
+
+One cell = **32 px = 1 m**, sourced from `Units.PixelsPerMeter` — never a local const.
+Cell coordinates are `(x right, y down)` from the layer's top-left. Storage is
+**sparse**: a layer holds a list of placed tiles, not a dense grid (maps are mostly
+air; also kills the grid-trim bugs of v0.5.x).
+
+### 2.2 Tile definitions (registry, data-driven per T20)
+
+A `TileDef` describes a kind of tile; painted cells reference defs by id. Defs live in
+a `TileRegistry` (code-defined table now, file-loadable later) — **adding a tile kind
+is adding a registry entry, never editing a switch** (T00 rule 1).
+
+| TileDef field | Type | Notes |
+|---------------|------|-------|
+| `id` | string | e.g. `"ground.grass"`, `"softvolume.cloud2x1"`, `"rule.cloudZone"` |
+| `displayName` | string | palette label |
+| `category` | enum | Ground, Platform, SoftVolume, Hazard, EnemySpawn, Respawn, LevelGoal, Character, Decoration, Rule, Misc |
+| `footprintW`, `footprintH` | int | cells occupied; default 1×1 (§2.3) |
+| `allowedRoles` | flags | which layer roles may hold it (gameplay categories: battlefield only; Decoration: any; Rule: battlefield + farview) |
+| `editorColor` | hex | placeholder quad color until art lands |
+| `spriteSlot` | string | reserved: atlas region / texture path the art department fills in (§2.5) |
+| `autotileGroup` | string? | reserved: connected-look group for future autotiling (§2.5) |
+| `effectArea` | shape def? | collision/trigger shape in px relative to anchor (§2.4); null = footprint rect |
+| `props` | dict | per-kind extras (foe table id for EnemySpawn, spawn rules for Rule tiles §6, …) |
+
+### 2.3 Multi-cell footprints
+
+- A placed tile stores only its **anchor** (top-left cell); occupancy of the other
+  footprint cells is derived at load/edit time into an occupancy index.
+- **One tile per cell**: placement is rejected (red ghost preview) if any footprint
+  cell is already occupied on that layer.
+- Erasing **any** occupied cell removes the whole tile (you can't half-delete a tree).
+- Footprints never extend outside the layer grid.
+
+### 2.4 Effect areas — cells are not the collision unit
+
+A cell is the *authoring* unit, not the *physics* unit. Each TileDef may carry an
+`effectArea` (rect/circle/polygon in pixels, anchored to the tile's anchor cell) used
+at runtime for its collider or trigger. Default = the footprint rectangle. The editor
+gets a **"Show effect areas"** toggle (top bar) that outlines them in orange so
+designers see what a hazard actually touches.
+
+### 2.5 Sprites & connected looks (art department slots)
+
+v1 renders every tile as its `editorColor` quad + name-on-hover; runtime rendering
+uses `spriteSlot` when art exists. Connected tiles looking different (grass edges,
+cliff corners) is **autotiling**: we reserve `autotileGroup` now and later adopt
+Godot's `TileSet` terrain system (peering-bit autotiles) as the runtime render path —
+it is the mature, built-in solution, so we do not hand-roll bitmask autotiling.
+The editor keeps its own custom renderer either way (it must draw ghosts, rule zones,
+effect areas, and layer-dimming that TileMap can't).
+
+## 3. Farview physics policy
+
+Motivation on record: "the stuff in the farview can collide — we are a fable-scened
+game; sometimes you can use the parallax to achieve something you couldn't."
+
+The trap: with parallax ≠ 1.0 a layer's *apparent* position depends on the camera, but
+physics runs in world space. A collider that matches what the player sees would have to
+move whenever the camera moves — physics becomes camera-dependent, breaking determinism
+(T00 rule 5), replay/daily-seed integrity, and producing jitter for anything standing
+on it.
+
+**Policy (v1):**
+1. `collision = true` is legal **only** on layers with parallax exactly (1.0, 1.0).
+   The editor greys the checkbox out otherwise, with a tooltip saying why.
+2. `loop` layers can never collide (a looping layer would tile its colliders forever).
+3. Decoration-at-parallax-1.0 is the blessed pattern: scenery that sits *in* the world,
+   doesn't burn battlefield cells, and may optionally collide.
+4. The fable fantasy ships later as a **Mirage tile** (IDEAS §6): a battlefield tile
+   whose collider is authored in battlefield space but whose sprite renders in a
+   farview sublayer — it *looks* impossibly far, it *is* deterministically standable.
+
+## 4. Sway
+
+Per-layer visual sway to keep the far/closeview vivid: sprite offset =
+`sin(time · 2π / swayPeriodSec + phase) · swayAmplitudePx`, where `phase` is hashed
+from the map seed + cell coords so trees don't wave in lockstep. Sway is
+**render-only** — colliders never move. Closeview forces sway 0 (spec: "steady");
+battlefield forces sway 0 in v1 (gameplay readability).
+
+## 5. Canvas rendering (v1)
+
+A full-viewport ColorRect behind everything, `mouse_filter = IGNORE` (KNOWLEDGE
+v0.2.4), color from map data, skyblue `#87CEEB` default, editable in map properties.
+Closeview presentation: tint + opacity via layer modulate (cheap); a real blur shader
+is a later polish item (perf budget: editor must not need a shader compile to open).
+
+## 6. Seeded detail generation — Rule tiles
+
+Every visit to a map should feel slightly unique, deterministically (rogue-like: same
+seed ⇒ same map). Mechanism: **rules are ground into tiles**, as designed.
+
+- A **Rule tile** (category Rule) is an editor-only marker painted over an area like
+  any tile; invisible at runtime. Contiguous cells of the same rule id on the same
+  layer are flood-fill-grouped into one **zone** at load (deterministic grouping).
+- The rule TileDef's `props` carry the generation table:
+
+| Rule prop | Meaning | Example (cloud zone) |
+|-----------|---------|----------------------|
+| `spawnTable` | weighted list of TileDef ids to place | `softvolume.cloud2x1` ×3, `softvolume.cloud1x1` ×1 |
+| `countMin..countMax` | how many to attempt | 2..4 |
+| `reserveW`, `reserveH` | cells reserved around each placement (min spacing) | a 2×1 cloud reserving 3×4 keeps others away |
+| `tags` | extra behaviors attached to spawned tiles | `foeSpawner:crab` — a cloud that is also a spawner |
+
+- **Determinism spec:** generation seed = `hash(mapId, nodeSeed)` where `nodeSeed`
+  comes from the run's `DetRandom` for that combat node — same run + node ⇒ identical
+  details, different nodes on the same map ⇒ different details. Zones resolve in
+  stable order (sorted by layer index, then anchor y, then x), and **each zone gets
+  its own child stream** `DetRandom(hash(seed, layerIdx, anchorX, anchorY))` so adding
+  a zone never reshuffles the others.
+- **Placement algorithm:** per zone, draw candidate anchors from the zone's cells in
+  seeded order; reject any whose footprint+reserve overlaps occupied or reserved
+  cells; stop at target count or after `4 × count` attempts (degrade gracefully — a
+  cramped zone just spawns fewer clouds, `GD.PushWarning` in debug).
+- Editor support: **"Preview generation"** button (top bar) rolls a scratch seed and
+  renders the outcome semi-transparent; press again to reroll; Esc clears. Rule zones
+  render as a hatched overlay in their rule color.
+
+## 7. Editor UX
+
+### 7.1 Screen layout
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Top bar: name · Save · Grid ⊞ · Effect areas · Preview gen · │
+│          zoom % · Cell = 32 px = 1 m                         │
+├───┬──────────────────────────────────────────────┬───────────┤
+│ T │                                              │ Layers    │
+│ o │              map canvas                      │  (stack,  │
+│ o │   (pan/zoom world, grid overlay,             │  +/- ,    │
+│ l │    ghost preview under cursor)               │  props)   │
+│ s │                                              ├───────────┤
+│   │                                              │ Palette   │
+│   │                                              │ (by cat.) │
+├───┴──────────────────────────────────────────────┴───────────┤
+│ Status: cursor cell (x, y) · selection count · unsaved dot   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 7.2 Tools (left rail, top-to-bottom)
+
+| Tool | Key | Behavior |
+|------|-----|----------|
+| Paint | `B` | click/drag paints current palette tile on current layer; drag = one undo step |
+| Erase | `E` | click/drag erases whole tiles under cursor |
+| Rect fill | `R` | drag a rectangle, fill with current tile (skips blocked cells) |
+| Marquee select | `M` | drag a rectangle selection on current layer |
+| Lasso select | `L` | freehand polygon selection |
+| Move | `V` | drag selection; ghost preview; drop **overwrites** target cells (standard tile-editor semantics) |
+| Eyedropper | `I` | click a tile to make it the current brush |
+| Bucket fill | `F` | flood-fill contiguous same-tile (or empty) region with current tile |
+
+`Shift+click` adds to selection, `Alt+click` subtracts. Any paint tool honors the
+current layer only.
+
+### 7.3 Shortcuts
+
+| Action | Keys |
+|--------|------|
+| Undo / Redo | `Ctrl/Cmd+Z` / `Ctrl/Cmd+Shift+Z` (also `Ctrl+Y`) |
+| Select all (current layer) / Deselect | `Ctrl/Cmd+A` / `Esc` |
+| Delete selection | `Delete` or `Backspace` |
+| Cut / Copy / Paste | `Ctrl/Cmd+X / C / V` (paste ghost follows cursor, click to stamp) |
+| Save | `Ctrl/Cmd+S` |
+| Toggle grid | `G` |
+| Cycle layer up/down | `PageUp` / `PageDown` |
+| Zoom | wheel (to cursor), `+` / `-`, `0` = 100% |
+| Pan | middle-drag, or `Space`+left-drag |
+
+All bindings go through the InputMap (project settings), not hardcoded scancodes, so
+Cmd/Ctrl resolves per-platform.
+
+### 7.4 Layer focus rendering
+
+Only the current layer is fully alive: its tiles draw at full opacity **plus a
+sketchline** (1.5 px outline traced around each contiguous tile group in the layer's
+accent color). Every other layer draws at **35% opacity — never 0** (you always see
+context). The layer panel row of the current layer is highlighted to match.
+
+### 7.5 Grid & cell-size indicator
+
+- **Grid toggle** (top bar + `G`): 1 px lines at 12%-alpha white every cell, a
+  brighter line every 8 cells, drawn **only across the visible rect** (a zoomed-out
+  512-wide map must not issue 500+ draw calls of off-screen lines).
+- The top bar permanently shows **`Cell = 32 px = 1 m`** and current zoom %; the
+  status bar shows the cursor's cell coordinate live. Below 25% zoom the fine grid
+  fades out (moiré), keeping only the 8-cell majors.
+
+### 7.6 Pan / zoom
+
+Manual screen-space transform (`_pan` offset + `_zoom` scalar), **no Camera2D** —
+mirrors the overworld map pattern (KNOWLEDGE v0.3.3) and keeps UI panels static.
+Wheel zooms toward the cursor (clamp 0.25×–4.0×). **The world is drawn by a dedicated
+`GridView` child control layered above the background and below the UI panels** — the
+v0.5.x bug was drawing in the root's own `_Draw`, which Godot renders behind all
+children, so the opaque background child occluded everything. Never draw world content
+in a node that owns opaque children.
+
+### 7.7 Undo / redo
+
+Command stack (`IEditorCommand { Do; Undo; }`), capacity 200. One mouse-down→up stroke
+= one command (batch); layer add/remove/reorder and property edits are commands too.
+The unsaved-changes dot derives from stack position vs. last-saved marker.
+
+### 7.8 Map browser
+
+- Grid of cards: **name (fixing the blank-name bug), world, WxH, last-saved date**.
+- Actions: Create (name prompt → opens editor), Open, Rename, Duplicate, Delete
+  (confirm dialog). Duplicate gets a fresh id.
+- **File identity is a GUID**, generated at creation, never derived from the name —
+  renames are metadata edits, and two maps named "Untitled" coexist peacefully
+  (fixes the v0.5.x overwrite-collapse bug).
+
+## 8. Persistence
+
+- JSON via `System.Text.Json`, **properties with `{ get; set; }` — never bare public
+  fields** (STJ silently ignores fields; this was the root cause of the "maps save as
+  `{}`" bug). A round-trip unit check (save → load → compare) guards this class of bug.
+- `{ "version": 1 }` from byte one; version-switched loader; unknown tile ids skip
+  with `GD.PushWarning`, unknown fields are preserved (T20 §5).
+- Atomic writes: temp file + rename (T30 §6). Missing/corrupt files degrade to an
+  empty list + warning, never a crash.
+- Location: `user://maps/<guid>.json`. **No `_index.json`** — the browser lists by
+  directory scan reading each file's meta block (cheap at our scale, and an index
+  can't desync if it doesn't exist).
+- Domain data (`Scripts/MapCreation/Data/`) has **zero `using Godot`** (T10 layer
+  law; colors are hex strings, shapes are plain structs) so it stays headless-testable.
+
+## 9. Runtime contract (later milestone — contract only)
+
+- `MapInstantiator` (ORCHESTRATION layer) : `(MapDocument, DetRandom nodeRng) →`
+  arena `Node2D` — resolves rule zones (§6), then builds `StaticBody2D`/`Area2D` per
+  tile from `effectArea`, collision layers from `Units.Layer*` (Ground → layer 3,
+  Platform → 4 one-way, Hazard → 6, SoftVolume → the existing SoftVolume scene).
+- Combat code never reads map files; RunState hands the instantiator the chosen map id
+  + node seed (the T10 §3 handshake). `ArenaBuilder`'s procedural platforms become one
+  consumer of the same tile-placement API.
+- Until then, custom maps are an authoring artifact; the editor's Preview-generation
+  button is the validation surface.
+
+## 10. Architecture & file map
+
+```
+Scripts/MapCreation/
+  Data/                    (DOMAIN DATA — no Godot)
+    MapDocument.cs         map = meta + canvas + layers
+    MapLayerData.cs        role, attributes (§1.2), placed tiles
+    PlacedTile.cs          defId, anchorX, anchorY, overrides
+    TileDef.cs / TileRegistry.cs      §2.2
+    RuleResolver.cs        §6 zone grouping + seeded placement (pure, testable)
+    MapJson.cs             versioned (de)serialization, atomic save
+  Editor/                  (PRESENTATION)
+    MapBrowser.cs          §7.8
+    MapEditor.cs           shell: builds panels, routes input to active tool
+    GridView.cs            the world-draw child control (§7.6): grid, tiles, ghosts,
+                           layer dimming, sketchlines, rule overlays, effect areas
+    EditorState.cs         current layer/tool/brush/selection/pan/zoom (one owner)
+    CommandStack.cs        §7.7
+    Tools/                 one class per tool (§7.2), registry-listed
+Scenes/MapCreation/MapBrowser.tscn, MapEditor.tscn   (thin roots, no fabricated uid=)
+```
+
+Existing `CustomMapData.cs` / `MapSaveLoad.cs` / old scene scripts are deleted (no
+saved user maps are worth migrating — they're all `{}` on disk anyway).
+
+## 11. Risks & known pitfalls (why the spec says what it says)
+
+1. **Parallax + collision** is camera-dependent physics — restricted to parallax 1.0
+   (§3); revisit only via the Mirage-tile design.
+2. **STJ fields bug** ate all v0.5.x saves — properties + round-trip test (§8);
+   KNOWLEDGE caveat to be added on ship.
+3. **Draw-behind-children** occlusion killed the old canvas — dedicated GridView child
+   (§7.6); KNOWLEDGE caveat to be added.
+4. **Name-derived filenames** collapse duplicates — GUID identity (§7.8).
+5. **Seeded gen must be insertion-order-proof** — per-zone child streams (§6).
+6. **Grid overdraw at min zoom** — visible-rect-only lines + LOD fade (§7.5).
+7. **Multi-cell erase/undo ambiguity** — whole-tile semantics + command batching
+   (§2.3, §7.7).
+8. **Decoration z-expectations**: farview parallax-1.0 decor draws *behind* the
+   battlefield; "in front of ground, behind player" needs a closeview or a future
+   battlefield-decor draw pass — accepted limitation v1.
+
+## 12. Out of scope (v1) / future
+
+Weather canvas modes (IDEAS §6) · Mirage tiles (IDEAS §6) · autotile art via TileSet
+terrains (§2.5) · blur shader for closeview (§5) · in-editor test-play · map sharing/
+export · runtime instantiation (§9, next milestone).
+
+## Decisions log
+
+- **Unify all layers into one schema with a `role` field.** One paint pipeline and one
+  serializer instead of three; battlefield is just the locked, distinguished layer.
+- **Farview collision only at parallax (1.0, 1.0); loop layers never collide.**
+  Camera-dependent colliders break determinism (T00 rule 5) and physics stability;
+  the "impossible platform" fantasy is preserved via the future Mirage tile instead.
+- **Sparse tile storage, anchor-only for multi-cell.** Maps are mostly air; dense
+  `List<List<>>` caused the old trim bugs and serializes bloated.
+- **GUID file identity, no `_index.json`.** Name-derived filenames caused the
+  one-map-overwrite bug; an index that doesn't exist can't desync.
+- **Properties, not fields, in every serialized class.** `System.Text.Json` ignores
+  public fields by default — the root cause of every v0.5.x save being `{}`.
+- **World drawing lives in a dedicated child control, never the root's `_Draw`.**
+  A node's own draw renders behind its children; the old editor hid the whole grid
+  behind its background ColorRect.
+- **No Camera2D in the editor.** Matches the overworld-map manual pan/zoom pattern
+  (KNOWLEDGE v0.3.3); UI stays in screen space with zero exclusion fuss.
+- **Custom editor renderer now, Godot TileSet terrains later for runtime art.**
+  Autotiling is a solved problem in-engine (don't hand-roll bitmasks); but the editor
+  needs ghosts/zones/dimming that TileMap can't draw.
+- **Rule tiles + per-zone child RNG streams.** Grounding spawn rules into paintable
+  tiles keeps generation authorable by designers; per-zone streams keep edits local
+  (adding a zone never reshuffles existing ones).
+- **Sway is render-only and battlefield/closeview stay steady.** Colliders never
+  follow visual sway; closeview is specified "steady", battlefield stays readable.
+- **Skyblue solid-color canvas v1.** Weather modes are marked in IDEAS and arrive
+  with the weather system in a late version.

@@ -91,6 +91,25 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### `System.Text.Json` ignores public fields — every serialized model class must use properties (v0.6.7, MapCreation rework)
+- **Symptom (root cause of the v0.5.x map builder):** every save in the old `Scripts/MapCreation/`
+  module wrote `{}` to disk. The serialized classes (`CustomMapData` and friends) used plain
+  public **fields**, and `System.Text.Json`'s default reflection contract only sees public
+  **properties** — fields are silently skipped, both on serialize (nothing written) and
+  deserialize (nothing populated). No exception, no warning; the file just quietly had no data.
+- **Rule:** any class that round-trips through `JsonSerializer` must expose every persisted
+  member as a property with `{ get; set; }`, never a bare field. Also add
+  `[JsonExtensionData] public Dictionary<string, JsonElement> Extra { get; set; }` to every
+  serialized class so a future version's unknown fields survive a load→save round trip instead
+  of being dropped (T20 §5 forward-compat). See `Scripts/MapCreation/Data/{MapDocument,
+  MapLayerData, PlacedTile}.cs` for the pattern, and `MapJson.RoundTripSelfTest()` for the
+  structural guard (build a representative doc, save, load, deep-compare every property) —
+  run this any time a new serialized field is added to catch a field/property slip immediately
+  instead of discovering it as an empty save file later.
+- **Why:** this is exactly the kind of bug that looks like a totally different failure (map
+  browser shows blank names, maps "don't save") because the write path never errors — the
+  round-trip test is cheap insurance precisely because there's no other signal.
+
 ### PumpKing head: a per-tick clamp on a fresh Init() eats the whole launch impulse; releasing a reference destroys state-machine memory, not just control (v0.6.1)
 - **Symptom (bug report, 4 linked issues):** the detached head visually sat at PumpKing's
   waist, barely traveled when fired, and read as "exploding on him" after Shift; knockback

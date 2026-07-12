@@ -876,3 +876,286 @@ dash direction vector.
 | `Sprites/UI/mugshot_next_pomegraknight.svg` | Placeholder pomegranate mugshot |
 | `Sprites/UI/mugshot_next_pumpking.svg` | Placeholder pumpkin mugshot |
 | `Scripts/GameVersion.cs` / `VERSION` / HUD+Map VersionLabels | 0.6.0 → 0.6.5 |
+
+---
+
+## 11. v0.6.7 — Map-creation rework (combat-map builder) (started 2026-07-11, on `main` @ 0.6.6)
+
+Full rework of `Scripts/MapCreation/` + `Scenes/MapCreation/` per the newly-approved
+**`Docs/MapCreation.gdd`** (canon; uncommitted in the working tree together with the
+`Docs/IDEAS.md` §6 additions — both fold into this milestone's commit UNMODIFIED).
+Scope locked by design lead: map browser, map editor, data model, tile registry, rule
+tiles + in-editor "Preview generation" (GDD §0/§12). **NOT in scope:** runtime arena
+instantiation (GDD §9 contract-only, next milestone); `Scripts/Map/` (roguelike
+overworld — unrelated system, do not touch).
+
+### 11.1 Build strategy
+
+Demolition first (old module was broken end-to-end: saves were `{}`, canvas drew behind
+its background, duplicate names overwrote each other), then five engineer phases in
+dependency order, one full-diff reviewer pass, orchestrator fixes, ship. Commit IS
+authorized this session (explicit `git add` paths only, per the v0.5.3 caveat).
+
+**Demolition list** (replaced, no migration — old saved maps are worthless `{}`):
+`Scripts/MapCreation/CustomMapData.cs`, `MapSaveLoad.cs`, `MapBrowser.cs`,
+`MapEditor.cs` (+ their `.cs.uid` sidecars); `Scenes/MapCreation/MapBrowser.tscn`,
+`MapEditor.tscn` rebuilt as thin roots (fabricated `uid="uid://..."` header strings
+removed per KNOWLEDGE v0.5.0; Menu.tscn's fabricated header uid removed in passing).
+Entry point stays stable: Menu "Map Creation" button → `MenuController.OnMapCreation` →
+`ChangeSceneToFile("res://Scenes/MapCreation/MapBrowser.tscn")`.
+
+### 11.2 Phase table
+
+| Phase | Scope | Agent | Status |
+|-------|-------|-------|--------|
+| MC1 | Demolition + `Scripts/MapCreation/Data/` domain layer: MapDocument/MapLayerData/PlacedTile/ShapeDef, TileDef/TileRegistry (starter set), LayerOccupancy, RuleResolver, MapJson (+ round-trip self-check) | engineer | DONE (2026-07-11, orchestrator spot-check passed) |
+| MC2 | MapBrowser: `Scenes/MapCreation/MapBrowser.tscn` thin root + `Editor/MapBrowser.cs` (dir-scan cards, Create/Open/Rename/Duplicate/Delete, GUID identity), `Editor/EditorLaunch.cs` handoff | engineer | DONE (2026-07-11, orchestrator spot-check passed) |
+| MC3 | MapEditor shell: `MapEditor.tscn` thin root + `Editor/MapEditor.cs` (top bar/tool rail/status bar/panel scaffolds), `Editor/EditorState.cs`, `Editor/GridView.cs` (pan/zoom/grid/LOD/canvas/layer-focus/sketchlines/rule hatching/effect areas), `Editor/CommandStack.cs`, `mapedit_*` InputMap actions in project.godot | engineer | DONE (2026-07-12, orchestrator spot-check passed) |
+| MC4 | `Editor/Tools/` (Paint/Erase/Rect/Marquee/Lasso/Move/Eyedropper/Bucket + TileBatchCommand/MoveCommand), selection/clipboard shortcuts (§7.3), ghost previews, paste mode | engineer | DONE (2026-07-12, +1 orchestrator fix F-MC1) |
+| MC5 | Layer panel (add/remove/reorder/props with §3 constraint enforcement), palette by category, Preview-generation button (RuleResolver + scratch seed), map properties (canvas color, battlefield WxH) | engineer | DONE (2026-07-12) |
+| MC6 | Full-diff reviewer pass → orchestrator triage/fixes | reviewer | PENDING |
+| MC7 | Ship: static verification (40-QA §1), KNOWLEDGE caveats, version trio 0.6.7, Migration §0 changelog, commit (authorized) | orchestrator | PENDING |
+
+### 11.3 Integration contract (locked before any code)
+
+```
+NAMESPACES / LAYERS (T00 law)
+  Fableland.MapCreation.Data   (Scripts/MapCreation/Data/)   — DOMAIN DATA. ZERO `using Godot`
+    per file. May reference: Units (foundation; the file itself needs no Godot using),
+    Fableland.Map.DetRandom (domain peer), System.Text.Json. Colors = hex strings
+    ("#RRGGBB" or "#RRGGBBAA"); shapes = plain ShapeDef struct (kind rect|circle|polygon,
+    px relative to the anchor cell's top-left).
+  Fableland.MapCreation.Editor (Scripts/MapCreation/Editor/ + Editor/Tools/) — PRESENTATION.
+    All Godot usage lives here (GD.PushWarning surfacing, ProjectSettings.GlobalizePath,
+    Controls, drawing).
+
+SERIALIZATION (GDD §8 — the STJ-fields bug is structural, not stylistic)
+  Every serialized type: public PROPERTIES with { get; set; } — never public fields.
+  Every serialized type carries [JsonExtensionData] public Dictionary<string, JsonElement>
+    Extra { get; set; } (unknown fields preserved on rewrite, T20 §5).
+  MapDocument = { Version:1, Id (GUID string, minted at creation, NEVER name-derived),
+    Name, World, CreatedUtc, ModifiedUtc, Canvas { Type:"solidColor", Color:"#87CEEB",
+    ModeId:null }, Layers: [MapLayerData] } — canvas is NOT a layer; Layers is
+    back-to-front draw order (farview…, battlefield, closeview…), exactly one
+    Role=Battlefield (missing on load ⇒ inject default 64×36 + warning).
+  MapLayerData per GDD §1.2 (+ Role string, Tiles: [PlacedTile{DefId,X,Y,Props?}]).
+    Sparse tiles, anchor-only for multi-cell footprints.
+  MapJson (Data/, pure): Save(doc, absolutePath) — serialize INDENTED, write temp file in
+    the same dir, File.Move(temp, final, overwrite:true) (atomic rename); Load(absolutePath,
+    out List<string> warnings) — null on missing/corrupt (caller degrades to empty +
+    GD.PushWarning); unknown TileDef ids on load → tile SKIPPED + warning string (Editor
+    layer surfaces all warnings via GD.PushWarning). Version-switched loader from byte one.
+  MapJson.RoundTripSelfTest() (pure, returns failure strings; empty = pass): builds a
+    representative MapDocument (multi-layer, multi-cell tiles, rule tiles, props), saves to
+    a temp path, loads, deep-compares. MapBrowser._Ready runs it when OS.IsDebugBuild()
+    and GD.PushError-s failures — the headless guard the GDD demands.
+
+FILE STORE (Editor layer)
+  Directory: user://maps (globalized via ProjectSettings.GlobalizePath), created on demand.
+  One file per map: user://maps/<guid>.json. NO _index.json — browser lists by directory
+  scan, reading each file's meta via MapJson.Load (corrupt file ⇒ skip + warning card-less).
+  Rename/Duplicate: rename = metadata edit (same file); duplicate = fresh GUID + " (copy)".
+
+SCENE HANDOFF (browser ⇄ editor; scene changes can't carry args)
+  Editor/EditorLaunch.cs: static string MapId (null ⇒ editor F5-launched: open a NEW
+  unsaved default document — the T10 §3 null-tolerant debug rule). Browser sets it, then
+  ChangeSceneToFile(MapEditor.tscn); editor Back button → ChangeSceneToFile(MapBrowser.tscn)
+  (unsaved-changes confirm first). MenuController untouched.
+
+EDITOR STRUCTURE (the draw-behind-children bug is structural, GDD §7.6)
+  MapEditor.tscn root (thin Control) builds in code, child order bottom→top:
+    Background ColorRect (canvas color, mouse_filter IGNORE)
+    GridView (dedicated child Control — ALL world drawing: grid, tiles, ghosts, dimming,
+      sketchlines, rule-zone hatching, effect-area outlines, preview overlay; owns
+      _pan/_zoom manual screen-space transform, NO Camera2D; wheel-zoom to cursor clamped
+      0.25–4.0; middle-drag or Space+left-drag pan; grid lines only across the visible
+      rect, 8-cell majors, fine lines fade out approaching min zoom — alpha lerp 0 at
+      ≤0.25 → full at ≥0.5)
+    UI panels (top bar, left tool rail, right layer+palette panels, bottom status bar).
+  The editor root's own _Draw stays EMPTY forever.
+  EditorState (one owner): Document, CurrentLayerIndex, ActiveTool, BrushDefId,
+    Selection (HashSet of PlacedTile refs; count shown in status bar), clipboard,
+    pan/zoom, toggles (grid on, effect areas off, preview off), dirty marker
+    (= CommandStack position vs last-saved mark). All mutations to Document go through
+    CommandStack commands; GridView/panels read EditorState and QueueRedraw on change.
+  CommandStack: IEditorCommand { Do(); Undo(); }, capacity 200 (drop oldest), one
+    mouse-down→up stroke = ONE batched command; layer add/remove/reorder/property edits
+    are commands too.
+  Occupancy: Data/LayerOccupancy builds Dictionary<(x,y) → PlacedTile> per layer from
+    sparse tiles + footprints; placement rejected (red ghost) on any overlap; erasing any
+    occupied cell removes the whole tile; footprints never leave the layer grid.
+
+DETERMINISM (GDD §6; T00 rule 5 — RuleResolver takes DetRandom IN)
+  RuleResolver.Resolve(MapDocument doc, TileRegistry reg, DetRandom rng)
+    → List<ResolvedSpawn { LayerIndex, DefId, X, Y, Tags[] }>. Pure, no Godot.
+  Zones: contiguous same-rule-id cells on the same layer, 4-connectivity flood fill;
+    zone anchor = its lexicographically smallest (y, then x) cell; zones resolve sorted
+    by (layerIndex, anchorY, anchorX); per-zone child stream =
+    rng.Sub("zone:" + layerIndex + ":" + anchorX + ":" + anchorY) — DetRandom.Sub derives
+    from the seed STRING (the project's hash(seed,…) idiom), so adding a zone never
+    reshuffles the others.
+  Per zone: count = zoneRng.Range(countMin, countMax); candidate anchors = zone cells
+    shuffled by zoneRng; accept iff footprint ⊆ zone cells AND footprint+reserve overlaps
+    no occupied/reserved cell (occupied = layer's real tiles + prior spawns); reserve rect
+    = ReserveW×ReserveH centered on the footprint (rounding toward top-left); stop at
+    count or 4×count attempts (cramped zone degrades gracefully — fewer spawns; editor
+    surfaces a warning in debug).
+  Runtime seed (next milestone) = mapId + ":" + nodeSeed handed in by RunState; the
+    EDITOR's Preview-generation button uses a scratch seed from DetRandom.NewSeed()
+    (editor-only affordance — the sanctioned non-deterministic mint), re-rolls on
+    re-press, Esc clears; preview spawns render semi-transparent.
+
+TILE REGISTRY (T20 §1 — adding a tile kind = adding an entry, never a switch)
+  TileRegistry: code-defined, read-only after boot, Dictionary<string id, TileDef>;
+  TileDef per GDD §2.2 (Category enum Ground/Platform/SoftVolume/Hazard/EnemySpawn/
+  Respawn/LevelGoal/Character/Decoration/Rule/Misc; AllowedRoles [Flags] over LayerRole
+  Farview/Battlefield/Closeview; FootprintW/H default 1×1; EditorColor hex; SpriteSlot +
+  AutotileGroup reserved strings; EffectArea ShapeDef? null = footprint rect; typed
+  RuleProps? for Rule tiles {SpawnTable[{DefId,Weight}], CountMin, CountMax, ReserveW,
+  ReserveH, Tags[]}; Props dict for misc extras).
+  Starter set: ground.grass, ground.stone; platform.wood, platform.vine;
+  softvolume.bush1x1, softvolume.cloud1x1, softvolume.cloud2x1 (2×1); hazard.bonfire,
+  hazard.freezepit; spawn.enemy (EnemySpawn, props foeTable), spawn.respawn (Respawn),
+  goal.level (LevelGoal), spawn.character (Character); deco.flower, deco.rock
+  (Decoration, any role); rule.cloudZone (Rule, battlefield+farview: spawnTable
+  cloud2x1×3 / cloud1x1×1, count 2..4, reserve 3×4, demonstrating spawnTable/count/
+  reserve per GDD §6's worked example).
+  Cell size everywhere = Units.PixelsPerMeter (32 px = 1 m) — never a literal.
+
+LAYER RULES enforced by the editor (GDD §1.2/§3/§4)
+  Battlefield: exactly 1, parallax locked (1,1), loop false, collision true, sway 0,
+    gridW/H = map bounds (default 64×36, max 512×256).
+  Farview 0..8: collision checkbox enabled ONLY when parallax == (1.0,1.0) AND !loop
+    (greyed with tooltip otherwise); loop layers never collide.
+  Closeview 0..2: collision never, sway forced 0, parallax default 1.2, tint default
+    #404050. Sway render-only everywhere.
+  Layer focus render: current layer 100% + 1.5 px sketchline outline around contiguous
+    tile groups (per-layer accent color); every other layer 35% opacity, NEVER 0.
+```
+
+### 11.4 Open questions / prototype defaults (decided by orchestrator, review later)
+
+- **Q-MC1.** GDD §7.8 card shows "world" but no world-selection UX exists → `World`
+  is a free string on MapDocument meta, default `""` (card renders "—"); not editable
+  in v1 UI. Revisit when worlds/registries meet the runtime milestone.
+- **Q-MC2.** "Map properties" surface (canvas color, battlefield WxH) is not given a
+  home by §7.1 → folded into the layer panel: selecting the Canvas or Battlefield row
+  shows its properties (color picker / WxH spinners). Cheapest honest reading of §5
+  "editable in map properties".
+- **Q-MC3.** Paste semantics unspecified (§7.3) → paste stamps like Move's drop:
+  overwrites target cells (removes overlapped tiles) — one consistent rule for both
+  "place a group" verbs.
+- **Q-MC4.** Grid LOD "fades below 25%" vs zoom clamp min = 25% → implemented as a
+  fade band: fine-grid alpha lerps from 0 at ≤0.25× to full at ≥0.5×; majors always on.
+- **Q-MC5.** No uniqueness rule for Character/Respawn/LevelGoal tiles in v1 (GDD is
+  silent); occupancy is the only constraint. Runtime milestone must validate.
+- **Q-MC6.** Selection is whole-tile (set of placed tiles, not cells): marquee/lasso
+  select any tile with a footprint cell inside the region; status-bar count = tiles.
+- **Q-MC7.** Shrinking a layer's GridW/GridH below existing tiles doesn't clip or
+  warn in-editor; the out-of-bounds tiles are skipped (with a warning) by
+  `MapJson.Load`'s validation on next load. Acceptable v1 self-heal; an in-editor
+  clip-confirm dialog is a future polish item.
+
+### 11.5 Phase log
+
+**MC1 (engineer, 2026-07-11) — delivered per contract.** Deleted the 4 old scripts +
+their `.cs.uid` sidecars (`git rm`, staged); old `.tscn`s left for MC2/MC3 rebuild.
+Created the 9 `Data/` files (namespace `Fableland.MapCreation.Data`, zero `using
+Godot`, properties-only + `[JsonExtensionData]` on all serialized types, 18-def
+starter registry incl. `rule.cloudZone` = GDD §6's worked example verbatim,
+`MapJson.RoundTripSelfTest()` deep-compare guard). Also pre-added the STJ-fields
+KNOWLEDGE caveat (v0.6.7). Orchestrator spot-check of MapJson/RuleResolver/model/
+registry/occupancy: conforms — determinism draw order documented (count → shuffle →
+per-attempt def roll), per-zone `rng.Sub("zone:L:x:y")` streams, stable zone sort,
+atomic temp+rename save, unknown-id/out-of-grid skip + warnings-out (no Godot).
+Accepted engineer decisions: occupancy helpers as instance methods; odd reserve
+margin rounds to top-left; candidate cycling via modulo until 4×count attempts
+(later attempts can succeed — smaller def rolled); Rule-tile cells excluded from
+"real" occupancy (required for the algorithm to place anything); `CanvasData` lives
+in `MapDocument.cs`.
+
+**MC2 (engineer, 2026-07-11) — delivered per contract.** `Editor/EditorLaunch.cs`
+(static MapId handoff), `Editor/MapBrowser.cs` (code-built browser: user://maps dir
+scan via GlobalizePath, corrupt-file skip + PushWarning, ModifiedUtc-descending card
+sort by ordinal ISO-8601 compare, cards show name/world/battlefield WxH/date,
+Create/Open/Rename/Duplicate/Delete with reused code-built dialogs, GUID identity —
+rename never moves the file, duplicate reloads from disk + fresh GUID; debug-build
+boot validation wires `MapJson.RoundTripSelfTest()` + `TileRegistry.Validate()` to
+GD.PushError). `MapBrowser.tscn` rewritten as thin root, no `uid=`. Orchestrator
+spot-check passed; one cosmetic nit deferred to the MC6 full review (LineEdit added
+as direct ConfirmationDialog child may overlap the dialog label).
+
+*(Session interruption 2026-07-11→12: the first MC3 agent died to a usage limit
+before writing anything; working tree audited on resume — MC1/MC2 intact — and MC3
+re-run clean.)*
+
+**MC3 (engineer, 2026-07-12) — delivered per contract.** `CommandStack.cs` (cap 200
+oldest-drop, saved-marker with −2 unreachable latch, `Changed` event, Godot-free),
+`EditorState.cs` (one owner: doc/layer/tool/brush/selection/clipboard/toggles/
+preview/commands, occupancy cache + `InvalidateOccupancy`, `StateChanged`,
+`AccentOf`), `GridView.cs` (531 lines: manual `_pan`/`_zoom` no-Camera2D, wheel-zoom-
+to-cursor 0.25–4×, middle/Space pan, visible-rect-only rendering, 35%-never-0 layer
+dimming, current-layer sketchline via boundary-edge tracing, rule-tile hatching,
+effect-area outlines, preview + selection render paths, MC4 cell-event plumbing),
+`MapEditor.cs` (407 lines: CanvasBg → GridView → UI child order, root `_Draw` absent
+with doc-comment, computed "Cell = 32 px = 1 m" from Units, tool rail ButtonGroup,
+status bar cell/sel/dirty-dot, `_UnhandledKeyInput` shortcuts with redo-before-undo
+ordering, save/back + discard confirm). `MapEditor.tscn` thin root no uid;
+project.godot +24 `mapedit_*` actions (physical_keycode style matching existing
+entries; `command_or_control_autoremap` on Ctrl/Cmd combos per GDD §7.3; all 12
+pre-existing actions untouched — verified). Accepted engineer decisions: default
+current layer = first battlefield; initial pan/zoom = origin/1×; rule-hatch spacing
+in world px (scales with zoom).
+
+**MC4 (engineer, 2026-07-12) — delivered per contract.** New `Editor/Tools/`:
+`ToolBase.cs` (abstract tool + `GhostInfo` + `ToolRegistry` + role-legality helper),
+`Commands.cs` (`TileBatchCommand` reused by paint/erase/rect/bucket/delete/cut/paste;
+`MoveCommand` mutates the same PlacedTile X/Y in place so the reference-identity
+Selection survives a move), and the 8 GDD §7.2 tools. GridView gained `GhostProvider`
+(Func<GhostInfo>) + `HoverCell` + `DrawGhost()` (above selection, below grid lines).
+MapEditor routes GridView cell events to the active tool, deactivates the previous
+tool on switch, and adds select_all/deselect/delete/cut/copy/paste handling; paste is
+a modal `_pasteModeActive` flag (ghost follows cursor, click stamps ONE overwrite
+command per Q-MC3, Esc exits; Esc priority = paste-cancel → preview-clear →
+deselect+drag-cancel). `EditorState.CurrentLayerIndex` setter now clears Selection
+on layer change (centralized invariant). Accepted engineer decisions: Alt beats
+Shift when both held on marquee/lasso; clipboard anchor = min-(Y,X) tile; undo of
+delete/cut does not re-select; rect/bucket footprint tiling steps from the region's
+top-left; single-bool ghost validity for multi-tile ghosts; whole-move aborts if any
+moved tile would leave the grid (vs paste's per-entry skip — move preserves a rigid
+group, paste is a stamp).
+
+**Orchestrator fixes applied (MC4):**
+- **F-MC1.** `TileBatchCommand.Do()` removed tiles from the layer but not from the
+  live `Selection` — erase/bucket/paste-overwrite of a selected tile left a dangling
+  selected ref (stale "Sel: N" + selection outline on a nonexistent tile). Fixed:
+  `Do()` also `Selection.Remove(t)` per removed tile; `Undo()` deliberately does not
+  re-select (matches the accepted MC4 decision).
+
+**MC5 (engineer, 2026-07-12) — delivered per contract.** `PanelCommands.cs`
+(`PropertyEditCommand` generic apply/revert closures incl. the §3 collision-auto-off
+coupling captured atomically in ONE command; `LayerAddCommand`/`LayerRemoveCommand`
+inverse pair holding the layer reference; `LayerReorderCommand` adjacent same-role
+swap, all occupancy-invalidating — the cache is index-keyed), `LayerPanel.cs`
+(rows = reverse(Layers) + Canvas row → Photoshop-style front-on-top; accent swatch +
+current-row highlight per §7.4; band-limited ▲▼; farview ≤8 / closeview ≤2 add
+buttons; remove with tile-count confirm; properties sub-panel with role-appropriate
+disabling — battlefield locked parallax/loop/collision/sway + editable 64×36..512×256
+bounds, closeview collision-never + sway-forced-0, farview collision gated on
+parallax==(1,1) && !loop with explanatory tooltips; structural-signature rebuild vs
+in-place `SetValueNoSignal` refresh so focused controls never get freed),
+`PalettePanel.cs` (category-grouped registry rows, brush highlight, role-illegal defs
+greyed against the current layer, built once + highlight-refresh on StateChanged).
+MapEditor: Preview-gen button enabled — scratch seed via `DetRandom.NewSeed()` (the
+sanctioned mint) → `RuleResolver.Resolve` → `State.Preview` (view-only, never a
+command, never dirties), re-press re-rolls, Esc clears (MC4 wiring), seed shown in
+button text, resolver warnings PushWarning'd in debug builds; CanvasBg re-tinted from
+`Document.Canvas.Color` on every StateChanged. Accepted engineer decisions: parallax
+spinbox range −4..4; raw enum category headers; reorder-follows-current-layer clears
+selection via the centralized setter; duplicate default layer names possible
+(cosmetic); removal confirm dialog parented under LayersBox (Window children ignore
+container layout).
+
+### 11.6 Version/commit log
+
+(filled at MC7)
