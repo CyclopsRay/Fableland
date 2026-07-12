@@ -913,8 +913,8 @@ Entry point stays stable: Menu "Map Creation" button → `MenuController.OnMapCr
 | MC3 | MapEditor shell: `MapEditor.tscn` thin root + `Editor/MapEditor.cs` (top bar/tool rail/status bar/panel scaffolds), `Editor/EditorState.cs`, `Editor/GridView.cs` (pan/zoom/grid/LOD/canvas/layer-focus/sketchlines/rule hatching/effect areas), `Editor/CommandStack.cs`, `mapedit_*` InputMap actions in project.godot | engineer | DONE (2026-07-12, orchestrator spot-check passed) |
 | MC4 | `Editor/Tools/` (Paint/Erase/Rect/Marquee/Lasso/Move/Eyedropper/Bucket + TileBatchCommand/MoveCommand), selection/clipboard shortcuts (§7.3), ghost previews, paste mode | engineer | DONE (2026-07-12, +1 orchestrator fix F-MC1) |
 | MC5 | Layer panel (add/remove/reorder/props with §3 constraint enforcement), palette by category, Preview-generation button (RuleResolver + scratch seed), map properties (canvas color, battlefield WxH) | engineer | DONE (2026-07-12) |
-| MC6 | Full-diff reviewer pass → orchestrator triage/fixes | reviewer | PENDING |
-| MC7 | Ship: static verification (40-QA §1), KNOWLEDGE caveats, version trio 0.6.7, Migration §0 changelog, commit (authorized) | orchestrator | PENDING |
+| MC6 | Full-diff reviewer pass → orchestrator triage/fixes | reviewer | DONE (2026-07-12) — APPROVE WITH FIXES; 1 BLOCKER + 1 MAJOR (adjudicated false positive) + 3 minors; fixes F-MC2..F-MC5 applied |
+| MC7 | Ship: static verification (40-QA §1), KNOWLEDGE caveats, version trio 0.6.7, Migration §0 changelog, commit (authorized) | orchestrator | DONE (2026-07-12) |
 
 ### 11.3 Integration contract (locked before any code)
 
@@ -1156,6 +1156,69 @@ selection via the centralized setter; duplicate default layer names possible
 (cosmetic); removal confirm dialog parented under LayersBox (Window children ignore
 container layout).
 
+*(2026-07-12: while the orchestrator session was down on a usage limit, the repo
+owner manually committed all five build phases as `98f4787` "map creation funciton
+upgrade" — MC1–MC5 code, both scenes, project.godot, the GDD/IDEAS/KNOWLEDGE/report
+doc changes. That commit is left untouched; MC6 reviewed `b0efc62..98f4787` and the
+fixes + ship items land as a follow-up commit.)*
+
+**MC6 (reviewer, 2026-07-12) — verdict APPROVE WITH FIXES** over the full milestone
+diff `b0efc62..98f4787`. Findings and orchestrator triage:
+- **BLOCKER (confirmed → F-MC2):** Ctrl+V paste was unreachable — `_UnhandledKeyInput`
+  checked the bare-`V` `mapedit_tool_move` action before `mapedit_paste`, and
+  `IsActionPressed`'s default non-exact modifier matching lets Ctrl+V satisfy bare-V.
+  Fixed by moving ALL 8 bare-key tool checks below the modifier-combo actions (same
+  tie-break family as the existing redo-before-undo ordering). KNOWLEDGE caveat added.
+- **MAJOR (adjudicated FALSE POSITIVE, no behavior change):** "MoveTool lets two
+  selected tiles land on the same cell." Rejected on the math: every dragged tile
+  moves by the same (dx,dy) — a uniform translation of pairwise-disjoint footprints
+  stays pairwise-disjoint — and MoveTool aborts whole-move on any out-of-grid tile
+  (no partial moves) while the overwrite scan excludes `movedSet`. The suggested
+  destCells-vs-area check would always pass. An invariant comment was added at the
+  overwrite scan documenting why the exclusion is load-bearing and when a self-overlap
+  check WOULD become mandatory (any future per-tile-skip move).
+- **PLAUSIBLE compile-risk (confirmed → F-MC3):** `mapedit_zoom_out`'s numpad binding
+  was `4194440` (KEY_KP_2), not KEY_KP_SUBTRACT (`4194435`) — a transcription error in
+  the orchestrator's own MC3 brief, faithfully copied by the engineer. Fixed in
+  project.godot; numpad enum note added to the new KNOWLEDGE caveat.
+- **MINOR (fixed → F-MC4):** `MapJson.Save`/`DoSave`/browser save sites had no IO
+  exception handling (inconsistent with the module's degrade-gracefully posture).
+  Fixed: Data layer documented as propagating; all 4 Editor-layer call sites
+  (DoSave, Create, Rename, Duplicate) now catch → GD.PushError, and `MarkSaved` only
+  runs on success so the dirty dot keeps telling the truth.
+- **PLAUSIBLE edge (fixed → F-MC5):** a shape-valid non-map .json deserialized into a
+  default MapDocument and showed a phantom "Untitled" card. Fixed: `MapJson.Load`
+  rejects documents with an empty `Id` ("not a map file") — the GUID is the one field
+  every real map has from creation.
+- **MINOR (accepted, documented):** browser prompt dialog's LineEdit as a direct
+  `ConfirmationDialog` child — AcceptDialog lays out non-internal Control children
+  into its content rect and the prompt dialog never sets `DialogText`, so there is no
+  label to overlap; accepted as-is (was the MC2 deferred nit).
+Reviewer verified clean: layer law (zero Godot under Data/, properties-only + Extra),
+no literal 32 / no unsanctioned RNG, GDD §1/§2/§3/§6/§7.x/§8 numbers and behaviors,
+drop-oldest + saved-marker latch, thin-root scenes with no uid, all 24 InputMap
+entries well-formed with the 12 pre-existing untouched, FloorToInt (not cast) in the
+negative-coordinate cell math, F-MC1 selection hygiene. Flagged-unverified (no
+toolchain): SetValueNoSignal/SetPressedNoSignal/TooltipText/ButtonGroup/DrawArc
+named-arg forms, `File.Move(overwrite:)` — all precedented/documented, compile-check
+at the next toolchain window.
+
+**MC7 (orchestrator, 2026-07-12) — ship checklist.** KNOWLEDGE.md: STJ caveat
+confirmed present (landed with 98f4787); added 3 more v0.6.7 caveats (bare-key vs
+modifier-combo action ordering + numpad enum note; _Draw-behind-children; GUID file
+identity) — the GDD §11 caveat list is now fully covered. Migration.md §0: 0.6.7
+changelog entry added (notes the 0.6.1–0.6.6 changelog gap, see §10). Version trio
+bumped 0.6.6 → 0.6.7 (`VERSION`, `Scripts/GameVersion.cs`, `Scenes/Hud.tscn`
+VersionLabel). Doc-sync: per the design lead's instruction, `Docs/MapCreation.gdd`
+was committed UNMODIFIED — implementation decisions live in §11.4/§11.5 of this
+report instead of a GDD decisions-log edit this milestone. Static verification: see
+the final report (no toolchain — `dotnet build` still owed at the next window, along
+with the standing v0.5.x/v0.6.x compile-check items).
+
 ### 11.6 Version/commit log
 
-(filled at MC7)
+- `98f4787` — owner's manual commit of MC1–MC5 (version still 0.6.6 inside; trio
+  intentionally not bumped there).
+- **v0.6.7** — MC6 review fixes (F-MC2..F-MC5 + MoveTool invariant comment) + ship
+  items (3 KNOWLEDGE caveats, Migration §0 entry, version trio, this report's §11
+  close-out). Follow-up commit on `main` (static checks only, no toolchain).

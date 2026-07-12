@@ -274,7 +274,18 @@ public partial class MapBrowser : Control
         {
             var doc = MapDocument.CreateNew(name);
             string path = Path.Combine(_mapsDir, doc.Id + ".json");
-            MapJson.Save(doc, path);
+            // F-MC4: MapJson.Save propagates IO exceptions (pure Data layer); catch and
+            // degrade here — a failed create must not crash the browser (T10 §5).
+            try
+            {
+                MapJson.Save(doc, path);
+            }
+            catch (Exception e)
+            {
+                GD.PushError("[MapBrowser] could not create map file: " + e.Message);
+                RefreshMaps();
+                return;
+            }
             OpenMap(doc.Id);
         });
     }
@@ -295,7 +306,14 @@ public partial class MapBrowser : Control
         ShowPrompt("Rename Map", doc.Name, newName =>
         {
             doc.Name = newName;
-            MapJson.Save(doc, path); // same path — file identity is the GUID, never move it
+            try
+            {
+                MapJson.Save(doc, path); // same path — file identity is the GUID, never move it
+            }
+            catch (Exception e) // F-MC4: degrade, never crash (T10 §5)
+            {
+                GD.PushError("[MapBrowser] rename save failed: " + e.Message);
+            }
             RefreshMaps();
         });
     }
@@ -317,7 +335,14 @@ public partial class MapBrowser : Control
         fresh.Id = Guid.NewGuid().ToString("N");
         fresh.Name = (string.IsNullOrEmpty(fresh.Name) ? "Untitled" : fresh.Name) + " (copy)";
         string newPath = Path.Combine(_mapsDir, fresh.Id + ".json");
-        MapJson.Save(fresh, newPath);
+        try
+        {
+            MapJson.Save(fresh, newPath);
+        }
+        catch (Exception e) // F-MC4: degrade, never crash (T10 §5)
+        {
+            GD.PushError("[MapBrowser] duplicate save failed: " + e.Message);
+        }
         RefreshMaps();
     }
 

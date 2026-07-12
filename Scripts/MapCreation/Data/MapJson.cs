@@ -15,7 +15,9 @@ public static class MapJson
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
     /// <summary>Atomic write: serialize to `absPath + ".tmp"` in the same directory, then
-    /// rename over the real path (GDD §8 / T30 §6).</summary>
+    /// rename over the real path (GDD §8 / T30 §6). IO exceptions PROPAGATE — this is
+    /// pure Data-layer code with no Godot logging; every Editor-layer caller wraps the
+    /// call in try/catch and surfaces the failure via GD.PushError (F-MC4).</summary>
     public static void Save(MapDocument doc, string absPath)
     {
         doc.ModifiedUtc = DateTime.UtcNow.ToString("o");
@@ -67,6 +69,17 @@ public static class MapJson
         if (doc == null)
         {
             warnings.Add($"map file '{absPath}' parsed to null");
+            return null;
+        }
+
+        // F-MC5 (review): a syntactically-valid JSON object with unrelated keys
+        // deserializes into a mostly-default MapDocument (STJ is lenient), which would
+        // surface as a spurious "Untitled" card. The GUID Id is the one field every real
+        // map has from creation (GDD §7.8 — identity is minted, never derived), so its
+        // absence means "not a map file": skip it like a corrupt file.
+        if (string.IsNullOrEmpty(doc.Id))
+        {
+            warnings.Add($"'{absPath}' is not a map file (no id); skipped");
             return null;
         }
 

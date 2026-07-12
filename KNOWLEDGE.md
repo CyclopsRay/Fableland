@@ -91,6 +91,54 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A bare-key InputMap action swallows every modifier-combo on the same base key — check combos first (v0.6.7, caught in review)
+- **Symptom:** `Ctrl+V` (paste, `mapedit_paste`) did nothing in the map editor — it switched to
+  the Move tool instead. `mapedit_tool_move` is bound to bare `V`, and `_UnhandledKeyInput`
+  checked the tool actions before the clipboard actions. `InputEvent.IsActionPressed` defaults
+  to **non-exact modifier matching**, so a `Ctrl+V` event also satisfies the bare-`V` action;
+  first match returned and paste was unreachable. Silent — no error, the key just "did the
+  wrong thing."
+- **Rule:** in any first-match-wins action dispatch chain, check **modifier-combo actions
+  before bare-key actions sharing the same base key** (and supersets before subsets — the same
+  reason `mapedit_redo` Ctrl+Shift+Z is checked before `mapedit_undo` Ctrl+Z). Audit for base-
+  key collisions whenever a new action is added to a dispatch chain: grep the [input] section
+  for the same `physical_keycode` appearing with and without modifiers.
+- **Why:** non-exact matching is Godot's default so that extra held modifiers don't break
+  gameplay actions; in an editor-style shortcut chain that default inverts into a shadowing
+  hazard. **Related transcription gotcha from the same review:** don't hand-derive Godot `Key`
+  enum values for numpad keys — the block is KP_MULTIPLY 4194433, KP_DIVIDE 4194434,
+  KP_SUBTRACT 4194435, KP_PERIOD 4194436, KP_ADD 4194437, then KP_0..KP_9 from 4194438;
+  a miscounted `4194440` (KP_2) shipped as "KP_SUBTRACT" and only a reviewer's enum
+  cross-check caught it (no toolchain = no runtime to notice a dead binding).
+
+### A node's own `_Draw` renders BEHIND its children — world drawing needs a dedicated child (v0.6.7, MapCreation rework)
+- **Symptom (root cause of the v0.5.x map editor):** the editor canvas was completely invisible
+  — grid, tiles, everything. The root Control drew the world in its own `_Draw`, and Godot
+  renders a CanvasItem's self-drawn content **before (= behind) all of its children**, so the
+  full-rect opaque background ColorRect child occluded every draw call. No error; the code ran
+  every frame and painted pixels nobody could see.
+- **Rule:** never draw world/content in a node that owns opaque children. Give the drawing its
+  own dedicated child (`GridView` in `Scripts/MapCreation/Editor/`), layered explicitly:
+  background child first, drawing child above it, UI panels after. The root's `_Draw` stays
+  empty forever — the map editor's `MapEditor.cs` class header documents this as a structural
+  rule (GDD MapCreation §7.6).
+- **Why:** self-draw-behind-children is by design (a container paints its own background
+  behind its content); it only becomes a trap when the "background" is a sibling-less child
+  and the "content" is the parent's own draw — exactly the shape a quick prototype reaches for.
+
+### File identity must be minted (GUID), never derived from a user-editable name (v0.6.7, MapCreation rework)
+- **Symptom (v0.5.x map browser):** two maps named "Untitled" collapsed into one file — the
+  save path was derived from the map's display name, so same-name maps silently overwrote each
+  other, and renaming a map orphaned its old file.
+- **Rule:** a persisted object's file identity is a GUID minted once at creation
+  (`MapDocument.Id` → `user://maps/<guid>.json`); renames are metadata-only edits that never
+  move the file; duplicates mint a fresh GUID. And no `_index.json`-style sidecar registry —
+  list by directory scan reading each file's own meta; an index that doesn't exist can't
+  desync. A load-time guard rejects id-less JSON as "not a map file" rather than showing a
+  default-valued phantom card (System.Text.Json happily deserializes any object shape).
+- **Why:** names are UX, identity is plumbing; the moment the two are coupled, every UX
+  affordance (rename, duplicate, "Untitled" defaults) becomes a data-loss path.
+
 ### `System.Text.Json` ignores public fields — every serialized model class must use properties (v0.6.7, MapCreation rework)
 - **Symptom (root cause of the v0.5.x map builder):** every save in the old `Scripts/MapCreation/`
   module wrote `{}` to disk. The serialized classes (`CustomMapData` and friends) used plain

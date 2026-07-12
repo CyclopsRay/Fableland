@@ -89,6 +89,12 @@ public sealed class MoveTool : ToolBase
             if (nx < 0 || ny < 0 || nx + fw > layer.GridW || ny + fh > layer.GridH) return; // abort whole move
         }
 
+        // INVARIANT (review-adjudicated): every dragged tile moves by the SAME (dx,dy),
+        // so pairwise-disjoint footprints stay disjoint — moved tiles can never overlap
+        // EACH OTHER, only non-moved tiles (handled by the overwrite scan below, which
+        // must keep excluding movedSet or a selected tile would be removed AND moved).
+        // If per-tile skips are ever introduced here (paste-style), that uniformity
+        // breaks and a self-overlap check on destCells becomes mandatory.
         var movedSet = new HashSet<PlacedTile>();
         foreach (var (t, _, _, _, _) in _dragging) movedSet.Add(t);
 

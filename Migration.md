@@ -9,6 +9,32 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.6.7** — **Map-creation rework (combat-map builder), per the new `Docs/MapCreation.gdd`.**
+  Complete demolition + rebuild of `Scripts/MapCreation/` + `Scenes/MapCreation/` (built per
+  `IMPLEMENTATION_REPORT.md` §11; main build landed in commit 98f4787, this version adds the
+  review fixes + ship checklist). **Data layer** (`Scripts/MapCreation/Data/`, zero Godot,
+  headless-testable): MapDocument/layers/sparse anchor-only tiles as STJ **properties** (fixes
+  the "every save was `{}`" fields bug, with a `RoundTripSelfTest` boot guard), GUID file
+  identity at `user://maps/<guid>.json` (fixes the duplicate-name overwrite bug; no
+  `_index.json`), versioned+atomic `MapJson`, code-defined `TileRegistry` (18 starter defs
+  incl. a 2×1 cloud, bonfire/freeze-pit hazards, spawns/goal/character, decorations), and a
+  pure deterministic `RuleResolver` (rule tiles → flood-filled zones → per-zone
+  `DetRandom.Sub` child streams, GDD §6). **Browser**: card grid (name/world/WxH/date),
+  Create/Open/Rename/Duplicate/Delete. **Editor**: dedicated `GridView` child does ALL world
+  drawing (fixes the draw-behind-children occlusion bug), manual pan/zoom (no Camera2D,
+  wheel-to-cursor 0.25–4×), grid with 8-cell majors + LOD fade, layer-focus rendering (current
+  layer 100% + sketchline, others 35% never 0), 8 tools (Paint/Erase/Rect/Marquee/Lasso/Move/
+  Eyedropper/Bucket) with red-ghost rejection + whole-tile erase, 200-deep command stack (one
+  stroke = one undo), full §7.3 shortcut set via InputMap (Cmd/Ctrl per-platform), layer panel
+  enforcing the farview collision-only-at-parallax-(1,1)/loop-never policy (GDD §3), palette
+  by category, canvas color + battlefield-bounds properties, and an in-editor "Preview
+  generation" button (scratch-seed rule resolution, Esc clears). Runtime arena instantiation
+  is deliberately NOT included (GDD §9 is contract-only, next milestone). Review fixes:
+  Ctrl+V paste unreachable behind the bare-V tool shortcut (action-dispatch ordering), numpad
+  zoom-out keycode, save-path IO guarding, id-less JSON rejected as not-a-map, stale selection
+  refs on overwrite. *(0.6.1–0.6.6 shipped without changelog lines — see
+  `IMPLEMENTATION_REPORT.md` §10 for that span. Static checks only — no toolchain this
+  session.)*
 - **0.6.0** — **First Team Build menu + wonder-item stub; PumpKing now testable; debug mode
   upgraded.** Three landings, all deliberately scoped:
   - **(a) PumpKing is playable/testable.** The character migrated in 0.5.3 is now actually

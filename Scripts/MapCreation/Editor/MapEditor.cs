@@ -314,8 +314,19 @@ public partial class MapEditor : Control
 
     private void DoSave()
     {
-        MapJson.Save(_state.Document, _state.SavePath);
-        _state.Commands.MarkSaved();
+        // Orchestrator fix (F-MC4, review MINOR): MapJson.Save is pure Data-layer code and
+        // lets IO exceptions propagate; the Editor layer catches and degrades (T10 §5 —
+        // an IO failure must not crash the editor). MarkSaved only on success, so the
+        // unsaved dot keeps telling the truth after a failed save.
+        try
+        {
+            MapJson.Save(_state.Document, _state.SavePath);
+            _state.Commands.MarkSaved();
+        }
+        catch (System.Exception e)
+        {
+            GD.PushError($"[MapEditor] save failed for '{_state.SavePath}': {e.Message}");
+        }
     }
 
     private void OnBackPressed()
@@ -603,15 +614,6 @@ public partial class MapEditor : Control
         if (@event.IsActionPressed("mapedit_zoom_out")) { _gridView.ZoomStep(-1); Accept(); return; }
         if (@event.IsActionPressed("mapedit_zoom_reset")) { _gridView.ZoomReset(); Accept(); return; }
 
-        if (@event.IsActionPressed("mapedit_tool_paint")) { SetTool(EditorState.EditorTool.Paint); Accept(); return; }
-        if (@event.IsActionPressed("mapedit_tool_erase")) { SetTool(EditorState.EditorTool.Erase); Accept(); return; }
-        if (@event.IsActionPressed("mapedit_tool_rect")) { SetTool(EditorState.EditorTool.Rect); Accept(); return; }
-        if (@event.IsActionPressed("mapedit_tool_marquee")) { SetTool(EditorState.EditorTool.Marquee); Accept(); return; }
-        if (@event.IsActionPressed("mapedit_tool_lasso")) { SetTool(EditorState.EditorTool.Lasso); Accept(); return; }
-        if (@event.IsActionPressed("mapedit_tool_move")) { SetTool(EditorState.EditorTool.Move); Accept(); return; }
-        if (@event.IsActionPressed("mapedit_tool_eyedropper")) { SetTool(EditorState.EditorTool.Eyedropper); Accept(); return; }
-        if (@event.IsActionPressed("mapedit_tool_bucket")) { SetTool(EditorState.EditorTool.Bucket); Accept(); return; }
-
         if (@event.IsActionPressed("mapedit_select_all"))
         {
             _state.Selection.Clear();
@@ -678,6 +680,21 @@ public partial class MapEditor : Control
             Accept();
             return;
         }
+
+        // Orchestrator fix (F-MC2, review BLOCKER): the bare-key tool shortcuts MUST be
+        // checked AFTER every modifier-combo action above. IsActionPressed defaults to
+        // non-exact modifier matching, so Ctrl+V also satisfies the bare-V
+        // `mapedit_tool_move` action — checked first, it swallowed the event and
+        // `mapedit_paste` could never fire. Same tie-break family as the
+        // redo-before-undo ordering documented at the top of this method.
+        if (@event.IsActionPressed("mapedit_tool_paint")) { SetTool(EditorState.EditorTool.Paint); Accept(); return; }
+        if (@event.IsActionPressed("mapedit_tool_erase")) { SetTool(EditorState.EditorTool.Erase); Accept(); return; }
+        if (@event.IsActionPressed("mapedit_tool_rect")) { SetTool(EditorState.EditorTool.Rect); Accept(); return; }
+        if (@event.IsActionPressed("mapedit_tool_marquee")) { SetTool(EditorState.EditorTool.Marquee); Accept(); return; }
+        if (@event.IsActionPressed("mapedit_tool_lasso")) { SetTool(EditorState.EditorTool.Lasso); Accept(); return; }
+        if (@event.IsActionPressed("mapedit_tool_move")) { SetTool(EditorState.EditorTool.Move); Accept(); return; }
+        if (@event.IsActionPressed("mapedit_tool_eyedropper")) { SetTool(EditorState.EditorTool.Eyedropper); Accept(); return; }
+        if (@event.IsActionPressed("mapedit_tool_bucket")) { SetTool(EditorState.EditorTool.Bucket); Accept(); return; }
     }
 
     private void Accept() => GetViewport().SetInputAsHandled();
