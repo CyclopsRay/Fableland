@@ -229,6 +229,76 @@ Materials table — the only thing this instantiation adds:
 | 3 (core) | Denser, coarser, greyer-tan sand — more visibly embedded stones/pebbles, craggier texture | Flat vertical cut, rough natural exposed-rock-in-sand face |
 | 4 (base) | Dense grey-brown rock/stone, angular and sharper-edged than Layer 3; bottom silhouette is jagged sharp rock points hanging into open air (roughly 60-80% coverage, transparent gaps between points) | Flat vertical cut (same no-slope convention), rough rocky exposed face |
 
+#### Generation strategy: try one combined image first
+
+13 independent AI calls give the model almost nothing to stay consistent against —
+color, exact edge height, and grain pattern can all drift between calls. Before
+committing to that, try the cheap experiment: ask for all **12 non-Peak tiles in a
+single image** (one generation is far more likely to be internally color/texture
+consistent than 12-13 separate ones), slice it in code, and look at the result.
+
+> Generate ONE image: a grid of 12 tiles, 3 columns x 4 rows, portrait canvas at
+> **exactly a 3:4 width:height aspect ratio** (request "3:4" if your tool has an
+> aspect-ratio option; e.g. 900x1200 or 1200x1600) so the 12 cells are perfect
+> squares with no leftover margin. This is ONE coherent illustration of a sand
+> hill's cross-section, not 12 unrelated pictures — color, grain texture, and
+> material must flow continuously across every shared boundary, both
+> horizontally and vertically, since these cells sit directly next to each other
+> in-game. Cells are perfectly, mechanically equal in size and share edges
+> directly: no gutters, border lines, dividers, labels, or numbers anywhere.
+>
+> Columns (left to right): LEFT edge variant · MID (interior) variant · RIGHT
+> edge variant. Rows (top to bottom): Layer 1 surface (fine pale-gold soft sand,
+> #E8C878-ish, faint grain) · Layer 2 upper-mid (coarser denser tan sand, larger
+> grains, a few pebbles, darker ochre) · Layer 3 core (denser, coarser, greyer-tan
+> sand, more visible stones, craggier) · Layer 4 base (dense grey-brown rock,
+> angular, sharper-edged than Layer 3).
+>
+> Left column: its outer (canvas-left) edge is open to air. Row 1 (Layer 1)
+> slopes gently down toward that edge, sand still filling ~70-85% of the cell's
+> height at the lowest point. Rows 2-4 have a flat vertical cut at that edge (no
+> slope), textured as a rough natural exposed face, not a smooth plane. Right
+> column: mirror of Left, on the canvas-right edge. Mid column: fully interior,
+> bridges Left and Right with no open edge.
+>
+> Every row-to-row (layer-to-layer) boundary within a column is a flat, seamless
+> color/material blend — no visible dividing line, just the material gradually
+> getting denser/darker from Layer 1 to Layer 4 — with exactly two exceptions:
+> the very TOP of the whole canvas (Layer 1's top, i.e. only where it isn't
+> already cut flat by an open Left/Right edge) is a gentle slope/dome, and the
+> very BOTTOM of the whole canvas (Layer 4's bottom) is a jagged, irregular
+> silhouette of exposed rock points hanging into transparent open air (roughly
+> 60-80% coverage, not a flat cut).
+>
+> Hand-painted storybook watercolor-and-ink style, bold dark-brown outlines,
+> limited cheerful beach palette, orthographic side view, flat lighting, no
+> baked directional shadow, no white sticker border, no text. Use a flat
+> `#ff00ff` chroma-key background only where the art calls for open air (above
+> Layer 1's sloped top, between Layer 4's jagged rock points) — everywhere else
+> is fully opaque material.
+
+Save the result as e.g. `terrain_sand_hill_combined.png`, then:
+
+```
+python3 Tools/slice_hill_grid.py terrain_sand_hill_combined.png --material sand
+python3 Tools/compose_hill_atlas.py --material sand --preview
+```
+
+`slice_hill_grid.py` crops it into the 12 individually-named tile files (Peak is
+skipped by design — this pass doesn't generate it) and `compose_hill_atlas.py`
+leaves that one cell blank rather than erroring, exactly so this 12-tile test
+works standalone. Open the `--preview` output and look at every zero-gap boundary.
+
+**Fallback if the combined image doesn't hold together:** you don't have to
+redo all 12. Crop the specific tile that's wrong out of the sliced result (or
+out of the combined image directly) and hand it back to the AI as a reference
+image with a targeted instruction — "redo this one tile, keep the same
+material/color as the reference, fix: <what's wrong>" — rather than a blind
+independent regeneration. The per-tile prompt table below is exactly the
+per-tile spec to pair with that reference-guided redo (or to fall back to
+fully individual generation for all 13, Peak included, if the combined-image
+approach doesn't pan out at all).
+
 Full per-tile prompts (prefix + tile-specific + suffix, per the base template scaffold),
 filenames under `Generated/SandHillSource/`:
 
