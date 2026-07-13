@@ -1,0 +1,16 @@
+{
+  "id": "ground.sand",
+  "displayName": "Beach Sand",
+  "role": "Ground",
+  "footprint": { "w": 1, "h": 1 },
+  "fillFootprint": true,
+  "autotileGroup": "terrain.beach_sand",
+  "edges": {
+    "top": "open-air-ok",
+    "right": "sand-fill",
+    "bottom": "sand-fill",
+    "left": "sand-fill"
+  },
+  "artSource": "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
+  "prompt": "Hand-painted storybook game texture, watercolor-and-ink feel, bold dark-brown outlines, limited cheerful beach palette. Warm sun-bleached sand: pale gold base (#E8C878) with soft tan shading and faint fine-grain texture, no pebbles or footprints. Orthographic side view, flat lighting (no directional shadow baked in). Seamlessly tileable on all four edges so repeated copies show no visible seam. Fills the entire canvas edge-to-edge with no transparent padding or border. No white sticker border, no baked floor line, no cast shadow, no text."
+}

@@ -37,6 +37,22 @@ public enum LayerRoleMask
 }
 
 /// <summary>
+/// GDD §2.5 extension — reserved neighbor-compatibility tags for future stamp/edge
+/// matching (see `TileManifest`/`TileManifestLoader`). Each side is a free-form tag;
+/// two tiles may be placed adjacent only once an authoring tool declares their facing
+/// tags compatible. Null (default, or a null field within) means "no declared
+/// constraint" — not yet consulted by any runtime/editor code, same status
+/// `AutotileGroup` had before `AutotileAtlas` used it.
+/// </summary>
+public sealed class EdgeRule
+{
+    public string Top { get; init; }
+    public string Right { get; init; }
+    public string Bottom { get; init; }
+    public string Left { get; init; }
+}
+
+/// <summary>
 /// GDD §6 — the seeded-generation table carried by a Rule-category TileDef.
 /// Not serialized (code-defined, like TileDef itself).
 /// </summary>
@@ -82,6 +98,10 @@ public sealed class TileDef
 
     /// <summary>Reserved: connected-look group for future TileSet-terrain autotiling (§2.5).</summary>
     public string AutotileGroup { get; init; }
+
+    /// <summary>Reserved: per-side neighbor-compatibility tags (§2.5 extension). Null = no
+    /// declared constraint. See <see cref="EdgeRule"/>.</summary>
+    public EdgeRule Edges { get; init; }
 
     /// <summary>Collision/trigger shape; null = footprint rectangle (§2.4).</summary>
     public ShapeDef EffectArea { get; init; }

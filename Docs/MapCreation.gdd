@@ -75,6 +75,7 @@ is adding a registry entry, never editing a switch** (T00 rule 1).
 | `editorColor` | hex | placeholder quad color until art lands |
 | `spriteSlot` | string | reserved: atlas region / texture path the art department fills in (§2.5) |
 | `autotileGroup` | string? | reserved: connected-look group for future autotiling (§2.5) |
+| `edges` | `EdgeRule?` | reserved: per-side (top/right/bottom/left) neighbor-compatibility tags for future stamp/edge matching (§2.5); not yet consulted by any runtime/editor code |
 | `effectArea` | shape def? | collision/trigger shape in px relative to anchor (§2.4); null = footprint rect |
 | `props` | dict | per-kind extras (foe table id for EnemySpawn, spawn rules for Rule tiles §6, …) |
 
@@ -104,6 +105,20 @@ Godot's `TileSet` terrain system (peering-bit autotiles) as the runtime render p
 it is the mature, built-in solution, so we do not hand-roll bitmask autotiling.
 The editor keeps its own custom renderer either way (it must draw ghosts, rule zones,
 effect areas, and layer-dimming that TileMap can't).
+
+**Manifest-driven authoring (v0.6.12).** `TileRegistry` is still the code-defined table
+(T00 rule 1: registration is a hand-edited list, never a switch or an implicit
+scan-on-boot), but the hand-transcription step between "an asset was generated" and
+"here is its `TileDef`" is now optional: `TileManifestLoader` (`Scripts/MapCreation/Data/`)
+reads a `<name>.tile.json` sidecar next to a same-named `<name>.png` (schema:
+`TileManifest`) and maps it straight into a `TileDef` — id, role, footprint, fill-vs-prop
+anchoring, `autotileGroup`, the new `edges` tags, and the exact generation prompt used
+(kept in `props["prompt"]` for reproducibility). See
+`Sprites/MapCreation/Beach/Generated/ground_sand_seamless.tile.json` and
+`ground_grass_seamless.tile.json` for worked examples, and `BeachTileSet.md`'s
+"Generation prompt lock" section for the shared invariant prompt block they extend.
+`TileManifestLoader.SelfTestFixtures` is the structural guard (mirrors
+`MapJson.RoundTripSelfTest`) — run it after adding or editing a manifest.
 
 ## 3. Farview physics policy
 

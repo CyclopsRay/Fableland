@@ -1,0 +1,16 @@
+{
+  "id": "ground.grass",
+  "displayName": "Grass",
+  "role": "Ground",
+  "footprint": { "w": 1, "h": 1 },
+  "fillFootprint": true,
+  "autotileGroup": "terrain.coastal_grass",
+  "edges": {
+    "top": "open-air-ok",
+    "right": "grass-fill",
+    "bottom": "grass-fill",
+    "left": "grass-fill"
+  },
+  "artSource": "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
+  "prompt": "Hand-painted storybook game texture, watercolor-and-ink feel, bold dark-brown outlines, limited cheerful beach palette. Coastal grass: fresh green base (#76B947) with lighter yellow-green blade highlights and a few darker ink strokes for texture, no flowers or dirt patches. Orthographic side view, flat lighting (no directional shadow baked in). Seamlessly tileable on all four edges so repeated copies show no visible seam. Fills the entire canvas edge-to-edge with no transparent padding or border. No white sticker border, no baked floor line, no cast shadow, no text."
+}

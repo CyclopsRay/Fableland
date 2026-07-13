@@ -62,3 +62,16 @@ Use the following invariant block for any replacement:
 
 The new terrain, bench, tower, caution sign, sun, and bonfire were generated with the
 built-in image tool using flat chroma-key backgrounds, then converted to alpha PNGs.
+
+## Manifest sidecars (v0.6.12+)
+
+New ground/terrain assets should ship a `<name>.tile.json` sidecar next to the PNG,
+following `Docs/MapCreation.gdd` §2.5's `TileManifest` schema — see
+`ground_sand_seamless.tile.json` / `ground_grass_seamless.tile.json` in `Generated/` for
+worked examples. The sidecar carries the exact prompt used (so a replacement is a
+one-file diff, not archaeology) plus the registry fields `TileManifestLoader` needs to
+build a `TileDef` without hand-transcription: role, footprint, fill-vs-prop anchoring,
+`autotileGroup`, and `edges` (per-side neighbor tags, currently descriptive metadata
+only — no runtime code consults them yet). Props/decoration assets that stay
+hand-anchored (bottom-center, per "Sprite placement and transforms" above) can adopt the
+same sidecar convention later; it isn't required until a loader path actually reads them.
