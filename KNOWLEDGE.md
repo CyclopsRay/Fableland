@@ -110,6 +110,28 @@ compiler surfaces below.
   `ScrollContainer`-wrapped sections with `SizeFlagsVertical = ExpandFill`, each foldable on its
   own, so one section's height never depends on the other's content.
 
+### Ground autotiling is a side-view 2-state (interior/top-edge) lookup, not a 16-tile bitmask blob set (v0.6.9, best-effort — needs visual confirmation in Godot)
+- **Context:** `Docs/Art/BeachTileSet.md`'s `terrain_beach_atlas.png` backs `ground.sand`/
+  `ground.grass` (`AutotileGroup = "terrain.beach_sand"`/`"terrain.coastal_grass"`). The atlas
+  is a hand-arranged grid, not a formulaic Wang/blob set, and the doc explicitly left the
+  atlas-coordinate mapping undefined. This dev environment has no Godot/dotnet toolchain, so the
+  mapping below was authored by reading the atlas image, not by opening it in the engine.
+- **Rule:** `Scripts/MapCreation/Data/AutotileAtlas.cs` counts the atlas as a 7-col × 6-row grid
+  (sand block = row 0, grass block = row 3) and exposes exactly two cells per terrain: `col 0`
+  = interior/full (every orthogonal neighbor same `AutotileGroup`), `col 1` = top-edge cap (north
+  neighbor NOT same-group). `GridView.NeighborSharesGroup`/`DrawLayerTiles` pick between them by
+  testing only the north neighbor via the layer's `LayerOccupancy` — left/right/bottom edges fall
+  back to the interior cell rather than guessing at a specific corner region.
+- **Why so coarse:** Fableland is a 2.5D SIDE-VIEW arena fighter, so "is there open air above
+  this cell" is the visually dominant case, unlike a top-down game's full 8-neighbor blob set.
+  Coordinates are computed from `AutotileAtlas.Cols`/`Rows`, not hand-typed pixel rects, so if the
+  real grid count turns out to be wrong once someone opens the atlas in Godot, it's a one-constant
+  fix here, not a re-type of every region.
+- **Do NOT extend this into a full bitmask autotiler inside `GridView`** without revisiting GDD
+  §2.5's decision log first — the recorded plan is a real Godot `TileSet` Terrain resource as the
+  RUNTIME render path precisely so nobody hand-rolls bitmask autotiling; this GridView lookup is a
+  deliberate, disclosed, editor-only exception for authoring-time visual feedback only.
+
 ### Mac trackpad two-finger scroll arrives as `InputEventPanGesture`, never a wheel `InputEventMouseButton` (v0.6.9, MapEditor UX fixes)
 - **Symptom:** the map editor's zoom only handled `InputEventMouseButton` `WheelUp`/`WheelDown` —
   a real scroll wheel worked, but a Mac trackpad two-finger swipe produced no zoom at all, because

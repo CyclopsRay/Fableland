@@ -336,8 +336,43 @@ public partial class GridView : Control
             Color baseColor = def != null ? ColorFromHex(def.EditorColor) : MagentaFallback;
             bool hatched = def != null && def.Category == TileCategory.Rule;
             Texture2D texture = def != null ? TextureFor(def.SpriteSlot) : null;
-            DrawTileQuad(tile.X, tile.Y, fw, fh, baseColor, layerAlphaMul, tint, hatched, texture);
+            Rect2? atlasRegion = null;
+
+            // Bug-fix (user report, item 5): connected-look ground autotiling. Best-effort
+            // v1 (see AutotileAtlas doc) — only wired for tiles carrying a non-empty
+            // AutotileGroup with an `artSource` atlas path; everything else keeps using
+            // SpriteSlot/flat color exactly as before.
+            if (def != null && !string.IsNullOrEmpty(def.AutotileGroup) &&
+                def.Props != null && def.Props.TryGetValue("artSource", out var artPath))
+            {
+                var atlasTex = TextureFor(artPath);
+                if (atlasTex != null)
+                {
+                    bool northSame = NeighborSharesGroup(layerIndex, tile.X, tile.Y - 1, def.AutotileGroup);
+                    if (AutotileAtlas.TryGetCell(def.AutotileGroup, northSame, out int row, out int col))
+                    {
+                        Vector2 texSize = atlasTex.GetSize();
+                        float cellW = texSize.X / AutotileAtlas.Cols;
+                        float cellH = texSize.Y / AutotileAtlas.Rows;
+                        atlasRegion = new Rect2(col * cellW, row * cellH, cellW, cellH);
+                        texture = atlasTex;
+                    }
+                }
+            }
+
+            DrawTileQuad(tile.X, tile.Y, fw, fh, baseColor, layerAlphaMul, tint, hatched, texture, atlasRegion);
         }
+    }
+
+    /// <summary>Whether the cell at (x, y) on `layerIndex` holds a tile whose def shares
+    /// `autotileGroup` — out-of-bounds/empty/unknown-def all count as "not same" (an edge).
+    /// Only tests the anchor cell, not a placed tile's full footprint: fine while every
+    /// AutotileGroup-tagged def is 1x1 (GDD §2.5/Docs/Art/BeachTileSet.md).</summary>
+    private bool NeighborSharesGroup(int layerIndex, int x, int y, string autotileGroup)
+    {
+        var neighbor = State?.OccupancyOf(layerIndex)?.TileAt(x, y);
+        if (neighbor == null) return false;
+        return TileRegistry.TryGet(neighbor.DefId, out var neighborDef) && neighborDef.AutotileGroup == autotileGroup;
     }
 
     private Texture2D TextureFor(string path)
@@ -351,7 +386,7 @@ public partial class GridView : Control
     }
 
     private void DrawTileQuad(int x, int y, int fw, int fh, Color baseColor, float alphaMul, Color? tint,
-        bool hatched, Texture2D texture = null)
+        bool hatched, Texture2D texture = null, Rect2? srcRect = null)
     {
         Color color = baseColor;
         if (tint.HasValue)
@@ -382,7 +417,10 @@ public partial class GridView : Control
             {
                 Color spriteModulate = tint ?? Colors.White;
                 spriteModulate.A *= alphaMul;
-                DrawTextureRect(texture, rect, tile: false, modulate: spriteModulate);
+                if (srcRect.HasValue)
+                    DrawTextureRectRegion(texture, rect, srcRect.Value, spriteModulate);
+                else
+                    DrawTextureRect(texture, rect, tile: false, modulate: spriteModulate);
             }
             else
                 DrawRect(rect, color);
