@@ -91,6 +91,22 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Never commit a file that still contains conflict markers — and two machines both minting "v0.6.7" means the reconciling merge takes the next patch number (v0.6.8, merge cleanup)
+- **Symptom:** the remote commit `17a896d "rebase merge"` (pushed from another machine) shipped
+  KNOWLEDGE.md with literal `<<<<<<< HEAD` / `=======` / `>>>>>>> 3fc1517` lines committed into
+  it — a rebase conflict was committed instead of resolved. The next merge then produced
+  *nested* markers that no longer matched git's normal conflict shape. Separately, both
+  machines had stamped their own commit "v0.6.7", so the version files collided silently
+  (identical bumps auto-merge with no conflict, hiding that two different builds share a
+  version string).
+- **Rule:** before `git rebase --continue` / committing a conflict resolution, grep the tree
+  for `^<<<<<<<`/`^=======$`/`^>>>>>>>`. When reconciling parallel work from two machines,
+  the merge commit is a commit like any other: bump to the **next** patch version in all three
+  spots (`VERSION`, `GameVersion.cs`, Hud `VersionLabel`) so each build string stays unique.
+- **Why:** committed markers corrupt Markdown/docs quietly and make later merges ambiguous;
+  duplicate version strings break the "which build is this?" contract the top-left HUD label
+  exists to answer.
+
 ### A bare-key InputMap action swallows every modifier-combo on the same base key — check combos first (v0.6.7, caught in review)
 - **Symptom:** `Ctrl+V` (paste, `mapedit_paste`) did nothing in the map editor — it switched to
   the Move tool instead. `mapedit_tool_move` is bound to bare `V`, and `_UnhandledKeyInput`
@@ -157,6 +173,36 @@ compiler surfaces below.
 - **Why:** this is exactly the kind of bug that looks like a totally different failure (map
   browser shows blank names, maps "don't save") because the write path never errors — the
   round-trip test is cheap insurance precisely because there's no other signal.
+
+### The HP bar is block-based (25 HP/block) and renders via a custom Control._Draw(); HpChanged now carries 4 args (v0.6.7)
+- **Why:** the old `ProgressBar` couldn't show shield (sky blue) or temp HP (green) as
+  distinct segments alongside normal HP (red). The new `HpBlockBar` Control draws blocks
+  via `_Draw()` with three stacked coloured segments within the same bar, matching the
+  Overwatch/LoL convention of one bar that shows all HP types at a glance.
+- **Rule 1 — `HpChanged` is now `Action<float, float, float, float>` (curHP, maxHP,
+  shield, tempHP).** Any code that subscribes to `CharacterController.HpChanged` must
+  accept 4 arguments, not 2. Use `NotifyHpChanged()` to fire it — don't invoke
+  `HpChanged` directly.
+- **Rule 2 — Shield is a virtual property on the base (`public virtual float Shield => 0f`).**
+  Characters that have a shield (PumpKing) override it and call `NotifyHpChanged()` on
+  every shield change. The HUD reads `.Shield` uniformly regardless of which character
+  is active.
+- **Rule 3 — TempHP lives on the base (`public float TempHP { get; protected set; }`)**
+  and is absorbed by the base `AbsorbDamage` before shields. Subclasses that override
+  `AbsorbDamage` must call `base.AbsorbDamage(damage)` first so TempHP absorbs before
+  their own shield. TempHP is cleared in `Die()` and `Respawn()`.
+- **Rule 4 — `HpBlockBar` uses `Size` from its Control rect (set by the scene's
+  `offset_*` properties) and renders all blocks within that width.** The block count
+  = `ceil(max(MaxHP, curHP+shield+tempHP) / 25)`. Each block is a fixed fraction of
+  the total width with a 2px gap; block dividers are drawn as vertical lines on top.
+- **Rule 5 — the `HpBlockBar` C# type replaces `ProgressBar` in `Hud.cs`.** The
+  `Hud.tscn` node changed from `type="ProgressBar"` to `type="Control"` with
+  `script = ExtResource("12")` (`res://Scripts/HpBlockBar.cs`). The `HpLabel` is
+  still a child of `HpBar` and overlays the drawn blocks.
+- **Related files:** `Scripts/HpBlockBar.cs` (new), `Scripts/CharacterController.cs`
+  (Shield/TempHP/NotifyHpChanged), `Scripts/PumpKing.cs` (override Shield,
+  NotifyHpChanged calls), `Scripts/GameManager.cs` (4-arg handler), `Scripts/Hud.cs`
+  (SetValues delegate), `Scenes/Hud.tscn` (Control with script ref).
 
 ### PumpKing head: a per-tick clamp on a fresh Init() eats the whole launch impulse; releasing a reference destroys state-machine memory, not just control (v0.6.1)
 - **Symptom (bug report, 4 linked issues):** the detached head visually sat at PumpKing's

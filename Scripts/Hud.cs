@@ -13,7 +13,7 @@ using System;
 /// </summary>
 public partial class Hud : CanvasLayer
 {
-    private ProgressBar _hpBar;
+    private HpBlockBar _hpBar;
     private Label _hpLabel;
     private Label _livesLabel;
     private Label _banner;
@@ -69,7 +69,7 @@ public partial class Hud : CanvasLayer
     {
         ProcessMode = ProcessModeEnum.Always;
 
-        _hpBar = GetNode<ProgressBar>("HpBar");
+        _hpBar = GetNode<HpBlockBar>("HpBar");
         _hpLabel = GetNode<Label>("HpBar/HpLabel");
         _livesLabel = GetNode<Label>("LivesLabel");
         _banner = GetNode<Label>("Banner");
@@ -188,12 +188,15 @@ public partial class Hud : CanvasLayer
         _ultRing.Value = cur;
     }
 
-    public void SetHp(float cur, float max)
+    public void SetHp(float cur, float max, float shield = 0f, float tempHP = 0f)
     {
-        _hpBar.MaxValue = max;
-        _hpBar.Value = cur;
-        _hpLabel.Text = $"{Mathf.CeilToInt(cur)} / {Mathf.CeilToInt(max)}";
+        _hpBar.SetValues(cur, max, shield, tempHP);
 
+        float total = cur + shield + tempHP;
+        _hpLabel.Text = $"{Mathf.CeilToInt(total)} / {Mathf.CeilToInt(max)}";
+
+        // Mugshot state is driven by normal HP ratio — shield and tempHP are
+        // temporary buffers that don't affect the character portrait.
         float frac = max > 0f ? cur / max : 0f;
         int state = frac >= 1f ? 0 : frac > 0.7f ? 1 : frac > 0.5f ? 2 : frac > 0.2f ? 3 : frac > 0f ? 4 : 5;
         _mugshot.Texture = _mugshotStates[state];

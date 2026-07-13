@@ -157,7 +157,7 @@ public partial class GameManager : Node2D
         _player.HpChanged += OnPlayerHpChanged;
         _player.Died += OnPlayerDied;
         _hud.SetPlayer(_player);
-        _hud.SetHp(_player.CurrentHP, _player.MaxHP);
+        _hud.SetHp(_player.CurrentHP, _player.MaxHP, _player.Shield, _player.TempHP);
 
         if (_hasRun && rs.ActiveBuild.Count > 0)
         {
@@ -554,7 +554,8 @@ public partial class GameManager : Node2D
 
     // ── Player death ──────────────────────────────────────────────────────────────────────
 
-    private void OnPlayerHpChanged(float cur, float max) => _hud.SetHp(cur, max);
+    private void OnPlayerHpChanged(float cur, float max, float shield, float tempHP) =>
+        _hud.SetHp(cur, max, shield, tempHP);
 
     private async void OnPlayerDied()
     {
