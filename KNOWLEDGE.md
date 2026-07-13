@@ -131,6 +131,11 @@ compiler surfaces below.
   §2.5's decision log first — the recorded plan is a real Godot `TileSet` Terrain resource as the
   RUNTIME render path precisely so nobody hand-rolls bitmask autotiling; this GridView lookup is a
   deliberate, disclosed, editor-only exception for authoring-time visual feedback only.
+- **v0.6.13 update:** the decision log above WAS revisited to add a second such exception —
+  `Scripts/MapCreation/Data/HillAutotile.cs`, a 4-layer × 4-position classifier for built-up sand
+  hills (`Docs/Art/BeachTileSet.md`'s "Sand hill layered autotile" section has the full rule set
+  and generation prompts). It's the same kind of disclosed, editor-only, non-Wang/blob exception as
+  this one — not yet wired into `GridView` or `TileRegistry` pending the reference atlas existing.
 
 ### Mac trackpad two-finger scroll arrives as `InputEventPanGesture`, never a wheel `InputEventMouseButton` (v0.6.9, MapEditor UX fixes)
 - **Symptom:** the map editor's zoom only handled `InputEventMouseButton` `WheelUp`/`WheelDown` —
