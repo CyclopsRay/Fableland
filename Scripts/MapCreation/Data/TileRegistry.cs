@@ -70,6 +70,16 @@ public static class TileRegistry
             },
             new()
             {
+                Id = "platform.sun_lounger", DisplayName = "Sun Lounger", Category = TileCategory.Platform,
+                FootprintW = 3, FootprintH = 1, EditorColor = "#C8A675",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_sun_lounger.png",
+                // The long seat is readable as a thin one-way surface; the raised
+                // backrest remains visual overhang rather than extra collision.
+                EffectArea = ShapeDef.Rect(0f, Units.PixelsPerMeter * 0.35f,
+                    Units.PixelsPerMeter * 3f, Units.PixelsPerMeter * 0.2f),
+            },
+            new()
+            {
                 Id = "platform.lifeguard_tower", DisplayName = "Lifeguard Tower", Category = TileCategory.Platform,
                 FootprintW = 4, FootprintH = 8, EditorColor = "#4F9B9B",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_lifeguard_tower.png",
@@ -112,10 +122,11 @@ public static class TileRegistry
             new()
             {
                 Id = "hazard.bonfire", DisplayName = "Bonfire", Category = TileCategory.Hazard,
-                FootprintW = 2, FootprintH = 2, EditorColor = "#FF4500",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/hazard_bonfire.png",
-                EffectArea = ShapeDef.Circle(Units.PixelsPerMeter, Units.PixelsPerMeter * 1.25f,
-                    Units.PixelsPerMeter * 0.75f),
+                FootprintW = 2, FootprintH = 1, EditorColor = "#FF4500",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/hazard_bonfire_flat.png",
+                // Deliberately catches only the hot center, not the full 2 m art width.
+                EffectArea = ShapeDef.Circle(Units.PixelsPerMeter, Units.PixelsPerMeter * 0.65f,
+                    Units.PixelsPerMeter * 0.35f),
             },
             new()
             {
@@ -161,7 +172,7 @@ public static class TileRegistry
                 Id = "deco.caution_sign", DisplayName = "Caution Sign", Category = TileCategory.Decoration,
                 FootprintW = 1, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#E66B42",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/deco_caution_sign.png",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/deco_caution_monkey.png",
             },
             new()
             {
@@ -175,7 +186,7 @@ public static class TileRegistry
                 Id = "deco.sun", DisplayName = "Sun", Category = TileCategory.Decoration,
                 FootprintW = 2, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#FFD24A",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/deco_sun.png",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/deco_sun_chibi.png",
             },
 
             // GDD §6's worked example, verbatim.

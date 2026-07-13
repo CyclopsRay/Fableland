@@ -690,3 +690,11 @@ is a mistake already paid for once.
   fill-footprint rendering.
 - **Why:** an image canvas is an export container, not a physical placement contract; collision
   and visual grounding must come from the tile footprint/effect-area data.
+
+### Godot 4.7 AnimatedSprite2D playback uses `Play`, and SpriteFrames uses loop modes (v0.6.7)
+- **Symptom:** constructing animation code with `AnimatedSprite2D.Playing = true` fails to
+  compile, while `SpriteFrames.SetAnimationLoop(..., true)` compiles only as obsolete.
+- **Rule:** add the sprite, call `sprite.Play(animationName)`, and configure looping with
+  `SetAnimationLoopMode(name, SpriteFrames.LoopMode.Linear)`.
+- **Why:** the Godot 4.7 C# binding exposes playback as a method and replaced the old bool
+  loop setter with an explicit loop-mode enum.
