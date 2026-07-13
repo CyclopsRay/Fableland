@@ -106,14 +106,16 @@ it is the mature, built-in solution, so we do not hand-roll bitmask autotiling.
 The editor keeps its own custom renderer either way (it must draw ghosts, rule zones,
 effect areas, and layer-dimming that TileMap can't).
 
-**Sand hill layered autotile (v0.6.13, spec locked, art/wiring pending).** A second,
-disclosed hand-rolled autotile system — pure classifier in
-`Scripts/MapCreation/Data/HillAutotile.cs`, full generation prompts and rules in
-`Docs/Art/BeachTileSet.md`'s "Sand hill layered autotile" section. It models a side-view
-vertical cross-section (4 depth layers × 4 horizontal positions, 13 tiles) for built-up
-sand terrain, not generic Wang/blob corner autotiling, so it doesn't preempt the Godot
-`TileSet` Terrain runtime path this section already commits to below. Like the existing
-2-state ground lookup, it stays an editor/authoring-time visual approximation only.
+**Layered ground-hill autotile (v0.6.13 sand, v0.6.15 generalized; spec locked, art/wiring
+pending).** A second, disclosed hand-rolled autotile system — pure classifier in
+`Scripts/MapCreation/Data/HillAutotile.cs` (material-agnostic), full generation prompts and
+rules in `Docs/Art/BeachTileSet.md`'s "Layered ground-hill autotile — base template" section,
+with Sand hill as the first worked instantiation and an "Adding a new material" walkthrough
+for the next one (grass, rock, …). It models a side-view vertical cross-section (4 depth
+layers × 4 horizontal positions, 13 tiles per material) for built-up terrain, not generic
+Wang/blob corner autotiling, so it doesn't preempt the Godot `TileSet` Terrain runtime path
+this section already commits to below. Like the existing 2-state ground lookup, it stays an
+editor/authoring-time visual approximation only.
 `HillAutotile.SelfTest()` is its structural guard. Not yet wired into `GridView` or
 registered in `TileRegistry` — that's next once the reference atlas exists (`Tools/
 compose_hill_atlas.py` composites it from 13 separately-generated equal-size tiles,

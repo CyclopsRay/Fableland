@@ -3,20 +3,25 @@ namespace Fableland.MapCreation.Data;
 using System;
 
 /// <summary>
-/// GDD §2.5 (second disclosed autotile exception, v0.6.13) — pure C#, editor-authoring-time
-/// classifier + atlas-cell lookup for the layered sand-hill system documented in
-/// `Docs/Art/BeachTileSet.md`'s "Sand hill layered autotile" section. Distinct from
-/// `AutotileAtlas`'s 2-state flat-ground lookup: this models a side-view vertical
-/// cross-section (4 depth layers x 4 horizontal positions), not generic Wang/blob corner
-/// autotiling — see that doc section and `KNOWLEDGE.md`'s v0.6.9 caveat for why a second
-/// hand-rolled system is disclosed here rather than folded into the first.
+/// GDD §2.5 (second disclosed autotile exception, v0.6.13, generalized v0.6.15) — pure C#,
+/// editor-authoring-time classifier + atlas-cell lookup for any layered ground-hill material
+/// (sand, grass, rock, ...) documented in `Docs/Art/BeachTileSet.md`'s "Layered ground-hill
+/// autotile — base template" section (Sand hill is the first worked instantiation there).
+/// This class itself is material-agnostic — it only ever asks a caller-supplied delegate "is
+/// the neighbor at this offset the same autotile group," so a new material needs zero changes
+/// here, just its own 13-tile atlas and `TileRegistry` entry. Distinct from `AutotileAtlas`'s
+/// 2-state flat-ground lookup: this models a side-view vertical cross-section (4 depth layers
+/// x 4 horizontal positions), not generic Wang/blob corner autotiling — see that doc section
+/// and `KNOWLEDGE.md`'s v0.6.9 caveat for why a second hand-rolled system is disclosed here
+/// rather than folded into the first.
 ///
-/// NOT YET WIRED into `GridView`'s renderer or registered in `TileRegistry` — the reference
-/// atlas (`Generated/terrain_sand_hill_atlas.png`, produced by `Tools/compose_hill_atlas.py`
-/// from the 13 prompts in BeachTileSet.md) doesn't exist yet, and this repo has no
-/// Godot/dotnet toolchain to visually verify a `GridView` change against real art. Once the
-/// atlas exists: add a `TileRegistry` entry (id e.g. `ground.sand_hill`, `AutotileGroup =
-/// "terrain.sand_hill"`, `Props["artSource"]` = the atlas path, `SpriteFillFootprint = true`),
+/// NOT YET WIRED into `GridView`'s renderer or registered in `TileRegistry` for any material —
+/// no reference atlas exists yet (`Tools/compose_hill_atlas.py --material <name>` produces one
+/// from 13 separately-generated tiles per BeachTileSet.md's prompts), and this repo has no
+/// Godot/dotnet toolchain to visually verify a `GridView` change against real art. Once a
+/// material's atlas exists: add a `TileRegistry` entry (id e.g. `ground.sand_hill`,
+/// `AutotileGroup = "terrain.sand_hill"`, `Props["artSource"]` = the atlas path,
+/// `SpriteFillFootprint = true`),
 /// then extend `GridView.DrawLayerTiles` with a branch that — for defs whose AutotileGroup
 /// this classifier recognizes — probes same-group neighbors up/down/left/right (mirroring
 /// the existing `NeighborSharesGroup` helper) and calls <see cref="Classify"/> +

@@ -144,11 +144,14 @@ watercolor layering, foam language, and blue palette; remove its white sticker o
 6. Keep `TsunamiHazard.Width/Height` derived from `Units` at 16x8 cells and preserve the
    triangle hitbox; any future art-size change must update this table and code together.
 
-## Sand hill layered autotile (v0.6.13, spec locked — art not yet generated)
+## Layered ground-hill autotile — base template (v0.6.15)
 
-A second, richer autotile system for **built-up sand terrain** (mounds/hills/cliffs), distinct
-from the flat `ground.sand` seamless fill above. Classification is per-cell, driven by two
-independent axes:
+**Read this before writing a prompt for any new built-up ground material** (sand, grass,
+rock, snow, …). It's the reusable rule set; each material is a short instantiation below
+that only needs to fill in a materials table, not re-derive any of this. A second, richer
+autotile system than the flat `ground.sand`/`ground.grass` seamless fills above — for
+*built-up* terrain (mounds/hills/cliffs). Classification is per-cell, driven by two
+independent axes, identical for every material:
 
 - **Layer** (vertical depth): **1** = surface cap (this cell's top neighbor is air) · **2** =
   the cell directly below a Layer-1 cell · **4** = base (this cell's bottom neighbor is air) ·
@@ -158,31 +161,78 @@ independent axes:
   neighbor is air, **Peak** if *both* (Layer 1 only — no other layer has a dedicated
   both-open variant; that case falls back to **Mid**), else **Mid**.
 
-**Geometry rule that keeps this tractable:** the *only* two tiles with a non-rectangular
-silhouette are **Layer 1's top** (a gentle slope/dome — sand still fills ~70-85% of the
-cell's height even at the open edge, never a thin wedge) and **Layer 4's bottom** (jagged
-exposed rock points hanging into open air). Every other edge — L1's bottom, L2/L3's top and
-bottom, L4's top, and every Left/Right side at every layer — is a flat, full-height cut,
-differentiated from its neighbor only by color/texture, never by shape. This is what
-guarantees any two tiles at any layer can sit side by side (or stack) with no gaps, and it's
-why 13 tiles cover every case instead of a full corner/edge blob set.
+**Geometry rule that keeps this tractable, for every material:** the *only* two tiles with a
+non-rectangular silhouette are **Layer 1's top** (a gentle slope/dome — the surface material
+still fills ~70-85% of the cell's height even at the open edge, never a thin wedge) and
+**Layer 4's bottom** (a jagged/irregular exposed silhouette hanging into open air — what it's
+*made of* is the one thing that's genuinely material-specific; see each instantiation's Layer
+4 entry). Every other edge — L1's bottom, L2/L3's top and bottom, L4's top, and every
+Left/Right side at every layer — is a flat, full-height cut, differentiated from its neighbor
+only by color/texture, never by shape. This is what guarantees any two tiles at any layer can
+sit side by side (or stack) with no gaps, and it's why 13 tiles cover every case instead of a
+full corner/edge blob set.
 
-**13 tiles, generated as 13 separate square images (NOT one composite sheet — see "Why
-separate files" below), then composited by `Tools/compose_hill_atlas.py`.**
+**13 tiles per material, generated as 13 separate square images (NOT one composite sheet —
+see "Why separate files" below), then composited by `Tools/compose_hill_atlas.py`.** Naming
+convention: `terrain_<material>_hill_L<1-4>_<left|mid|right>.png`, plus one
+`terrain_<material>_hill_L1_peak.png`, saved under `Generated/<Material>HillSource/`.
 
-Shared prompt (prepend to every row below):
+Shared prompt scaffold (every instantiation below fills in the bracketed parts):
 > Hand-painted storybook game texture, watercolor-and-ink feel, bold dark-brown outlines,
 > limited cheerful beach palette (per this doc's Style Lock). Orthographic side view, flat
 > lighting, no baked directional shadow. This single square image is exactly ONE tile of a
-> larger sand-hill cross-section system — do not draw a grid, multiple tiles, or repeat the
-> motif within the canvas. No white sticker border, no text.
+> larger [material] hill cross-section system — do not draw a grid, multiple tiles, or
+> repeat the motif within the canvas. No white sticker border, no text.
+>
+> [Tile-specific: Layer N, POSITION. Material/texture/palette description. Which edges are
+> open-to-air vs. flat-cut-against-a-neighbor, per the geometry rule above.]
+>
+> Keep every one of the 13 [material]-hill tile images at the exact same pixel width and
+> height as each other (any resolution is fine as long as all 13 match) so they can be
+> composited into a uniform grid afterward.
 
-Shared suffix (append to every row below):
-> Keep every one of the 13 sand-hill tile images at the exact same pixel width and height as
-> each other (any resolution is fine as long as all 13 match) so they can be composited into
-> a uniform grid afterward.
+**Why separate files, not one AI-drawn grid sheet:** the existing `terrain_beach_atlas.png`
+(1536×1024, sliced 7×6 per `AutotileAtlas.cs`) doesn't even divide evenly — 1536/7 and
+1024/6 are both non-integers — which is almost certainly why the last hand-drawn attempt at
+a tile sheet came out unequally divided. Diffusion models don't reliably hit exact grid
+lines; compositing 13 independently-generated, equal-size squares into a grid is a
+deterministic, always-exact operation in code.
 
-| # | Filename (under `Generated/SandHillSource/`) | Layer / Position | Tile-specific prompt (insert between shared prefix and suffix) |
+**Pipeline for a new material:** generate its 13 files, save under
+`Generated/<Material>HillSource/`, then run
+`python3 Tools/compose_hill_atlas.py --material <material>` to produce
+`Generated/terrain_<material>_hill_atlas.png` (a guaranteed-uniform 4-row × 4-col sheet — row
+= Layer 1-4, col = Left/Mid/Right/Peak; the 3 cells at rows 2-4 col 4 are intentionally left
+blank/transparent, since only Layer 1 has a Peak variant). `HillAutotile.cs`
+(`Scripts/MapCreation/Data/`) is the pure-C# classifier + atlas-cell lookup — it's already
+material-agnostic (works on any `AutotileGroup` whose neighbors it's asked to probe), so a
+new material needs no code changes there. Wiring a material into `GridView`'s renderer
+(mirroring how `AutotileAtlas` is wired today) and registering its `TileRegistry` entry are
+left for once that material's reference atlas exists to check the result against — see
+`HillAutotile.cs`'s header comment for the exact next step.
+
+**Second disclosed autotiling exception (see `Docs/MapCreation.gdd` §2.5):** like the
+existing 2-state ground lookup, this is editor/authoring-time only, not a runtime bitmask
+autotiler — it's a side-view vertical-stratification model, not generic Wang/blob corner
+autotiling, so it doesn't compete with the eventual Godot `TileSet` Terrain runtime path.
+Applies to every material instantiated below, not just the first one.
+
+### Sand hill (instantiation, v0.6.13, spec locked — art not yet generated)
+
+Follows the base template above exactly (13 tiles, same classification/geometry rules).
+Materials table — the only thing this instantiation adds:
+
+| Layer | Material / palette | Left/Right side treatment |
+|---|---|---|
+| 1 (surface) | Fine pale-gold soft sand (#E8C878-ish), faint grain texture | Slopes down toward the open edge (sand still fills ~70-85% of cell height at the lowest point); Peak domes symmetrically on both open sides |
+| 2 (upper-mid) | Coarser, denser tan sand — visible larger grains, a few tiny embedded pebbles, slightly darker ochre shading | Flat vertical cut (no slope), textured as a natural rough exposed sand face |
+| 3 (core) | Denser, coarser, greyer-tan sand — more visibly embedded stones/pebbles, craggier texture | Flat vertical cut, rough natural exposed-rock-in-sand face |
+| 4 (base) | Dense grey-brown rock/stone, angular and sharper-edged than Layer 3; bottom silhouette is jagged sharp rock points hanging into open air (roughly 60-80% coverage, transparent gaps between points) | Flat vertical cut (same no-slope convention), rough rocky exposed face |
+
+Full per-tile prompts (prefix + tile-specific + suffix, per the base template scaffold),
+filenames under `Generated/SandHillSource/`:
+
+| # | Filename | Layer / Position | Tile-specific prompt |
 |---|---|---|---|
 | 1 | `terrain_sand_hill_L1_left.png` | 1 / Left | Layer 1, LEFT edge. Fine pale-gold soft sand (#E8C878-ish), faint grain texture. The surface slopes gently down toward the LEFT edge, which is open to air; sand still fills ~70-85% of the cell's height at the lowest point. The RIGHT edge is a flat vertical cut at near-full sand height (butts against a Mid tile). Bottom edge is a flat horizontal cut (sits on Layer 2). |
 | 2 | `terrain_sand_hill_L1_mid.png` | 1 / Mid | Layer 1, MID. Same soft pale-gold sand. Top surface is nearly flat with only very subtle undulation for texture — no directional slope. Both LEFT and RIGHT edges are flat vertical cuts at the same near-full sand height as tile 1's un-sloped edge, so it tiles seamlessly against Left/Right/Mid neighbors. Bottom edge flat (sits on Layer 2). |
@@ -198,22 +248,14 @@ Shared suffix (append to every row below):
 | 12 | `terrain_sand_hill_L4_mid.png` | 4 / Mid | Layer 4, MID. Same rock material. Both LEFT and RIGHT edges flat full-width cuts (fully surrounded). Top flat, blends into Layer 3. BOTTOM: same jagged exposed-rock silhouette as tile 11. |
 | 13 | `terrain_sand_hill_L4_right.png` | 4 / Right | Layer 4, RIGHT edge. Mirror of tile 11. |
 
-**Why separate files, not one AI-drawn grid sheet:** the existing `terrain_beach_atlas.png`
-(1536×1024, sliced 7×6 per `AutotileAtlas.cs`) doesn't even divide evenly — 1536/7 and
-1024/6 are both non-integers — which is almost certainly why the last hand-drawn attempt at
-a tile sheet came out unequally divided. Diffusion models don't reliably hit exact grid
-lines; compositing 13 independently-generated, equal-size squares into a grid is a
-deterministic, always-exact operation in code. Generate the 13 files above individually,
-save them under `Generated/SandHillSource/`, then run `Tools/compose_hill_atlas.py` to
-produce `Generated/terrain_sand_hill_atlas.png` (a guaranteed-uniform 4-row × 4-col sheet —
-row = Layer 1-4, col = Left/Mid/Right/Peak; the 3 cells at rows 2-4 col 4 are intentionally
-left blank/transparent, since only Layer 1 has a Peak variant). `HillAutotile.cs`
-(`Scripts/MapCreation/Data/`) is the pure-C# classifier + atlas-cell lookup for this system;
-wiring it into `GridView`'s renderer (mirroring how `AutotileAtlas` is wired today) and
-registering a `TileRegistry` entry are left for once the real atlas exists to check the
-result against — see that file's header comment for the exact next step.
+### Adding a new material (e.g. grass hill)
 
-**Second disclosed autotiling exception (see `Docs/MapCreation.gdd` §2.5):** like the
-existing 2-state ground lookup, this is editor/authoring-time only, not a runtime bitmask
-autotiler — it's a side-view vertical-stratification model, not generic Wang/blob corner
-autotiling, so it doesn't compete with the eventual Godot `TileSet` Terrain runtime path.
+1. Copy the materials table above, replace each layer's description (a grass-capped hill
+   would plausibly reuse Layer 4 = rock unchanged, Layer 2/3 = soil/dirt, Layer 1 = grass —
+   but that's a design call for whoever authors it, not dictated by this template).
+2. Write the 13 tile-specific prompt cells the same way: geometry phrase from the base
+   template's per-position rule (which edges are open/flat-cut) + this material's texture.
+3. Generate, save under `Generated/<Material>HillSource/`, run `compose_hill_atlas.py
+   --material <material>`.
+4. `HillAutotile.cs` needs no changes; wiring `GridView`/`TileRegistry` is the same
+   next-step as Sand's, per that file's header comment.
