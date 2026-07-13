@@ -60,10 +60,22 @@ public partial class MapEditor : Control
 
     private readonly System.Collections.Generic.List<(Button Btn, EditorState.EditorTool Tool)> _toolButtons = new();
 
+    // Bug-fix (user report): every bar/panel can be folded to a header-only strip so it
+    // stops covering the canvas. Panel refs kept so each fold closure (built where the bar
+    // is constructed) can resize the right dimension.
+    private PanelContainer _topBarPanel;
+    private PanelContainer _leftRailPanel;
+    private PanelContainer _rightPanel;
+    private PanelContainer _statusBarPanel;
+
     private const float TopBarHeight = 44f;
     private const float StatusBarHeight = 28f;
     private const float RailWidth = 130f;
     private const float SidePanelWidth = 260f;
+
+    private const float FoldedBarThickness = 22f;
+    private const float FoldedRailWidth = 26f;
+    private const float FoldedPanelWidth = 140f;
 
     public override void _Ready()
     {
@@ -161,14 +173,21 @@ public partial class MapEditor : Control
 
     private void BuildTopBar()
     {
-        var panel = new PanelContainer();
-        panel.AnchorLeft = 0f; panel.AnchorRight = 1f; panel.AnchorTop = 0f; panel.AnchorBottom = 0f;
-        panel.OffsetBottom = TopBarHeight;
-        AddChild(panel);
+        _topBarPanel = new PanelContainer();
+        _topBarPanel.AnchorLeft = 0f; _topBarPanel.AnchorRight = 1f; _topBarPanel.AnchorTop = 0f; _topBarPanel.AnchorBottom = 0f;
+        _topBarPanel.OffsetBottom = TopBarHeight;
+        AddChild(_topBarPanel);
 
-        var hbox = new HBoxContainer();
+        var outer = new HBoxContainer();
+        outer.AddThemeConstantOverride("separation", 4);
+        _topBarPanel.AddChild(outer);
+
+        var foldBtn = BuildFoldButton("Fold top bar");
+        outer.AddChild(foldBtn);
+
+        var hbox = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         hbox.AddThemeConstantOverride("separation", 10);
-        panel.AddChild(hbox);
+        outer.AddChild(hbox);
 
         _mapNameLabel = new Label { Text = _state.Document.Name, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         hbox.AddChild(_mapNameLabel);
@@ -215,19 +234,35 @@ public partial class MapEditor : Control
         var backBtn = new Button { Text = "Back" };
         backBtn.Pressed += OnBackPressed;
         hbox.AddChild(backBtn);
+
+        bool folded = false;
+        foldBtn.Pressed += () =>
+        {
+            folded = !folded;
+            foldBtn.Text = folded ? "▸" : "▾";
+            hbox.Visible = !folded;
+            _topBarPanel.OffsetBottom = folded ? FoldedBarThickness : TopBarHeight;
+        };
     }
 
     private void BuildLeftRail()
     {
-        var panel = new PanelContainer();
-        panel.AnchorLeft = 0f; panel.AnchorRight = 0f; panel.AnchorTop = 0f; panel.AnchorBottom = 1f;
-        panel.OffsetRight = RailWidth;
-        panel.OffsetTop = TopBarHeight; panel.OffsetBottom = -StatusBarHeight;
-        AddChild(panel);
+        _leftRailPanel = new PanelContainer();
+        _leftRailPanel.AnchorLeft = 0f; _leftRailPanel.AnchorRight = 0f; _leftRailPanel.AnchorTop = 0f; _leftRailPanel.AnchorBottom = 1f;
+        _leftRailPanel.OffsetRight = RailWidth;
+        _leftRailPanel.OffsetTop = TopBarHeight; _leftRailPanel.OffsetBottom = -StatusBarHeight;
+        AddChild(_leftRailPanel);
+
+        var outer = new VBoxContainer();
+        outer.AddThemeConstantOverride("separation", 4);
+        _leftRailPanel.AddChild(outer);
+
+        var foldBtn = BuildFoldButton("Fold tool rail");
+        outer.AddChild(foldBtn);
 
         var rail = new VBoxContainer();
         rail.AddThemeConstantOverride("separation", 4);
-        panel.AddChild(rail);
+        outer.AddChild(rail);
 
         var group = new ButtonGroup();
         void AddTool(string label, EditorState.EditorTool tool)
@@ -254,39 +289,98 @@ public partial class MapEditor : Control
         AddTool("Bucket (F)", EditorState.EditorTool.Bucket);
 
         SyncRailHighlight();
+
+        bool folded = false;
+        foldBtn.Pressed += () =>
+        {
+            folded = !folded;
+            foldBtn.Text = folded ? "▸" : "▾";
+            rail.Visible = !folded;
+            _leftRailPanel.OffsetRight = folded ? FoldedRailWidth : RailWidth;
+        };
     }
 
+    /// <summary>Bug-fix (user report): Layers and Palette are now two independently
+    /// scrollable, independently foldable sections (own header + fold toggle) instead of
+    /// one unbounded VBox — previously the Layers properties sub-panel could grow tall
+    /// enough to push the Palette section off the bottom of the screen entirely.</summary>
     private void BuildRightPanel()
     {
-        var panel = new PanelContainer();
-        panel.AnchorLeft = 1f; panel.AnchorRight = 1f; panel.AnchorTop = 0f; panel.AnchorBottom = 1f;
-        panel.OffsetLeft = -SidePanelWidth;
-        panel.OffsetTop = TopBarHeight; panel.OffsetBottom = -StatusBarHeight;
-        AddChild(panel);
+        _rightPanel = new PanelContainer();
+        _rightPanel.AnchorLeft = 1f; _rightPanel.AnchorRight = 1f; _rightPanel.AnchorTop = 0f; _rightPanel.AnchorBottom = 1f;
+        _rightPanel.OffsetLeft = -SidePanelWidth;
+        _rightPanel.OffsetTop = TopBarHeight; _rightPanel.OffsetBottom = -StatusBarHeight;
+        AddChild(_rightPanel);
 
         var vbox = new VBoxContainer();
-        vbox.AddThemeConstantOverride("separation", 8);
-        panel.AddChild(vbox);
+        vbox.AddThemeConstantOverride("separation", 4);
+        _rightPanel.AddChild(vbox);
 
-        vbox.AddChild(new Label { Text = "Layers" });
+        var layersHeader = new HBoxContainer();
+        var layersFoldBtn = BuildFoldButton("Fold layers panel");
+        layersHeader.AddChild(layersFoldBtn);
+        layersHeader.AddChild(new Label { Text = "Layers", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
+        vbox.AddChild(layersHeader);
+
+        var layersScroll = new ScrollContainer
+        {
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 100),
+        };
         LayersBox = new VBoxContainer();
-        vbox.AddChild(LayersBox);
+        layersScroll.AddChild(LayersBox);
+        vbox.AddChild(layersScroll);
 
-        vbox.AddChild(new Label { Text = "Palette" });
-        PaletteBox = new VBoxContainer();
+        vbox.AddChild(new HSeparator());
+
+        var paletteHeader = new HBoxContainer();
+        var paletteFoldBtn = BuildFoldButton("Fold palette panel");
+        paletteHeader.AddChild(paletteFoldBtn);
+        paletteHeader.AddChild(new Label { Text = "Palette", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
+        vbox.AddChild(paletteHeader);
+
+        // PalettePanel wraps its own ScrollContainer inside this box (see PalettePanel.Build).
+        PaletteBox = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
         vbox.AddChild(PaletteBox);
+
+        // Sections fold independently; when BOTH are folded the whole panel narrows to a
+        // header-only strip so it stops covering the canvas horizontally too.
+        bool layersFolded = false, paletteFolded = false;
+        void RefreshWidth() => _rightPanel.OffsetLeft = (layersFolded && paletteFolded) ? -FoldedPanelWidth : -SidePanelWidth;
+
+        layersFoldBtn.Pressed += () =>
+        {
+            layersFolded = !layersFolded;
+            layersFoldBtn.Text = layersFolded ? "▸" : "▾";
+            layersScroll.Visible = !layersFolded;
+            RefreshWidth();
+        };
+        paletteFoldBtn.Pressed += () =>
+        {
+            paletteFolded = !paletteFolded;
+            paletteFoldBtn.Text = paletteFolded ? "▸" : "▾";
+            PaletteBox.Visible = !paletteFolded;
+            RefreshWidth();
+        };
     }
 
     private void BuildStatusBar()
     {
-        var panel = new PanelContainer();
-        panel.AnchorLeft = 0f; panel.AnchorRight = 1f; panel.AnchorTop = 1f; panel.AnchorBottom = 1f;
-        panel.OffsetTop = -StatusBarHeight;
-        AddChild(panel);
+        _statusBarPanel = new PanelContainer();
+        _statusBarPanel.AnchorLeft = 0f; _statusBarPanel.AnchorRight = 1f; _statusBarPanel.AnchorTop = 1f; _statusBarPanel.AnchorBottom = 1f;
+        _statusBarPanel.OffsetTop = -StatusBarHeight;
+        AddChild(_statusBarPanel);
 
-        var hbox = new HBoxContainer();
+        var outer = new HBoxContainer();
+        outer.AddThemeConstantOverride("separation", 4);
+        _statusBarPanel.AddChild(outer);
+
+        var foldBtn = BuildFoldButton("Fold status bar");
+        outer.AddChild(foldBtn);
+
+        var hbox = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         hbox.AddThemeConstantOverride("separation", 16);
-        panel.AddChild(hbox);
+        outer.AddChild(hbox);
 
         _cursorCellLabel = new Label { Text = "Cell: —" };
         hbox.AddChild(_cursorCellLabel);
@@ -296,7 +390,28 @@ public partial class MapEditor : Control
 
         _unsavedDotLabel = new Label { Text = "●", TooltipText = "Unsaved changes", Visible = false };
         hbox.AddChild(_unsavedDotLabel);
+
+        bool folded = false;
+        foldBtn.Pressed += () =>
+        {
+            folded = !folded;
+            foldBtn.Text = folded ? "▸" : "▾";
+            hbox.Visible = !folded;
+            _statusBarPanel.OffsetTop = folded ? -FoldedBarThickness : -StatusBarHeight;
+        };
     }
+
+    /// <summary>Small always-visible toggle button shared by every foldable bar/section
+    /// (top bar, tool rail, layers/palette sections, status bar) — flat so it doesn't look
+    /// like a tool button, fixed tiny size so it stays a minimal header even when folded.</summary>
+    private static Button BuildFoldButton(string tooltip) => new()
+    {
+        Text = "▾",
+        Flat = true,
+        FocusMode = Control.FocusModeEnum.None,
+        CustomMinimumSize = new Vector2(20, 20),
+        TooltipText = tooltip,
+    };
 
     private void BuildDialogs()
     {

@@ -91,6 +91,35 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Folding a UI panel means resizing its anchored offset, not just hiding its content (v0.6.9, MapEditor UX fixes)
+- **Symptom:** the map editor's Layers/Palette side panel and Tools rail are fixed-size
+  `PanelContainer`s anchored by `Offset*`; hiding a child `Control` inside one (`Visible = false`)
+  collapses the *content*'s layout footprint, but the parent panel's own anchored rect is
+  unchanged — the empty panel background still sits over the canvas and (being added after
+  `GridView` as a sibling) still intercepts clicks meant for it (KNOWLEDGE v0.2.4's "background
+  eats clicks" trap, one level up).
+- **Rule:** a fold toggle must do both: `content.Visible = !folded` AND shrink the panel's own
+  `Offset*` on the dimension that matters (`OffsetBottom`/`OffsetTop` for the horizontal top/status
+  bars, `OffsetRight` for the left rail) down to a small header-only constant, restoring it when
+  unfolded. For the right panel's two independent sections (Layers, Palette — see next point),
+  the panel only narrows once **both** are folded, since either one alone still needs the full
+  width for its own content.
+- **Also fixed alongside:** the Layers and Palette panels used to share one unbounded
+  `VBoxContainer` — the Layers properties sub-panel (~14 rows) could grow tall enough to push
+  Palette off the bottom of the screen with no way to reach it. They're now two independent
+  `ScrollContainer`-wrapped sections with `SizeFlagsVertical = ExpandFill`, each foldable on its
+  own, so one section's height never depends on the other's content.
+
+### Mac trackpad two-finger scroll arrives as `InputEventPanGesture`, never a wheel `InputEventMouseButton` (v0.6.9, MapEditor UX fixes)
+- **Symptom:** the map editor's zoom only handled `InputEventMouseButton` `WheelUp`/`WheelDown` —
+  a real scroll wheel worked, but a Mac trackpad two-finger swipe produced no zoom at all, because
+  Godot reports trackpad pan gestures as a distinct `InputEventPanGesture` (with a `Vector2 Delta`),
+  not a mouse-wheel button event.
+- **Rule:** handle `InputEventPanGesture` alongside the wheel case in the same `_GuiInput`; use
+  only the vertical `Delta.Y` component (horizontal swipe is left alone — no trackpad-pan feature
+  exists) and convert it to the same `ZoomFactor`-per-step curve the wheel/keyboard shortcuts use
+  (`GridView.HandlePanGesture`) so all three zoom inputs feel consistent.
+
 ### Never commit a file that still contains conflict markers — and two machines both minting "v0.6.7" means the reconciling merge takes the next patch number (v0.6.8, merge cleanup)
 - **Symptom:** the remote commit `17a896d "rebase merge"` (pushed from another machine) shipped
   KNOWLEDGE.md with literal `<<<<<<< HEAD` / `=======` / `>>>>>>> 3fc1517` lines committed into

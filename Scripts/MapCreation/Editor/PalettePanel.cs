@@ -92,6 +92,10 @@ public sealed class PalettePanel
             if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } && IsAllowedOnCurrentLayer(def))
             {
                 _state.BrushDefId = defId;
+                // Bug-fix (user report): picking a brush while Erase/Lasso/etc. is active
+                // used to leave that tool selected with no way to paint the new brush
+                // without a manual rail click. Selecting a palette tile always re-arms Paint.
+                _state.ActiveTool = EditorState.EditorTool.Paint;
                 _state.RaiseStateChanged();
             }
         };

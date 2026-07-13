@@ -137,7 +137,31 @@ public partial class GridView : Control
         if (@event is InputEventMouseMotion mm)
         {
             HandleMouseMotion(mm);
+            return;
         }
+
+        if (@event is InputEventPanGesture pan)
+        {
+            HandlePanGesture(pan);
+        }
+    }
+
+    /// <summary>Bug-fix (user report) — Mac trackpad two-finger swipe up/down: Godot
+    /// surfaces this as `InputEventPanGesture` (never `InputEventMouseButton` wheel
+    /// events), so without this handler a trackpad swipe did nothing at all. Only the
+    /// vertical component drives zoom (horizontal swipe is left alone — no trackpad-pan
+    /// feature was requested); `PanZoomSensitivity` converts the gesture's pixel-ish
+    /// delta into the same ZoomFactor-per-step curve the wheel/keys already use, so all
+    /// three input paths feel consistent.</summary>
+    private const float PanZoomSensitivity = 0.02f;
+
+    private void HandlePanGesture(InputEventPanGesture pan)
+    {
+        float steps = -pan.Delta.Y * PanZoomSensitivity;
+        if (Mathf.IsZeroApprox(steps)) return;
+
+        ApplyZoom(_zoom * Mathf.Pow(ZoomFactor, steps), pan.Position);
+        AcceptEvent();
     }
 
     private void HandleMouseButton(InputEventMouseButton mb)
