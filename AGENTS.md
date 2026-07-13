@@ -1,4 +1,4 @@
-# CLAUDE.md — Fableland (Godot 4.7 / .NET C#)
+# AGENTS.md — Fableland (Godot 4.7 / .NET C#)
 
 The Godot port of **GloryOfFableland** (Unity). A 2.5D arena fighter; the current
 playable vertical slice stars **Pomegraknight**. Full plan, controls, and file map
@@ -19,8 +19,6 @@ live in `Migration.md` (see §0 for the delivered prototype).
   and performance budgets. Read the relevant T-doc before building a new system.
 - `Docs/IDEAS.md` — the design idea ledger (non-canon). New content ideas land there
   first and graduate into GDDs via the change workflow.
-- **`Docs/Art/BeachTileSet.md`** — beach combat-map tile catalog, sprite provenance,
-  footprints/effect areas, style lock, and the remaining terrain-atlas slicing work.
 
 ## Mandatory workflow
 - **After fixing ANY bug, add a caveat to `KNOWLEDGE.md`** (symptom → rule → why) under

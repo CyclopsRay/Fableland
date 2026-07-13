@@ -1,6 +1,7 @@
 namespace Fableland.MapCreation.Editor;
 
 using System;
+using System.Collections.Generic;
 using Godot;
 using Fableland.MapCreation.Data;
 using Fableland.MapCreation.Editor.Tools;
@@ -63,6 +64,7 @@ public partial class GridView : Control
     public bool IsPanning { get; private set; }
 
     private static readonly Color MagentaFallback = new(1f, 0f, 1f);
+    private readonly Dictionary<string, Texture2D> _textureCache = new();
 
     public override void _Ready()
     {
@@ -309,11 +311,23 @@ public partial class GridView : Control
 
             Color baseColor = def != null ? ColorFromHex(def.EditorColor) : MagentaFallback;
             bool hatched = def != null && def.Category == TileCategory.Rule;
-            DrawTileQuad(tile.X, tile.Y, fw, fh, baseColor, layerAlphaMul, tint, hatched);
+            Texture2D texture = def != null ? TextureFor(def.SpriteSlot) : null;
+            DrawTileQuad(tile.X, tile.Y, fw, fh, baseColor, layerAlphaMul, tint, hatched, texture);
         }
     }
 
-    private void DrawTileQuad(int x, int y, int fw, int fh, Color baseColor, float alphaMul, Color? tint, bool hatched)
+    private Texture2D TextureFor(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        if (_textureCache.TryGetValue(path, out var cached)) return cached;
+
+        var texture = ResourceLoader.Load<Texture2D>(path);
+        _textureCache[path] = texture;
+        return texture;
+    }
+
+    private void DrawTileQuad(int x, int y, int fw, int fh, Color baseColor, float alphaMul, Color? tint,
+        bool hatched, Texture2D texture = null)
     {
         Color color = baseColor;
         if (tint.HasValue)
@@ -340,7 +354,14 @@ public partial class GridView : Control
         else
         {
             color.A *= alphaMul;
-            DrawRect(rect, color);
+            if (texture != null)
+            {
+                Color spriteModulate = tint ?? Colors.White;
+                spriteModulate.A *= alphaMul;
+                DrawTextureRect(texture, rect, tile: false, modulate: spriteModulate);
+            }
+            else
+                DrawRect(rect, color);
         }
     }
 

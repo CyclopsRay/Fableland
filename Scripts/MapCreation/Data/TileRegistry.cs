@@ -25,7 +25,20 @@ public static class TileRegistry
             new()
             {
                 Id = "ground.grass", DisplayName = "Grass", Category = TileCategory.Ground,
-                EditorColor = "#4CAF50",
+                EditorColor = "#76B947", AutotileGroup = "terrain.coastal_grass",
+                Props = new Dictionary<string, string>
+                {
+                    ["artSource"] = "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
+                },
+            },
+            new()
+            {
+                Id = "ground.sand", DisplayName = "Beach Sand", Category = TileCategory.Ground,
+                EditorColor = "#E8C878", AutotileGroup = "terrain.beach_sand",
+                Props = new Dictionary<string, string>
+                {
+                    ["artSource"] = "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
+                },
             },
             new()
             {
@@ -43,6 +56,24 @@ public static class TileRegistry
                 Id = "platform.vine", DisplayName = "Vine Platform", Category = TileCategory.Platform,
                 EditorColor = "#6B8E23",
             },
+            new()
+            {
+                Id = "platform.bench", DisplayName = "Beach Bench", Category = TileCategory.Platform,
+                FootprintW = 4, FootprintH = 2, EditorColor = "#B88755",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_bench.png",
+                EffectArea = ShapeDef.Rect(0f, Units.PixelsPerMeter * 0.75f,
+                    Units.PixelsPerMeter * 4f, Units.PixelsPerMeter * 0.25f),
+            },
+            new()
+            {
+                Id = "platform.lifeguard_tower", DisplayName = "Lifeguard Tower", Category = TileCategory.Platform,
+                FootprintW = 4, FootprintH = 8, EditorColor = "#4F9B9B",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_lifeguard_tower.png",
+                // v1 exposes the top balcony as the tower's one-way platform. Multiple
+                // landings need compound effect areas in the later runtime milestone.
+                EffectArea = ShapeDef.Rect(0f, Units.PixelsPerMeter * 1.75f,
+                    Units.PixelsPerMeter * 4f, Units.PixelsPerMeter * 0.25f),
+            },
 
             new()
             {
@@ -53,19 +84,28 @@ public static class TileRegistry
             {
                 Id = "softvolume.cloud1x1", DisplayName = "Cloud (1x1)", Category = TileCategory.SoftVolume,
                 EditorColor = "#B0E0E6",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Legacy/softvolume_cloud_1x1.png",
             },
             new()
             {
                 Id = "softvolume.cloud2x1", DisplayName = "Cloud (2x1)", Category = TileCategory.SoftVolume,
                 FootprintW = 2, FootprintH = 1, EditorColor = "#ADD8E6",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Legacy/softvolume_cloud_2x1.png",
+            },
+            new()
+            {
+                Id = "softvolume.palm_tree", DisplayName = "Palm Tree", Category = TileCategory.SoftVolume,
+                FootprintW = 3, FootprintH = 6, EditorColor = "#4E9A51",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Legacy/softvolume_palm_tree.png",
             },
 
             new()
             {
                 Id = "hazard.bonfire", DisplayName = "Bonfire", Category = TileCategory.Hazard,
-                EditorColor = "#FF4500",
-                // Centered on the 1x1 footprint; radius 0.75 m.
-                EffectArea = ShapeDef.Circle(Units.PixelsPerMeter * 0.5f, Units.PixelsPerMeter * 0.5f, Units.PixelsPerMeter * 0.75f),
+                FootprintW = 2, FootprintH = 2, EditorColor = "#FF4500",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/hazard_bonfire.png",
+                EffectArea = ShapeDef.Circle(Units.PixelsPerMeter, Units.PixelsPerMeter * 1.25f,
+                    Units.PixelsPerMeter * 0.75f),
             },
             new()
             {
@@ -105,6 +145,27 @@ public static class TileRegistry
             {
                 Id = "deco.rock", DisplayName = "Rock", Category = TileCategory.Decoration,
                 AllowedRoles = LayerRoleMask.Any, EditorColor = "#708090",
+            },
+            new()
+            {
+                Id = "deco.caution_sign", DisplayName = "Caution Sign", Category = TileCategory.Decoration,
+                FootprintW = 1, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
+                EditorColor = "#E66B42",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/deco_caution_sign.png",
+            },
+            new()
+            {
+                Id = "deco.sand_castle", DisplayName = "Sand Castle", Category = TileCategory.Decoration,
+                FootprintW = 2, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
+                EditorColor = "#DDBB68",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Legacy/deco_sand_castle.png",
+            },
+            new()
+            {
+                Id = "deco.sun", DisplayName = "Sun", Category = TileCategory.Decoration,
+                FootprintW = 2, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
+                EditorColor = "#FFD24A",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/deco_sun.png",
             },
 
             // GDD §6's worked example, verbatim.
