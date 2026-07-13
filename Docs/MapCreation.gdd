@@ -217,6 +217,7 @@ current layer only.
 | Select all (current layer) / Deselect | `Ctrl/Cmd+A` / `Esc` |
 | Delete selection | `Delete` or `Backspace` |
 | Cut / Copy / Paste | `Ctrl/Cmd+X / C / V` (paste ghost follows cursor, click to stamp) |
+| Flip selected tiles horizontally | `H` (also top-bar **Flip H**) |
 | Save | `Ctrl/Cmd+S` |
 | Toggle grid | `G` |
 | Cycle layer up/down | `PageUp` / `PageDown` |

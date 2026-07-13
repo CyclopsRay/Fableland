@@ -111,3 +111,21 @@ public sealed class MoveCommand : IEditorCommand
         _state.InvalidateOccupancy();
     }
 }
+
+/// <summary>Undoable horizontal flip for a selected batch. Transform state belongs to
+/// each placed tile, so maps retain deliberate visual variation after save/load.</summary>
+public sealed class FlipTilesCommand : IEditorCommand
+{
+    public string Name => "Flip horizontal";
+    private readonly List<PlacedTile> _tiles;
+
+    public FlipTilesCommand(IEnumerable<PlacedTile> tiles) => _tiles = new List<PlacedTile>(tiles);
+
+    public void Do() => Toggle();
+    public void Undo() => Toggle();
+
+    private void Toggle()
+    {
+        foreach (var tile in _tiles) tile.FlipX = !tile.FlipX;
+    }
+}

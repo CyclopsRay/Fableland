@@ -224,6 +224,14 @@ public partial class MapEditor : Control
         PreviewButton.Pressed += OnPreviewGenPressed;
         hbox.AddChild(PreviewButton);
 
+        var flipBtn = new Button
+        {
+            Text = "Flip H",
+            TooltipText = "Flip selected object tiles horizontally (H)",
+        };
+        flipBtn.Pressed += FlipSelectionHorizontal;
+        hbox.AddChild(flipBtn);
+
         _zoomLabel = new Label { Text = "100%" };
         hbox.AddChild(_zoomLabel);
 
@@ -586,7 +594,7 @@ public partial class MapEditor : Control
         var toAdd = new List<PlacedTile>();
         var toRemoveSet = new HashSet<PlacedTile>();
 
-        foreach (var (defId, dx, dy) in _state.Clipboard)
+        foreach (var (defId, dx, dy, flipX) in _state.Clipboard)
         {
             if (!TileRegistry.TryGet(defId, out var def)) continue;
             if ((def.AllowedRoles & ToolBase.RoleMaskOf(layer.Role)) == 0) continue;
@@ -602,7 +610,7 @@ public partial class MapEditor : Control
                     if (existing != null) toRemoveSet.Add(existing);
                 }
 
-            toAdd.Add(new PlacedTile { DefId = def.Id, X = x, Y = y });
+            toAdd.Add(new PlacedTile { DefId = def.Id, X = x, Y = y, FlipX = flipX });
         }
 
         if (toAdd.Count > 0)
@@ -618,7 +626,7 @@ public partial class MapEditor : Control
         var cells = new List<(Vector2I, int, int, string)>();
         bool valid = true;
 
-        foreach (var (defId, dx, dy) in _state.Clipboard)
+        foreach (var (defId, dx, dy, _) in _state.Clipboard)
         {
             int fw = 1, fh = 1;
             bool legal = TileRegistry.TryGet(defId, out var def);
@@ -653,7 +661,14 @@ public partial class MapEditor : Control
             if (anchor == null || t.Y < anchor.Y || (t.Y == anchor.Y && t.X < anchor.X)) anchor = t;
 
         foreach (var t in _state.Selection)
-            _state.Clipboard.Add((t.DefId, t.X - anchor.X, t.Y - anchor.Y));
+            _state.Clipboard.Add((t.DefId, t.X - anchor.X, t.Y - anchor.Y, t.FlipX));
+    }
+
+    private void FlipSelectionHorizontal()
+    {
+        if (_state.Selection.Count == 0) return;
+        _state.Commands.Push(new FlipTilesCommand(_state.Selection));
+        _state.RaiseStateChanged();
     }
 
     /// <summary>Deletes every selected tile as one command; Selection is cleared
@@ -792,6 +807,13 @@ public partial class MapEditor : Control
             // Empty clipboard: no-op (paste mode never engages).
             _pasteModeActive = _state.Clipboard.Count > 0;
             _state.RaiseStateChanged();
+            Accept();
+            return;
+        }
+
+        if (@event.IsActionPressed("mapedit_flip_horizontal"))
+        {
+            FlipSelectionHorizontal();
             Accept();
             return;
         }

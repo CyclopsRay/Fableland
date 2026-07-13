@@ -26,6 +26,8 @@ public static class TileRegistry
             {
                 Id = "ground.grass", DisplayName = "Grass", Category = TileCategory.Ground,
                 EditorColor = "#76B947", AutotileGroup = "terrain.coastal_grass",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/ground_grass_seamless.png",
+                SpriteFillFootprint = true,
                 Props = new Dictionary<string, string>
                 {
                     ["artSource"] = "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
@@ -35,6 +37,8 @@ public static class TileRegistry
             {
                 Id = "ground.sand", DisplayName = "Beach Sand", Category = TileCategory.Ground,
                 EditorColor = "#E8C878", AutotileGroup = "terrain.beach_sand",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/ground_sand_seamless.png",
+                SpriteFillFootprint = true,
                 Props = new Dictionary<string, string>
                 {
                     ["artSource"] = "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
@@ -84,19 +88,25 @@ public static class TileRegistry
             {
                 Id = "softvolume.cloud1x1", DisplayName = "Cloud (1x1)", Category = TileCategory.SoftVolume,
                 EditorColor = "#B0E0E6",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Legacy/softvolume_cloud_1x1.png",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_cloud_small.png",
             },
             new()
             {
                 Id = "softvolume.cloud2x1", DisplayName = "Cloud (2x1)", Category = TileCategory.SoftVolume,
                 FootprintW = 2, FootprintH = 1, EditorColor = "#ADD8E6",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Legacy/softvolume_cloud_2x1.png",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_cloud_medium.png",
+            },
+            new()
+            {
+                Id = "softvolume.cloud3x2", DisplayName = "Cloud (3x2)", Category = TileCategory.SoftVolume,
+                FootprintW = 3, FootprintH = 2, EditorColor = "#A9D7E3",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_cloud_large.png",
             },
             new()
             {
                 Id = "softvolume.palm_tree", DisplayName = "Palm Tree", Category = TileCategory.SoftVolume,
-                FootprintW = 3, FootprintH = 6, EditorColor = "#4E9A51",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Legacy/softvolume_palm_tree.png",
+                FootprintW = 3, FootprintH = 4, EditorColor = "#4E9A51",
+                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_palm_tree_v2.png",
             },
 
             new()
@@ -180,6 +190,7 @@ public static class TileRegistry
                     {
                         ("softvolume.cloud2x1", 3),
                         ("softvolume.cloud1x1", 1),
+                        ("softvolume.cloud3x2", 1),
                     },
                     CountMin = 2,
                     CountMax = 4,

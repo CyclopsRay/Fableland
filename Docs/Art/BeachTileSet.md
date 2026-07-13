@@ -16,13 +16,14 @@ runtime collider/trigger and may be smaller than the visible art.
 
 | Registry id | Role | Footprint | Art | Status / effect-area contract |
 |---|---|---:|---|---|
-| `ground.sand` | Ground | 1x1 terrain cells | `Generated/terrain_beach_atlas.png` | Connected-look source approved; `terrain.beach_sand`; slice into a Godot terrain TileSet when autotile rendering lands. |
-| `ground.grass` | Ground | 1x1 terrain cells | same atlas | Connected-look source approved; `terrain.coastal_grass`; shares the sand soil/outline language. |
+| `ground.sand` | Ground | 1x1 terrain cells | `Generated/ground_sand_seamless.png` | Seamless fill now joins without transparent gutters; `terrain.beach_sand` remains reserved for edge/corner terrain variants. |
+| `ground.grass` | Ground | 1x1 terrain cells | `Generated/ground_grass_seamless.png` | Seamless fill now joins without transparent gutters; `terrain.coastal_grass` remains reserved for edge/corner terrain variants. |
 | `platform.bench` | Platform | 4x2 | `Generated/platform_bench.png` | New art. One-way top is a 4 m x 0.25 m strip at y=0.75 m. |
 | `platform.lifeguard_tower` | Platform | 4x8 | `Generated/platform_lifeguard_tower.png` | New art. v1 exposes the top balcony only; compound landings require compound shapes in the runtime-instantiation milestone. |
-| `softvolume.palm_tree` | SoftVolume | 3x6 | `Legacy/softvolume_palm_tree.png` | Transferred from Unity; usable, but first candidate for regeneration because of its white sticker edge. |
-| `softvolume.cloud1x1` | SoftVolume | 1x1 | `Legacy/softvolume_cloud_1x1.png` | Transferred and scaled from the approved cloud motif. Regenerate as a distinct compact silhouette later. |
-| `softvolume.cloud2x1` | SoftVolume | 2x1 | `Legacy/softvolume_cloud_2x1.png` | Transferred from Unity. Full footprint is enterable. |
+| `softvolume.palm_tree` | SoftVolume | 3x4 | `Generated/softvolume_palm_tree_v2.png` | Redrawn at 3:4 with dark ink only and no sticker outline. |
+| `softvolume.cloud1x1` | SoftVolume | 1x1 | `Generated/softvolume_cloud_small.png` | Redrawn compact cloud; no sticker outline. |
+| `softvolume.cloud2x1` | SoftVolume | 2x1 | `Generated/softvolume_cloud_medium.png` | Redrawn curled medium cloud; full footprint is enterable. |
+| `softvolume.cloud3x2` | SoftVolume | 3x2 | `Generated/softvolume_cloud_large.png` | Redrawn asymmetrical large cloud; full footprint is enterable. |
 | `deco.caution_sign` | Decoration | 1x2 | `Generated/deco_caution_sign.png` | New art; deliberately uses an exclamation pictogram rather than skull imagery. |
 | `deco.sand_castle` | Decoration | 2x2 | `Legacy/deco_sand_castle.png` | Transferred from Unity; visual only. |
 | `deco.sun` | Decoration | 2x2 | `Generated/deco_sun.png` | New art; intended for Farview, though Decoration remains legal on any layer. |
@@ -39,9 +40,17 @@ this repository; only standalone, useful cutouts were transferred.
 
 Generated replacements are non-destructive and live under `Generated/`. Unity-derived
 cutouts live under `Legacy/` so provenance and replacement priority remain obvious.
-The terrain image is intentionally retained as an atlas source rather than pretending
-that a hand-sliced region schema exists: `MapCreation.gdd` reserves Godot TileSet terrain
-autotiling, and that milestone must define atlas coordinates/peering bits once, in data.
+Ground currently uses seamless fill textures so adjacent cells have no transparent
+gutters. The earlier terrain atlas remains a source for the later Godot TileSet terrain
+pass, which must define edge/corner atlas coordinates and peering bits once, in data.
+
+## Sprite placement and transforms
+
+The editor derives the visible alpha bounds of prop sprites, aspect-fits them inside
+their footprint, and anchors those bounds bottom-center. Transparent export padding
+therefore cannot make an object float above its footprint floor. Seamless ground uses
+the separate fill-footprint mode. Each `PlacedTile` serializes `FlipX`; select one or
+more tiles and press `H` (or use **Flip H**) to mirror them, with undo/redo support.
 
 ## Generation prompt lock
 

@@ -676,3 +676,12 @@ is a mistake already paid for once.
   `_day/_stamina/_inVoid` as **read-only computed aliases** so the existing view + atlas code
   reads them unchanged. Never write these back locally — write through RunState. The map remains
   directly launchable (F5): `_Ready` calls `RunState.NewRun(...)` itself when no run exists.
+
+### Map sprites need alpha-bound bottom anchoring, not full-canvas stretching (v0.6.7)
+- **Symptom:** exported props with transparent padding appear to float above the ground and
+  change proportions when the editor stretches the whole PNG canvas into a tile footprint.
+- **Rule:** for non-terrain map sprites, derive the visible alpha bounds once, aspect-fit that
+  region, and anchor it bottom-center inside the footprint. Only seamless terrain textures use
+  fill-footprint rendering.
+- **Why:** an image canvas is an export container, not a physical placement contract; collision
+  and visual grounding must come from the tile footprint/effect-area data.

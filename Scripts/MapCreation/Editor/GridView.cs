@@ -64,7 +64,13 @@ public partial class GridView : Control
     public bool IsPanning { get; private set; }
 
     private static readonly Color MagentaFallback = new(1f, 0f, 1f);
-    private readonly Dictionary<string, Texture2D> _textureCache = new();
+    private sealed class SpriteTexture
+    {
+        public Texture2D Texture;
+        public Rect2 SourceRect;
+    }
+
+    private readonly Dictionary<string, SpriteTexture> _textureCache = new();
 
     public override void _Ready()
     {
@@ -335,8 +341,7 @@ public partial class GridView : Control
 
             Color baseColor = def != null ? ColorFromHex(def.EditorColor) : MagentaFallback;
             bool hatched = def != null && def.Category == TileCategory.Rule;
-            Texture2D texture = def != null ? TextureFor(def.SpriteSlot) : null;
-            Rect2? atlasRegion = null;
+            SpriteTexture texture = def != null ? TextureFor(def.SpriteSlot) : null;
 
             // Bug-fix (user report, item 5): connected-look ground autotiling. Best-effort
             // v1 (see AutotileAtlas doc) — only wired for tiles carrying a non-empty
@@ -345,22 +350,26 @@ public partial class GridView : Control
             if (def != null && !string.IsNullOrEmpty(def.AutotileGroup) &&
                 def.Props != null && def.Props.TryGetValue("artSource", out var artPath))
             {
-                var atlasTex = TextureFor(artPath);
-                if (atlasTex != null)
+                var atlasSprite = TextureFor(artPath);
+                if (atlasSprite?.Texture != null)
                 {
                     bool northSame = NeighborSharesGroup(layerIndex, tile.X, tile.Y - 1, def.AutotileGroup);
                     if (AutotileAtlas.TryGetCell(def.AutotileGroup, northSame, out int row, out int col))
                     {
-                        Vector2 texSize = atlasTex.GetSize();
+                        Vector2 texSize = atlasSprite.Texture.GetSize();
                         float cellW = texSize.X / AutotileAtlas.Cols;
                         float cellH = texSize.Y / AutotileAtlas.Rows;
-                        atlasRegion = new Rect2(col * cellW, row * cellH, cellW, cellH);
-                        texture = atlasTex;
+                        texture = new SpriteTexture
+                        {
+                            Texture = atlasSprite.Texture,
+                            SourceRect = new Rect2(col * cellW, row * cellH, cellW, cellH)
+                        };
                     }
                 }
             }
 
-            DrawTileQuad(tile.X, tile.Y, fw, fh, baseColor, layerAlphaMul, tint, hatched, texture, atlasRegion);
+            DrawTileQuad(tile.X, tile.Y, fw, fh, baseColor, layerAlphaMul, tint, hatched,
+                texture, def?.SpriteFillFootprint ?? false, tile.FlipX);
         }
     }
 
@@ -375,18 +384,30 @@ public partial class GridView : Control
         return TileRegistry.TryGet(neighbor.DefId, out var neighborDef) && neighborDef.AutotileGroup == autotileGroup;
     }
 
-    private Texture2D TextureFor(string path)
+    private SpriteTexture TextureFor(string path)
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
         if (_textureCache.TryGetValue(path, out var cached)) return cached;
 
         var texture = ResourceLoader.Load<Texture2D>(path);
-        _textureCache[path] = texture;
-        return texture;
+        if (texture == null)
+        {
+            _textureCache[path] = null;
+            return null;
+        }
+
+        var image = texture.GetImage();
+        Rect2I used = image?.GetUsedRect() ?? new Rect2I(0, 0, texture.GetWidth(), texture.GetHeight());
+        if (used.Size.X <= 0 || used.Size.Y <= 0)
+            used = new Rect2I(0, 0, texture.GetWidth(), texture.GetHeight());
+
+        var result = new SpriteTexture { Texture = texture, SourceRect = used };
+        _textureCache[path] = result;
+        return result;
     }
 
     private void DrawTileQuad(int x, int y, int fw, int fh, Color baseColor, float alphaMul, Color? tint,
-        bool hatched, Texture2D texture = null, Rect2? srcRect = null)
+        bool hatched, SpriteTexture sprite = null, bool fillFootprint = false, bool flipX = false)
     {
         Color color = baseColor;
         if (tint.HasValue)
@@ -413,14 +434,30 @@ public partial class GridView : Control
         else
         {
             color.A *= alphaMul;
-            if (texture != null)
+            if (sprite != null)
             {
                 Color spriteModulate = tint ?? Colors.White;
                 spriteModulate.A *= alphaMul;
-                if (srcRect.HasValue)
-                    DrawTextureRectRegion(texture, rect, srcRect.Value, spriteModulate);
-                else
-                    DrawTextureRect(texture, rect, tile: false, modulate: spriteModulate);
+                Rect2 drawRect = rect;
+                Rect2 sourceRect = fillFootprint
+                    ? new Rect2(Vector2.Zero, sprite.Texture.GetSize())
+                    : sprite.SourceRect;
+
+                if (!fillFootprint)
+                {
+                    float scale = Mathf.Min(rect.Size.X / sourceRect.Size.X, rect.Size.Y / sourceRect.Size.Y);
+                    Vector2 fittedSize = sourceRect.Size * scale;
+                    drawRect = new Rect2(
+                        new Vector2(rect.Position.X + (rect.Size.X - fittedSize.X) * 0.5f,
+                            rect.End.Y - fittedSize.Y),
+                        fittedSize);
+                }
+
+                Vector2 center = drawRect.GetCenter();
+                DrawSetTransform(center, 0f, new Vector2(flipX ? -1f : 1f, 1f));
+                DrawTextureRectRegion(sprite.Texture,
+                    new Rect2(-drawRect.Size * 0.5f, drawRect.Size), sourceRect, spriteModulate);
+                DrawSetTransform(Vector2.Zero, 0f, Vector2.One);
             }
             else
                 DrawRect(rect, color);

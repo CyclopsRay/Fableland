@@ -258,6 +258,7 @@ public static class MapJson
                 Check(ta.DefId == tb.DefId, ttag + ".DefId");
                 Check(ta.X == tb.X, ttag + ".X");
                 Check(ta.Y == tb.Y, ttag + ".Y");
+                Check(ta.FlipX == tb.FlipX, ttag + ".FlipX");
 
                 bool aHasProps = ta.Props is { Count: > 0 };
                 bool bHasProps = tb.Props is { Count: > 0 };

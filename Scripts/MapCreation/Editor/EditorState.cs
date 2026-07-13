@@ -64,7 +64,7 @@ public sealed class EditorState
 
     /// <summary>Cut/copy payload, cell-relative to the selection's anchor. MC4 fills
     /// this on Cut/Copy and consumes it on Paste.</summary>
-    public readonly List<(string DefId, int Dx, int Dy)> Clipboard = new();
+    public readonly List<(string DefId, int Dx, int Dy, bool FlipX)> Clipboard = new();
 
     public bool ShowGrid = true;
     public bool ShowEffectAreas;

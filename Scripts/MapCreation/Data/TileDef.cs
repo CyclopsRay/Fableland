@@ -76,6 +76,10 @@ public sealed class TileDef
     /// <summary>Reserved: atlas region / texture path the art department fills in later (§2.5).</summary>
     public string SpriteSlot { get; init; }
 
+    /// <summary>True for seamless terrain textures that fill the entire footprint.
+    /// False (default) trims transparent padding, aspect-fits, and bottom-anchors props.</summary>
+    public bool SpriteFillFootprint { get; init; }
+
     /// <summary>Reserved: connected-look group for future TileSet-terrain autotiling (§2.5).</summary>
     public string AutotileGroup { get; init; }
 
