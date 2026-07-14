@@ -698,3 +698,24 @@ is a mistake already paid for once.
   `SetAnimationLoopMode(name, SpriteFrames.LoopMode.Linear)`.
 - **Why:** the Godot 4.7 C# binding exposes playback as a method and replaced the old bool
   loop setter with an explicit loop-mode enum.
+
+### A "preview" and a "commit" are different verbs — rule-tile generation must have both (v0.6.17)
+- **Symptom:** the map editor's "Preview gen" ran `RuleResolver` and stored the result in
+  `EditorState.Preview` (a throwaway overlay), but nothing ever turned those spawns into real
+  `PlacedTile`s — the user's rule zones "did nothing." Read to the user as "the rule tile is broken."
+- **Rule:** a generator that a designer paints against needs a **commit** path distinct from its
+  preview: a separate button that converts the resolved output into real, undoable tiles
+  (`TileBatchCommand` per layer). Reuse the previewed seed on commit so what they saw is what they get.
+- **Why:** preview is view-state (never dirties the save, cleared by Esc); committing is a model
+  mutation that must be undoable and persisted. Conflating them leaves either no output or an
+  un-undoable one.
+
+### `MapDocument.CreateNew`'s layer count is load-bearing — find the battlefield by role, not index (v0.6.17)
+- **Symptom:** giving new maps a full default layer stack (farview×4 / battlefield / closeview)
+  instead of one battlefield broke `MapJson.RoundTripSelfTest`, which did `doc.Layers[0]` assuming
+  index 0 was the battlefield.
+- **Rule:** the battlefield is the *distinguished* layer (`Role == RoleBattlefield`), not a fixed
+  index. Any code that wants it must scan by role (as `MapBrowser.BattlefieldDims` and
+  `MapEditor.DefaultLayerIndex` already did). Never index `Layers[0]` for "the battlefield."
+- **Why:** list order is draw order (back-to-front); the battlefield sits in the *middle* of a
+  real stack, so its index depends on how many farview sublayers precede it.

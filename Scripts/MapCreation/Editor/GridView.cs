@@ -79,6 +79,68 @@ public partial class GridView : Control
         MouseFilter = Control.MouseFilterEnum.Stop;
     }
 
+    // ------------------------------------------------------------ play preview (item 5)
+
+    /// <summary>True while the Play preview (a WASD fly-camera over the map, parallax
+    /// applied, no physics) is running. MapEditor hides its panels and lets this control
+    /// take over the whole viewport.</summary>
+    public bool PreviewMode { get; private set; }
+
+    /// <summary>Raised on Esc while in preview — MapEditor restores the editor chrome.</summary>
+    public event Action PreviewExited;
+
+    private Vector2 _previewCamWorld;
+    private double _previewTime;
+    private bool _prevEscDown;
+    private const float PreviewPanSpeed = 600f; // world px/s (Shift = ×3)
+
+    /// <summary>Enter preview centered on <paramref name="camWorld"/> (MapEditor passes the
+    /// battlefield center). Records the current Esc state so a still-held key from launching
+    /// doesn't instantly exit.</summary>
+    public void StartPreview(Vector2 camWorld)
+    {
+        PreviewMode = true;
+        _previewCamWorld = camWorld;
+        _previewTime = 0;
+        _prevEscDown = Input.IsPhysicalKeyPressed(Key.Escape);
+        QueueRedraw();
+    }
+
+    public void StopPreview()
+    {
+        PreviewMode = false;
+        QueueRedraw();
+    }
+
+    /// <summary>Only does work in preview (returns immediately otherwise): moves the fly
+    /// camera from raw WASD (physical keys, so it's layout-independent and needs no focus),
+    /// advances preview time for auto-scroll, and exits on the Esc key edge.</summary>
+    public override void _Process(double delta)
+    {
+        if (!PreviewMode) return;
+
+        _previewTime += delta;
+
+        float speed = PreviewPanSpeed * (Input.IsKeyPressed(Key.Shift) ? 3f : 1f);
+        Vector2 move = Vector2.Zero;
+        if (Input.IsPhysicalKeyPressed(Key.A)) move.X -= 1f;
+        if (Input.IsPhysicalKeyPressed(Key.D)) move.X += 1f;
+        if (Input.IsPhysicalKeyPressed(Key.W)) move.Y -= 1f;
+        if (Input.IsPhysicalKeyPressed(Key.S)) move.Y += 1f;
+        if (move != Vector2.Zero) _previewCamWorld += move.Normalized() * speed * (float)delta;
+
+        bool esc = Input.IsPhysicalKeyPressed(Key.Escape);
+        if (esc && !_prevEscDown)
+        {
+            _prevEscDown = true;
+            PreviewExited?.Invoke();
+            return;
+        }
+        _prevEscDown = esc;
+
+        QueueRedraw();
+    }
+
     // ------------------------------------------------------------ transform
 
     public Vector2 WorldToScreen(Vector2 worldPx) => worldPx * _zoom + _pan;
@@ -134,6 +196,8 @@ public partial class GridView : Control
 
     public override void _GuiInput(InputEvent @event)
     {
+        if (PreviewMode) return; // preview drives itself from _Process; ignore paint/pan input
+
         if (@event is InputEventMouseButton mb)
         {
             HandleMouseButton(mb);
@@ -271,6 +335,8 @@ public partial class GridView : Control
         var doc = State?.Document;
         if (doc?.Layers == null) return;
 
+        if (PreviewMode) { DrawPreviewScene(doc); return; }
+
         // In-editor, every layer draws aligned at world origin — parallax, autoscroll,
         // and sway are RUNTIME-only visuals (GDD §1.2/§4); the authoring view
         // deliberately ignores them so tiles stay where the designer clicked them.
@@ -301,6 +367,57 @@ public partial class GridView : Control
             if (State.ShowGrid) DrawGrid(currentLayer, visible);
             if (_lastCursorCell.HasValue)
                 DrawHoverCell(_lastCursorCell.Value, State.AccentOf(State.CurrentLayerIndex));
+        }
+    }
+
+    /// <summary>Item 5 — renders the whole map as it appears in-world: each layer offset by
+    /// its own parallax against the WASD fly-camera (+ auto-scroll drift), full opacity, real
+    /// sprites/tints, back-to-front so the closeview occludes. No editor chrome. The solid-color
+    /// canvas is MapEditor's full-rect ColorRect behind this control, so the sky shows through.</summary>
+    private void DrawPreviewScene(MapDocument doc)
+    {
+        float cell = Units.PixelsPerMeter;
+        Vector2 screenCenter = Size * 0.5f;
+
+        for (int i = 0; i < doc.Layers.Count; i++)
+        {
+            var layer = doc.Layers[i];
+            if (layer?.Tiles == null) continue;
+
+            Vector2 offset = new(
+                -_previewCamWorld.X * layer.ParallaxX + layer.AutoScrollX * (float)_previewTime,
+                -_previewCamWorld.Y * layer.ParallaxY + layer.AutoScrollY * (float)_previewTime);
+
+            Color? tint = string.IsNullOrEmpty(layer.Tint) ? null : ColorFromHex(layer.Tint, Colors.White);
+            float baseX = screenCenter.X + offset.X;
+            float layerW = layer.GridW * cell;
+
+            // Loop layers tile horizontally: draw enough copies to cover the viewport.
+            int repFrom = 0, repTo = 0;
+            if (layer.Loop && layerW > 0.5f)
+            {
+                repFrom = Mathf.FloorToInt(-baseX / layerW) - 1;
+                repTo = Mathf.CeilToInt((Size.X - baseX) / layerW) + 1;
+                if (repTo - repFrom > 200) repTo = repFrom + 200; // pathological guard
+            }
+
+            for (int rep = repFrom; rep <= repTo; rep++)
+            {
+                float repX = rep * layerW;
+                foreach (var tile in layer.Tiles)
+                {
+                    if (!TileRegistry.TryGet(tile.DefId, out var def) || def.Category == TileCategory.Rule)
+                        continue;
+
+                    var sprite = ResolveTexture(i, tile, def);
+                    Color baseColor = ColorFromHex(def.EditorColor);
+                    Vector2 tl = new(screenCenter.X + offset.X + tile.X * cell + repX,
+                                     screenCenter.Y + offset.Y + tile.Y * cell);
+                    Vector2 size = new(def.FootprintW * cell, def.FootprintH * cell);
+                    DrawTileVisual(new Rect2(tl, size), baseColor, layer.Opacity, tint,
+                        hatched: false, sprite, def.SpriteFillFootprint, tile.FlipX);
+                }
+            }
         }
     }
 
@@ -341,36 +458,44 @@ public partial class GridView : Control
 
             Color baseColor = def != null ? ColorFromHex(def.EditorColor) : MagentaFallback;
             bool hatched = def != null && def.Category == TileCategory.Rule;
-            SpriteTexture texture = def != null ? TextureFor(def.SpriteSlot) : null;
-
-            // Bug-fix (user report, item 5): connected-look ground autotiling. Best-effort
-            // v1 (see AutotileAtlas doc) — only wired for tiles carrying a non-empty
-            // AutotileGroup with an `artSource` atlas path; everything else keeps using
-            // SpriteSlot/flat color exactly as before.
-            if (def != null && !string.IsNullOrEmpty(def.AutotileGroup) &&
-                def.Props != null && def.Props.TryGetValue("artSource", out var artPath))
-            {
-                var atlasSprite = TextureFor(artPath);
-                if (atlasSprite?.Texture != null)
-                {
-                    bool northSame = NeighborSharesGroup(layerIndex, tile.X, tile.Y - 1, def.AutotileGroup);
-                    if (AutotileAtlas.TryGetCell(def.AutotileGroup, northSame, out int row, out int col))
-                    {
-                        Vector2 texSize = atlasSprite.Texture.GetSize();
-                        float cellW = texSize.X / AutotileAtlas.Cols;
-                        float cellH = texSize.Y / AutotileAtlas.Rows;
-                        texture = new SpriteTexture
-                        {
-                            Texture = atlasSprite.Texture,
-                            SourceRect = new Rect2(col * cellW, row * cellH, cellW, cellH)
-                        };
-                    }
-                }
-            }
+            SpriteTexture texture = ResolveTexture(layerIndex, tile, def);
 
             DrawTileQuad(tile.X, tile.Y, fw, fh, baseColor, layerAlphaMul, tint, hatched,
                 texture, def?.SpriteFillFootprint ?? false, tile.FlipX);
         }
+    }
+
+    /// <summary>The texture a placed tile should draw with: its <see cref="TileDef.SpriteSlot"/>,
+    /// or the connected-look autotile region (best-effort v1, see AutotileAtlas doc) when the
+    /// def carries a non-empty <c>AutotileGroup</c> + an <c>artSource</c> atlas path. Shared by
+    /// the authoring draw and the Play preview so both look identical. Null = flat color quad.</summary>
+    private SpriteTexture ResolveTexture(int layerIndex, PlacedTile tile, TileDef def)
+    {
+        if (def == null) return null;
+        SpriteTexture texture = TextureFor(def.SpriteSlot);
+
+        if (!string.IsNullOrEmpty(def.AutotileGroup) &&
+            def.Props != null && def.Props.TryGetValue("artSource", out var artPath))
+        {
+            var atlasSprite = TextureFor(artPath);
+            if (atlasSprite?.Texture != null)
+            {
+                bool northSame = NeighborSharesGroup(layerIndex, tile.X, tile.Y - 1, def.AutotileGroup);
+                if (AutotileAtlas.TryGetCell(def.AutotileGroup, northSame, out int row, out int col))
+                {
+                    Vector2 texSize = atlasSprite.Texture.GetSize();
+                    float cellW = texSize.X / AutotileAtlas.Cols;
+                    float cellH = texSize.Y / AutotileAtlas.Rows;
+                    texture = new SpriteTexture
+                    {
+                        Texture = atlasSprite.Texture,
+                        SourceRect = new Rect2(col * cellW, row * cellH, cellW, cellH)
+                    };
+                }
+            }
+        }
+
+        return texture;
     }
 
     /// <summary>Whether the cell at (x, y) on `layerIndex` holds a tile whose def shares
@@ -409,17 +534,25 @@ public partial class GridView : Control
     private void DrawTileQuad(int x, int y, int fw, int fh, Color baseColor, float alphaMul, Color? tint,
         bool hatched, SpriteTexture sprite = null, bool fillFootprint = false, bool flipX = false)
     {
+        float cell = Units.PixelsPerMeter;
+        Vector2 screenTL = WorldToScreen(new Vector2(x * cell, y * cell));
+        Vector2 screenSize = new Vector2(fw * cell, fh * cell) * _zoom;
+        DrawTileVisual(new Rect2(screenTL, screenSize), baseColor, alphaMul, tint, hatched, sprite, fillFootprint, flipX);
+    }
+
+    /// <summary>Draws one tile into an already-computed SCREEN rect. Split out of
+    /// <see cref="DrawTileQuad"/> so the Play preview (which positions each layer by parallax,
+    /// not by the authoring pan/zoom) reuses the exact same sprite fit / tint / flip / hatch
+    /// look. Preview never passes <paramref name="hatched"/> (rule tiles are invisible there).</summary>
+    private void DrawTileVisual(Rect2 rect, Color baseColor, float alphaMul, Color? tint,
+        bool hatched, SpriteTexture sprite, bool fillFootprint, bool flipX)
+    {
         Color color = baseColor;
         if (tint.HasValue)
         {
             var t = tint.Value;
             color = new Color(color.R * t.R, color.G * t.G, color.B * t.B, color.A);
         }
-
-        float cell = Units.PixelsPerMeter;
-        Vector2 screenTL = WorldToScreen(new Vector2(x * cell, y * cell));
-        Vector2 screenSize = new Vector2(fw * cell, fh * cell) * _zoom;
-        var rect = new Rect2(screenTL, screenSize);
 
         if (hatched)
         {
@@ -528,7 +661,9 @@ public partial class GridView : Control
                 continue;
 
             Vector2 anchorWorld = new(tile.X * cell, tile.Y * cell);
-            var shape = def.EffectArea;
+            // GDD §2.4 — the per-tile-kind effect painter's override (if any) wins over the
+            // def's code default (TileEffectStore, item 6). null = footprint rect.
+            var shape = TileEffectStore.EffectAreaOf(def);
 
             if (shape == null)
             {
@@ -540,6 +675,22 @@ public partial class GridView : Control
 
             switch (shape.Kind)
             {
+                case ShapeDef.KindSubcellMask:
+                {
+                    float subPx = cell / ShapeDef.SubcellsPerAxis;
+                    Color subFill = orange; subFill.A = 0.28f;
+                    for (int r = 0; r < ShapeDef.SubcellsPerAxis; r++)
+                        for (int c = 0; c < ShapeDef.SubcellsPerAxis; c++)
+                        {
+                            if ((shape.Mask & (1 << (r * ShapeDef.SubcellsPerAxis + c))) == 0) continue;
+                            Vector2 tl = WorldToScreen(anchorWorld + new Vector2(c * subPx, r * subPx));
+                            Vector2 size = new Vector2(subPx, subPx) * _zoom;
+                            var sr = new Rect2(tl, size);
+                            DrawRect(sr, subFill);
+                            DrawRect(sr, orange, filled: false, width: 1f);
+                        }
+                    break;
+                }
                 case ShapeDef.KindRect:
                 {
                     Vector2 tl = WorldToScreen(anchorWorld + new Vector2(shape.OffsetX, shape.OffsetY));

@@ -37,8 +37,12 @@ public sealed class MapDocument
     [JsonExtensionData]
     public Dictionary<string, JsonElement> Extra { get; set; }
 
-    /// <summary>Fresh document: new GUID identity, default canvas, one default 64x36
-    /// battlefield layer.</summary>
+    /// <summary>Fresh document: new GUID identity, default canvas, and a ready-made layer
+    /// stack (GDD §1 rework) so the user doesn't have to hand-build parallax depth. List
+    /// order is back-to-front draw order: farthest farview first … battlefield … closeview
+    /// last. The canvas (never-moving backdrop) is <see cref="Canvas"/>, not a layer.
+    /// Parallax picked so distant layers barely drift and the near decoration hugs the
+    /// battlefield; farthest two loop so a narrow mountain strip tiles across a wide map.</summary>
     public static MapDocument CreateNew(string name)
     {
         string nowIso = DateTime.UtcNow.ToString("o");
@@ -51,7 +55,15 @@ public sealed class MapDocument
             CreatedUtc = nowIso,
             ModifiedUtc = nowIso,
             Canvas = new CanvasData(),
-            Layers = new List<MapLayerData> { MapLayerData.CreateBattlefield() },
+            Layers = new List<MapLayerData>
+            {
+                MapLayerData.CreateFarview("Very Far Mountains", 0.15f, 0.15f, loop: true),
+                MapLayerData.CreateFarview("Far Mountains", 0.30f, 0.30f, loop: true),
+                MapLayerData.CreateFarview("Backdrop Scene", 0.55f, 0.55f),
+                MapLayerData.CreateFarview("Near Decoration", 0.85f, 0.85f),
+                MapLayerData.CreateBattlefield(),
+                MapLayerData.CreateCloseview("Foreground"),
+            },
         };
     }
 }

@@ -188,12 +188,20 @@ public static class TileRegistry
                 EditorColor = "#FFD24A",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/deco_sun_chibi.png",
             },
+            // A tall foreground occluder for the closeview "hide-behind" band (GDD §1 rework):
+            // a Roman-style column. No art yet — renders as its editorColor quad until one lands.
+            new()
+            {
+                Id = "deco.column", DisplayName = "Roman Column", Category = TileCategory.Decoration,
+                FootprintW = 1, FootprintH = 3, AllowedRoles = LayerRoleMask.Any,
+                EditorColor = "#CFC7B0",
+            },
 
             // GDD §6's worked example, verbatim.
             new()
             {
                 Id = "rule.cloudZone", DisplayName = "Cloud Zone (rule)", Category = TileCategory.Rule,
-                AllowedRoles = LayerRoleMask.Battlefield | LayerRoleMask.Farview,
+                AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#DDA0DD",
                 RuleProps = new RuleProps
                 {

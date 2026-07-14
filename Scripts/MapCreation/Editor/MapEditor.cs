@@ -37,7 +37,8 @@ public partial class MapEditor : Control
 
     // MC5 palette/layer panel scaffolds — kept as fields per this phase's contract.
     internal VBoxContainer LayersBox;
-    internal VBoxContainer PaletteBox;
+    // Item 1: the palette now lives in a bottom dock (its own foldable strip), not the right panel.
+    private Control _paletteDockContent;
     internal Button PreviewButton;
 
     // MC5: the panels themselves (built after the scaffolds exist, in _Ready).
@@ -67,15 +68,35 @@ public partial class MapEditor : Control
     private PanelContainer _leftRailPanel;
     private PanelContainer _rightPanel;
     private PanelContainer _statusBarPanel;
+    private PanelContainer _paletteDockPanel;
+
+    // Item 6: per-tile-kind effect-area painter (global store, TileEffectStore).
+    private AcceptDialog _effectDialog;
+    private Label _effectDialogTitle;
+    private Panel[] _effectCells;      // 4×4 sub-cell toggles (row-major, index = row*4+col)
+    private bool[] _effectMaskBits;
+    private Color _effectPaintColor = Colors.White;
+    private string _effectDialogDefId;
+    private string _effectStorePath;
+
+    // Item 5: WASD fly-camera play preview.
+    private bool _previewActive;
+    private Label _previewHint;
 
     private const float TopBarHeight = 44f;
     private const float StatusBarHeight = 28f;
     private const float RailWidth = 130f;
     private const float SidePanelWidth = 260f;
+    private const float PaletteDockHeight = 132f;
 
     private const float FoldedBarThickness = 22f;
     private const float FoldedRailWidth = 26f;
     private const float FoldedPanelWidth = 140f;
+
+    /// <summary>Bottom offset (from the control's bottom edge) where the left rail and right
+    /// panel stop — above both the status bar and the palette dock.</summary>
+    private float SidePanelBottomOffset => -(StatusBarHeight + (_paletteDockFolded ? FoldedBarThickness : PaletteDockHeight));
+    private bool _paletteDockFolded;
 
     public override void _Ready()
     {
@@ -84,16 +105,23 @@ public partial class MapEditor : Control
         _state = new EditorState { Document = doc, SavePath = savePath };
         _state.CurrentLayerIndex = DefaultLayerIndex(doc);
 
+        // Item 6: load the global per-tile-kind effect overrides before the first draw so the
+        // "Show effect areas" overlay already reflects saved masks.
+        _effectStorePath = ProjectSettings.GlobalizePath("user://tile_effects.json");
+        TileEffectStore.Load(_effectStorePath, out var effectWarnings);
+        foreach (var w in effectWarnings) GD.PushWarning("[MapEditor] " + w);
+
         BuildUi();
 
-        // MC5: LayersBox/PaletteBox exist now (built inside BuildUi -> BuildRightPanel);
-        // each panel self-manages via its own EditorState subscriptions from here on.
+        // LayersBox / the palette dock exist now (built inside BuildUi); each panel
+        // self-manages via its own EditorState subscriptions from here on.
         _layerPanel = new LayerPanel(_state, LayersBox);
-        _palettePanel = new PalettePanel(_state, PaletteBox);
+        _palettePanel = new PalettePanel(_state, _paletteDockContent, OnConfigureEffect);
 
         _gridView.State = _state;
         _gridView.CursorCellChanged += OnCursorCellChanged;
         _gridView.ViewChanged += OnViewChanged;
+        _gridView.PreviewExited += ExitPreview; // Esc in preview returns to edit mode (item 5)
 
         _state.StateChanged += OnStateChanged;
         _state.Commands.Changed += OnCommandsChanged;
@@ -167,8 +195,11 @@ public partial class MapEditor : Control
         BuildTopBar();
         BuildLeftRail();
         BuildRightPanel();
+        BuildPaletteDock();
         BuildStatusBar();
+        BuildPreviewHint();
         BuildDialogs();
+        BuildEffectDialog();
     }
 
     private void BuildTopBar()
@@ -191,6 +222,15 @@ public partial class MapEditor : Control
 
         _mapNameLabel = new Label { Text = _state.Document.Name, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         hbox.AddChild(_mapNameLabel);
+
+        // Item 5 — enter the WASD fly-camera preview of this map.
+        var playBtn = new Button
+        {
+            Text = "▶ Play",
+            TooltipText = "Preview the map: WASD to move, Shift faster, Esc to return",
+        };
+        playBtn.Pressed += EnterPreview;
+        hbox.AddChild(playBtn);
 
         var saveBtn = new Button { Text = "Save" };
         saveBtn.Pressed += DoSave;
@@ -223,6 +263,16 @@ public partial class MapEditor : Control
         };
         PreviewButton.Pressed += OnPreviewGenPressed;
         hbox.AddChild(PreviewButton);
+
+        // Item 4 — commit rule-tile generation as REAL, undoable tiles (Preview gen only
+        // shows a throwaway overlay; this stamps the clouds into the layers).
+        var generateBtn = new Button
+        {
+            Text = "Generate",
+            TooltipText = "Stamp real tiles from rule zones into the map (undoable)",
+        };
+        generateBtn.Pressed += OnGeneratePressed;
+        hbox.AddChild(generateBtn);
 
         var flipBtn = new Button
         {
@@ -258,7 +308,7 @@ public partial class MapEditor : Control
         _leftRailPanel = new PanelContainer();
         _leftRailPanel.AnchorLeft = 0f; _leftRailPanel.AnchorRight = 0f; _leftRailPanel.AnchorTop = 0f; _leftRailPanel.AnchorBottom = 1f;
         _leftRailPanel.OffsetRight = RailWidth;
-        _leftRailPanel.OffsetTop = TopBarHeight; _leftRailPanel.OffsetBottom = -StatusBarHeight;
+        _leftRailPanel.OffsetTop = TopBarHeight; _leftRailPanel.OffsetBottom = SidePanelBottomOffset;
         AddChild(_leftRailPanel);
 
         var outer = new VBoxContainer();
@@ -308,16 +358,15 @@ public partial class MapEditor : Control
         };
     }
 
-    /// <summary>Bug-fix (user report): Layers and Palette are now two independently
-    /// scrollable, independently foldable sections (own header + fold toggle) instead of
-    /// one unbounded VBox — previously the Layers properties sub-panel could grow tall
-    /// enough to push the Palette section off the bottom of the screen entirely.</summary>
+    /// <summary>Item 1 — the right panel is now Layers-only (the palette moved to the bottom
+    /// dock, <see cref="BuildPaletteDock"/>), so the Layers scroll expands to the full panel
+    /// height instead of splitting space with the palette.</summary>
     private void BuildRightPanel()
     {
         _rightPanel = new PanelContainer();
         _rightPanel.AnchorLeft = 1f; _rightPanel.AnchorRight = 1f; _rightPanel.AnchorTop = 0f; _rightPanel.AnchorBottom = 1f;
         _rightPanel.OffsetLeft = -SidePanelWidth;
-        _rightPanel.OffsetTop = TopBarHeight; _rightPanel.OffsetBottom = -StatusBarHeight;
+        _rightPanel.OffsetTop = TopBarHeight; _rightPanel.OffsetBottom = SidePanelBottomOffset;
         AddChild(_rightPanel);
 
         var vbox = new VBoxContainer();
@@ -339,36 +388,60 @@ public partial class MapEditor : Control
         layersScroll.AddChild(LayersBox);
         vbox.AddChild(layersScroll);
 
-        vbox.AddChild(new HSeparator());
-
-        var paletteHeader = new HBoxContainer();
-        var paletteFoldBtn = BuildFoldButton("Fold palette panel");
-        paletteHeader.AddChild(paletteFoldBtn);
-        paletteHeader.AddChild(new Label { Text = "Palette", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill });
-        vbox.AddChild(paletteHeader);
-
-        // PalettePanel wraps its own ScrollContainer inside this box (see PalettePanel.Build).
-        PaletteBox = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
-        vbox.AddChild(PaletteBox);
-
-        // Sections fold independently; when BOTH are folded the whole panel narrows to a
-        // header-only strip so it stops covering the canvas horizontally too.
-        bool layersFolded = false, paletteFolded = false;
-        void RefreshWidth() => _rightPanel.OffsetLeft = (layersFolded && paletteFolded) ? -FoldedPanelWidth : -SidePanelWidth;
-
+        bool folded = false;
         layersFoldBtn.Pressed += () =>
         {
-            layersFolded = !layersFolded;
-            layersFoldBtn.Text = layersFolded ? "▸" : "▾";
-            layersScroll.Visible = !layersFolded;
-            RefreshWidth();
+            folded = !folded;
+            layersFoldBtn.Text = folded ? "▸" : "▾";
+            layersScroll.Visible = !folded;
+            _rightPanel.OffsetLeft = folded ? -FoldedPanelWidth : -SidePanelWidth;
         };
-        paletteFoldBtn.Pressed += () =>
+    }
+
+    /// <summary>Item 1 — the tile palette as a full-width foldable dock strip along the bottom,
+    /// above the status bar (a horizontal scroll of category-grouped tile chips, built by
+    /// <see cref="PalettePanel"/>). Folding it collapses to a header strip and lets the left
+    /// rail / right panel reclaim the freed vertical space (<see cref="SidePanelBottomOffset"/>).</summary>
+    private void BuildPaletteDock()
+    {
+        _paletteDockPanel = new PanelContainer();
+        _paletteDockPanel.AnchorLeft = 0f; _paletteDockPanel.AnchorRight = 1f;
+        _paletteDockPanel.AnchorTop = 1f; _paletteDockPanel.AnchorBottom = 1f;
+        _paletteDockPanel.OffsetTop = -(StatusBarHeight + PaletteDockHeight);
+        _paletteDockPanel.OffsetBottom = -StatusBarHeight;
+        AddChild(_paletteDockPanel);
+
+        var outer = new HBoxContainer();
+        outer.AddThemeConstantOverride("separation", 4);
+        _paletteDockPanel.AddChild(outer);
+
+        var foldBtn = BuildFoldButton("Fold palette dock");
+        outer.AddChild(foldBtn);
+
+        var body = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        outer.AddChild(body);
+        body.AddChild(new Label { Text = "Palette", MouseFilter = Control.MouseFilterEnum.Ignore });
+
+        // A MarginContainer lays out PalettePanel's single scroll child to fill the dock body.
+        var content = new MarginContainer
         {
-            paletteFolded = !paletteFolded;
-            paletteFoldBtn.Text = paletteFolded ? "▸" : "▾";
-            PaletteBox.Visible = !paletteFolded;
-            RefreshWidth();
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+        };
+        body.AddChild(content);
+        _paletteDockContent = content;
+
+        foldBtn.Pressed += () =>
+        {
+            _paletteDockFolded = !_paletteDockFolded;
+            foldBtn.Text = _paletteDockFolded ? "▸" : "▾";
+            body.Visible = !_paletteDockFolded;
+            _paletteDockPanel.OffsetTop = _paletteDockFolded
+                ? -(StatusBarHeight + FoldedBarThickness)
+                : -(StatusBarHeight + PaletteDockHeight);
+            // Let the side panels reclaim (or yield) the freed space.
+            _leftRailPanel.OffsetBottom = SidePanelBottomOffset;
+            _rightPanel.OffsetBottom = SidePanelBottomOffset;
         };
     }
 
@@ -433,6 +506,171 @@ public partial class MapEditor : Control
             GetTree().ChangeSceneToFile("res://Scenes/MapCreation/MapBrowser.tscn");
     }
 
+    /// <summary>Item 5 — top-centered hint shown only while the Play preview is running.</summary>
+    private void BuildPreviewHint()
+    {
+        _previewHint = new Label
+        {
+            Text = "▶ Preview — WASD move · Shift faster · Esc to exit",
+            Visible = false,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        _previewHint.AnchorLeft = 0f; _previewHint.AnchorRight = 1f;
+        _previewHint.AnchorTop = 0f; _previewHint.AnchorBottom = 0f;
+        _previewHint.OffsetTop = 10f; _previewHint.OffsetBottom = 34f;
+        AddChild(_previewHint);
+    }
+
+    /// <summary>Item 6 — the per-tile-kind effect-area painter: a 4×4 grid of sub-cell toggles
+    /// (each = 8 px). OK saves the mask into the global <see cref="TileEffectStore"/> (applies to
+    /// every instance of the kind, in every map); "Clear" reverts to the def's code default.
+    /// Built once; <see cref="OnConfigureEffect"/> re-seeds it per tile on open.</summary>
+    private void BuildEffectDialog()
+    {
+        _effectDialog = new AcceptDialog { Title = "Effect Area" };
+        AddChild(_effectDialog);
+
+        var vbox = new VBoxContainer();
+        vbox.AddThemeConstantOverride("separation", 8);
+        _effectDialog.AddChild(vbox);
+
+        _effectDialogTitle = new Label { Text = "" };
+        vbox.AddChild(_effectDialogTitle);
+        vbox.AddChild(new Label
+        {
+            Text = "Toggle the sub-cells that make up this tile's effect area (each = 8 px of the\n32 px cell). Applies to every placed instance, in every map.",
+        });
+
+        var grid = new GridContainer { Columns = ShapeDef.SubcellsPerAxis };
+        grid.AddThemeConstantOverride("h_separation", 3);
+        grid.AddThemeConstantOverride("v_separation", 3);
+        vbox.AddChild(grid);
+
+        _effectCells = new Panel[ShapeDef.SubcellsPerAxis * ShapeDef.SubcellsPerAxis];
+        _effectMaskBits = new bool[_effectCells.Length];
+        for (int i = 0; i < _effectCells.Length; i++)
+        {
+            int idx = i;
+            var p = new Panel { CustomMinimumSize = new Vector2(42, 42) };
+            p.GuiInput += ev =>
+            {
+                if (ev is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+                {
+                    _effectMaskBits[idx] = !_effectMaskBits[idx];
+                    UpdateEffectCell(idx);
+                }
+            };
+            grid.AddChild(p);
+            _effectCells[idx] = p;
+        }
+
+        _effectDialog.GetOkButton().Text = "Save";
+        _effectDialog.Confirmed += OnEffectDialogSave;
+        _effectDialog.AddButton("Clear (use default)", right: false, action: "clear");
+        _effectDialog.CustomAction += OnEffectDialogCustomAction;
+    }
+
+    private void OnConfigureEffect(string defId)
+    {
+        if (_effectDialog == null || !TileRegistry.TryGet(defId, out var def)) return;
+
+        _effectDialogDefId = defId;
+        _effectPaintColor = ColorFromHex(def.EditorColor, Colors.White);
+        _effectDialogTitle.Text = $"{def.DisplayName}  ({def.Category})";
+
+        int mask = TileEffectStore.OpeningMaskFor(def);
+        for (int i = 0; i < _effectMaskBits.Length; i++)
+        {
+            _effectMaskBits[i] = (mask & (1 << i)) != 0;
+            UpdateEffectCell(i);
+        }
+        _effectDialog.PopupCentered();
+    }
+
+    private void UpdateEffectCell(int i)
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = _effectMaskBits[i] ? _effectPaintColor : new Color(0.16f, 0.16f, 0.2f),
+            BorderColor = new Color(0f, 0f, 0f, 0.6f),
+        };
+        style.SetBorderWidthAll(1);
+        _effectCells[i].AddThemeStyleboxOverride("panel", style);
+    }
+
+    private void OnEffectDialogSave()
+    {
+        if (_effectDialogDefId == null) return;
+        int mask = 0;
+        for (int i = 0; i < _effectMaskBits.Length; i++) if (_effectMaskBits[i]) mask |= 1 << i;
+        TileEffectStore.SetMask(_effectDialogDefId, mask);
+        PersistEffectStore();
+        _state.RaiseStateChanged(); // GridView redraws the effect-area overlay
+    }
+
+    private void OnEffectDialogCustomAction(StringName action)
+    {
+        if (action.ToString() == "clear" && _effectDialogDefId != null)
+        {
+            TileEffectStore.ClearOverride(_effectDialogDefId);
+            PersistEffectStore();
+            _state.RaiseStateChanged();
+        }
+        _effectDialog.Hide();
+    }
+
+    private void PersistEffectStore()
+    {
+        try { TileEffectStore.Save(_effectStorePath); }
+        catch (System.Exception e) { GD.PushError($"[MapEditor] could not save tile effects: {e.Message}"); }
+    }
+
+    // ---------------------------------------------------------------- play preview (item 5)
+
+    private void EnterPreview()
+    {
+        if (_previewActive) return;
+        _previewActive = true;
+
+        _topBarPanel.Visible = false;
+        _leftRailPanel.Visible = false;
+        _rightPanel.Visible = false;
+        _paletteDockPanel.Visible = false;
+        _statusBarPanel.Visible = false;
+        _previewHint.Visible = true;
+
+        _gridView.StartPreview(PreviewStartCamWorld());
+        _gridView.GrabFocus();
+    }
+
+    private void ExitPreview()
+    {
+        if (!_previewActive) return;
+        _previewActive = false;
+        _gridView.StopPreview();
+
+        _topBarPanel.Visible = true;
+        _leftRailPanel.Visible = true;
+        _rightPanel.Visible = true;
+        _paletteDockPanel.Visible = true;
+        _statusBarPanel.Visible = true;
+        _previewHint.Visible = false;
+    }
+
+    /// <summary>Preview opens centered on the battlefield (the layer the player fights on).</summary>
+    private Vector2 PreviewStartCamWorld()
+    {
+        float cell = Units.PixelsPerMeter;
+        MapLayerData bf = null;
+        if (_state.Document?.Layers != null)
+            foreach (var l in _state.Document.Layers)
+                if (l.Role == MapLayerData.RoleBattlefield) { bf = l; break; }
+        var layer = bf ?? _state.CurrentLayer;
+        if (layer == null) return Vector2.Zero;
+        return new Vector2(layer.GridW * cell * 0.5f, layer.GridH * cell * 0.5f);
+    }
+
     // ---------------------------------------------------------------- actions
 
     private void DoSave()
@@ -479,6 +717,55 @@ public partial class MapEditor : Control
             foreach (var w in warnings) GD.PushWarning("[PreviewGen] " + w);
 
         _state.Preview = results;
+        _state.RaiseStateChanged();
+    }
+
+    /// <summary>Item 4 — commits rule-tile generation as REAL, undoable tiles (Preview gen
+    /// only shows a throwaway overlay). Reuses the visible preview's seed when one is showing
+    /// so "what you saw is what you commit", else rolls a fresh one. Resolved spawns are
+    /// grouped by layer and pushed as one <see cref="TileBatchCommand"/> per layer; any spawn
+    /// overlapping tiles already on that layer is skipped defensively.</summary>
+    private void OnGeneratePressed()
+    {
+        string seed = _state.Preview != null && !string.IsNullOrEmpty(_previewScratchSeed)
+            ? _previewScratchSeed
+            : DetRandom.NewSeed();
+
+        var rng = new DetRandom(seed);
+        var results = RuleResolver.Resolve(_state.Document, rng, out var warnings);
+        if (OS.IsDebugBuild())
+            foreach (var w in warnings) GD.PushWarning("[Generate] " + w);
+
+        var byLayer = new System.Collections.Generic.Dictionary<int, List<PlacedTile>>();
+        foreach (var spawn in results)
+        {
+            if (spawn.LayerIndex < 0 || spawn.LayerIndex >= _state.Document.Layers.Count) continue;
+            if (!TileRegistry.TryGet(spawn.DefId, out var def)) continue;
+
+            var occ = _state.OccupancyOf(spawn.LayerIndex);
+            bool blocked = false;
+            for (int dy = 0; dy < def.FootprintH && !blocked; dy++)
+                for (int dx = 0; dx < def.FootprintW && !blocked; dx++)
+                    if (occ.TileAt(spawn.X + dx, spawn.Y + dy) != null) blocked = true;
+            if (blocked) continue;
+
+            if (!byLayer.TryGetValue(spawn.LayerIndex, out var list))
+                byLayer[spawn.LayerIndex] = list = new List<PlacedTile>();
+            list.Add(new PlacedTile { DefId = spawn.DefId, X = spawn.X, Y = spawn.Y });
+        }
+
+        int total = 0;
+        foreach (var kv in byLayer)
+        {
+            if (kv.Value.Count == 0) continue;
+            _state.Commands.Push(new TileBatchCommand(_state, _state.Document.Layers[kv.Key], "Generate", kv.Value, null));
+            total += kv.Value.Count;
+        }
+
+        // The scratch preview is now committed (or nothing generated) — clear it either way.
+        _state.Preview = null;
+        _previewScratchSeed = null;
+        if (total == 0) GD.PushWarning("[Generate] no rule zones produced any tiles (paint a rule tile first)");
         _state.RaiseStateChanged();
     }
 
@@ -698,6 +985,10 @@ public partial class MapEditor : Control
     /// redo must win the tie or Shift+Ctrl+Z would silently undo instead.</summary>
     public override void _UnhandledKeyInput(InputEvent @event)
     {
+        // Item 5 — while the Play preview owns the screen, GridView handles its own WASD/Esc;
+        // suppress every editor shortcut so nothing paints/undoes behind the preview.
+        if (_previewActive) return;
+
         if (@event.IsActionPressed("mapedit_save")) { DoSave(); Accept(); return; }
 
         if (@event.IsActionPressed("mapedit_grid"))

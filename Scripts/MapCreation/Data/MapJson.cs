@@ -164,7 +164,11 @@ public static class MapJson
         farview.GridH = 20;
         farview.Tiles.Add(new PlacedTile { DefId = "deco.flower", X = 2, Y = 3 });
 
-        var battlefield = doc.Layers[0]; // CreateNew seeds exactly one default battlefield
+        // CreateNew now seeds a full layer stack; find the distinguished battlefield by role
+        // rather than assuming index 0.
+        MapLayerData battlefield = null;
+        foreach (var l in doc.Layers)
+            if (l.Role == MapLayerData.RoleBattlefield) { battlefield = l; break; }
         battlefield.GridW = 64;
         battlefield.GridH = 36;
         battlefield.Tiles.Add(new PlacedTile { DefId = "softvolume.cloud2x1", X = 5, Y = 5 });

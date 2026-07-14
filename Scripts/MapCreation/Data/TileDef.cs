@@ -84,7 +84,12 @@ public sealed class TileDef
     public int FootprintW { get; init; } = 1;
     public int FootprintH { get; init; } = 1;
 
-    public LayerRoleMask AllowedRoles { get; init; } = LayerRoleMask.Battlefield;
+    /// <summary>Which layer roles may hold this tile (GDD §2.2). Default is Any: the user
+    /// can place grounds/platforms/soft-volumes/spawns on background/foreground layers too,
+    /// not only the battlefield. Placement ≠ collision — a tile only physically collides on
+    /// a layer whose <c>Collision</c> is on (still legal only at parallax 1.0, GDD §3), so
+    /// relaxing placement here doesn't touch the determinism policy.</summary>
+    public LayerRoleMask AllowedRoles { get; init; } = LayerRoleMask.Any;
 
     /// <summary>Placeholder quad color until art lands (hex string).</summary>
     public string EditorColor { get; init; } = "#FFFFFF";

@@ -18,7 +18,19 @@ A map is a stack of layers, drawn back-to-front:
 | 0 | **Canvas** | exactly 1 | n/a (fills screen) | via future "modes" only | Backdrop: solid color now, animated weather modes later |
 | 1 | **Farview** | 0..8 sublayers | per-layer (≤ 1.0 typical) | only if `collision` and parallax = 1.0 (§3) | Background scenery, decoration, parallax depth |
 | 2 | **Battlefield** | exactly 1 | 1.0 fixed | yes — the game board | Ground, platforms, spawns, hazards, goals |
-| 3 | **Closeview** | 0..2 sublayers | per-layer (> 1.0 typical) | **never** | Foreground occluders: blurry, dark, steady |
+| 3 | **Closeview** | 0..2 sublayers | 1.0 (moves with battlefield) | **never** (visual occlusion only) | Foreground scenery the player hides behind (bush, column) |
+
+**Closeview rework (v0.6.17).** Closeview is no longer a "blurry dark shadow" band. It now moves
+*with* the battlefield (parallax 1.0 default, no dark tint) and holds real foreground occluders —
+bushes, Roman columns — that the player can duck behind. Because it is last in the layer list it
+draws *in front* of the battlefield; the "hide behind" effect is that draw order (there is still no
+gameplay collision on closeview — it is purely visual). Sway stays 0 ("steady").
+
+**Default layer stack (v0.6.17).** `MapDocument.CreateNew` now seeds a ready-made stack so a new
+map starts with parallax depth instead of a bare battlefield (the user shouldn't have to hand-build
+it): back-to-front — *Very Far Mountains* (0.15, loop) · *Far Mountains* (0.30, loop) · *Backdrop
+Scene* (0.55) · *Near Decoration* (0.85) · **Battlefield** (1.0) · *Foreground* closeview (1.0).
+The never-moving canvas is `CanvasData`, not a layer.
 
 **Unified layer model.** Internally every layer (farview sublayer, battlefield,
 closeview sublayer) is the same `MapLayerData` schema with a `role` field; the
@@ -38,10 +50,10 @@ deep sea) that can also fire battlefield events — idea marked in `Docs/IDEAS.m
 | Attribute | Type | Default | Notes |
 |-----------|------|---------|-------|
 | `name` | string | "Layer N" | shown in the layer panel |
-| `parallaxX`, `parallaxY` | float | 0.5 / 0.5 (farview), 1.2 (closeview) | 1.0 = moves with battlefield |
+| `parallaxX`, `parallaxY` | float | 0.5 / 0.5 (farview), 1.0 (closeview) | 1.0 = moves with battlefield |
 | `loop` | bool | false | horizontally tiles the layer (clouds, hills). Loop layers can never collide (§3) |
 | `collision` | bool | false | only legal when parallax = (1.0, 1.0) — editor disables it otherwise (§3) |
-| `tint` | hex string | none | color modulate; closeview defaults dark (#404050) |
+| `tint` | hex string | none | color modulate; no default tint on any role (v0.6.17: closeview no longer darkens) |
 | `opacity` | float | 1.0 | |
 | `swayAmplitudePx`, `swayPeriodSec` | float | 0 / 4.0 | visual-only sway (§4); forced 0 on closeview ("steady") |
 | `autoScrollX`, `autoScrollY` | float px/s | 0 | drifting clouds/fog independent of camera |
@@ -71,7 +83,7 @@ is adding a registry entry, never editing a switch** (T00 rule 1).
 | `displayName` | string | palette label |
 | `category` | enum | Ground, Platform, SoftVolume, Hazard, EnemySpawn, Respawn, LevelGoal, Character, Decoration, Rule, Misc |
 | `footprintW`, `footprintH` | int | cells occupied; default 1×1 (§2.3) |
-| `allowedRoles` | flags | which layer roles may hold it (gameplay categories: battlefield only; Decoration: any; Rule: battlefield + farview) |
+| `allowedRoles` | flags | which layer roles may hold it. **Default Any (v0.6.17):** grounds/platforms/soft-volumes/spawns can be placed on background/foreground layers, not just the battlefield. Placement ≠ collision — a tile only physically collides on a layer whose `collision` is on (still parallax-1.0-only, §3), so this doesn't touch the determinism policy |
 | `editorColor` | hex | placeholder quad color until art lands |
 | `spriteSlot` | string | reserved: atlas region / texture path the art department fills in (§2.5) |
 | `autotileGroup` | string? | reserved: connected-look group for future autotiling (§2.5) |
@@ -95,6 +107,18 @@ A cell is the *authoring* unit, not the *physics* unit. Each TileDef may carry a
 at runtime for its collider or trigger. Default = the footprint rectangle. The editor
 gets a **"Show effect areas"** toggle (top bar) that outlines them in orange so
 designers see what a hazard actually touches.
+
+**Per-tile-kind effect painter (v0.6.17).** A new `ShapeDef.KindSubcellMask` kind lets a
+designer author the effect area as a **4×4 grid of 8 px sub-cells** (16-bit mask) covering the
+anchor cell. Each palette chip has a **⚙ gear** button (item 6) that opens the painter: click
+sub-cells to toggle them (colored by the tile's own category color), Save writes the mask, Clear
+reverts to the def's code default. The mask is **per tile-kind and global**, not per-map: it lives
+in `Scripts/MapCreation/Data/TileEffectStore.cs`, keyed by defId, persisted to a single
+`user://tile_effects.json` (STJ, atomic write, round-trip self-test — same contract as `MapJson`)
+and loaded at editor/browser boot. `TileEffectStore.EffectAreaOf(def)` returns the override when
+present, else the code-defined `effectArea`; "Show effect areas" and (future) runtime both consult
+it. TileDef's own `effectArea` stays the code default — the store only overrides. (Multi-cell
+footprints author the anchor cell only in v1.)
 
 ### 2.5 Sprites & connected looks (art department slots)
 
@@ -201,27 +225,49 @@ seed ⇒ same map). Mechanism: **rules are ground into tiles**, as designed.
 - Editor support: **"Preview generation"** button (top bar) rolls a scratch seed and
   renders the outcome semi-transparent; press again to reroll; Esc clears. Rule zones
   render as a hatched overlay in their rule color.
+- **"Generate" button (v0.6.17, item 4).** Preview is throwaway view-state; **Generate**
+  *commits* — it resolves the rule zones (reusing the visible preview's seed when one is showing,
+  else a fresh one), converts each `ResolvedSpawn` into a real `PlacedTile`, and pushes one
+  undoable `TileBatchCommand` per affected layer (skipping any spawn overlapping existing tiles).
+  This is what makes a painted Cloud Zone actually place the 3 cloud tiles it references. The old
+  build had preview-only and no commit path — read to the user as "the rule tile is broken."
 
 ## 7. Editor UX
 
 ### 7.1 Screen layout
 
+Layout updated v0.6.17 (item 1): the palette moved out of the right panel into a full-width
+**bottom dock** (its own foldable strip), so the right panel is Layers-only and the canvas is
+wider. The top bar gained **▶ Play** (item 5) and **Generate** (item 4).
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ Top bar: name · Save · Grid ⊞ · Effect areas · Preview gen · │
-│          zoom % · Cell = 32 px = 1 m                         │
+│ Top bar: name · ▶Play · Save · Grid ⊞ · Effect areas ·       │
+│          Preview gen · Generate · zoom % · Cell = 32px = 1m  │
 ├───┬──────────────────────────────────────────────┬───────────┤
 │ T │                                              │ Layers    │
 │ o │              map canvas                      │  (stack,  │
 │ o │   (pan/zoom world, grid overlay,             │  +/- ,    │
 │ l │    ghost preview under cursor)               │  props)   │
-│ s │                                              ├───────────┤
-│   │                                              │ Palette   │
-│   │                                              │ (by cat.) │
+│ s │                                              │           │
 ├───┴──────────────────────────────────────────────┴───────────┤
+│ Palette dock: tile chips (sprite thumb + name + ⚙), by cat.  │
+├──────────────────────────────────────────────────────────────┤
 │ Status: cursor cell (x, y) · selection count · unsaved dot   │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+Palette chips (item 8) show each tile's real sprite when its `spriteSlot` loads (trimmed +
+aspect-fit) and fall back to the `editorColor` swatch otherwise, so "implemented vs placeholder"
+reads at a glance. The **⚙** gear on each non-Rule chip opens the effect painter (§2.4).
+
+### 7.1a Play preview (v0.6.17, item 5)
+
+**▶ Play** enters a render-preview of the map (no physics, no combat — the §9 runtime milestone
+stays deferred): the editor panels hide and `GridView` draws every layer offset by its own parallax
+(+ auto-scroll drift; loop layers tile horizontally) against a **WASD fly-camera** (Shift = faster),
+centered on the battlefield. **Esc** returns to edit mode. Implemented as a mode on `GridView`
+(reuses its tile renderer), driven from `_Process`; the solid-color canvas shows through as sky.
 
 ### 7.2 Tools (left rail, top-to-bottom)
 
@@ -370,8 +416,10 @@ saved user maps are worth migrating — they're all `{}` on disk anyway).
 ## 12. Out of scope (v1) / future
 
 Weather canvas modes (IDEAS §6) · Mirage tiles (IDEAS §6) · autotile art via TileSet
-terrains (§2.5) · blur shader for closeview (§5) · in-editor test-play · map sharing/
-export · runtime instantiation (§9, next milestone).
+terrains (§2.5) · map sharing/export · runtime instantiation for real combat (§9, next
+milestone). **Delivered v0.6.17:** in-editor render-preview with a WASD fly-camera (§7.1a — a
+lighter step than full §9 combat instantiation); the closeview blur shader is dropped (closeview
+is real scenery now, §1, not a blurred band).
 
 ## Decisions log
 

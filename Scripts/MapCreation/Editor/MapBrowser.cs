@@ -41,6 +41,11 @@ public partial class MapBrowser : Control
             GD.PushWarning("[MapBrowser] could not create maps directory: " + e.Message);
         }
 
+        // Item 6: warm the global per-tile-kind effect-mask store so any editor opened from
+        // here already reflects saved overrides.
+        TileEffectStore.Load(ProjectSettings.GlobalizePath("user://tile_effects.json"), out var effectWarnings);
+        foreach (var w in effectWarnings) GD.PushWarning("[MapBrowser] " + w);
+
         BuildUi();
 
         if (OS.IsDebugBuild()) RunBootValidation();
@@ -56,6 +61,9 @@ public partial class MapBrowser : Control
     private void RunBootValidation()
     {
         foreach (var failure in MapJson.RoundTripSelfTest())
+            GD.PushError("[MapCreation] " + failure);
+
+        foreach (var failure in TileEffectStore.RoundTripSelfTest())
             GD.PushError("[MapCreation] " + failure);
 
         foreach (var problem in TileRegistry.Validate())

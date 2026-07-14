@@ -71,21 +71,27 @@ public sealed class MapLayerData
         GridH = gridH,
     };
 
-    public static MapLayerData CreateFarview(string name = "Farview") => new()
+    public static MapLayerData CreateFarview(string name = "Farview",
+        float parallaxX = 0.5f, float parallaxY = 0.5f, bool loop = false) => new()
     {
         Role = RoleFarview,
         Name = name,
-        ParallaxX = 0.5f,
-        ParallaxY = 0.5f,
+        ParallaxX = parallaxX,
+        ParallaxY = parallaxY,
+        Loop = loop,
     };
 
+    /// <summary>Closeview is the foreground occluder band the player can hide behind
+    /// (bushes, columns). It MOVES WITH the battlefield (parallax 1.0, GDD §1/§2 rework)
+    /// and carries no default dark tint — it is real scenery, not a blurry shadow. Sway
+    /// stays 0 (GDD §4 "steady").</summary>
     public static MapLayerData CreateCloseview(string name = "Closeview") => new()
     {
         Role = RoleCloseview,
         Name = name,
-        ParallaxX = 1.2f,
-        ParallaxY = 1.2f,
-        Tint = "#404050",
+        ParallaxX = 1.0f,
+        ParallaxY = 1.0f,
+        Tint = null,
         SwayAmplitudePx = 0f,
     };
 }
