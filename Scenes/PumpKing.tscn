@@ -1,8 +1,8 @@
 [gd_scene load_steps=138 format=3]
 
-[ext_resource type="Script" path="res://Scripts/PumpKing.cs" id="1"]
+[ext_resource type="Script" path="res://Scripts/Protagonists/PumpKing/PumpKing.cs" id="1"]
 [ext_resource type="PackedScene" path="res://Scenes/PumpKingHead.tscn" id="2"]
-[ext_resource type="Script" path="res://Scripts/ShakeCamera2D.cs" id="3"]
+[ext_resource type="Script" path="res://Scripts/UI/ShakeCamera2D.cs" id="3"]
 [ext_resource type="Texture2D" path="res://Assets/Sprites/Characters/PumpKing/Pump_Idle/Pump_idle_1.png" id="4"]
 [ext_resource type="Texture2D" path="res://Assets/Sprites/Characters/PumpKing/Pump_Idle/Pump_idle_2.png" id="5"]
 [ext_resource type="Texture2D" path="res://Assets/Sprites/Characters/PumpKing/Pump_Idle/Pump_squeeze_idle3.png" id="6"]

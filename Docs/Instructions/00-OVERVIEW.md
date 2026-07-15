@@ -90,7 +90,7 @@ These override convenience. Every department doc assumes them.
    `30-DATA-AND-BALANCE.md`.
 4. **Units are derived.** 32 px/m, 2 m player, 8 m/1 s jump ⇒ g = 2048 px/s². Everything
    comes from `Units.cs`. GDDs speak meters/seconds; code converts once, at the edge.
-5. **Versioning trio.** Every commit bumps the patch and keeps `Scripts/GameVersion.cs`,
+5. **Versioning trio.** Every commit bumps the patch and keeps `Scripts/Foundation/GameVersion.cs`,
    root `VERSION`, and the HUD `VersionLabel` in sync. Minor version = GDD milestone.
 6. **Every bug becomes a caveat.** After fixing any bug, append symptom → rule → why to
    `KNOWLEDGE.md`, tagged with the version. Read it before writing code. This file is

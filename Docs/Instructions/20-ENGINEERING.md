@@ -10,17 +10,18 @@ and the recipes. When the two overlap, KNOWLEDGE.md wins on Godot/C# specifics.
 
 ```
 Scripts/
-├── Units.cs                 # physical model — DERIVE, never hardcode (32 px/m, g, jump)
-├── GameVersion.cs           # version trio member (with /VERSION and Hud VersionLabel)
-├── CharacterController.cs   # playable base: intentVel+externalVel, HP/lives, i-frames,
-│                            #   statuses, ammo/magazine, jumps+coyote, MeleeCone, hooks
-├── Pomegraknight.cs …       # one subclass per character (+ their projectiles: PomeSeed)
-├── Enemy.cs                 # LEGACY crab — replaced by Scripts/Foes/ at v0.4.0
-├── Hazard.cs + {Fire,Freeze,Damage,Tsunami}Hazard.cs, TsunamiTrigger.cs
-├── HitInfo.cs               # per-skill hit authoring: Damage, Knockback(Δv), Stun
-├── DecayingDebuff.cs        # stackable self-decaying points (OnFire / Frozen)
-├── GameManager.cs           # arena match loop (spawners, score, win/lose)
-├── Hud.cs, DamageNumberManager.cs, ShakeCamera2D.cs
+├── Foundation/              # Units.cs + GameVersion.cs
+├── Gameplay/
+│   ├── Characters/          # CharacterController shared playable base
+│   ├── Combat/              # HitInfo + DecayingDebuff universal combat effects
+│   └── World/               # SoftVolume + WonderCorePickup shared world gameplay
+├── Protagonists/
+│   ├── Pomegraknight/       # Pomegraknight + PomeSeed
+│   ├── PumpKing/            # PumpKing + PumpKingHead
+│   └── Legacy/              # throwaway prototype Player, isolated until deletion
+├── Hazard/                  # Hazard base + Fire/Freeze/Damage/Tsunami + trigger
+├── Orchestration/Arena/     # GameManager scene/run/mission integrator
+├── UI/                      # Hud, HpBlockBar, DamageNumberManager, ShakeCamera2D
 ├── Map/                     # DetRandom, MapGenerator, MapData, MapController(+Atlas),
 │                            #   MapRenderModel — the seeded overworld
 └── Menu/MenuController.cs
@@ -62,7 +63,7 @@ assignments; don't shadow inherited members; never commit the PAT.
   (Pixolotl), trickle resources (Cleopastar Glows: override `UpdateAmmo`,
   `AutoTriggerReplenishOnShot=false`), single-head (PumpKing mag=1, manual reload).
   Extend it; don't build sibling resource systems.
-- **Autoload singletons:** register as `Name="*res://Scripts/X.cs"`, set static
+- **Autoload singletons:** register using the script's real module path, set static
   `Instance` in `_EnterTree`; they survive `ReloadCurrentScene`.
 - **Determinism:** all gameplay RNG through `DetRandom` derived from the run seed (use
   suffixed sub-seeds like `seed+"R"` per subsystem so adding a consumer doesn't shift

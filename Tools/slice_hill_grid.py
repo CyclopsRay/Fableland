@@ -3,14 +3,15 @@
 Peak omitted) into individually-named tile files, ready for
 Tools/compose_hill_atlas.py to composite and preview.
 
-This is the cheap-first-experiment path: try generating all 12 non-Peak
-tiles as a single coherent image before committing to 12-13 separate calls.
+This is the guide-conditioned path: generate the exact construction seed with
+Tools/generate_hill_guide.py, use that guide as the binding geometry reference
+for all 12 non-Peak tiles, then validate and slice the painted result here.
 Grid reading order (top-left origin):
   columns (left to right): Left, Mid, Right
   rows (top to bottom):    Layer1, Layer2, Layer3, Layer4
 
 See Docs/Art/BeachTileSet.md's "Layered ground-hill autotile" section for
-the combined-image generation prompt this pairs with.
+the guide-generation command and reference-guided image prompt this pairs with.
 
 Usage:
     python3 Tools/slice_hill_grid.py <combined_image.png>
@@ -45,6 +46,11 @@ def main():
     parser.add_argument("image", type=Path, help="the combined 3x4 grid image to slice")
     parser.add_argument("--material", default="sand", help="material name (default: sand)")
     parser.add_argument("--out-dir", type=Path, default=None, help="where to write the 12 sliced tiles (default: Generated/<Material>HillSource/)")
+    parser.add_argument(
+        "--allow-imperfect",
+        action="store_true",
+        help="allow legacy non-3:4 sources by cropping remainder pixels (never use for production)",
+    )
     args = parser.parse_args()
 
     if not args.image.is_file():
@@ -58,16 +64,23 @@ def main():
     w, h = src.size
     cols, rows = len(COLS), len(ROWS)
 
-    if w % cols != 0 or h % rows != 0:
-        print(f"warning: {w}x{h} doesn't divide evenly into a {cols}x{rows} grid "
-              f"({w}/{cols}={w/cols:.2f}, {h}/{rows}={h/rows:.2f}) — cropping the remainder "
-              f"pixels off the right/bottom edge rather than stretching.", file=sys.stderr)
-
     cell_w, cell_h = w // cols, h // rows
-    if cell_w != cell_h:
-        print(f"warning: sliced cells are {cell_w}x{cell_h}, not square — the source image's "
-              f"aspect ratio wasn't exactly {cols}:{rows}. Tiles will still slice, but won't be "
-              f"square 1x1 map cells without a resize.", file=sys.stderr)
+    exact = w % cols == 0 and h % rows == 0 and cell_w == cell_h
+    if not exact and not args.allow_imperfect:
+        print(
+            f"error: {w}x{h} is not an exact {cols}:{rows} sheet of square cells "
+            f"({w}/{cols}={w/cols:.2f}, {h}/{rows}={h/rows:.2f}). Refusing to crop or "
+            "stretch a production source. Regenerate from Tools/generate_hill_guide.py, "
+            "or pass --allow-imperfect only for a disposable legacy inspection.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if not exact:
+        print(
+            f"warning: allowing imperfect {w}x{h} source; output cells are "
+            f"{cell_w}x{cell_h} and remainder pixels are cropped.",
+            file=sys.stderr,
+        )
 
     written = []
     for r, layer in enumerate(ROWS):

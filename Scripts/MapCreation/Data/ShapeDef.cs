@@ -13,12 +13,12 @@ public sealed class ShapeDef
     public const string KindCircle = "circle";
     public const string KindPolygon = "polygon";
 
-    /// <summary>4×4 sub-cell grid (each sub-cell = 8 px = PixelsPerMeter/4). The effect
+    /// <summary>4×4 sub-cell grid (each sub-cell = 16 px = MapGrid.PixelsPerCell/4). The effect
     /// area is the union of the "on" sub-cells; see <see cref="Mask"/>. This is the
     /// authoring model the per-tile-kind effect painter (GDD §2.4) produces.</summary>
     public const string KindSubcellMask = "subcellMask";
 
-    /// <summary>Number of sub-cells per axis for <see cref="KindSubcellMask"/> (4 → 8 px cells).</summary>
+    /// <summary>Number of sub-cells per axis for <see cref="KindSubcellMask"/> (4 → 16 px cells).</summary>
     public const int SubcellsPerAxis = 4;
 
     /// <summary>"rect" | "circle" | "polygon" | "subcellMask".</summary>
@@ -38,7 +38,7 @@ public sealed class ShapeDef
     // polygon only: flat x,y pairs, relative to the anchor cell's top-left.
     public float[] Points { get; }
 
-    /// <summary>subcellMask only: 16-bit grid, bit (row*4 + col) set = that 8 px sub-cell
+    /// <summary>subcellMask only: 16-bit grid, bit (row*4 + col) set = that 16 px sub-cell
     /// of the anchor cell is part of the effect area (row/col from the cell's top-left).</summary>
     public int Mask { get; }
 
@@ -64,7 +64,7 @@ public sealed class ShapeDef
         new(KindPolygon, 0f, 0f, 0f, 0f, 0f, points, 0);
 
     /// <summary>A 4×4 sub-cell effect area (GDD §2.4). <paramref name="mask"/> uses bit
-    /// (row*4 + col) for the 8 px sub-cell at that row/col of the anchor cell.</summary>
+    /// (row*4 + col) for the 16 px sub-cell at that row/col of the anchor cell.</summary>
     public static ShapeDef SubcellMask(int mask) =>
         new(KindSubcellMask, 0f, 0f, 0f, 0f, 0f, null, mask & 0xFFFF);
 

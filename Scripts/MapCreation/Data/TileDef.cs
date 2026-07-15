@@ -73,6 +73,20 @@ public sealed class RuleProps
     public string[] Tags { get; init; } = Array.Empty<string>();
 }
 
+/// <summary>
+/// Optional per-kind tuning for an enterable <see cref="TileCategory.SoftVolume"/>.
+/// The map builder applies this data to the reusable runtime scene before it enters
+/// the tree; absent values deliberately preserve that scene's exported defaults.
+/// </summary>
+public sealed class SoftVolumeTuning
+{
+    /// <summary>
+    /// Optional 0..1 viscosity index. It caps self-directed speed to this fraction
+    /// of max speed and determines the resistance rate; see SoftVolume and GDD §2.2.
+    /// </summary>
+    public float? StagnationIndex { get; init; }
+}
+
 /// <summary>GDD §2.2 — a registered tile kind.</summary>
 public sealed class TileDef
 {
@@ -86,9 +100,9 @@ public sealed class TileDef
 
     /// <summary>Which layer roles may hold this tile (GDD §2.2). Default is Any: the user
     /// can place grounds/platforms/soft-volumes/spawns on background/foreground layers too,
-    /// not only the battlefield. Placement ≠ collision — a tile only physically collides on
-    /// a layer whose <c>Collision</c> is on (still legal only at parallax 1.0, GDD §3), so
-    /// relaxing placement here doesn't touch the determinism policy.</summary>
+    /// not only the battlefield. Placement ≠ collision — Battlefield uses its normal layer
+    /// setting, while a non-looping Farview can opt in only its SoftVolumes as fixed-world
+    /// colliders (GDD §3).</summary>
     public LayerRoleMask AllowedRoles { get; init; } = LayerRoleMask.Any;
 
     /// <summary>Placeholder quad color until art lands (hex string).</summary>
@@ -110,6 +124,10 @@ public sealed class TileDef
 
     /// <summary>Collision/trigger shape; null = footprint rectangle (§2.4).</summary>
     public ShapeDef EffectArea { get; init; }
+
+    /// <summary>Optional per-kind gameplay tuning, valid only for <see cref="TileCategory.SoftVolume"/>.
+    /// Null keeps the reusable SoftVolume scene's defaults.</summary>
+    public SoftVolumeTuning SoftVolumeTuning { get; init; }
 
     /// <summary>Non-null only when Category == Rule (§6).</summary>
     public RuleProps RuleProps { get; init; }

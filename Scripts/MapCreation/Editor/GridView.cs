@@ -79,68 +79,6 @@ public partial class GridView : Control
         MouseFilter = Control.MouseFilterEnum.Stop;
     }
 
-    // ------------------------------------------------------------ play preview (item 5)
-
-    /// <summary>True while the Play preview (a WASD fly-camera over the map, parallax
-    /// applied, no physics) is running. MapEditor hides its panels and lets this control
-    /// take over the whole viewport.</summary>
-    public bool PreviewMode { get; private set; }
-
-    /// <summary>Raised on Esc while in preview — MapEditor restores the editor chrome.</summary>
-    public event Action PreviewExited;
-
-    private Vector2 _previewCamWorld;
-    private double _previewTime;
-    private bool _prevEscDown;
-    private const float PreviewPanSpeed = 600f; // world px/s (Shift = ×3)
-
-    /// <summary>Enter preview centered on <paramref name="camWorld"/> (MapEditor passes the
-    /// battlefield center). Records the current Esc state so a still-held key from launching
-    /// doesn't instantly exit.</summary>
-    public void StartPreview(Vector2 camWorld)
-    {
-        PreviewMode = true;
-        _previewCamWorld = camWorld;
-        _previewTime = 0;
-        _prevEscDown = Input.IsPhysicalKeyPressed(Key.Escape);
-        QueueRedraw();
-    }
-
-    public void StopPreview()
-    {
-        PreviewMode = false;
-        QueueRedraw();
-    }
-
-    /// <summary>Only does work in preview (returns immediately otherwise): moves the fly
-    /// camera from raw WASD (physical keys, so it's layout-independent and needs no focus),
-    /// advances preview time for auto-scroll, and exits on the Esc key edge.</summary>
-    public override void _Process(double delta)
-    {
-        if (!PreviewMode) return;
-
-        _previewTime += delta;
-
-        float speed = PreviewPanSpeed * (Input.IsKeyPressed(Key.Shift) ? 3f : 1f);
-        Vector2 move = Vector2.Zero;
-        if (Input.IsPhysicalKeyPressed(Key.A)) move.X -= 1f;
-        if (Input.IsPhysicalKeyPressed(Key.D)) move.X += 1f;
-        if (Input.IsPhysicalKeyPressed(Key.W)) move.Y -= 1f;
-        if (Input.IsPhysicalKeyPressed(Key.S)) move.Y += 1f;
-        if (move != Vector2.Zero) _previewCamWorld += move.Normalized() * speed * (float)delta;
-
-        bool esc = Input.IsPhysicalKeyPressed(Key.Escape);
-        if (esc && !_prevEscDown)
-        {
-            _prevEscDown = true;
-            PreviewExited?.Invoke();
-            return;
-        }
-        _prevEscDown = esc;
-
-        QueueRedraw();
-    }
-
     // ------------------------------------------------------------ transform
 
     public Vector2 WorldToScreen(Vector2 worldPx) => worldPx * _zoom + _pan;
@@ -154,8 +92,8 @@ public partial class GridView : Control
         if (layer == null) return null;
 
         Vector2 world = ScreenToWorld(screenPos);
-        int cx = Mathf.FloorToInt(world.X / Units.PixelsPerMeter);
-        int cy = Mathf.FloorToInt(world.Y / Units.PixelsPerMeter);
+        int cx = Mathf.FloorToInt(world.X / MapGrid.PixelsPerCell);
+        int cy = Mathf.FloorToInt(world.Y / MapGrid.PixelsPerCell);
 
         if (cx < 0 || cy < 0 || cx >= layer.GridW || cy >= layer.GridH) return null;
         return new Vector2I(cx, cy);
@@ -196,8 +134,6 @@ public partial class GridView : Control
 
     public override void _GuiInput(InputEvent @event)
     {
-        if (PreviewMode) return; // preview drives itself from _Process; ignore paint/pan input
-
         if (@event is InputEventMouseButton mb)
         {
             HandleMouseButton(mb);
@@ -335,8 +271,6 @@ public partial class GridView : Control
         var doc = State?.Document;
         if (doc?.Layers == null) return;
 
-        if (PreviewMode) { DrawPreviewScene(doc); return; }
-
         // In-editor, every layer draws aligned at world origin — parallax, autoscroll,
         // and sway are RUNTIME-only visuals (GDD §1.2/§4); the authoring view
         // deliberately ignores them so tiles stay where the designer clicked them.
@@ -370,57 +304,6 @@ public partial class GridView : Control
         }
     }
 
-    /// <summary>Item 5 — renders the whole map as it appears in-world: each layer offset by
-    /// its own parallax against the WASD fly-camera (+ auto-scroll drift), full opacity, real
-    /// sprites/tints, back-to-front so the closeview occludes. No editor chrome. The solid-color
-    /// canvas is MapEditor's full-rect ColorRect behind this control, so the sky shows through.</summary>
-    private void DrawPreviewScene(MapDocument doc)
-    {
-        float cell = Units.PixelsPerMeter;
-        Vector2 screenCenter = Size * 0.5f;
-
-        for (int i = 0; i < doc.Layers.Count; i++)
-        {
-            var layer = doc.Layers[i];
-            if (layer?.Tiles == null) continue;
-
-            Vector2 offset = new(
-                -_previewCamWorld.X * layer.ParallaxX + layer.AutoScrollX * (float)_previewTime,
-                -_previewCamWorld.Y * layer.ParallaxY + layer.AutoScrollY * (float)_previewTime);
-
-            Color? tint = string.IsNullOrEmpty(layer.Tint) ? null : ColorFromHex(layer.Tint, Colors.White);
-            float baseX = screenCenter.X + offset.X;
-            float layerW = layer.GridW * cell;
-
-            // Loop layers tile horizontally: draw enough copies to cover the viewport.
-            int repFrom = 0, repTo = 0;
-            if (layer.Loop && layerW > 0.5f)
-            {
-                repFrom = Mathf.FloorToInt(-baseX / layerW) - 1;
-                repTo = Mathf.CeilToInt((Size.X - baseX) / layerW) + 1;
-                if (repTo - repFrom > 200) repTo = repFrom + 200; // pathological guard
-            }
-
-            for (int rep = repFrom; rep <= repTo; rep++)
-            {
-                float repX = rep * layerW;
-                foreach (var tile in layer.Tiles)
-                {
-                    if (!TileRegistry.TryGet(tile.DefId, out var def) || def.Category == TileCategory.Rule)
-                        continue;
-
-                    var sprite = ResolveTexture(i, tile, def);
-                    Color baseColor = ColorFromHex(def.EditorColor);
-                    Vector2 tl = new(screenCenter.X + offset.X + tile.X * cell + repX,
-                                     screenCenter.Y + offset.Y + tile.Y * cell);
-                    Vector2 size = new(def.FootprintW * cell, def.FootprintH * cell);
-                    DrawTileVisual(new Rect2(tl, size), baseColor, layer.Opacity, tint,
-                        hatched: false, sprite, def.SpriteFillFootprint, tile.FlipX);
-                }
-            }
-        }
-    }
-
     /// <summary>Visible world-cell range for `layer`, clamped to its own grid — grid
     /// lines and effect-area/selection sweeps use this so a zoomed-out 512-wide map
     /// never issues an off-screen draw call (GDD §7.5).</summary>
@@ -428,7 +311,7 @@ public partial class GridView : Control
     {
         Vector2 topLeftWorld = ScreenToWorld(Vector2.Zero);
         Vector2 bottomRightWorld = ScreenToWorld(Size);
-        float cell = Units.PixelsPerMeter;
+        float cell = MapGrid.PixelsPerCell;
 
         int x0 = Mathf.Clamp(Mathf.FloorToInt(topLeftWorld.X / cell) - 1, 0, layer.GridW);
         int y0 = Mathf.Clamp(Mathf.FloorToInt(topLeftWorld.Y / cell) - 1, 0, layer.GridH);
@@ -534,7 +417,7 @@ public partial class GridView : Control
     private void DrawTileQuad(int x, int y, int fw, int fh, Color baseColor, float alphaMul, Color? tint,
         bool hatched, SpriteTexture sprite = null, bool fillFootprint = false, bool flipX = false)
     {
-        float cell = Units.PixelsPerMeter;
+        float cell = MapGrid.PixelsPerCell;
         Vector2 screenTL = WorldToScreen(new Vector2(x * cell, y * cell));
         Vector2 screenSize = new Vector2(fw * cell, fh * cell) * _zoom;
         DrawTileVisual(new Rect2(screenTL, screenSize), baseColor, alphaMul, tint, hatched, sprite, fillFootprint, flipX);
@@ -572,9 +455,10 @@ public partial class GridView : Control
                 Color spriteModulate = tint ?? Colors.White;
                 spriteModulate.A *= alphaMul;
                 Rect2 drawRect = rect;
-                Rect2 sourceRect = fillFootprint
-                    ? new Rect2(Vector2.Zero, sprite.Texture.GetSize())
-                    : sprite.SourceRect;
+                // `fillFootprint` controls destination fitting only. The source region must
+                // always be honored: atlas-backed terrain supplies one selected cell here,
+                // while ordinary textures already carry their full image as SourceRect.
+                Rect2 sourceRect = sprite.SourceRect;
 
                 if (!fillFootprint)
                 {
@@ -623,7 +507,7 @@ public partial class GridView : Control
     /// assembly needed: draw an edge segment wherever the 4-neighbor is unoccupied).</summary>
     private void DrawSketchline(LayerOccupancy occ, Color accent, (int x0, int y0, int x1, int y1) visible)
     {
-        float cell = Units.PixelsPerMeter;
+        float cell = MapGrid.PixelsPerCell;
         foreach (var (cx, cy) in occ.Cells.Keys)
         {
             if (cx < visible.x0 - 1 || cx > visible.x1 || cy < visible.y0 - 1 || cy > visible.y1) continue;
@@ -651,7 +535,7 @@ public partial class GridView : Control
     {
         if (layer.Tiles == null) return;
         Color orange = new(1f, 0.55f, 0f);
-        float cell = Units.PixelsPerMeter;
+        float cell = MapGrid.PixelsPerCell;
 
         foreach (var tile in layer.Tiles)
         {
@@ -661,9 +545,23 @@ public partial class GridView : Control
                 continue;
 
             Vector2 anchorWorld = new(tile.X * cell, tile.Y * cell);
+
+            // A sub-cell override (or code-default mask) is mirrored across the whole
+            // footprint before it is drawn, matching the runtime collision transform.
+            var shape = TileEffectStore.EffectAreaOf(def);
+            if (TileEffectStore.HasOverride(def.Id) || shape?.Kind == ShapeDef.KindSubcellMask)
+            {
+                int[] masks = TileEffectStore.OpeningMasksFor(def);
+                if (tile.FlipX)
+                    masks = EffectAreaTransform.FlipMasksHorizontally(masks, def.FootprintW, def.FootprintH);
+                DrawSubcellMasksFootprint(anchorWorld, def.FootprintW, def.FootprintH, masks, cell, orange);
+                continue;
+            }
+
             // GDD §2.4 — the per-tile-kind effect painter's override (if any) wins over the
             // def's code default (TileEffectStore, item 6). null = footprint rect.
-            var shape = TileEffectStore.EffectAreaOf(def);
+            if (tile.FlipX)
+                shape = EffectAreaTransform.FlipHorizontally(shape, def.FootprintW * cell);
 
             if (shape == null)
             {
@@ -677,18 +575,8 @@ public partial class GridView : Control
             {
                 case ShapeDef.KindSubcellMask:
                 {
-                    float subPx = cell / ShapeDef.SubcellsPerAxis;
-                    Color subFill = orange; subFill.A = 0.28f;
-                    for (int r = 0; r < ShapeDef.SubcellsPerAxis; r++)
-                        for (int c = 0; c < ShapeDef.SubcellsPerAxis; c++)
-                        {
-                            if ((shape.Mask & (1 << (r * ShapeDef.SubcellsPerAxis + c))) == 0) continue;
-                            Vector2 tl = WorldToScreen(anchorWorld + new Vector2(c * subPx, r * subPx));
-                            Vector2 size = new Vector2(subPx, subPx) * _zoom;
-                            var sr = new Rect2(tl, size);
-                            DrawRect(sr, subFill);
-                            DrawRect(sr, orange, filled: false, width: 1f);
-                        }
+                    // Single-cell mask (code default or v1 override) — draw in the anchor cell.
+                    DrawSubcellMaskCell(anchorWorld, shape.Mask, cell, orange);
                     break;
                 }
                 case ShapeDef.KindRect:
@@ -722,12 +610,62 @@ public partial class GridView : Control
         }
     }
 
+    /// <summary>Draw per-footprint-cell sub-cell masks across the tile's full footprint.
+    /// <paramref name="masks"/> is row-major, length = fw × fh, each element a 16-bit mask.</summary>
+    private void DrawSubcellMasksFootprint(Vector2 anchorWorld, int fw, int fh, int[] masks,
+        float cell, Color orange)
+    {
+        float subPx = cell / ShapeDef.SubcellsPerAxis;
+        Color subFill = orange; subFill.A = 0.28f;
+
+        for (int cy = 0; cy < fh; cy++)
+        {
+            for (int cx = 0; cx < fw; cx++)
+            {
+                int idx = cy * fw + cx;
+                if (idx >= masks.Length) continue;
+                int mask = masks[idx];
+
+                Vector2 cellOrigin = anchorWorld + new Vector2(cx * cell, cy * cell);
+                for (int r = 0; r < ShapeDef.SubcellsPerAxis; r++)
+                {
+                    for (int c = 0; c < ShapeDef.SubcellsPerAxis; c++)
+                    {
+                        if ((mask & (1 << (r * ShapeDef.SubcellsPerAxis + c))) == 0) continue;
+                        Vector2 tl = WorldToScreen(cellOrigin + new Vector2(c * subPx, r * subPx));
+                        Vector2 size = new Vector2(subPx, subPx) * _zoom;
+                        var sr = new Rect2(tl, size);
+                        DrawRect(sr, subFill);
+                        DrawRect(sr, orange, filled: false, width: 1f);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>Draw a single-cell 4×4 sub-cell mask (code default or v1 fallback).</summary>
+    private void DrawSubcellMaskCell(Vector2 anchorWorld, int mask, float cell, Color orange)
+    {
+        float subPx = cell / ShapeDef.SubcellsPerAxis;
+        Color subFill = orange; subFill.A = 0.28f;
+        for (int r = 0; r < ShapeDef.SubcellsPerAxis; r++)
+            for (int c = 0; c < ShapeDef.SubcellsPerAxis; c++)
+            {
+                if ((mask & (1 << (r * ShapeDef.SubcellsPerAxis + c))) == 0) continue;
+                Vector2 tl = WorldToScreen(anchorWorld + new Vector2(c * subPx, r * subPx));
+                Vector2 size = new Vector2(subPx, subPx) * _zoom;
+                var sr = new Rect2(tl, size);
+                DrawRect(sr, subFill);
+                DrawRect(sr, orange, filled: false, width: 1f);
+            }
+    }
+
     /// <summary>GDD §6 — each resolved preview spawn as a translucent quad + white
     /// outline; null <see cref="EditorState.Preview"/> draws nothing.</summary>
     private void DrawPreview()
     {
         if (State?.Preview == null) return;
-        float cell = Units.PixelsPerMeter;
+        float cell = MapGrid.PixelsPerCell;
 
         foreach (var spawn in State.Preview)
         {
@@ -747,7 +685,7 @@ public partial class GridView : Control
     private void DrawSelection()
     {
         if (State?.Selection == null || State.Selection.Count == 0) return;
-        float cell = Units.PixelsPerMeter;
+        float cell = MapGrid.PixelsPerCell;
         Color yellow = new(1f, 1f, 0.2f);
 
         foreach (var tile in State.Selection)
@@ -771,7 +709,7 @@ public partial class GridView : Control
         var ghost = GhostProvider?.Invoke();
         if (ghost == null) return;
 
-        float cell = Units.PixelsPerMeter;
+        float cell = MapGrid.PixelsPerCell;
         Color fill = ghost.Valid ? new Color(0.3f, 1f, 0.3f, 0.4f) : new Color(1f, 0.15f, 0.15f, 0.45f);
         Color outline = ghost.Valid ? new Color(0.6f, 1f, 0.6f, 0.9f) : new Color(1f, 0.3f, 0.3f, 0.9f);
 
@@ -809,7 +747,7 @@ public partial class GridView : Control
     /// every 8 cells, LOD fade below 50% zoom (gone at/below 25%).</summary>
     private void DrawGrid(MapLayerData layer, (int x0, int y0, int x1, int y1) visible)
     {
-        float cell = Units.PixelsPerMeter;
+        float cell = MapGrid.PixelsPerCell;
         float lod = Mathf.Clamp((_zoom - ZoomMin) / ZoomMin, 0f, 1f); // full >=0.5x, 0 at <=0.25x
         Color minor = new(1f, 1f, 1f, 0.12f * lod);
         Color major = new(1f, 1f, 1f, 0.30f);
@@ -840,7 +778,7 @@ public partial class GridView : Control
 
     private void DrawHoverCell(Vector2I cell, Color accent)
     {
-        float cellPx = Units.PixelsPerMeter;
+        float cellPx = MapGrid.PixelsPerCell;
         Vector2 tl = WorldToScreen(new Vector2(cell.X * cellPx, cell.Y * cellPx));
         Vector2 size = new Vector2(cellPx, cellPx) * _zoom;
         DrawRect(new Rect2(tl, size), accent, filled: false, width: 1f);

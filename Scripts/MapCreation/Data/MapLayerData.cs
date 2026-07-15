@@ -18,6 +18,9 @@ public sealed class MapLayerData
     public const string RoleFarview = "farview";
     public const string RoleBattlefield = "battlefield";
     public const string RoleCloseview = "closeview";
+    public const int DefaultGridWidth = 64;
+    public const int DefaultGridHeight = 36;
+    public const int DefaultLoopGridWidth = 16;
 
     public string Role { get; set; } = RoleBattlefield;
     public string Name { get; set; } = "Layer";
@@ -31,8 +34,9 @@ public sealed class MapLayerData
     /// (GDD §3 rule 2).</summary>
     public bool Loop { get; set; }
 
-    /// <summary>Only legal when parallax is exactly (1.0, 1.0) — camera-dependent physics
-    /// otherwise breaks determinism (GDD §3). The editor enforces this, not this data class.</summary>
+    /// <summary>Battlefield is fixed on and Closeview fixed off. On a non-looping Farview,
+    /// this opt-in creates only its authored SoftVolume colliders in fixed world space; it
+    /// never makes parallax artwork camera-dependent physics (GDD §3).</summary>
     public bool Collision { get; set; }
 
     /// <summary>Hex color modulate, or null for none. Closeview defaults dark (#404050).</summary>
@@ -48,9 +52,10 @@ public sealed class MapLayerData
     public float AutoScrollX { get; set; }
     public float AutoScrollY { get; set; }
 
-    /// <summary>Per-layer grid size; battlefield default 64x36, max 512x256 (GDD §1.2).</summary>
-    public int GridW { get; set; } = 64;
-    public int GridH { get; set; } = 36;
+    /// <summary>Per-layer grid size; battlefield/non-loop default 64x36 and a new looping
+    /// Farview defaults to a 16-cell-wide repeat strip (GDD §1.2).</summary>
+    public int GridW { get; set; } = DefaultGridWidth;
+    public int GridH { get; set; } = DefaultGridHeight;
 
     /// <summary>Sparse, anchor-only placed tiles (GDD §2.1).</summary>
     public List<PlacedTile> Tiles { get; set; } = new();
@@ -58,7 +63,7 @@ public sealed class MapLayerData
     [JsonExtensionData]
     public Dictionary<string, JsonElement> Extra { get; set; }
 
-    public static MapLayerData CreateBattlefield(int gridW = 64, int gridH = 36) => new()
+    public static MapLayerData CreateBattlefield(int gridW = DefaultGridWidth, int gridH = DefaultGridHeight) => new()
     {
         Role = RoleBattlefield,
         Name = "Battlefield",
@@ -79,6 +84,7 @@ public sealed class MapLayerData
         ParallaxX = parallaxX,
         ParallaxY = parallaxY,
         Loop = loop,
+        GridW = loop ? DefaultLoopGridWidth : DefaultGridWidth,
     };
 
     /// <summary>Closeview is the foreground occluder band the player can hide behind

@@ -9,6 +9,17 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.6.18** — **Map Creation playtest and environmental traversal.** The editor can now
+  instantiate its current map with Pomegraknight, authored runtime collision, camera-anchored
+  parallax, looping farview art, and deterministic opt-in Farview SoftVolumes. Effect-area
+  painting now spans each complete multi-cell footprint and mirrors with Flip H. Platforms use a
+  full-footprint fallback; authored narrow surfaces live solely in the global effect painter.
+  SoftVolumes are enterable Area2D fields that preserve input, gravity, and jump launches while
+  applying gradual resistance; clouds use a 0.3 stagnation index and palms use 0.1. The beach
+  tsunami event darkens map visuals, adds visual wind/sway, and applies the wave's actor wind and
+  hit payload. Scripts have been reorganized into the documented Foundation, Gameplay,
+  Protagonists, Hazard, Orchestration, and UI modules. (Verification: `dotnet build`, 0 errors
+  and 0 warnings.)
 - **0.6.7** — **Map-creation rework (combat-map builder), per the new `Docs/MapCreation.gdd`.**
   Complete demolition + rebuild of `Scripts/MapCreation/` + `Scenes/MapCreation/` (built per
   `IMPLEMENTATION_REPORT.md` §11; main build landed in commit 98f4787, this version adds the
@@ -188,23 +199,22 @@ costs HP with brief i-frames + knockback. Dying spends a life (3 total) and resp
 
 ### What was built (files)
 ```
-Scripts/CharacterController.cs  Base playable char: movement/double-jump, HP/lives, i-frames,
+Scripts/Gameplay/Characters/CharacterController.cs  Base playable char: movement/double-jump, HP/lives, i-frames,
                                 knockback, death+respawn, Burning status, move penalty,
                                 MeleeCone helper, debug-range draw hook, animation hook
-Scripts/Pomegraknight.cs        First character (subclass): 3-stage combo w/ magazine+reload,
+Scripts/Protagonists/Pomegraknight/Pomegraknight.cs  First character: 3-stage combo w/ magazine+reload,
                                 Blush + Fire Tornado, Pome Seed Eruption, burn passive, range lines
-Scripts/PomeSeed.cs             Gravity seed projectile; per-wave shared hit registry (30 first/6 rest)
-Scripts/Enemy.cs                Crab foe: patrol/chase/contact damage + burn DoT
-Scripts/WonderPage.cs           Overlap pickup with bob
-Scripts/GameManager.cs          Match loop: enemy/page spawners, score, lives, win/lose, restart
-Scripts/Hud.cs                  HP bar, lives, page count, banner
-Scripts/DecayingDebuff.cs       Stackable, self-decaying "points" debuff (10%/0.2s, rounds up);
+Scripts/Protagonists/Pomegraknight/PomeSeed.cs  Gravity seed projectile; per-wave shared hit registry
+Scripts/Foes/                  BaseFoe hierarchy, crab/seagull foes and their projectiles
+Scripts/Orchestration/Arena/GameManager.cs  Match/mission orchestration and run handshake
+Scripts/UI/Hud.cs              HP, mission, party-switch and reward UI
+Scripts/Gameplay/Combat/DecayingDebuff.cs  Stackable self-decaying status points;
                                 backs the OnFire/Frozen hazard statuses
-Scripts/Hazard.cs               Base for a stationary periodic hazard box (collision built from
+Scripts/Hazard/Hazard.cs        Base for a stationary periodic hazard box (collision built from
                                 BoxSize; per-body tick timer; dispatches to Character/Enemy)
-Scripts/{Fire,Freeze,Damage}Hazard.cs  Bonfire / frozen pit / plain damage hazard
-Scripts/TsunamiHazard.cs        One-shot moving pyramid sweep (35% max HP, big shove, 1s stun)
-Scripts/TsunamiTrigger.cs       Walk-into button that spawns a TsunamiHazard
+Scripts/Hazard/{Fire,Freeze,Damage}Hazard.cs  Bonfire / frozen pit / plain damage hazard
+Scripts/Hazard/TsunamiHazard.cs  Animated 16x8-cell moving sweep (35% max HP, shove, stun)
+Scripts/Hazard/TsunamiTrigger.cs  1x1 trigger: storm fade + shake + wave + restore
 Scenes/Arena.tscn               Ground + 3 platforms + walls, spawn markers, HUD, player,
                                 3 test hazards (bonfire/frozen pit/tsunami button) on the left
 Scenes/Pomegraknight.tscn       Player (CharacterBody2D + Camera2D + FirePoint + empty AnimationPlayer)
@@ -215,7 +225,7 @@ Sprites/*.svg                   Placeholder art (player, enemy, page, seed, plat
 `CharacterController.UpdateAnimator()` is the drive point, and BA/seed damage is applied inline
 with a `// NOTE(animation)` marker showing where to move it onto AnimationPlayer call-method tracks.
 
-`Scenes/Demo.tscn` + `Scripts/Player.cs` are the original throwaway skeleton — kept for now,
+`Scenes/Demo.tscn` + `Scripts/Protagonists/Legacy/Player.cs` are the original throwaway skeleton — kept for now,
 safe to delete once the prototype is confirmed.
 
 ### How this maps to the full plan below

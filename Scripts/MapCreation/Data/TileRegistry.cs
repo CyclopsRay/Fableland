@@ -36,12 +36,13 @@ public static class TileRegistry
             new()
             {
                 Id = "ground.sand", DisplayName = "Beach Sand", Category = TileCategory.Ground,
-                EditorColor = "#E8C878", AutotileGroup = "terrain.beach_sand",
+                EditorColor = "#E8C878", AutotileGroup = "terrain.sand_hill",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/ground_sand_seamless.png",
                 SpriteFillFootprint = true,
                 Props = new Dictionary<string, string>
                 {
-                    ["artSource"] = "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
+                    ["artSource"] = "res://Sprites/MapCreation/Beach/Generated/terrain_sand_hill_atlas.png",
+                    ["autotileKind"] = "layered_hill",
                 },
             },
             new()
@@ -63,30 +64,20 @@ public static class TileRegistry
             new()
             {
                 Id = "platform.bench", DisplayName = "Beach Bench", Category = TileCategory.Platform,
-                FootprintW = 4, FootprintH = 2, EditorColor = "#B88755",
+                FootprintW = 2, FootprintH = 1, EditorColor = "#B88755",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_bench.png",
-                EffectArea = ShapeDef.Rect(0f, Units.PixelsPerMeter * 0.75f,
-                    Units.PixelsPerMeter * 4f, Units.PixelsPerMeter * 0.25f),
             },
             new()
             {
                 Id = "platform.sun_lounger", DisplayName = "Sun Lounger", Category = TileCategory.Platform,
                 FootprintW = 3, FootprintH = 1, EditorColor = "#C8A675",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_sun_lounger.png",
-                // The long seat is readable as a thin one-way surface; the raised
-                // backrest remains visual overhang rather than extra collision.
-                EffectArea = ShapeDef.Rect(0f, Units.PixelsPerMeter * 0.35f,
-                    Units.PixelsPerMeter * 3f, Units.PixelsPerMeter * 0.2f),
             },
             new()
             {
                 Id = "platform.lifeguard_tower", DisplayName = "Lifeguard Tower", Category = TileCategory.Platform,
                 FootprintW = 4, FootprintH = 8, EditorColor = "#4F9B9B",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_lifeguard_tower.png",
-                // v1 exposes the top balcony as the tower's one-way platform. Multiple
-                // landings need compound effect areas in the later runtime milestone.
-                EffectArea = ShapeDef.Rect(0f, Units.PixelsPerMeter * 1.75f,
-                    Units.PixelsPerMeter * 4f, Units.PixelsPerMeter * 0.25f),
             },
 
             new()
@@ -99,24 +90,28 @@ public static class TileRegistry
                 Id = "softvolume.cloud1x1", DisplayName = "Cloud (1x1)", Category = TileCategory.SoftVolume,
                 EditorColor = "#B0E0E6",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_cloud_small.png",
+                SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.3f },
             },
             new()
             {
                 Id = "softvolume.cloud2x1", DisplayName = "Cloud (2x1)", Category = TileCategory.SoftVolume,
                 FootprintW = 2, FootprintH = 1, EditorColor = "#ADD8E6",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_cloud_medium.png",
+                SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.3f },
             },
             new()
             {
                 Id = "softvolume.cloud3x2", DisplayName = "Cloud (3x2)", Category = TileCategory.SoftVolume,
                 FootprintW = 3, FootprintH = 2, EditorColor = "#A9D7E3",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_cloud_large.png",
+                SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.3f },
             },
             new()
             {
                 Id = "softvolume.palm_tree", DisplayName = "Palm Tree", Category = TileCategory.SoftVolume,
                 FootprintW = 3, FootprintH = 4, EditorColor = "#4E9A51",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_palm_tree_v2.png",
+                SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.1f },
             },
 
             new()
@@ -125,14 +120,25 @@ public static class TileRegistry
                 FootprintW = 2, FootprintH = 1, EditorColor = "#FF4500",
                 SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/hazard_bonfire_flat.png",
                 // Deliberately catches only the hot center, not the full 2 m art width.
-                EffectArea = ShapeDef.Circle(Units.PixelsPerMeter, Units.PixelsPerMeter * 0.65f,
-                    Units.PixelsPerMeter * 0.35f),
+                EffectArea = ShapeDef.Circle(MapGrid.PixelsPerCell, MapGrid.PixelsPerCell * 0.65f,
+                    MapGrid.PixelsPerCell * 0.35f),
             },
             new()
             {
                 Id = "hazard.freezepit", DisplayName = "Freeze Pit", Category = TileCategory.Hazard,
                 EditorColor = "#66CCFF",
-                EffectArea = ShapeDef.Rect(0f, 0f, Units.PixelsPerMeter, Units.PixelsPerMeter),
+                EffectArea = ShapeDef.Rect(0f, 0f, MapGrid.PixelsPerCell, MapGrid.PixelsPerCell),
+            },
+            new()
+            {
+                Id = "hazard.tsunami_trigger", DisplayName = "Tsunami Trigger", Category = TileCategory.Hazard,
+                EditorColor = "#287DB5",
+                EffectArea = ShapeDef.Rect(0f, 0f, MapGrid.PixelsPerCell, MapGrid.PixelsPerCell),
+                Props = new Dictionary<string, string>
+                {
+                    ["scene"] = "res://Scenes/TsunamiTrigger.tscn",
+                    ["spawnHazard"] = "hazard.tsunami",
+                },
             },
 
             new()
@@ -197,7 +203,7 @@ public static class TileRegistry
                 EditorColor = "#CFC7B0",
             },
 
-            // GDD §6's worked example, verbatim.
+            // All three authored cloud silhouettes participate in deterministic generation.
             new()
             {
                 Id = "rule.cloudZone", DisplayName = "Cloud Zone (rule)", Category = TileCategory.Rule,
@@ -243,6 +249,17 @@ public static class TileRegistry
         {
             if (def.FootprintW < 1 || def.FootprintH < 1)
                 problems.Add($"{def.Id}: footprint must be >= 1x1 (got {def.FootprintW}x{def.FootprintH})");
+
+            if (def.SoftVolumeTuning != null)
+            {
+                if (def.Category != TileCategory.SoftVolume)
+                    problems.Add($"{def.Id}: SoftVolumeTuning is valid only for SoftVolume tiles");
+
+                if (def.SoftVolumeTuning.StagnationIndex.HasValue &&
+                    (def.SoftVolumeTuning.StagnationIndex.Value < 0f ||
+                     def.SoftVolumeTuning.StagnationIndex.Value > 1f))
+                    problems.Add($"{def.Id}: SoftVolumeTuning.StagnationIndex must be within 0..1");
+            }
 
             if (def.Category != TileCategory.Rule) continue;
 

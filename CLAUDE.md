@@ -27,7 +27,7 @@ live in `Migration.md` (see §0 for the delivered prototype).
   "Caveats / gotchas", tagged with the version. This is how future chats avoid re-making
   the same mistake — do not skip it.
 - **Versioning:** bump the patch (+0.0.1) on **every commit**. Keep these three in sync:
-  `Scripts/GameVersion.cs`, the repo-root `VERSION` file, and the HUD `VersionLabel` in
+  `Scripts/Foundation/GameVersion.cs`, the repo-root `VERSION` file, and the HUD `VersionLabel` in
   `Scenes/Hud.tscn`. The version renders top-left in-game.
 - **Verify before committing.** The dev host may have no Godot/.NET toolchain, so at minimum
   check statically (brace/paren balance, `.tscn` resource paths resolve, `GetNode` paths
@@ -36,7 +36,7 @@ live in `Migration.md` (see §0 for the delivered prototype).
 
 ## Conventions (details in KNOWLEDGE.md / Units.cs)
 - **Units:** 32 px/m; player 2 m, jump 8 m, 1 s ground jump ⇒ g = 2048 px/s², jump 1024 px/s.
-  Derive from `Units`, don't hardcode.
+  Derive from `Scripts/Foundation/Units.cs`, don't hardcode.
 - **Collision layers:** 1 Player, 2 Foes, 3 Ground, 4 Platform, 5 Projectile, 6 Hazard.
 - **Two platform types:** thin one-way `platform` vs enterable `SoftVolume`.
 - **Architecture:** characters subclass `CharacterController`; abilities are `HandleBA` /

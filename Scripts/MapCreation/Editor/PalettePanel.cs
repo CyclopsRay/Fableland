@@ -28,7 +28,7 @@ public sealed class PalettePanel
     private readonly Dictionary<string, PanelContainer> _chipByDefId = new();
     private readonly Dictionary<string, Texture2D> _thumbCache = new();
 
-    private const float ThumbSize = 30f;
+    private const float ThumbSize = 32f;
     private const float ChipWidth = 76f;
 
     public PalettePanel(EditorState state, Control container, Action<string> onConfigureEffect)
@@ -114,7 +114,7 @@ public sealed class PalettePanel
                 Flat = true,
                 FocusMode = Control.FocusModeEnum.None,
                 CustomMinimumSize = new Vector2(20, 20),
-                TooltipText = "Configure effect area (4×4 sub-cells)",
+                TooltipText = $"Configure effect area ({def.FootprintW * ShapeDef.SubcellsPerAxis}×{def.FootprintH * ShapeDef.SubcellsPerAxis} sub-cells)",
             };
             gear.Pressed += () => _onConfigureEffect?.Invoke(defIdForGear);
             topRow.AddChild(gear);
@@ -168,6 +168,7 @@ public sealed class PalettePanel
             {
                 Texture = shown,
                 CustomMinimumSize = new Vector2(ThumbSize, ThumbSize),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
                 MouseFilter = Control.MouseFilterEnum.Ignore,
                 TooltipText = def.DisplayName,

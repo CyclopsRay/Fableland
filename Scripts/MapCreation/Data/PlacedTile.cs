@@ -19,6 +19,8 @@ public sealed class PlacedTile
     public string DefId { get; set; } = "";
     public int X { get; set; }
     public int Y { get; set; }
+    /// <summary>Mirrors the visual and its runtime/editor effect area horizontally across
+    /// this placed tile's entire footprint; it never mutates the shared TileDef.</summary>
     public bool FlipX { get; set; }
 
     /// <summary>Per-instance overrides (e.g. a spawn tile's foe-table id). Null when there are

@@ -37,6 +37,10 @@ public sealed class TileManifest
     /// <summary>Optional connected-look group (§2.5) for ground tiles, e.g. "terrain.beach_sand".</summary>
     public string AutotileGroup { get; set; }
 
+    /// <summary>Optional editor classifier family, e.g. "layered_hill". Omitted groups use
+    /// the legacy two-state north-edge lookup.</summary>
+    public string AutotileKind { get; set; }
+
     /// <summary>Optional per-side neighbor-compatibility tags (§2.5 extension).</summary>
     public TileManifestEdges Edges { get; set; }
 

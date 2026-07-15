@@ -60,7 +60,7 @@ public sealed class LassoTool : ToolBase
 
     private static Vector2 CellCenterWorld(Vector2I cell)
     {
-        float c = Units.PixelsPerMeter;
+        float c = MapGrid.PixelsPerCell;
         return new Vector2((cell.X + 0.5f) * c, (cell.Y + 0.5f) * c);
     }
 

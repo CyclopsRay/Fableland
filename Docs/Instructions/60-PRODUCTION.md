@@ -28,7 +28,7 @@ this real solo:
 - **Branches:** feature work on branches like `prototype-0-playable`; `main` receives
   milestone-quality merges (PRs via `gh`). Never commit the GitHub PAT or bake it into
   a remote.
-- **Every commit:** patch bump (+0.0.1) with the trio in sync — `Scripts/GameVersion.cs`,
+- **Every commit:** patch bump (+0.0.1) with the trio in sync — `Scripts/Foundation/GameVersion.cs`,
   root `VERSION`, HUD `VersionLabel` in `Scenes/Hud.tscn`. The on-screen stamp is the
   cheapest build-provenance tool we have; playtest notes always cite it.
 - **Minor version = GDD milestone** (0.4 foes, 0.5 nodes, 0.6 items — already reserved).

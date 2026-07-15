@@ -1,6 +1,6 @@
 [gd_scene load_steps=13 format=3]
 
-[ext_resource type="Script" path="res://Scripts/Hud.cs" id="1"]
+[ext_resource type="Script" path="res://Scripts/UI/Hud.cs" id="1"]
 [ext_resource type="Texture2D" path="res://Sprites/UI/ui_ring_backing.svg" id="2"]
 [ext_resource type="Texture2D" path="res://Sprites/UI/ui_ult_empty.svg" id="3"]
 [ext_resource type="Texture2D" path="res://Sprites/UI/ui_ult_fill.svg" id="4"]
@@ -11,7 +11,7 @@
 [ext_resource type="Texture2D" path="res://Sprites/UI/ui_cd_overlay.svg" id="9"]
 [ext_resource type="Texture2D" path="res://Sprites/UI/mugshot_next_pomegraknight.svg" id="10"]
 [ext_resource type="Texture2D" path="res://Sprites/UI/mugshot_next_pumpking.svg" id="11"]
-[ext_resource type="Script" path="res://Scripts/HpBlockBar.cs" id="12"]
+[ext_resource type="Script" path="res://Scripts/UI/HpBlockBar.cs" id="12"]
 
 [node name="Hud" type="CanvasLayer"]
 script = ExtResource("1")
@@ -22,7 +22,7 @@ offset_top = 2.0
 offset_right = 220.0
 offset_bottom = 20.0
 theme_override_font_sizes/font_size = 12
-text = "v0.6.17"
+text = "v0.6.18"
 
 [node name="HpBar" type="Control" parent="."]
 script = ExtResource("12")

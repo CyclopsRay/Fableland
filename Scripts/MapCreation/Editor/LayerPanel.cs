@@ -414,43 +414,36 @@ public sealed class LayerPanel
             Commit("Name", () => layer.Name = v, () => layer.Name = old);
         });
 
-        // Parallax X/Y — editing either re-evaluates Collision legality (GDD §3 coupling).
+        // Parallax never changes Farview's fixed-world collider contract (GDD §3).
         _parallaxXSpin = AddSpinRow("Parallax X", layer.ParallaxX, -4f, 4f, 0.05f, isBattlefield, v =>
         {
             float old = layer.ParallaxX;
             if (Mathf.IsEqualApprox(old, v)) return;
-            bool oldCollision = layer.Collision;
-            bool newCollision = oldCollision && CollisionLegal(v, layer.ParallaxY, layer.Loop);
-            Commit("Parallax X",
-                () => { layer.ParallaxX = v; layer.Collision = newCollision; },
-                () => { layer.ParallaxX = old; layer.Collision = oldCollision; });
+            Commit("Parallax X", () => layer.ParallaxX = v, () => layer.ParallaxX = old);
         });
 
         _parallaxYSpin = AddSpinRow("Parallax Y", layer.ParallaxY, -4f, 4f, 0.05f, isBattlefield, v =>
         {
             float old = layer.ParallaxY;
             if (Mathf.IsEqualApprox(old, v)) return;
-            bool oldCollision = layer.Collision;
-            bool newCollision = oldCollision && CollisionLegal(layer.ParallaxX, v, layer.Loop);
-            Commit("Parallax Y",
-                () => { layer.ParallaxY = v; layer.Collision = newCollision; },
-                () => { layer.ParallaxY = old; layer.Collision = oldCollision; });
+            Commit("Parallax Y", () => layer.ParallaxY = v, () => layer.ParallaxY = old);
         });
 
-        // Loop — also re-evaluates Collision legality (GDD §3 rule 2: loop layers never collide).
+        // Loop — looped scenery can never have a fixed Farview collider (GDD §3).
         _loopCheck = AddCheckRow("Loop", layer.Loop, isBattlefield, v =>
         {
             bool old = layer.Loop;
             if (old == v) return;
             bool oldCollision = layer.Collision;
-            bool newCollision = oldCollision && CollisionLegal(layer.ParallaxX, layer.ParallaxY, v);
+            bool newCollision = oldCollision && CollisionLegal(v);
             Commit("Loop",
                 () => { layer.Loop = v; layer.Collision = newCollision; },
                 () => { layer.Loop = old; layer.Collision = oldCollision; });
         });
 
-        // Collision — gating computed fresh (role + live parallax/loop), GDD §3.
-        _collisionCheck = AddCheckRow("Collision", layer.Collision, false, v =>
+        // Collision — Farview's fixed-world SoftVolume opt-in, GDD §3.
+        string collisionLabel = layer.Role == MapLayerData.RoleFarview ? "Collision (SoftVolumes)" : "Collision";
+        _collisionCheck = AddCheckRow(collisionLabel, layer.Collision, false, v =>
         {
             bool old = layer.Collision;
             if (old == v) return;
@@ -537,12 +530,10 @@ public sealed class LayerPanel
         });
     }
 
-    /// <summary>GDD §3 verbatim policy: "collision = true is legal only on layers with
-    /// parallax exactly (1.0, 1.0)" and "loop layers can never collide". Closeview never
-    /// collides regardless (GDD §1: "never" interacts with gameplay); battlefield's
-    /// Collision is fixed-on by design, not gated by this rule at all.</summary>
-    private static bool CollisionLegal(float parallaxX, float parallaxY, bool loop) =>
-        !loop && Mathf.IsEqualApprox(parallaxX, 1f) && Mathf.IsEqualApprox(parallaxY, 1f);
+    /// <summary>Farview's collider is stationary in world space, independent of its visual
+    /// parallax. Only looping is illegal because it would make its visual copies ambiguous.
+    /// Battlefield is fixed-on and Closeview fixed-off by role.</summary>
+    private static bool CollisionLegal(bool loop) => !loop;
 
     private void ApplyCollisionGating(MapLayerData layer, CheckBox checkBox)
     {
@@ -558,13 +549,13 @@ public sealed class LayerPanel
         }
         else
         {
-            bool legal = CollisionLegal(layer.ParallaxX, layer.ParallaxY, layer.Loop);
+            bool legal = CollisionLegal(layer.Loop);
             checkBox.Disabled = !legal;
             checkBox.TooltipText = legal
-                ? ""
+                ? "Enables fixed-world SoftVolumes on this Farview layer. Other tile categories stay visual-only."
                 : layer.Loop
                     ? "Loop layers can never collide."
-                    : "Collision requires parallax (1.0, 1.0) — camera-dependent colliders break determinism.";
+                    : "";
         }
     }
 

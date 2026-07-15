@@ -86,21 +86,17 @@ public static class RuleResolver
                 ci++;
                 attempts++;
 
-                string chosenDefId = WeightedPick(rp.SpawnTable, zoneRng); // (3) per-attempt def roll
+                // A zone may be as small as one cell. Pick only definitions whose full
+                // footprint can actually fit at this candidate, otherwise a heavily weighted
+                // 2x1 cloud can starve the valid 1x1 cloud forever.
+                List<(string DefId, int Weight)> fittingTable = FittingSpawnTable(rp.SpawnTable, zone.Cells, cx, cy);
+                string chosenDefId = WeightedPick(fittingTable, zoneRng); // (3) per-attempt def roll
                 if (chosenDefId == null) break; // empty/degenerate spawn table: never place anything
 
                 if (!TileRegistry.TryGet(chosenDefId, out var chosenDef)) continue;
 
                 int fw = chosenDef.FootprintW;
                 int fh = chosenDef.FootprintH;
-
-                // Footprint must be fully inside the ZONE's own cells (not merely the grid).
-                bool insideZone = true;
-                for (int dy = 0; dy < fh && insideZone; dy++)
-                    for (int dx = 0; dx < fw && insideZone; dx++)
-                        if (!zone.Cells.Contains((cx + dx, cy + dy)))
-                            insideZone = false;
-                if (!insideZone) continue;
 
                 // Reserve rect: ReserveW x ReserveH centered on the footprint, rounding the
                 // extra margin toward top-left (an odd leftover cell goes to the top/left
@@ -141,6 +137,67 @@ public static class RuleResolver
         }
 
         return results;
+    }
+
+    /// <summary>Pure regression guard for a one-cell Cloud Zone. The default cloud table
+    /// weights its 2x1 entry highest, so this verifies that impossible entries are filtered
+    /// before the weighted roll rather than starving the only fitting 1x1 cloud.</summary>
+    public static List<string> SelfTest()
+    {
+        var failures = new List<string>();
+        var doc = new MapDocument
+        {
+            Id = "rule-resolver-self-test",
+            Layers = new List<MapLayerData>
+            {
+                new()
+                {
+                    Role = MapLayerData.RoleFarview,
+                    GridW = 1,
+                    GridH = 1,
+                    Tiles = new List<PlacedTile>
+                    {
+                        new() { DefId = "rule.cloudZone", X = 0, Y = 0 },
+                    },
+                },
+            },
+        };
+
+        // Several independent parent seeds exercise several child zone streams. Every
+        // resolution must keep the one fitting cloud even though the rule asks for 2..4.
+        for (int i = 0; i < 16; i++)
+        {
+            List<ResolvedSpawn> results = Resolve(doc, new DetRandom("rule-fit-" + i), out _);
+            bool correct = results.Count == 1 && results[0].DefId == "softvolume.cloud1x1" &&
+                results[0].X == 0 && results[0].Y == 0;
+            if (!correct) failures.Add($"one-cell Cloud Zone seed {i}: expected one cloud1x1, got {results.Count}");
+        }
+
+        return failures;
+    }
+
+    private static List<(string DefId, int Weight)> FittingSpawnTable(
+        List<(string DefId, int Weight)> table, HashSet<(int x, int y)> zoneCells, int anchorX, int anchorY)
+    {
+        var fitting = new List<(string DefId, int Weight)>();
+        if (table == null || zoneCells == null) return fitting;
+
+        foreach (var entry in table)
+        {
+            if (entry.Weight <= 0 || !TileRegistry.TryGet(entry.DefId, out var def)) continue;
+            if (FootprintFitsZone(zoneCells, anchorX, anchorY, def.FootprintW, def.FootprintH))
+                fitting.Add(entry);
+        }
+        return fitting;
+    }
+
+    private static bool FootprintFitsZone(HashSet<(int x, int y)> zoneCells,
+        int anchorX, int anchorY, int footprintW, int footprintH)
+    {
+        for (int dy = 0; dy < footprintH; dy++)
+            for (int dx = 0; dx < footprintW; dx++)
+                if (!zoneCells.Contains((anchorX + dx, anchorY + dy))) return false;
+        return true;
     }
 
     private static string WeightedPick(List<(string DefId, int Weight)> table, DetRandom rng)

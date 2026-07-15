@@ -41,7 +41,7 @@ patrol turnaround exceeds this width — patrolling gulls wall-turn in practice.
 | Move | `A`/`D` or `←`/`→` | Left/right movement |
 | Jump | `Space` | Jump (character-specific max jumps) |
 | Drop through platform | `S`/`Down` | Drop through one-way platforms |
-| SoftVolume vertical | `W`/`S` or `↑`/`↓` | Move up/down inside SoftVolumes |
+| SoftVolume traversal | normal movement + `Space` | A SoftVolume is enterable; it does not add swim/climb controls or a standable top |
 | Skill 1 (Shift) | `Left Shift` | Character-specific Shift ability |
 | Skill 2 (E) | `E` | Character-specific E ability |
 | Ultimate (Q) | `Q` | Character-specific Ult (if unlocked) |
@@ -49,6 +49,22 @@ patrol turnaround exceeds this width — patrolling gulls wall-turn in practice.
 | Switch protagonist | `Tab` | Switch to next protagonist in sequence (12 s CD) |
 | Pick up item | Walk over | Wonder items on the ground are auto-picked up |
 | Melee / BA | `J` or `LMB` | Character-specific basic attack |
+
+**SoftVolume traversal (v0.6.18).** A SoftVolume (cloud, bush, tree, water) is an
+`Area2D` field, not a one-way platform: a character falls directly into it and never
+needs to press Down to enter. Inside it, the normal input, gravity, and jump launch
+all continue, and active membership refreshes jump charges before input is read. The
+volume never replaces a jump launch with a low fixed velocity. Instead it applies a gradual
+resistance delta-v each physics tick toward the `StagnationIndex × maxSpeed` cap plus
+its small `GravityIndex × maxSpeed` downward drift. The default resistance is derived
+from `Units.Gravity × (1 - StagnationIndex)`, so a jump visibly reaches a lower apex
+without being cancelled on its first frame. External knockback/wind retains its
+separate, stronger in-volume damping contract.
+
+For Map Creation tiles, `StagnationIndex` is per kind: all cloud silhouettes use **0.3**,
+the palm tree uses **0.1**, and an unconfigured SoftVolume retains the reusable scene's **0.5**
+fallback. Lower values are more viscous: they impose a lower speed cap and a stronger gradual
+resistance. `GravityIndex` (0.1) and `ExternalDampingMult` (3) remain shared scene defaults.
 
 ### A.3 Switch Protagonist (Tab, 12 s CD)
 
@@ -99,6 +115,76 @@ position with 0 stamina and must finish the day (`NODES.gdd` §2.3).
 - All other failures = node unconquered, player survives (Collection keeps the cores
   already grabbed — details in `NODES.gdd` §2.3)
 - Standing on ground the VOID devours at day-end = run over (`NODES.gdd` §2.2)
+
+### A.6 Arena environmental events
+
+An **Arena Environmental Event** is a battle-local, timed sequence that may combine
+canvas presentation, map-visual changes, a wind field, and spawned hazards. It is not
+the future **daily Weather** roll: that is a run/map-layer system. A canvas mode is the
+persistent visual profile an arena starts with; an environmental event is the temporary
+thing that happens *inside* that arena.
+
+The arena-scoped controller owns an event's phase and restoration. Hazards remain the
+damage/collision payload: the controller may spawn a `TsunamiHazard`, but a moving wave
+does not own the sky, the map tint, or global wind. This keeps lava, meteors, and future
+biome events from duplicating the tsunami sequence.
+
+Ambient gusts happen every few seconds through the same controller. In this prototype
+they are **visual only**: responsive scenery may sway, but player movement is unchanged.
+That keeps ordinary traversal reliable while proving the shared response path.
+
+#### A.6.1 Beach tsunami
+
+The beach map may place a **1x1-cell Tsunami Trigger**. Player contact asks the arena
+environment controller to start the `tsunami` event; the trigger is disabled until the
+event has restored and its cooldown finishes.
+
+| Parameter | Value |
+|---|---:|
+| Trigger footprint | 1x1 m |
+| Canvas fade to storm gray | 2 s |
+| World visual tint during storm | low-saturation dark blue-gray `#68727C` |
+| Camera-shake ramp | 3 s |
+| Sustained shake trauma | 0.75 |
+| Wave art / hitbox envelope | 16x8 m |
+| Wave direction | left |
+| Ambient-gust interval / duration | 3–6 s / 0.7 s, visual only |
+| Tsunami wind direction | left (from sea/right side of the arena) |
+| Tsunami wind pulse | 6 m/s delta-v every 0.2 s, actors only |
+| Damage | 35% target Max HP |
+| No-control duration | 1 s |
+| Knockback travel target | approximately 15 m |
+| Trigger cooldown after restoration | 4 s |
+
+Sequence: **Warning** fades the authored sky to gray, darkens/desaturates map visuals,
+ramps shake, and increases visual gusts; it applies no physical wind. **Sweep** spawns
+the wave at the configured right-side position, sustains shake, and delivers the
+leftward wind pulse to `CharacterController` and `BaseFoe` bodies. Moving with the wind
+gains external velocity; resisting it loses ground. Existing SoftVolume damping applies
+naturally. **Recovery** begins when the wave leaves: wind and shake stop, sky and map
+visuals restore to their exact authored values, then the trigger cools down.
+
+The first slice excludes projectiles from wind. Their motion implementations do not yet
+share a wind-response contract; adding one is a separate base-projectile task, not a
+set of per-projectile exceptions. The art never defines collision—the same 16x8
+`Units`-derived envelope drives the triangular hitbox and sprite display.
+
+#### A.6.2 Environment-reactive map visuals
+
+The map visual root receives the storm tint once, so every terrain/platform/prop visual
+darkens together without changing actors, HUD, or colliders. A responsive prop such as
+a coconut palm has a visual-only wind-sway child: it offsets/rotates its sprite, never
+its collision root. Runtime map instantiation will attach this same response component
+to tile instances tagged for sway; the current arena's SoftVolume tree is the prototype
+proof asset.
+
+#### A.6.3 Volcanic eruption (record; deferred)
+
+Volcanic Eruption is the next environmental-event family: volcano/canvas eruption,
+falling lava hazards, and persistent fire pits. A lava impact may request removal of a
+runtime tile instance tagged `destructible_lava` (clouds and palms are candidates), but
+never edits the authored `MapDocument`. It is deferred until `MapInstantiator` and
+runtime tile-instance ownership exist; no lava code lands in the tsunami slice.
 
 ---
 
@@ -191,6 +277,22 @@ multipliers) lives in **`FOES.gdd` §2** — this doc does not duplicate it.
 | Wonder items, tags, cooldowns, item catalog | `ITEMS.gdd` |
 | ATK/DEF formulas, engineering conventions | `KNOWLEDGE.md` |
 | Per-character abilities, stats, visuals | `Docs/<CharacterName>.gdd` |
+
+---
+
+## E. Decisions log
+
+- **Arena environmental events are separate from daily Weather.** A tsunami/lava sequence is
+  local to one fight and must restore with that arena; a future daily roll changes run/map rules.
+  Keeping the two concepts distinct prevents a combat trigger from becoming a second owner of
+  global run state.
+- **Ambient wind is visual-only; tsunami wind is pulsed external delta-v.** Ordinary movement
+  remains predictable, while the tsunami still changes positioning through the existing
+  external-velocity/damping model. Projectiles wait for one shared motion contract rather than
+  receiving inconsistent per-projectile patches.
+- **Events tint one map-visual root and sway visual children only.** This affects every tile
+  consistently without darkening actors/HUD or moving a collision shape; future lava changes
+  runtime tile instances, never authored map data.
 
 ---
 

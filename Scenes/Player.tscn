@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://Scripts/Player.cs" id="1"]
+[ext_resource type="Script" path="res://Scripts/Protagonists/Legacy/Player.cs" id="1"]
 [ext_resource type="Texture2D" path="res://Sprites/player_placeholder.svg" id="2"]
 
 [sub_resource type="RectangleShape2D" id="1"]

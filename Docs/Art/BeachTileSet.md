@@ -1,8 +1,8 @@
 # Beach Combat-Map Tile Set
 
 Production catalog for the beach assets used by `Docs/MapCreation.gdd`. One map cell
-is 32 px / 1 m. The footprint is authoring occupancy; the effect area is the future
-runtime collider/trigger and may be smaller than the visible art.
+is 64 px / 2 m. The footprint is authoring occupancy; the effect area is the runtime
+collider/trigger and may be smaller than the visible art.
 
 ## Style lock
 
@@ -10,17 +10,18 @@ runtime collider/trigger and may be smaller than the visible art.
 - Warm sand, sun-bleached wood, teal accents, coral-orange highlights, and coastal greens.
 - Transparent backgrounds, no white sticker border, no baked floor or cast shadow.
 - Orthographic side-view silhouettes that remain legible when scaled to their footprint.
-- Decorative overhang is allowed; collision must always come from `TileDef.EffectArea`.
+- Decorative overhang is allowed; collision must always come from the tile effect area
+  (the full footprint when `TileDef.EffectArea` is absent).
 
 ## Tile catalog
 
 | Registry id | Role | Footprint | Art | Status / effect-area contract |
 |---|---|---:|---|---|
-| `ground.sand` | Ground | 1x1 terrain cells | `Generated/ground_sand_seamless.png` | Seamless fill now joins without transparent gutters; `terrain.beach_sand` remains reserved for edge/corner terrain variants. |
+| `ground.sand` | Ground | 1x1 terrain cells | `Generated/terrain_sand_hill_atlas.png` | Wired to the 4-layer `terrain.sand_hill` classifier in the map creator; `ground_sand_seamless.png` remains its graceful fallback. |
 | `ground.grass` | Ground | 1x1 terrain cells | `Generated/ground_grass_seamless.png` | Seamless fill now joins without transparent gutters; `terrain.coastal_grass` remains reserved for edge/corner terrain variants. |
-| `platform.bench` | Platform | 4x2 | `Generated/platform_bench.png` | New art. One-way top is a 4 m x 0.25 m strip at y=0.75 m. |
-| `platform.sun_lounger` | Platform | 3x1 | `Generated/platform_sun_lounger.png` | Recreates the old angled wooden lounger rather than the front-facing bench. Thin one-way seat; raised back is visual only. |
-| `platform.lifeguard_tower` | Platform | 4x8 | `Generated/platform_lifeguard_tower.png` | New art. v1 exposes the top balcony only; compound landings require compound shapes in the runtime-instantiation milestone. |
+| `platform.bench` | Platform | 2x1 | `Generated/platform_bench.png` | Compact map bench. Default collider is its complete footprint; author a seat-only shape with the effect painter when desired. |
+| `platform.sun_lounger` | Platform | 3x1 | `Generated/platform_sun_lounger.png` | Recreates the old angled wooden lounger rather than the front-facing bench. Default collider is its complete footprint; the effect painter owns any seat/backrest distinction. |
+| `platform.lifeguard_tower` | Platform | 4x8 | `Generated/platform_lifeguard_tower.png` | New art. Default collider is its complete footprint; author landings through the effect painter. |
 | `softvolume.palm_tree` | SoftVolume | 3x4 | `Generated/softvolume_palm_tree_v2.png` | Redrawn at 3:4 with dark ink only and no sticker outline. |
 | `softvolume.cloud1x1` | SoftVolume | 1x1 | `Generated/softvolume_cloud_small.png` | Redrawn compact cloud; no sticker outline. |
 | `softvolume.cloud2x1` | SoftVolume | 2x1 | `Generated/softvolume_cloud_medium.png` | Redrawn curled medium cloud; full footprint is enterable. |
@@ -29,6 +30,7 @@ runtime collider/trigger and may be smaller than the visible art.
 | `deco.sand_castle` | Decoration | 2x2 | `Legacy/deco_sand_castle.png` | Transferred from Unity; visual only. |
 | `deco.sun` | Decoration | 2x2 | `Generated/deco_sun_chibi.png` | Restores the old sleepy chibi smile and playful clockwise tilt; intended for Farview. |
 | `hazard.bonfire` | Hazard | 2x1 | `Generated/hazard_bonfire_flat.png` | Flat, tiny redraw based on the old small fire. Only the central 0.35 m-radius circle is hazardous. |
+| `hazard.tsunami_trigger` | Hazard | 1x1 | editor-color marker | Single-cell pressure trigger. Runtime scene performs storm fade, sustained shake, wave spawn, restoration, then cooldown. |
 
 Paths above are relative to `Sprites/MapCreation/Beach/`.
 
@@ -41,9 +43,10 @@ this repository; only standalone, useful cutouts were transferred.
 
 Generated replacements are non-destructive and live under `Generated/`. Unity-derived
 cutouts live under `Legacy/` so provenance and replacement priority remain obvious.
-Ground currently uses seamless fill textures so adjacent cells have no transparent
-gutters. The earlier terrain atlas remains a source for the later Godot TileSet terrain
-pass, which must define edge/corner atlas coordinates and peering bits once, in data.
+Grass currently uses a seamless fill texture so adjacent cells have no transparent gutters.
+Beach Sand uses the layered hill atlas in the map creator. The earlier terrain atlas remains
+a source for the later Godot TileSet terrain pass, which must define edge/corner atlas
+coordinates and peering bits once, in data.
 
 ## Sprite placement and transforms
 
@@ -149,7 +152,7 @@ watercolor layering, foam language, and blue palette; remove its white sticker o
 **Read this before writing a prompt for any new built-up ground material** (sand, grass,
 rock, snow, …). It's the reusable rule set; each material is a short instantiation below
 that only needs to fill in a materials table, not re-derive any of this. A second, richer
-autotile system than the flat `ground.sand`/`ground.grass` seamless fills above — for
+autotile system than the original flat `ground.sand`/`ground.grass` seamless fills — for
 *built-up* terrain (mounds/hills/cliffs). Classification is per-cell, driven by two
 independent axes, identical for every material:
 
@@ -162,8 +165,9 @@ independent axes, identical for every material:
   both-open variant; that case falls back to **Mid**), else **Mid**.
 
 **Geometry rule that keeps this tractable, for every material:** the *only* two tiles with a
-non-rectangular silhouette are **Layer 1's top** (a gentle slope/dome — the surface material
-still fills ~70-85% of the cell's height even at the open edge, never a thin wedge) and
+non-rectangular silhouette are **Layer 1's top** (Left/Right slope only toward their open
+outer edge; Mid is mechanically flat and repeat-safe; Peak alone is a symmetric dome — the
+surface material still fills ~70-85% of the cell's height even at an open edge) and
 **Layer 4's bottom** (a jagged/irregular exposed silhouette hanging into open air — what it's
 *made of* is the one thing that's genuinely material-specific; see each instantiation's Layer
 4 entry). Every other edge — L1's bottom, L2/L3's top and bottom, L4's top, and every
@@ -172,8 +176,10 @@ only by color/texture, never by shape. This is what guarantees any two tiles at 
 sit side by side (or stack) with no gaps, and it's why 13 tiles cover every case instead of a
 full corner/edge blob set.
 
-**13 tiles per material, generated as 13 separate square images (NOT one composite sheet —
-see "Why separate files" below), then composited by `Tools/compose_hill_atlas.py`.** Naming
+**13 tiles per material, with geometry seeded from a deterministic coded guide, then
+composited by `Tools/compose_hill_atlas.py`.** The preferred first pass generates the 12
+non-Peak tiles as one guide-conditioned 3x4 image, slices it, and generates Peak separately.
+Targeted per-tile regeneration remains the fallback for any cell that drifts. Naming
 convention: `terrain_<material>_hill_L<1-4>_<left|mid|right>.png`, plus one
 `terrain_<material>_hill_L1_peak.png`, saved under `Generated/<Material>HillSource/`.
 
@@ -191,15 +197,19 @@ Shared prompt scaffold (every instantiation below fills in the bracketed parts):
 > height as each other (any resolution is fine as long as all 13 match) so they can be
 > composited into a uniform grid afterward.
 
-**Why separate files, not one AI-drawn grid sheet:** the existing `terrain_beach_atlas.png`
+**Why code owns the grid, not the image model:** the existing `terrain_beach_atlas.png`
 (1536×1024, sliced 7×6 per `AutotileAtlas.cs`) doesn't even divide evenly — 1536/7 and
 1024/6 are both non-integers — which is almost certainly why the last hand-drawn attempt at
-a tile sheet came out unequally divided. Diffusion models don't reliably hit exact grid
-lines; compositing 13 independently-generated, equal-size squares into a grid is a
-deterministic, always-exact operation in code.
+an atlas came out unequally divided. Diffusion models do not reliably infer mechanical cell
+boundaries from prose. `Tools/generate_hill_guide.py` creates an exact 3:4 guide with square
+cells, fixed row boundaries, repeat-safe surface geometry, and guide-only cyan construction
+lines. The image model paints against that seed; `slice_hill_grid.py` then rejects any source
+that is not still an exact 3:4 sheet of square cells. `compose_hill_atlas.py` remains the
+deterministic final compositor.
 
-**Pipeline for a new material:** generate its 13 files, save under
-`Generated/<Material>HillSource/`, then run
+**Pipeline for a new material:** generate the coded guide, use it as the geometry reference
+for a 12-cell image-generation pass, validate/slice into `Generated/<Material>HillSource/`,
+generate the one Peak tile, then run
 `python3 Tools/compose_hill_atlas.py --material <material>` to produce
 `Generated/terrain_<material>_hill_atlas.png` (a guaranteed-uniform 4-row × 4-col sheet — row
 = Layer 1-4, col = Left/Mid/Right/Peak; the 3 cells at rows 2-4 col 4 are intentionally left
@@ -217,7 +227,7 @@ autotiler — it's a side-view vertical-stratification model, not generic Wang/b
 autotiling, so it doesn't compete with the eventual Godot `TileSet` Terrain runtime path.
 Applies to every material instantiated below, not just the first one.
 
-### Sand hill (instantiation, v0.6.13, spec locked — art not yet generated)
+### Sand hill (instantiation, v0.6.13, spec locked — 13-tile atlas/editor wiring landed v0.6.16)
 
 Follows the base template above exactly (13 tiles, same classification/geometry rules).
 Materials table — the only thing this instantiation adds:
@@ -229,23 +239,29 @@ Materials table — the only thing this instantiation adds:
 | 3 (core) | Denser, coarser, greyer-tan sand — more visibly embedded stones/pebbles, craggier texture | Flat vertical cut, rough natural exposed-rock-in-sand face |
 | 4 (base) | Dense grey-brown rock/stone, angular and sharper-edged than Layer 3; bottom silhouette is jagged sharp rock points hanging into open air (roughly 60-80% coverage, transparent gaps between points) | Flat vertical cut (same no-slope convention), rough rocky exposed face |
 
-#### Generation strategy: try one combined image first
+#### Generation strategy: coded geometry guide first
 
-13 independent AI calls give the model almost nothing to stay consistent against —
-color, exact edge height, and grain pattern can all drift between calls. Before
-committing to that, try the cheap experiment: ask for all **12 non-Peak tiles in a
-single image** (one generation is far more likely to be internally color/texture
-consistent than 12-13 separate ones), slice it in code, and look at the result.
+Text alone is not the source of truth for atlas geometry. Generate the deterministic guide:
 
-> Generate ONE image: a grid of 12 tiles, 3 columns x 4 rows, portrait canvas at
-> **exactly a 3:4 width:height aspect ratio** (request "3:4" if your tool has an
-> aspect-ratio option; e.g. 900x1200 or 1200x1600) so the 12 cells are perfect
-> squares with no leftover margin. This is ONE coherent illustration of a sand
-> hill's cross-section, not 12 unrelated pictures — color, grain texture, and
-> material must flow continuously across every shared boundary, both
-> horizontally and vertically, since these cells sit directly next to each other
-> in-game. Cells are perfectly, mechanically equal in size and share edges
-> directly: no gutters, border lines, dividers, labels, or numbers anywhere.
+```bash
+python3 Tools/generate_hill_guide.py --material sand --cell-size 384
+```
+
+This writes `Generated/Guides/terrain_sand_hill_guide.png`: a 1152x1536 exact 3:4
+canvas containing twelve 384x384 cells, plus the square
+`terrain_sand_hill_L1_peak_guide.png`. Cyan lines are construction overlays only. Feed this
+guide to the image model as the **geometry reference**, and feed
+`Docs/Art/References/sand_tile_pixel_style_reference.png` only as a **style/material
+reference**. The style reference's 274x444 proportions are invalid and must never influence
+the output geometry. The guide's solid fills and scratch marks communicate the intended
+surface, grain, pebble, core, and rock regions; the model replaces them with finished art.
+
+> Image 1 is the binding geometry guide. Preserve its exact 3-column x 4-row structure,
+> exact 3:4 canvas, square cell proportions, surface silhouettes, and layer locations.
+> The cyan grid is construction markup only: remove it completely from the finished art.
+> Image 2 is style/material reference only. Borrow its compact 2D-platformer watercolor
+> texture, warm sand palette, small grains, embedded rounded stones, and dark-brown ink;
+> ignore its layout, spacing, number of tiles, and incorrect aspect ratio.
 >
 > Columns (left to right): LEFT edge variant · MID (interior) variant · RIGHT
 > edge variant. Rows (top to bottom): Layer 1 surface (fine pale-gold soft sand,
@@ -254,21 +270,16 @@ consistent than 12-13 separate ones), slice it in code, and look at the result.
 > sand, more visible stones, craggier) · Layer 4 base (dense grey-brown rock,
 > angular, sharper-edged than Layer 3).
 >
-> Left column: its outer (canvas-left) edge is open to air. Row 1 (Layer 1)
-> slopes gently down toward that edge, sand still filling ~70-85% of the cell's
-> height at the lowest point. Rows 2-4 have a flat vertical cut at that edge (no
-> slope), textured as a rough natural exposed face, not a smooth plane. Right
-> column: mirror of Left, on the canvas-right edge. Mid column: fully interior,
-> bridges Left and Right with no open edge.
+> In Layer 1, LEFT slopes only toward its open left edge and reaches MID at MID's fixed
+> top height. MID's top is mechanically flat from its first pixel column to its last;
+> repeating MID side by side must form one level platform with no wave, dome, rise, or dip.
+> RIGHT mirrors LEFT. Rows 2-4 have full-height flat vertical outer cuts. MID is fully
+> interior. Preserve all guide edge heights exactly.
 >
-> Every row-to-row (layer-to-layer) boundary within a column is a flat, seamless
-> color/material blend — no visible dividing line, just the material gradually
-> getting denser/darker from Layer 1 to Layer 4 — with exactly two exceptions:
-> the very TOP of the whole canvas (Layer 1's top, i.e. only where it isn't
-> already cut flat by an open Left/Right edge) is a gentle slope/dome, and the
-> very BOTTOM of the whole canvas (Layer 4's bottom) is a jagged, irregular
-> silhouette of exposed rock points hanging into transparent open air (roughly
-> 60-80% coverage, not a flat cut).
+> Every layer change lands exactly on a guide row boundary. Blend color and texture
+> naturally across that boundary after removing the cyan line, but never move or curve the
+> boundary. The only non-rectangular silhouettes are Layer 1 Left/Right's outer slopes and
+> Layer 4's guide-defined jagged bottom. There is no broad dome across the sheet.
 >
 > Hand-painted storybook watercolor-and-ink style, bold dark-brown outlines,
 > limited cheerful beach palette, orthographic side view, flat lighting, no
@@ -277,17 +288,32 @@ consistent than 12-13 separate ones), slice it in code, and look at the result.
 > Layer 1's sloped top, between Layer 4's jagged rock points) — everywhere else
 > is fully opaque material.
 
-Save the result as e.g. `terrain_sand_hill_combined.png`, then:
+If the model borrows dark horizontal ledges from the style reference, run one constrained
+edit with the painted sheet as the edit target and the coded guide still attached:
+
+> Change only the three internal row-to-row transitions: remove every dark-brown ridge,
+> ledge, lip, and outline there. Make each transition a flat seamless watercolor material
+> blend at the exact square-cell boundary. Preserve the 3:4 canvas, twelve square cells,
+> repeat-safe flat Layer-1 Mid, outer slopes, textures, side faces, and jagged bottom.
+
+Save non-destructively with a revision suffix (the current accepted candidate is
+`terrain_sand_hill_combined_v3.png`), then validate and slice:
 
 ```
-python3 Tools/slice_hill_grid.py terrain_sand_hill_combined.png --material sand
+python3 Tools/slice_hill_grid.py terrain_sand_hill_combined_v3.png --material sand
 python3 Tools/compose_hill_atlas.py --material sand --preview
 ```
 
-`slice_hill_grid.py` crops it into the 12 individually-named tile files (Peak is
-skipped by design — this pass doesn't generate it) and `compose_hill_atlas.py`
-leaves that one cell blank rather than erroring, exactly so this 12-tile test
-works standalone. Open the `--preview` output and look at every zero-gap boundary.
+Before production composition, remove the flat `#ff00ff` key from the accepted combined sheet
+and Peak render with the image-generation skill's chroma-key helper (soft matte + despill).
+Slice the resulting RGBA combined sheet, resize the RGBA Peak to the same cell size, and save
+all 13 files under `Generated/SandHillSource/`.
+
+`slice_hill_grid.py` refuses an imperfect aspect ratio or non-square cells instead of
+silently cropping them, then writes the 12 individually-named non-Peak files. The separately
+generated Peak completes the source set. `compose_hill_atlas.py`
+leaves Peak blank only during an explicitly incomplete 12-tile test. Open the `--preview`
+output and look at every zero-gap boundary.
 
 **Fallback if the combined image doesn't hold together:** you don't have to
 redo all 12. Crop the specific tile that's wrong out of the sliced result (or
@@ -325,7 +351,8 @@ filenames under `Generated/SandHillSource/`:
    but that's a design call for whoever authors it, not dictated by this template).
 2. Write the 13 tile-specific prompt cells the same way: geometry phrase from the base
    template's per-position rule (which edges are open/flat-cut) + this material's texture.
-3. Generate, save under `Generated/<Material>HillSource/`, run `compose_hill_atlas.py
-   --material <material>`.
+3. Generate its coded guide with `generate_hill_guide.py`, use that as the binding geometry
+   reference, save validated slices under `Generated/<Material>HillSource/`, then run
+   `compose_hill_atlas.py --material <material>`.
 4. `HillAutotile.cs` needs no changes; wiring `GridView`/`TileRegistry` is the same
    next-step as Sand's, per that file's header comment.

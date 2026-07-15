@@ -35,6 +35,7 @@ Scripts/Data/
 │                      #   foe-level-by-day breakpoints                     (Map §8, FOES §2)
 ├── ItemTable.cs       # ItemDef catalog: tags, CDs, perish, plant data     (ITEMS §7)
 ├── CharacterTable.cs  # per-character kit numbers (HP curves, CDs, dmg)    (character GDDs)
+├── EnvironmentEventDefs.cs # arena event phases, tints, wind, cooldowns    (Gameplay §A.6)
 ├── MapGenTable.cs     # node-count rolls, edge/bridge/function-node odds,
 │                      #   shelter/? split, trader chance + min-3           (Map §4–6)
 └── ShelterTable.cs    # Rest/Sharpen values, joust timer                   (NODES §5)
@@ -102,6 +103,9 @@ trader 15%/min-3 (map-wide), NPC 5-day window, devour days (10/20/30/35/40/45), 
 v0.6.0: the full item catalog incl. mushroom outcome table (18×5+10%), perish/harvest
 timers, inheritance ranges (60–140%).
 Characters: each kit's skill-summary table verbatim.
+Arena events: tsunami warning/recovery/cooldown, storm tint, gust schedule, wind pulse,
+and subsequent event definitions. Canvas colours stay hex data; Godot colours are made only
+at the presentation edge.
 
 ## 6. Balance-testing method
 
@@ -116,4 +120,3 @@ Characters: each kit's skill-summary table verbatim.
   playtest log (40-QA.md §5).
 - **Change one axis at a time.** Node-level scaling and day-scaling multiply; tuning
   both simultaneously makes attribution impossible.
-

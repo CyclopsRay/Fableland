@@ -15,18 +15,11 @@ using System;
 /// and `KNOWLEDGE.md`'s v0.6.9 caveat for why a second hand-rolled system is disclosed here
 /// rather than folded into the first.
 ///
-/// NOT YET WIRED into `GridView`'s renderer or registered in `TileRegistry` for any material —
-/// no reference atlas exists yet (`Tools/compose_hill_atlas.py --material <name>` produces one
-/// from 13 separately-generated tiles per BeachTileSet.md's prompts), and this repo has no
-/// Godot/dotnet toolchain to visually verify a `GridView` change against real art. Once a
-/// material's atlas exists: add a `TileRegistry` entry (id e.g. `ground.sand_hill`,
-/// `AutotileGroup = "terrain.sand_hill"`, `Props["artSource"]` = the atlas path,
-/// `SpriteFillFootprint = true`),
-/// then extend `GridView.DrawLayerTiles` with a branch that — for defs whose AutotileGroup
-/// this classifier recognizes — probes same-group neighbors up/down/left/right (mirroring
-/// the existing `NeighborSharesGroup` helper) and calls <see cref="Classify"/> +
-/// <see cref="TryGetCell"/> instead of the old 2-state `AutotileAtlas` path, exactly
-/// paralleling how that path already derives `SourceRect` from `Cols`/`Rows`.
+/// WIRED for `ground.sand` in `TileRegistry`/`GridView`: the def declares
+/// `Props["autotileKind"] = "layered_hill"` and points `artSource` at the 4x4 atlas.
+/// `GridView.DrawLayerTiles` probes same-group neighbors through `NeighborSharesGroup`, calls
+/// <see cref="ClassifyAndGetCell"/>, and draws the selected atlas source region. Future hill
+/// materials opt in through the same two data fields without another renderer branch.
 /// </summary>
 public static class HillAutotile
 {

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Composites 13 separately-generated ground-hill tile images (any material —
+"""Composites 13 validated ground-hill tile images (any material —
 sand, grass, rock, ...) into one pixel-perfect 4x4 atlas sheet.
 
-Why this exists: asking an AI image model to draw one composite grid sheet
-directly is unreliable — the existing terrain_beach_atlas.png (1536x1024,
-sliced 7x6 by AutotileAtlas.cs) doesn't even divide evenly, which is almost
-certainly why the earlier hand-drawn sheet came out unequally divided.
-Generating 13 separate equal-size squares and compositing them here instead
-is a deterministic, always-exact operation.
+Why this exists: an image model does not own atlas geometry. The preferred
+pipeline seeds the 12 non-Peak cells from Tools/generate_hill_guide.py, validates
+and slices that guide-conditioned sheet with Tools/slice_hill_grid.py, and
+generates Peak separately. This compositor then owns the final 4x4 layout and
+keeps its three intentionally-unused cells exactly transparent.
 
 Grid layout (must match Scripts/MapCreation/Data/HillAutotile.cs, and is the
 same for every material — HillAutotile.cs's classifier is material-agnostic):
@@ -180,8 +179,10 @@ def main():
 
     blank = 16 - len(tiles)
     print(f"Wrote {out} ({atlas.width}x{atlas.height}, cell {cell_w}x{cell_h})")
-    print(f"Filled {len(tiles)}/16 cells ({blank} left blank: the 3 unused Peak cells for Layer 2-4, "
-          f"plus Layer1/Peak too if that file wasn't present).")
+    blank_note = "the 3 unused Peak cells for Layer 2-4"
+    if peak_missing:
+        blank_note += ", plus Layer1/Peak"
+    print(f"Filled {len(tiles)}/16 cells ({blank} left blank: {blank_note}).")
 
     if args.preview:
         preview_out = args.preview_out if args.preview_out is not None else default_preview(args.material)

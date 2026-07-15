@@ -197,8 +197,9 @@ HP/ATK/DEF pools (Rest excess, Sharpen), not a level ladder.
 ## Implementation Notes
 
 ### Godot Port Status (v0.5.3)
-Ported to Godot as `Scripts/PumpKing.cs` + `Scenes/PumpKing.tscn` (body + `NeckHead`
-child) and `Scripts/PumpKingHead.cs` + `Scenes/PumpKingHead.tscn` (rolling head).
+Ported to Godot as `Scripts/Protagonists/PumpKing/PumpKing.cs` + `Scenes/PumpKing.tscn`
+(body + `NeckHead` child) and `Scripts/Protagonists/PumpKing/PumpKingHead.cs` +
+`Scenes/PumpKingHead.tscn` (rolling head).
 Sprites and body animations (idle/walk/jump/soul) are migrated. Notes/deviations vs.
 the Unity source:
 - **Shield** is implemented in the subclass via a new `CharacterController.AbsorbDamage`

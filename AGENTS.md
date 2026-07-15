@@ -25,7 +25,7 @@ live in `Migration.md` (see §0 for the delivered prototype).
   "Caveats / gotchas", tagged with the version. This is how future chats avoid re-making
   the same mistake — do not skip it.
 - **Versioning:** bump the patch (+0.0.1) on **every commit**. Keep these three in sync:
-  `Scripts/GameVersion.cs`, the repo-root `VERSION` file, and the HUD `VersionLabel` in
+  `Scripts/Foundation/GameVersion.cs`, the repo-root `VERSION` file, and the HUD `VersionLabel` in
   `Scenes/Hud.tscn`. The version renders top-left in-game.
 - **Verify before committing.** The dev host may have no Godot/.NET toolchain, so at minimum
   check statically (brace/paren balance, `.tscn` resource paths resolve, `GetNode` paths

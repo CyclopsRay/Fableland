@@ -66,8 +66,24 @@ public partial class MapBrowser : Control
         foreach (var failure in TileEffectStore.RoundTripSelfTest())
             GD.PushError("[MapCreation] " + failure);
 
+        foreach (var failure in EffectAreaTransform.SelfTest())
+            GD.PushError("[MapCreation] " + failure);
+
         foreach (var problem in TileRegistry.Validate())
             GD.PushError("[MapCreation] " + problem);
+
+        foreach (var failure in RuleResolver.SelfTest())
+            GD.PushError("[MapCreation] " + failure);
+
+        foreach (var failure in HillAutotile.SelfTest())
+            GD.PushError("[MapCreation] " + failure);
+
+        foreach (var failure in TileManifestLoader.SelfTest())
+            GD.PushError("[MapCreation] " + failure);
+
+        string projectRoot = ProjectSettings.GlobalizePath("res://");
+        foreach (var failure in TileManifestLoader.SelfTestFixtures(projectRoot))
+            GD.PushError("[MapCreation] " + failure);
     }
 
     // ---------------------------------------------------------------- UI build

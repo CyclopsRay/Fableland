@@ -303,17 +303,17 @@ public partial class BaseFoe : CharacterBody2D
         float damp = ExternalDamping * (_softVolume != null ? _softVolume.ExternalDampingMult : 1f);
         ExternalVel = ExternalVel.MoveToward(Vector2.Zero, damp * dt);
 
-        if (_softVolume != null && UseGravity)
-        {
-            float h = Stunned ? 0f : Dir;
-            IntentVel = _softVolume.ComputeVelocity(CurrentMoveSpeed, h, 0f);
-        }
-        else if (UseGravity)
+        if (UseGravity)
         {
             if (!IsOnFloor()) IntentVel.Y += Gravity * dt;
             else if (IntentVel.Y > 0f) IntentVel.Y = 0f;
         }
         // no-gravity foes: IntentVel is fully controlled by the subclass movement/skills.
+
+        // Match the player contract: the volume slows existing velocity over time but
+        // never replaces gravity, an aerial move, or a launched foe with a fixed field.
+        if (_softVolume != null)
+            IntentVel = _softVolume.ApplyVelocityResistance(IntentVel, CurrentMoveSpeed, dt);
 
         Velocity = IntentVel + ExternalVel;
         MoveAndSlide();

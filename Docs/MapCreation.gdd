@@ -16,7 +16,7 @@ A map is a stack of layers, drawn back-to-front:
 | # | Role | Count | Parallax | Interacts with gameplay | Purpose |
 |---|------|-------|----------|-------------------------|---------|
 | 0 | **Canvas** | exactly 1 | n/a (fills screen) | via future "modes" only | Backdrop: solid color now, animated weather modes later |
-| 1 | **Farview** | 0..8 sublayers | per-layer (≤ 1.0 typical) | only if `collision` and parallax = 1.0 (§3) | Background scenery, decoration, parallax depth |
+| 1 | **Farview** | 0..8 sublayers | per-layer (≤ 1.0 typical) | visual-only, except opted-in fixed-world SoftVolumes (§3) | Background scenery, decoration, parallax depth |
 | 2 | **Battlefield** | exactly 1 | 1.0 fixed | yes — the game board | Ground, platforms, spawns, hazards, goals |
 | 3 | **Closeview** | 0..2 sublayers | 1.0 (moves with battlefield) | **never** (visual occlusion only) | Foreground scenery the player hides behind (bush, column) |
 
@@ -28,7 +28,7 @@ gameplay collision on closeview — it is purely visual). Sway stays 0 ("steady"
 
 **Default layer stack (v0.6.17).** `MapDocument.CreateNew` now seeds a ready-made stack so a new
 map starts with parallax depth instead of a bare battlefield (the user shouldn't have to hand-build
-it): back-to-front — *Very Far Mountains* (0.15, loop) · *Far Mountains* (0.30, loop) · *Backdrop
+it): back-to-front — *Very Far Mountains* (0.15, 16-cell loop) · *Far Mountains* (0.30, 16-cell loop) · *Backdrop
 Scene* (0.55) · *Near Decoration* (0.85) · **Battlefield** (1.0) · *Foreground* closeview (1.0).
 The never-moving canvas is `CanvasData`, not a layer.
 
@@ -38,12 +38,21 @@ battlefield is the distinguished layer with gameplay semantics and locked parall
 One data shape ⇒ one paint pipeline, one renderer, one serializer. List order **is**
 draw order (T00 rule 3: explicit order, no z-index attribute).
 
+**Playtest parallax anchor.** Runtime parallax reads the active `Camera2D`'s actual
+screen-center position (including camera smoothing/shake), never the player body's
+position. The character's initial spawn point is the playtest anchor `A`. For a tile
+at authored world position `T`, camera center `C`, and layer parallax `p`, its visual
+world position is `T + (C - A) × (1 - p)` (plus any intentional auto-scroll). Thus
+when `C = A`, every layer renders at its authored absolute position; only subsequent
+camera motion produces the parallax offset.
+
 ### 1.1 Canvas
 
 `{ "type": "solidColor", "color": "#87CEEB" }` (skyblue default). The schema reserves
 `type: "mode"` + `modeId` for animated weather canvases (meteor night, flooding lava,
-deep sea) that can also fire battlefield events — idea marked in `Docs/IDEAS.md` §6
-("Canvas Weather Modes"), graduates in a late version alongside the weather system.
+deep sea) that can also fire battlefield events. The arena-event contract lives in
+`Gameplay.gdd` §A.6: a canvas mode is the persistent visual profile, while a timed
+environmental event owns temporary wind, tint, and hazard spawning.
 
 ### 1.2 Layer attributes (farview/closeview sublayers)
 
@@ -52,12 +61,12 @@ deep sea) that can also fire battlefield events — idea marked in `Docs/IDEAS.m
 | `name` | string | "Layer N" | shown in the layer panel |
 | `parallaxX`, `parallaxY` | float | 0.5 / 0.5 (farview), 1.0 (closeview) | 1.0 = moves with battlefield |
 | `loop` | bool | false | horizontally tiles the layer (clouds, hills). Loop layers can never collide (§3) |
-| `collision` | bool | false | only legal when parallax = (1.0, 1.0) — editor disables it otherwise (§3) |
+| `collision` | bool | false | Battlefield is fixed on. On a non-looping Farview layer it enables only its fixed-world SoftVolumes, at any parallax (§3); Closeview is fixed off. |
 | `tint` | hex string | none | color modulate; no default tint on any role (v0.6.17: closeview no longer darkens) |
 | `opacity` | float | 1.0 | |
 | `swayAmplitudePx`, `swayPeriodSec` | float | 0 / 4.0 | visual-only sway (§4); forced 0 on closeview ("steady") |
 | `autoScrollX`, `autoScrollY` | float px/s | 0 | drifting clouds/fog independent of camera |
-| `gridW`, `gridH` | int | battlefield dims | per-layer grid size (loop layers are usually narrow) |
+| `gridW`, `gridH` | int | battlefield dims (16×36 for a new looping Farview) | per-layer grid size; a loop repeats exactly every `gridW` cells, so sparse scenery needs a deliberately narrow strip |
 
 Battlefield fixes: parallax (1,1), loop false, collision true, sway 0. Its `gridW/H`
 define the map bounds shown in map properties (default **64 × 36** cells, max 512 × 256).
@@ -66,8 +75,10 @@ define the map bounds shown in map properties (default **64 × 36** cells, max 5
 
 ### 2.1 The cell
 
-One cell = **32 px = 1 m**, sourced from `Units.PixelsPerMeter` — never a local const.
-Cell coordinates are `(x right, y down)` from the layer's top-left. Storage is
+One cell = **64 px = 2 m**, sourced from `MapGrid.PixelsPerCell` (derived from
+`Units.PixelsPerMeter`) — never a local const. Pomegraknight's unchanged 8 m / 256 px
+ground jump therefore rises exactly **four map cells**. Cell coordinates are `(x right, y down)`
+from the layer's top-left. Storage is
 **sparse**: a layer holds a list of placed tiles, not a dense grid (maps are mostly
 air; also kills the grid-trim bugs of v0.5.x).
 
@@ -83,13 +94,18 @@ is adding a registry entry, never editing a switch** (T00 rule 1).
 | `displayName` | string | palette label |
 | `category` | enum | Ground, Platform, SoftVolume, Hazard, EnemySpawn, Respawn, LevelGoal, Character, Decoration, Rule, Misc |
 | `footprintW`, `footprintH` | int | cells occupied; default 1×1 (§2.3) |
-| `allowedRoles` | flags | which layer roles may hold it. **Default Any (v0.6.17):** grounds/platforms/soft-volumes/spawns can be placed on background/foreground layers, not just the battlefield. Placement ≠ collision — a tile only physically collides on a layer whose `collision` is on (still parallax-1.0-only, §3), so this doesn't touch the determinism policy |
+| `allowedRoles` | flags | which layer roles may hold it. **Default Any (v0.6.17):** grounds/platforms/soft-volumes/spawns can be placed on background/foreground layers, not just the battlefield. Placement ≠ collision — Battlefield collision applies normally; a non-loop Farview's Collision switch applies only to its fixed-world SoftVolumes (§3) |
 | `editorColor` | hex | placeholder quad color until art lands |
 | `spriteSlot` | string | reserved: atlas region / texture path the art department fills in (§2.5) |
 | `autotileGroup` | string? | reserved: connected-look group for future autotiling (§2.5) |
 | `edges` | `EdgeRule?` | reserved: per-side (top/right/bottom/left) neighbor-compatibility tags for future stamp/edge matching (§2.5); not yet consulted by any runtime/editor code |
 | `effectArea` | shape def? | collision/trigger shape in px relative to anchor (§2.4); null = footprint rect |
+| `softVolumeTuning` | `SoftVolumeTuning?` | optional per-kind traversal data for SoftVolumes; currently `stagnationIndex` only (§2.4) |
 | `props` | dict | per-kind extras (foe table id for EnemySpawn, spawn rules for Rule tiles §6, …) |
+
+Beach hazard content includes `hazard.tsunami_trigger`, a 1x1 battlefield marker whose
+runtime scene starts the storm presentation and moving tsunami. The 16x8 tsunami itself
+is not a placed tile; it is spawned by the trigger and sweeps beyond its anchor cell.
 
 ### 2.3 Multi-cell footprints
 
@@ -108,17 +124,36 @@ at runtime for its collider or trigger. Default = the footprint rectangle. The e
 gets a **"Show effect areas"** toggle (top bar) that outlines them in orange so
 designers see what a hazard actually touches.
 
-**Per-tile-kind effect painter (v0.6.17).** A new `ShapeDef.KindSubcellMask` kind lets a
-designer author the effect area as a **4×4 grid of 8 px sub-cells** (16-bit mask) covering the
-anchor cell. Each palette chip has a **⚙ gear** button (item 6) that opens the painter: click
-sub-cells to toggle them (colored by the tile's own category color), Save writes the mask, Clear
-reverts to the def's code default. The mask is **per tile-kind and global**, not per-map: it lives
-in `Scripts/MapCreation/Data/TileEffectStore.cs`, keyed by defId, persisted to a single
-`user://tile_effects.json` (STJ, atomic write, round-trip self-test — same contract as `MapJson`)
-and loaded at editor/browser boot. `TileEffectStore.EffectAreaOf(def)` returns the override when
-present, else the code-defined `effectArea`; "Show effect areas" and (future) runtime both consult
-it. TileDef's own `effectArea` stays the code default — the store only overrides. (Multi-cell
-footprints author the anchor cell only in v1.)
+**Flip contract.** `PlacedTile.flipX` mirrors the entire tile, not merely its sprite.
+The effect area is reflected horizontally inside the full authored footprint before the
+editor draws it or playtest constructs collision: rect offsets move to the opposite
+side, circle centers reflect, polygon winding is preserved after reflection, and a
+painted sub-cell mask reverses both its footprint-cell order and every row's sub-cell
+columns. Thus the orange overlay and gameplay collision always match the flipped art.
+
+**Per-tile-kind effect painter (v0.6.17, storage v2).** A new
+`ShapeDef.KindSubcellMask` authoring model divides **every footprint cell** into a 4×4 grid of
+16 px sub-cells. The ⚙ button on each non-Rule palette chip opens one continuous, zero-gap grid
+across the tile's full footprint (a 3×1 tile is 12×4 sub-cells), with the `SpriteSlot` texture
+dimmed behind it and highlighted boundaries every four rows/columns. Click toggles a sub-cell;
+dragging paints that same on/off value until release. Sub-cell size auto-scales from 12–42 px to
+keep the grid near 320×240 px. Save writes one 16-bit mask per footprint cell, row-major; Clear
+removes the override and restores the tile definition's fallback. A platform with no custom
+`effectArea` falls back to its complete footprint, so newly added platforms begin fully solid
+until their effect area is explicitly painted.
+
+The override is **per tile-kind and global**, not per-map: it lives in
+`Scripts/MapCreation/Data/TileEffectStore.cs`, keyed by defId and persisted atomically to
+`user://tile_effects.json`. Storage v2 uses an integer array per def; the loader also accepts the
+v1 single-integer value as the anchor-cell mask. The browser/editor load the store at boot and
+the effect-area overlay consumes all footprint-cell masks. TileDef's own `effectArea`, when one
+is supplied, remains an immutable fallback; platforms intentionally supply none by default.
+
+**SoftVolume traversal tuning.** `softVolumeTuning` is immutable TileDef data, applied when
+playtest instantiates the reusable SoftVolume scene. Its current `stagnationIndex` is a 0..1
+index: it caps intent speed to that fraction of max speed and determines the inverse resistance
+rate. All three cloud kinds use `0.3`; the palm tree uses `0.1`; unconfigured volumes retain the
+scene fallback of `0.5`.
 
 ### 2.5 Sprites & connected looks (art department slots)
 
@@ -130,8 +165,8 @@ it is the mature, built-in solution, so we do not hand-roll bitmask autotiling.
 The editor keeps its own custom renderer either way (it must draw ghosts, rule zones,
 effect areas, and layer-dimming that TileMap can't).
 
-**Layered ground-hill autotile (v0.6.13 sand, v0.6.15 generalized; spec locked, art/wiring
-pending).** A second, disclosed hand-rolled autotile system — pure classifier in
+**Layered ground-hill autotile (v0.6.13 sand, v0.6.15 generalized; sand art/editor wiring
+landed in v0.6.16).** A second, disclosed hand-rolled autotile system — pure classifier in
 `Scripts/MapCreation/Data/HillAutotile.cs` (material-agnostic), full generation prompts and
 rules in `Docs/Art/BeachTileSet.md`'s "Layered ground-hill autotile — base template" section,
 with Sand hill as the first worked instantiation and an "Adding a new material" walkthrough
@@ -140,10 +175,10 @@ layers × 4 horizontal positions, 13 tiles per material) for built-up terrain, n
 Wang/blob corner autotiling, so it doesn't preempt the Godot `TileSet` Terrain runtime path
 this section already commits to below. Like the existing 2-state ground lookup, it stays an
 editor/authoring-time visual approximation only.
-`HillAutotile.SelfTest()` is its structural guard. Not yet wired into `GridView` or
-registered in `TileRegistry` — that's next once the reference atlas exists (`Tools/
-compose_hill_atlas.py` composites it from 13 separately-generated equal-size tiles,
-deliberately not one AI-drawn sheet — see that doc section for why).
+`HillAutotile.SelfTest()` is its structural guard. `ground.sand` now opts into the classifier
+through `TileDef.Props["autotileKind"] = "layered_hill"`; `GridView` selects one source cell
+from `terrain_sand_hill_atlas.png`. `Tools/compose_hill_atlas.py` deterministically composites
+the 13 equal-size RGBA sources prepared by the coded-guide generation pipeline.
 
 **Manifest-driven authoring (v0.6.12).** `TileRegistry` is still the code-defined table
 (T00 rule 1: registration is a hand-edited list, never a switch or an implicit
@@ -170,15 +205,25 @@ move whenever the camera moves — physics becomes camera-dependent, breaking de
 (T00 rule 5), replay/daily-seed integrity, and producing jitter for anything standing
 on it.
 
-**Policy (v1):**
-1. `collision = true` is legal **only** on layers with parallax exactly (1.0, 1.0).
-   The editor greys the checkbox out otherwise, with a tooltip saying why.
-2. `loop` layers can never collide (a looping layer would tile its colliders forever).
-3. Decoration-at-parallax-1.0 is the blessed pattern: scenery that sits *in* the world,
-   doesn't burn battlefield cells, and may optionally collide.
-4. The fable fantasy ships later as a **Mirage tile** (IDEAS §6): a battlefield tile
-   whose collider is authored in battlefield space but whose sprite renders in a
-   farview sublayer — it *looks* impossibly far, it *is* deterministically standable.
+**Policy (v2):**
+1. Battlefield collision is fixed on. Closeview collision is fixed off. A looping
+   Farview is also collision-off: repeating a collider would make encounter physics
+   depend on a presentational loop.
+2. A **non-looping Farview** exposes a Collision checkbox at every parallax value.
+   Turning it on builds exactly one real `SoftVolume` at each authored SoftVolume tile's
+   absolute world cell. Turning it off builds no Farview physics. The checkbox does
+   not make the art itself collide; it is an explicit opt-in to the steady collider.
+3. The exception is category-specific. Farview ground, platforms, hazards, decoration,
+   and every other category remain visual-only even when the checkbox is on. Closeview
+   remains visual-only.
+4. Art and physics deliberately have separate transforms. A cloud at `(4,5)` always
+   has its collider at world `(4,5)`, while its Farview sprite follows the anchored
+   camera-parallax transform. A looping Farview repeats **all** of its artwork,
+   including cloud art, but has no collider. Use a non-looping Farview for an
+   interactable cloud; use a looping Farview for decorative clouds.
+5. A loop repeats after `gridW` cells. New default looping Farviews use a 16-cell strip;
+   making a sparse loop 64 cells wide is valid but leaves large intentional gaps between
+   repetitions rather than creating continuous sky decoration.
 
 ## 4. Sway
 
@@ -219,12 +264,18 @@ seed ⇒ same map). Mechanism: **rules are ground into tiles**, as designed.
   its own child stream** `DetRandom(hash(seed, layerIdx, anchorX, anchorY))` so adding
   a zone never reshuffles the others.
 - **Placement algorithm:** per zone, draw candidate anchors from the zone's cells in
-  seeded order; reject any whose footprint+reserve overlaps occupied or reserved
-  cells; stop at target count or after `4 × count` attempts (degrade gracefully — a
-  cramped zone just spawns fewer clouds, `GD.PushWarning` in debug).
+  seeded order. At each anchor, weighted-pick only from table entries whose full
+  footprint fits that zone; then reject any whose footprint+reserve overlaps occupied
+  or reserved cells. Stop at target count or after `4 × count` attempts (degrade
+  gracefully — a cramped zone just spawns fewer clouds, `GD.PushWarning` in debug).
+  Thus a one-cell Cloud Zone can deterministically produce its 1×1 cloud instead of
+  repeatedly rolling an impossible 2×1/3×2 entry.
 - Editor support: **"Preview generation"** button (top bar) rolls a scratch seed and
   renders the outcome semi-transparent; press again to reroll; Esc clears. Rule zones
   render as a hatched overlay in their rule color.
+
+The beach `rule.cloudZone` table contains all three distinct cloud defs:
+`cloud1x1` (weight 1), `cloud2x1` (weight 3), and `cloud3x2` (weight 1).
 - **"Generate" button (v0.6.17, item 4).** Preview is throwaway view-state; **Generate**
   *commits* — it resolves the rule zones (reusing the visible preview's seed when one is showing,
   else a fresh one), converts each `ResolvedSpawn` into a real `PlacedTile`, and pushes one
@@ -243,7 +294,7 @@ wider. The top bar gained **▶ Play** (item 5) and **Generate** (item 4).
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ Top bar: name · ▶Play · Save · Grid ⊞ · Effect areas ·       │
-│          Preview gen · Generate · zoom % · Cell = 32px = 1m  │
+│          Preview gen · Generate · zoom % · Cell = 64px = 2m  │
 ├───┬──────────────────────────────────────────────┬───────────┤
 │ T │                                              │ Layers    │
 │ o │              map canvas                      │  (stack,  │
@@ -261,13 +312,28 @@ Palette chips (item 8) show each tile's real sprite when its `spriteSlot` loads 
 aspect-fit) and fall back to the `editorColor` swatch otherwise, so "implemented vs placeholder"
 reads at a glance. The **⚙** gear on each non-Rule chip opens the effect painter (§2.4).
 
-### 7.1a Play preview (v0.6.17, item 5)
+### 7.1a Playtest (prototype)
 
-**▶ Play** enters a render-preview of the map (no physics, no combat — the §9 runtime milestone
-stays deferred): the editor panels hide and `GridView` draws every layer offset by its own parallax
-(+ auto-scroll drift; loop layers tile horizontally) against a **WASD fly-camera** (Shift = faster),
-centered on the battlefield. **Esc** returns to edit mode. Implemented as a mode on `GridView`
-(reuses its tile renderer), driven from `_Process`; the solid-color canvas shows through as sky.
+**▶ Play** starts an isolated runtime playtest of the current in-memory document. It hides the
+editor chrome, instantiates Pomegraknight at the first battlefield `spawn.character` tile, and
+builds real Ground (layer 3), one-way Platform (layer 4), Hazard (layer 6), and SoftVolume nodes
+from the authored effect areas. The player has their normal movement and abilities; **Esc** frees
+the entire playtest tree and returns to the unchanged editor document.
+
+When a SoftVolume is created, its optional TileDef `softVolumeTuning` is applied to the runtime
+scene before it enters the tree. This keeps cloud/palm viscosity as registry data rather than a
+map-specific or gameplay-side special case.
+
+The visual map is built back-to-front as normal: each layer retains its tint, opacity, auto-scroll,
+loop behavior, and camera parallax. Physics is a separate steady world tree. Battlefield collision
+is built only when its collision setting is enabled; a non-looping Farview builds its fixed-world
+SoftVolumes only when its Collision switch is enabled (§3). A playtest never writes generated
+runtime state back to the map file.
+
+The playtest camera is constrained to the Battlefield rectangle exactly:
+`[0, gridW × MapGrid.PixelsPerCell] × [0, gridH × MapGrid.PixelsPerCell]`. It replaces any
+prototype limits serialized on the character scene, with no extra top/bottom/side margin, so
+the visible camera frame stays inside the authored map and can reach its final row.
 
 ### 7.2 Tools (left rail, top-to-bottom)
 
@@ -315,7 +381,7 @@ context). The layer panel row of the current layer is highlighted to match.
 - **Grid toggle** (top bar + `G`): 1 px lines at 12%-alpha white every cell, a
   brighter line every 8 cells, drawn **only across the visible rect** (a zoomed-out
   512-wide map must not issue 500+ draw calls of off-screen lines).
-- The top bar permanently shows **`Cell = 32 px = 1 m`** and current zoom %; the
+- The top bar permanently shows **`Cell = 64 px = 2 m`** and current zoom %; the
   status bar shows the cursor's cell coordinate live. Below 25% zoom the fine grid
   fades out (moiré), keeping only the 8-cell majors.
 
@@ -359,17 +425,25 @@ The unsaved-changes dot derives from stack position vs. last-saved marker.
 - Domain data (`Scripts/MapCreation/Data/`) has **zero `using Godot`** (T10 layer
   law; colors are hex strings, shapes are plain structs) so it stays headless-testable.
 
-## 9. Runtime contract (later milestone — contract only)
+## 9. Runtime contract
 
-- `MapInstantiator` (ORCHESTRATION layer) : `(MapDocument, DetRandom nodeRng) →`
-  arena `Node2D` — resolves rule zones (§6), then builds `StaticBody2D`/`Area2D` per
-  tile from `effectArea`, collision layers from `Units.Layer*` (Ground → layer 3,
-  Platform → 4 one-way, Hazard → 6, SoftVolume → the existing SoftVolume scene).
+- `MapPlaytestController` (ORCHESTRATION layer) is the delivered first consumer:
+  `MapDocument → isolated Node2D runtime`. It builds `StaticBody2D`/`Area2D` per tile
+  from `effectArea`, collision layers from `Units.Layer*` (Ground → layer 3, Platform
+  → 4 one-way, Hazard → 6, SoftVolume → the existing SoftVolume scene), then spawns
+  Pomegraknight. It intentionally takes no run seed because its authored map has
+  already committed rule results; normal adventure integration will supply the seed.
+- The instantiator creates one map-visual root and retains runtime tile-instance handles.
+  `ArenaEnvironmentController` can tint that visual root in one operation; future
+  responsive/destructible tiles opt in through data tags and receive only visual or
+  runtime-instance changes. Events never mutate the authored `MapDocument` during combat.
 - Combat code never reads map files; RunState hands the instantiator the chosen map id
   + node seed (the T10 §3 handshake). `ArenaBuilder`'s procedural platforms become one
   consumer of the same tile-placement API.
-- Until then, custom maps are an authoring artifact; the editor's Preview-generation
-  button is the validation surface.
+- The later `MapInstantiator` for normal adventures reuses this construction policy,
+  resolves rule zones from the supplied node seed, and owns the persistent encounter
+  runtime. The editor's Preview-generation button remains the authoring surface for
+  inspecting a rule roll before committing it.
 
 ## 10. Architecture & file map
 
@@ -378,6 +452,7 @@ Scripts/MapCreation/
   Data/                    (DOMAIN DATA — no Godot)
     MapDocument.cs         map = meta + canvas + layers
     MapLayerData.cs        role, attributes (§1.2), placed tiles
+    MapGrid.cs             2 m / 64 px authored cell scale (§2.1)
     PlacedTile.cs          defId, anchorX, anchorY, overrides
     TileDef.cs / TileRegistry.cs      §2.2
     RuleResolver.cs        §6 zone grouping + seeded placement (pure, testable)
@@ -390,6 +465,8 @@ Scripts/MapCreation/
     EditorState.cs         current layer/tool/brush/selection/pan/zoom (one owner)
     CommandStack.cs        §7.7
     Tools/                 one class per tool (§7.2), registry-listed
+  Playtest/
+    MapPlaytestController.cs  isolated runtime map builder (§7.1a, §9)
 Scenes/MapCreation/MapBrowser.tscn, MapEditor.tscn   (thin roots, no fabricated uid=)
 ```
 
@@ -398,8 +475,9 @@ saved user maps are worth migrating — they're all `{}` on disk anyway).
 
 ## 11. Risks & known pitfalls (why the spec says what it says)
 
-1. **Parallax + collision** is camera-dependent physics — restricted to parallax 1.0
-   (§3); revisit only via the Mirage-tile design.
+1. **Parallax + collision** is camera-dependent physics — the only Farview exception
+   is an explicit, non-looping fixed-world SoftVolume collider (§3), never a collider
+   moved to chase parallax art.
 2. **STJ fields bug** ate all v0.5.x saves — properties + round-trip test (§8);
    KNOWLEDGE caveat to be added on ship.
 3. **Draw-behind-children** occlusion killed the old canvas — dedicated GridView child
@@ -416,18 +494,19 @@ saved user maps are worth migrating — they're all `{}` on disk anyway).
 ## 12. Out of scope (v1) / future
 
 Weather canvas modes (IDEAS §6) · Mirage tiles (IDEAS §6) · autotile art via TileSet
-terrains (§2.5) · map sharing/export · runtime instantiation for real combat (§9, next
-milestone). **Delivered v0.6.17:** in-editor render-preview with a WASD fly-camera (§7.1a — a
-lighter step than full §9 combat instantiation); the closeview blur shader is dropped (closeview
-is real scenery now, §1, not a blurred band).
+terrains (§2.5) · map sharing/export · seeded adventure-map integration (the persistent
+`MapInstantiator` form of §9). **Delivered in this workspace:** isolated editor playtesting with
+Pomegraknight, authored runtime collision, and opt-in deterministic Farview SoftVolumes (§3, §7.1a);
+the closeview blur shader is dropped (closeview is real scenery now, §1, not a blurred band).
 
 ## Decisions log
 
 - **Unify all layers into one schema with a `role` field.** One paint pipeline and one
   serializer instead of three; battlefield is just the locked, distinguished layer.
-- **Farview collision only at parallax (1.0, 1.0); loop layers never collide.**
-  Camera-dependent colliders break determinism (T00 rule 5) and physics stability;
-  the "impossible platform" fantasy is preserved via the future Mirage tile instead.
+- **Farview Collision is an explicit fixed-world SoftVolume switch.** It is available
+  on non-looping Farview layers at any parallax and builds only those one-per-tile
+  colliders. This preserves deterministic physics while giving authors a visible,
+  reversible choice; looping Farviews remain decorative.
 - **Sparse tile storage, anchor-only for multi-cell.** Maps are mostly air; dense
   `List<List<>>` caused the old trim bugs and serializes bloated.
 - **GUID file identity, no `_index.json`.** Name-derived filenames caused the
@@ -447,5 +526,8 @@ is real scenery now, §1, not a blurred band).
   (adding a zone never reshuffles existing ones).
 - **Sway is render-only and battlefield/closeview stay steady.** Colliders never
   follow visual sway; closeview is specified "steady", battlefield stays readable.
+- **SoftVolume viscosity is tile-kind data.** The reusable scene provides the common movement
+  behavior and fallback values; cloud kinds set `stagnationIndex = 0.3`, while palms set `0.1`.
+  This makes a new SoftVolume's feel an additive registry entry, not a map-builder switch.
 - **Skyblue solid-color canvas v1.** Weather modes are marked in IDEAS and arrive
   with the weather system in a late version.

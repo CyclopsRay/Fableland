@@ -10,7 +10,7 @@ For architecture, controls, and the file map, see `Migration.md` §0.
 
 ## Conventions
 
-**Units / physics** (`Scripts/Units.cs`) — derive everything from these, don't hardcode:
+**Units / physics** (`Scripts/Foundation/Units.cs`) — derive everything from these, don't hardcode:
 - Scale is **32 px/m**. A player is **2 m** (64 px) tall; jump height **8 m**; a ground
   jump takes **1 s** (0.5 s up / down). ⇒ gravity **64 m/s² = 2048 px/s²**, launch
   speed **32 m/s = 1024 px/s**.
@@ -25,13 +25,15 @@ Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
 **Two platform archetypes:**
 1. thin one-way **platform** — land/cross/drop-through (a `StaticBody2D` with
    `one_way_collision = true` on its shape).
-2. **SoftVolume** (`Scripts/SoftVolume.cs`) — enterable "go-inside" volume (tree/bush/…);
-   Area2D field + one-way top; inside, falling halts and up/down move like left/right,
-   capped by StagnationIndex (0.5·maxSpeed) plus a constant GravityIndex drift
-   (0.1·maxSpeed). Applies to players AND foes.
+2. **SoftVolume** (`Scripts/Gameplay/World/SoftVolume.cs`) — enterable "go-inside" volume (tree/bush/…);
+   Area2D field with **no** standable top. Inside, normal gravity/input/jumps continue;
+   velocity is gradually pulled toward StagnationIndex (the scene fallback is 0.5·maxSpeed;
+   map clouds use 0.3 and palms 0.1) plus a small
+   GravityIndex drift (0.1·maxSpeed), rather than being overwritten. Active membership refreshes
+   player jump charges even though it is not a physical floor. Applies to players AND foes.
 
 **Movement / combat model** (`CharacterController`, `Enemy`, `HitInfo`):
-- Velocity = **`intentVel`** (self-directed: input, gravity, jump, or the SoftVolume field) +
+- Velocity = **`intentVel`** (self-directed: input, gravity, jump, then any SoftVolume resistance) +
   **`externalVel`** (impulses — knockback/wind — that decay via `ExternalDamping`). This is what
   gives external forces "room" to coexist with player control.
 - Horizontal intent has **momentum** (accelerate toward `MoveSpeed` via Ground/Air Accel; stop via
@@ -44,7 +46,7 @@ Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
   knockback still shoves you in but fades fast.
 
 **Jumps** — per-character `MaxJumps` (jumps before touching down again; Pomegraknight = 1),
-refreshed on touching ground / platform / SoftVolume. A universal `JumpCooldown` (0.3 s) is the
+refreshed on touching ground / platform / active SoftVolume. A universal `JumpCooldown` (0.3 s) is the
 minimum gap between jumps; override per character only when explicitly specified. **Coyote
 time** (`CoyoteTime`, 0.2 s): leaving a surface doesn't cost a jump for that long (edge jumps
 still work), but if it elapses with no manual jump, one jump charge is forfeited once — see the
@@ -78,7 +80,7 @@ actions (Sharpen Weapon: +10 ATK; Sharpen Armor: +10 DEF). Unlike the temporary 
 bonus (which uses the `_defenseBonuses` dictionary), permanent ATK/DEF from shelter Blessings
 are stored separately and persist across the entire run.
 
-**Versioning** — bump patch (+0.0.1) every commit; keep `Scripts/GameVersion.cs`, the
+**Versioning** — bump patch (+0.0.1) every commit; keep `Scripts/Foundation/GameVersion.cs`, the
 repo-root `VERSION` file, and the HUD `VersionLabel` (`Scenes/Hud.tscn`) in sync. Shown
 top-left in-game.
 
@@ -90,6 +92,132 @@ compiler surfaces below.
 ---
 
 ## Caveats / gotchas (grow this on every bug fix)
+
+### Platform defaults are full footprints; the effect painter is the only source of bespoke platform geometry (v0.6.18, Map Creation collision clarification)
+- **Symptom:** the bench, sun lounger, and lifeguard tower had legacy narrow registry rectangles as fallbacks while the effect painter also stored the authored shape. This made it difficult to tell whether collision came from the active painted mask or an old built-in region.
+- **Rule:** platform TileDefs leave `EffectArea` null, which means their complete footprint is the default collider. A narrower platform surface or a compound tower landing exists only as a saved `TileEffectStore` mask. The painter override remains per tile kind and wins completely; use Clear only to return to the full-footprint fallback.
+- **Why:** one obvious fallback makes a new platform predictable and keeps every exceptional collision surface visibly authored in the same tool that controls it.
+
+### Farview collision is a fixed-world SoftVolume opt-in, not a parallax gate (v0.6.17, Map Playtest bug fix)
+- **Symptom:** the Farview Collision checkbox was disabled for every parallax other than 1.0,
+  yet Farview SoftVolumes ignored it and always built colliders. At the same time their art was
+  deliberately excluded from loop copies, making sparse cloud layers appear missing.
+- **Rule:** on a non-looping Farview, Collision is available at every parallax and controls only
+  the one fixed-world SoftVolume collider at each authored tile. Looping Farviews are decorative:
+  they repeat all artwork but build no physics. Keep this policy in the layer panel, playtest
+  builder, and GDD together. New looping layers use a 16-cell strip; old 64-cell loops retain
+  their authored width and may intentionally have wide gaps.
+- **Why:** a collider must never move with a camera transform, but authors still need an explicit
+  deterministic choice. Separating the one real collider from repeated visuals makes the choice
+  clear and keeps a looping sky from silently creating duplicate collision.
+
+### SoftVolume resistance must modify a live jump instead of replacing it (v0.6.17, movement bug fix)
+- **Symptom:** SoftVolumes supplied a one-way top (requiring Down to enter) and replaced intent
+  velocity with a small fixed field on overlap. A normal `-Units.JumpSpeed` launch was therefore
+  cancelled immediately. A follow-up briefly removed jump refresh with the top, but cloud/tree
+  traversal still needs a refreshed jump while the body is inside.
+- **Rule:** SoftVolumes are `Area2D` fields with no top collider. Run normal movement/gravity/jump
+  first, then move the existing intent velocity gradually toward the indexed cap and drift; derive
+  the default resistance from `Units.Gravity × (1 - StagnationIndex)`. Ground/platform **and an
+  active SoftVolume** refresh jumps, with the latter refresh occurring before jump input. Continue
+  applying the separate in-volume external-velocity damping.
+- **Why:** a viscous cloud should shorten a jump through accumulated delta-v, not erase the input
+  frame that began it. Retaining the two velocity channels also keeps wind and knockback behavior
+  composable.
+
+### Rule generators must filter impossible footprints before weighted selection (v0.6.17, Map Creation bug fix)
+- **Symptom:** a one-cell Cloud Zone often generated nothing: its table weighted the 2×1 cloud
+  most highly, so the resolver rolled an entry that could not fit and burned an attempt instead
+  of considering the available 1×1 cloud.
+- **Rule:** at each candidate anchor, build the weighted selection list from only definitions
+  whose entire footprint lies in the zone; then apply the normal occupancy/reserve rejection.
+  Keep the one-cell Cloud Zone regression self-test in the browser's debug boot validation.
+- **Why:** fitting is a deterministic eligibility rule, not a stochastic outcome. Filtering it
+  before the roll preserves the intended weights among possible content and makes small zones
+  degrade to fewer valid spawns instead of zero content.
+
+### Map playtest must overwrite character-scene camera limits from its Battlefield bounds (v0.6.17, Map Playtest bug fix)
+- **Symptom:** Pomegraknight's reusable scene carried the prototype Arena camera limits
+  (`right = 2000`, `bottom = 720`). Once Map Creation cells grew to 64 px, a 64×36 map was
+  4096×2304 px, but its camera still stopped at the old arena edge and could not reach lower
+  authored tiles.
+- **Rule:** after instantiating the playtest character, set `Camera2D.LimitLeft/Top/Right/Bottom`
+  from the Battlefield rectangle (`0, 0, gridW × MapGrid.PixelsPerCell, gridH ×
+  MapGrid.PixelsPerCell`). Do this in the map orchestrator; do not alter the reusable character
+  scene's Arena-specific defaults. Add no arbitrary camera margin unless the map contract names one.
+- **Why:** a character scene is reused by the fixed Arena and custom maps, whose extents differ.
+  Scene-authored camera limits are therefore defaults, not map ownership; the runtime map must
+  supply its own bounds to keep the camera frame inside the current authored battlefield.
+
+### Runtime parallax follows the active camera center, anchored at the authored spawn (v0.6.17, Map Playtest bug fix)
+- **Symptom:** farview tiles were offset from the player body's position. Camera smoothing and
+  shake therefore made their apparent motion disagree with the camera, and all farview art was
+  shifted from its authored coordinates when the playtest began away from world origin.
+- **Rule:** read `Camera2D.GetScreenCenterPosition()` for parallax, never a character body's
+  `GlobalPosition`. Store an explicit world anchor (the playtest character spawn) and use
+  `tileVisual = authoredTile + (cameraCenter - anchor) × (1 - parallax)`; use the corresponding
+  anchored parallax-space value when selecting loop copies.
+- **Why:** the camera is the rendered view transform; a player body is only one possible target
+  and can diverge from it. Anchoring makes `cameraCenter == anchor` render every tile at its saved
+  absolute position, while still allowing intentional parallax afterwards.
+
+### `PlacedTile.FlipX` must mirror effect geometry across the full footprint (v0.6.17, Map Creation bug fix)
+- **Symptom:** using **Flip H** mirrored a tile sprite but left its orange effect-area overlay
+  and playtest collider at the unflipped coordinates. An asymmetric hazard or platform therefore
+  looked safe on one side while still affecting the other.
+- **Rule:** treat `FlipX` as a placed-instance geometry transform, never as a sprite-only flag.
+  Before drawing or constructing collision, reflect rect offsets, circle centers, and polygon
+  points inside the full tile width; reverse mirrored polygon point order to preserve winding.
+  For sub-cell masks, reverse both the footprint-cell order and each 4×4 row's columns. Keep this
+  logic in `EffectAreaTransform` so editor overlays and runtime collision call the same transform.
+- **Why:** `TileDef` and its effect shape are shared immutable content, while `FlipX` belongs to a
+  saved placed instance. Mutating the definition would flip every instance; transforming only the
+  sprite desynchronizes presentation from deterministic gameplay.
+
+### Persisted JSON casing and Container stretching must match the effect painter's contracts (v0.6.17)
+- **Symptom:** a saved `tile_effects.json` immediately reloaded with no overrides because STJ
+  wrote `Masks` while the custom v1/v2 reader searched only for `masks`. Separately, a 1×1
+  painter's host expanded to the dialog width, but hit-testing still divided coordinates by the
+  calculated 42 px sub-cell size, so the visible cells, sprite, and painted cell could disagree.
+- **Rule:** compatibility readers accept both the serializer's existing PascalCase keys and
+  camelCase inputs, and their round-trip test must include the legacy schema. Any pixel-mapped
+  grid inside a `Container` must opt into shrink sizing (and set its exact calculated size) so
+  layout cannot stretch it independently of hit-testing; keep cell overlays translucent when a
+  reference texture is drawn behind them.
+- **Why:** JSON property matching is case-sensitive at the `JsonElement` level, and Godot
+  containers resize children according to size flags rather than `CustomMinimumSize` alone.
+  Persistence or pointer geometry that silently uses a different contract makes authoring look
+  successful while saving or painting the wrong data.
+
+### Atlas source regions must survive fill-footprint drawing, and generated air must become alpha (v0.6.16)
+- **Symptom:** placing `Beach Sand` in the map creator did not use the new layered hill art.
+  The registry still pointed at the old atlas, `HillAutotile` had no renderer dispatch, the
+  generated source cells still carried opaque magenta, and—most critically—even the existing
+  atlas lookup's selected `SourceRect` was discarded because `DrawTileQuad` replaced it with
+  the whole texture whenever `SpriteFillFootprint` was true.
+- **Rule:** `SpriteFillFootprint` controls only the destination rectangle; always draw the
+  `SpriteTexture.SourceRect`. Select classifier families through tile data
+  (`Props["autotileKind"]`), not a content-id switch. Chroma-key generated open air to RGBA
+  before atlas composition, and require all 13 equal-size sources (including Layer-1 Peak)
+  before wiring the atlas into a palette tile.
+- **Why:** an atlas is useful only if the renderer preserves its selected cell, and an opaque
+  key color is not transparency. Keeping classifier choice in `TileDef` also lets later hill
+  materials reuse the renderer without another hard-coded branch.
+
+### AI terrain geometry must start from a coded guide, and imperfect sheets must fail closed (v0.6.16)
+- **Symptom:** a text-only request for a 3x4 sand-hill sheet produced an image whose file
+  dimensions divided into twelve squares, but whose painted layer changes ignored the row
+  boundaries and whose broad surface dome made repeated Mid tiles form visible waves.
+  `slice_hill_grid.py` would also merely warn and crop a genuinely wrong-ratio source, allowing
+  malformed cells to enter the production atlas.
+- **Rule:** generate `Tools/generate_hill_guide.py` first and use its output as the binding
+  geometry reference; style images are finish-only references and never own proportions. Layer
+  1 Mid is mechanically flat across both endpoints; only Left/Right slope toward their open
+  outer edges and Peak domes. The slicer rejects any source that is not an exact 3:4 grid of
+  square cells unless `--allow-imperfect` is explicitly used for disposable legacy inspection.
+- **Why:** image models can paint a supplied structure convincingly but prose is not a reliable
+  pixel grid. Keeping geometry deterministic in code prevents waves, shifted material bands,
+  remainder-pixel cropping, and atlas seams while still allowing generated watercolor texture.
 
 ### Folding a UI panel means resizing its anchored offset, not just hiding its content (v0.6.9, MapEditor UX fixes)
 - **Symptom:** the map editor's Layers/Palette side panel and Tools rail are fixed-size
@@ -534,7 +662,8 @@ is a mistake already paid for once.
 - **Rule:** track `_airborneTimer` since leaving a surface. Within `CoyoteTime` (0.2s) a
   jump still works normally (edge jump preserved). If that window elapses **without** a
   manual jump (`_jumpedSinceGrounded` stays false), forfeit one jump charge once
-  (`_coyoteConsumed` guards against repeating it). Touching ground/platform/SoftVolume
+  (`_coyoteConsumed` guards against repeating it). Touching ground/platform or entering an active
+  SoftVolume
   calls `RefreshJumps()` which resets all three fields. This makes `MaxJumps` mean "jumps
   before your foot has been off a surface for a beat," not "jumps since the last button
   press," so multi-jump characters keep their real air jumps while 1-jump characters can't
@@ -648,7 +777,7 @@ is a mistake already paid for once.
   off its `InfoLabel`.
 
 ### Autoload C# singletons (reference)
-- A C# autoload is registered as `Name="*res://Scripts/Name.cs"` in `project.godot`; set the
+- A C# autoload is registered with its actual module path in `project.godot`; set the
   static `Instance` in `_EnterTree`. Autoloads persist across `ReloadCurrentScene`, so a
   manager (e.g. `DamageNumberManager`) that parents nodes into `GetTree().CurrentScene`
   stays valid across restarts.

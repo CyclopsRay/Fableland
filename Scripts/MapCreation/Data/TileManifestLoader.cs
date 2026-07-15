@@ -59,11 +59,14 @@ public static class TileManifestLoader
         };
 
         Dictionary<string, string> props = null;
-        if (!string.IsNullOrWhiteSpace(manifest.ArtSource) || !string.IsNullOrWhiteSpace(manifest.Prompt))
+        if (!string.IsNullOrWhiteSpace(manifest.ArtSource) ||
+            !string.IsNullOrWhiteSpace(manifest.Prompt) ||
+            !string.IsNullOrWhiteSpace(manifest.AutotileKind))
         {
             props = new Dictionary<string, string>();
             if (!string.IsNullOrWhiteSpace(manifest.ArtSource)) props["artSource"] = manifest.ArtSource;
             if (!string.IsNullOrWhiteSpace(manifest.Prompt)) props["prompt"] = manifest.Prompt;
+            if (!string.IsNullOrWhiteSpace(manifest.AutotileKind)) props["autotileKind"] = manifest.AutotileKind;
         }
 
         return new TileDef
@@ -135,6 +138,7 @@ public static class TileManifestLoader
             Footprint = new TileManifestFootprint { W = 1, H = 1 },
             FillFootprint = true,
             AutotileGroup = "terrain.selftest",
+            AutotileKind = "layered_hill",
             Edges = new TileManifestEdges { Top = "open-air-ok", Right = "x", Bottom = "x", Left = "x" },
             ArtSource = "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
             Prompt = "test prompt",
@@ -155,6 +159,7 @@ public static class TileManifestLoader
             Check(def.FootprintW == 1 && def.FootprintH == 1, "Footprint");
             Check(def.SpriteFillFootprint, "SpriteFillFootprint");
             Check(def.AutotileGroup == "terrain.selftest", "AutotileGroup");
+            Check(def.Props != null && def.Props["autotileKind"] == "layered_hill", "Props.autotileKind");
             // The temp file lives outside Sprites/, so DeriveSpritePath can't produce a
             // res:// path here (that prefixing is only checked by SelfTestFixtures, which
             // loads the real on-disk manifests) — just confirm the sidecar-basename
@@ -220,7 +225,7 @@ public static class TileManifestLoader
             }
         }
 
-        CheckDef("ground_sand_seamless.tile.json", "ground.sand", "terrain.beach_sand");
+        CheckDef("ground_sand_seamless.tile.json", "ground.sand", "terrain.sand_hill");
         CheckDef("ground_grass_seamless.tile.json", "ground.grass", "terrain.coastal_grass");
 
         return failures;
