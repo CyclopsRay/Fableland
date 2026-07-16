@@ -37,6 +37,10 @@ public partial class RunState : Node {
   live node's exported fields (nodes die with scenes; RunState is the truth).
 - On scene entry, characters hydrate from `ProtagonistState` (HP carries between
   fights) and write back on scene exit / death.
+- `ActiveBuild` is editable shelter configuration, not live arena state. `BeginAdventure`
+  validates and copies it into `AdventureContext.BattleTeam`; the Arena uses only that
+  immutable order and keeps its own local current-member index. This prevents a UI edit
+  or stale index from changing a fight's protagonist identity mid-combat.
 - Test hooks: a `DebugSnapshot()` string dump (day, stamina, node, counters) shown in
   the debug overlay; unit tests construct RunState headlessly (no scene needed —
   keep node-type fields nullable-tolerant).

@@ -21,9 +21,13 @@ public sealed class ProtagonistState
     public int MaxHpPercentPoints;  // additive percentage points: two full-HP Rests → +10, +20 (NOT compounding)
 
     /// <summary>The single held wonder-item slot (defId, null = empty). ONE held slot per
-    /// protagonist (ITEMS.gdd §1.1 / T30 §4 — the real design, even in this v0.6.0 stub). No
-    /// passive/skill/cooldown behavior attaches yet — that is future work (T30 §4).</summary>
+    /// protagonist (ITEMS.gdd §1.1 / T30 §4). TwistedReality currently uses this slot's daily
+    /// cooldown; the remaining item passive/skill contracts are future work.</summary>
     public string HeldItemDefId;
+
+    /// <summary>Remaining daily cooldown of the held item. This lives with the held slot so
+    /// backpack items cannot progress their cooldown outside the party.</summary>
+    public int HeldItemDayCooldownRemaining;
 
     /// <summary>True when <see cref="HeldItemDefId"/> was drawn from the real backpack (so it must
     /// return there on unhold / bump-out). False for a debug Team-Build "conjured" catalog item
@@ -39,6 +43,14 @@ public sealed class ProtagonistState
     // time is persisted here.
     public float ShiftCdRemaining;
     public float ESkillCdRemaining;
+
+    // Universal basic-attack magazine state. It is persisted while this protagonist is
+    // benched so a Tab switch cannot create a free reload (Gameplay.gdd §A.2.1/A.3).
+    public bool AmmoInitialized;
+    public int AmmoCurrent;
+    public float AmmoAttackCooldownRemaining;
+    public bool AmmoReloadActive;
+    public float AmmoReloadRemaining;
 
     public ProtagonistState(string id) { Id = id; }
 }

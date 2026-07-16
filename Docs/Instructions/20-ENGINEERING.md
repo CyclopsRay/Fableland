@@ -51,18 +51,17 @@ assignments; don't shadow inherited members; never commit the PAT.
 - **Damage taken:** single lever — defense: `mult = 100/(100+defense)`, defense being an
   aggregatable pool. Don't add flat damage-reduction multipliers (removed in v0.2.1).
 - **Statuses:** `DecayingDebuff` (integer points, cap 99, 10%/0.2 s decay, ceil) backs
-  OnFire/Frozen. New stackable buffs follow the **single-shared-timer** model
-  (Cleopastar StarSicking): timer on the buff instance, not per stack.
+  OnFire/Frozen. New stackable buffs follow the **single-shared-timer** model: timer
+  on the buff instance, not per stack.
 - **Modifiers:** dictionaries keyed by source string that aggregate (sum), e.g.
   `SetDefenseSource("Frozen", 30)` / `ClearDefenseSource`. Every new buff-like effect
   uses this. Generalized spec in `30-DATA-AND-BALANCE.md` §3.
 - **Hazards:** stationary `Area2D`, collision box built in code from `BoxSize` (shape
   can't drift from telegraph), tick every 0.25 s via `Deliver(...)`; ticks deliberately
   **bypass** the 0.8 s hit i-frame; one-shots (Tsunami) go through `TakeHit` instead.
-- **Ammo/magazine:** the base system covers 3-swing combos (Pomegraknight), volleys
-  (Pixolotl), trickle resources (Cleopastar Glows: override `UpdateAmmo`,
-  `AutoTriggerReplenishOnShot=false`), single-head (PumpKing mag=1, manual reload).
-  Extend it; don't build sibling resource systems.
+- **Ammo/magazine:** all BA resources use the shared `AmmoController` contract in
+  `Gameplay.gdd` §A.2.1. Migrate Pomegraknight and PumpKing's local counters before
+  adding Cleopastar; never build a character-local ammo/reload timer.
 - **Autoload singletons:** register using the script's real module path, set static
   `Instance` in `_EnterTree`; they survive `ReloadCurrentScene`.
 - **Determinism:** all gameplay RNG through `DetRandom` derived from the run seed (use
@@ -100,7 +99,7 @@ the arena derives mission from node level and foe level from day (FOES §10).
 
 **New character** — 1) GDD complete per `10-DESIGN.md` §2. 2) Subclass
 `CharacterController`; override `InitCharacter`, `HandleBA/HandleSkill1/2/Ult`,
-`DrawDebug`, later `UpdateAnimator`. 3) New base-class needs (e.g. `externalForce`)
+`DrawDebug`, later `UpdateAnimator`. 3) New base-class needs (e.g. a continuous-force source)
 go in as minimal, non-breaking, documented additions. 4) Scene: CharacterBody2D +
 Camera2D + FirePoint + empty AnimationPlayer, collision 48-wide×64 class shape, layers
 per `Units.cs`. 5) Projectiles = own scenes/scripts; guard 0-lifetime first-tick.
@@ -127,8 +126,9 @@ payload. One-shots opt into `TakeHit` explicitly.
 hosts: `Setup(nodeLevel)`, `Tick`, `IsComplete/IsFailed`, `GrantReward`. Mission choice
 is rolled **at map-generation time** from `DetRandom` and stored on the node.
 
-**New world** — add to the pool in `MapGenerator` + palette + both barrier flavours in
-`MapRenderModel.Themes`; verify generation invariants still pass (40-QA.md §4).
+**New world** — add it to the pool in `MapGenerator`, give it an atlas land palette, and ensure
+its seeded sector, altitude field, boss-reachability tree, required LV3 function routes, and
+extra function-node counts pass the map invariants (40-QA.md §4).
 
 ## 5. Data-driven rules (the engineering half)
 

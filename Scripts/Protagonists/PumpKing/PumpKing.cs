@@ -8,7 +8,7 @@ using Fableland.Run;
 ///          active only in Normal state; entering Rolling or Soul clears it. Each
 ///          stack also grows the head visually and applies a linear move-speed
 ///          penalty (0%→40% at 5 stacks).
-/// BA       Normal: fire the head as a rolling projectile (magazine 1, 0.5s reload).
+/// BA       Normal: fire the head as a rolling projectile (magazine 1, 1.5s reload).
 ///          Rolling: detonate the head manually. Soul: no-op.
 /// SHIFT    Soul Form (12s CD, 0.5s windup) — 6s free-flight ghost form; a live head
 ///          becomes autonomous (visual bounce only, no AoE on its own explosion).
@@ -28,9 +28,9 @@ using Fableland.Run;
 ///  - No dead/stun body clip exists in the delivered art — death freezes the last frame
 ///    (base gray tint carries the "dead" read) and stun uses the base's universal
 ///    Anim.SpeedScale freeze, same as every other character.
-///  - Soul free-flight ignores external knockback impulses and gravity while active
-///    (ghost form; CharacterController's velocity channels are private) — damage still
-///    lands normally via TakeHit.
+///  - Soul free-flight ignores transient knockback impulses and gravity while active
+///    (ghost form), while continuous environmental velocities still apply — damage
+///    still lands normally via TakeHit.
 /// </summary>
 public partial class PumpKing : CharacterController
 {
@@ -56,7 +56,6 @@ public partial class PumpKing : CharacterController
     [Export] public float ExplosionRadius = Units.Px(3f);     // 96 px
     [Export] public float ExplosionDamage = 50f;
     [Export] public float ExplosionKnockback = Units.Px(15f); // 480 px/s ⇒ ~96 px (3 m) travel vs foes' 1200 px/s² ExternalDamping — matches the blast radius
-    [Export] public float ReplenishWindup = 0.5f;
 
     // Designer knob: head visual scale per pump-stack count (index = stacks).
     [Export] public float[] HeadScales = { 1.0f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f };
@@ -83,8 +82,6 @@ public partial class PumpKing : CharacterController
     private float _shield;
     public override float Shield => _shield;
     private float _pumpCd;
-    private float _reloadTimer;
-    private int _ammo;
     private float _soulCd;
     private float _soulWindup;
     private float _soulActive;
@@ -106,7 +103,7 @@ public partial class PumpKing : CharacterController
         MaxJumps = 1;
         MoveSpeed = Units.Px(8f);
         _baseMoveSpeed = MoveSpeed;
-        _ammo = 1;
+        ConfigureAmmo("PumpKing");
 
         _neckHead = GetNode<Sprite2D>("NeckHead");
         _neckBaseScale = _neckHead.Scale;
@@ -147,12 +144,6 @@ public partial class PumpKing : CharacterController
         if (_soulCd > 0f) _soulCd -= dt;
         if (_baTelegraph > 0f) _baTelegraph -= dt;
 
-        if (_reloadTimer > 0f)
-        {
-            _reloadTimer -= dt;
-            if (_reloadTimer <= 0f) OnHeadReloaded();
-        }
-
         if (_soulWindup > 0f)
         {
             _soulWindup -= dt;
@@ -166,9 +157,8 @@ public partial class PumpKing : CharacterController
         }
     }
 
-    private void OnHeadReloaded()
+    protected override void OnAmmoReloaded(int restored)
     {
-        _ammo = 1;
         _neckShown = true;
         RefreshHeadVisual(_pumpStacks);   // stacks are 0 after any fire, but stay faithful to state
     }
@@ -179,7 +169,8 @@ public partial class PumpKing : CharacterController
         switch (CurrentState)
         {
             case PKState.Normal:
-                if (_activeHead == null && _ammo > 0) FireHead(ResolveLaunchDirection());
+                if (_activeHead == null && PumpKingHeadScene != null && TryConsumeAmmo())
+                    FireHead(ResolveLaunchDirection());
                 break;
             case PKState.Rolling:
                 if (IsInstanceValid(_activeHead) && !_activeHead.Exploded) _activeHead.Explode(manual: true);
@@ -201,7 +192,9 @@ public partial class PumpKing : CharacterController
         head.GlobalPosition = FirePoint != null ? FirePoint.GlobalPosition : GlobalPosition + NeckOffset;
         // Carry PumpKing's own momentum into the throw (a head fired while running
         // forward should fly farther than one fired standing still).
-        head.Init(dir * HeadLaunchSpeed + Velocity, this, scale, DamageDealtMultiplier, HandleHeadExplosion);
+        head.Init(dir * HeadLaunchSpeed + Velocity, this, scale, DamageDealtMultiplier,
+            ExplosionRadius, ExplosionDamage * DamageDealtMultiplier, ExplosionKnockback,
+            HandleHeadResolved);
 
         _activeHead = head;
         _pumpStacks = 0;
@@ -210,28 +203,17 @@ public partial class PumpKing : CharacterController
         RefreshPassive();
         RefreshHeadVisual(0);
         _neckShown = false;
-        _ammo = 0;
         _baTelegraph = 0.15f;
         CurrentState = PKState.Rolling;
     }
 
-    /// <summary>onExplode callback from a non-autonomous head — AoE + reload.</summary>
-    private void HandleHeadExplosion(Vector2 pos)
+    /// <summary>Callback from every resolved head explosion. Damage is resolved by the
+    /// surviving head itself, so this state-only callback remains safe after Tab removes
+    /// the PumpKing body; it still starts the shared reload in persisted run state.</summary>
+    private void HandleHeadResolved()
     {
-        foreach (Node n in GetTree().GetNodesInGroup("enemy"))
-        {
-            if (n is not BaseFoe e) continue;
-            Vector2 to = e.GlobalPosition - pos;
-            float dist = to.Length();
-            if (dist - e.HitRadius > ExplosionRadius) continue;
-
-            Vector2 knock = (dist > 0.01f ? to / dist : Vector2.Right) * ExplosionKnockback;
-            e.TakeHit(new HitInfo(ExplosionDamage * DamageDealtMultiplier, knock), pos);
-        }
-
-        ShakeCamera(0.35f);
         _activeHead = null;
-        _reloadTimer = ReplenishWindup;
+        RequestAmmoReload();
         if (CurrentState == PKState.Rolling) CurrentState = PKState.Normal;
     }
 
@@ -269,19 +251,15 @@ public partial class PumpKing : CharacterController
         // A head released autonomous on Shift press keeps rolling/bouncing on its own
         // for the whole 6 s Soul Form — it may still be live (→ Rolling, BA can detonate
         // it per the GDD) or may already have auto-exploded via its own still-timer/
-        // lifetime while we were away (→ Normal, safe to start reloading).
+        // lifetime while we were away (→ Normal; its callback already started reload).
         CurrentState = (_activeHead != null && IsInstanceValid(_activeHead) && !_activeHead.Exploded)
             ? PKState.Rolling : PKState.Normal;
 
         if (CurrentState == PKState.Normal)
         {
-            // An autonomous head that self-detonated (still-timer/lifetime) while we were
-            // away skips HandleHeadExplosion (no AoE ⇒ no callback), so _activeHead is
-            // never nulled there — clear the stale reference ourselves or BA's Normal-state
-            // "_activeHead == null" gate would wrongly block firing a fresh head.
+            // The normal-explosion callback clears this eagerly. Keep the defensive
+            // cleanup for a head freed externally without reaching its callback.
             _activeHead = null;
-            if (_ammo < 1 && _reloadTimer <= 0f)
-                _reloadTimer = ReplenishWindup;
         }
     }
 
@@ -345,11 +323,11 @@ public partial class PumpKing : CharacterController
             if (Input.IsActionPressed("move_down")) v += 1f;   // S = down
         }
 
-        // Accepted simplification: during Soul, external knockback/gravity don't
-        // apply (ghost form; the base's intent/external velocity channels are
-        // private) — damage still lands via TakeHit normally.
+        // Accepted simplification: during Soul, transient knockback/gravity don't
+        // apply; source-keyed environmental movement (such as a Blackhole) does.
         Vector2 dir = new Vector2(h, v);
-        Velocity = dir != Vector2.Zero ? dir.Normalized() * SoulMoveSpeed : Vector2.Zero;
+        Velocity = (dir != Vector2.Zero ? dir.Normalized() * SoulMoveSpeed : Vector2.Zero)
+            + ContinuousExternalVelocity;
         MoveAndSlide();
 
         if (h > 0.01f) { Facing = 1f; Sprite.FlipH = false; }

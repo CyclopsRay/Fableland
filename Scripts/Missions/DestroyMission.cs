@@ -32,7 +32,8 @@ public sealed class DestroyMission : Mission
             var obj = arena.DestroyObjectiveScene.Instantiate<DestroyObjective>();
             obj.Rng = new RandomNumberGenerator { Seed = rng.NextULong() };
             arena.Entities.AddChild(obj);                 // _Ready auto-Inits at level 1
-            obj.GlobalPosition = arena.RandomPlacementPoint(rng);
+            // Destroy maps author Level Goal tiles as enemy-objective positions.
+            obj.GlobalPosition = arena.RandomLevelGoalPoint(rng);
             obj.OverrideMaxHp(hp);                        // fixed table HP, not level-scaled
             _objectives.Add(obj);
         }

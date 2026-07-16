@@ -43,8 +43,11 @@ Two buttons live in the top-right corner during Adventure mode:
   **"Finish the Day?"** → `Yes` / `Cancel`.
 - `Yes` → day ends, mode switches to Exploration.
 - Reward is delivered when the goal is achieved (delivery mechanism TBD).
+- At the instant the goal resolves, **all players and foes become invincible**. This
+  includes direct hits, hazards, and already-running damage-over-time effects; the
+  arena is a resolved presentation state until the player leaves it.
 
-**Shelter node:**
+**Service node (Transportation Hub or the zone-6 Shelter):**
 - Both buttons are always available.
 - The player may open the map and **move to other nodes** as long as stamina remains
   (entering a shelter does not automatically end the day).
@@ -72,7 +75,7 @@ without stopping. The rules:
 |-------------|--------|
 | Conquered combat node | Nothing — safe ground. |
 | Unconquered (failed) combat node | The fight re-triggers — a full combat entry, all stamina drained (§2.3). |
-| Shelter (Blessed or Mundane) | The shelter menu always opens (§5). |
+| Transportation Hub or special Shelter | The restricted service menu always opens (§5). |
 | Resolved `?` node | Nothing — inert. If the event converted the node into a shelter (Sanctuary), it behaves as a shelter thereafter. |
 
 - NPC 5-day windows (§5.3, §5.4) start on the player's **first entry as destination**,
@@ -168,6 +171,12 @@ party members form a **fixed sequence** (e.g., Pomegraknight → PumpKing → Pi
 set at the shelter). Pressing **Tab** (12 s cooldown) switches control to the next
 protagonist in the sequence.
 
+When entering a combat node, the game captures that complete ordered team as a
+**battle snapshot**. The Arena owns its own switch cursor for that snapshot and never
+rereads the editable shelter build while the fight is live. Shelter edits therefore
+affect the **next** combat entry only, and the snapshot's first member replaces the
+Arena scene's authoring placeholder before combat starts.
+
 | Rule | Detail |
 |------|--------|
 | **HP ratio inheritance** | The incoming protagonist inherits the outgoing protagonist's **current HP ratio** (current HP / max HP), applied to their own max HP. |
@@ -228,6 +237,13 @@ stops) during which the player may collect any cores still on the field. Then
 
 **Failure states** — see §2.3. Only BOSS timer expiry = death. All other failures =
 no reward, node unconquered, player survives.
+
+**Combat-map marker contract:** the selected authored map receives the already-fixed node goal.
+Its `goal.level` markers become Wonder Core points for **Collection** (called **claim** in map
+metadata), the Condensed Wonder Core position for **Protect**, and enemy-objective positions for
+**Destroy**. **Slaughter** has no level-goal placement. A map whose metadata does not match the
+node goal is never selected; a malformed selected custom map falls back to normal arena placement
+with a content warning rather than ending the run.
 
 ### 4.2 Node level → goal scaling
 
@@ -341,11 +357,18 @@ slot if the current protagonist has an empty slot, otherwise to the backpack. Pr
 
 ---
 
-## 5. Shelter nodes
+## 5. Service nodes — Transportation Hubs and the singularity Shelter
 
-A shelter node (camp icon) is generated **Blessed** — it has a pool of functions
-available. See `MapGDD.md` §6 for generation rules (edge crossings, per-level
-probabilities, 40/60 shelter-to-? split).
+The current generated map uses **Transportation Hubs** in every outer realm and one special
+`XX-S` **Shelter** between each LV4 capital and LV5. The Shelter label is reserved for that
+zone-6 crossing; it is not an ordinary hub. Both node types deliberately expose the same narrow
+service set: **Rest**, **Sharpen Weapon**, **Sharpen Armor**, **Team Build**, and leave/finish
+the day. Plantations, traders, jousting, wishes, and other optional services are not generated
+or available at either type.
+
+Legacy optional-service designs below are retained as future reference only and are explicitly
+overridden by this current-map contract. See `MapGDD.md` §§6–8 for placement, one-way traversal,
+and VOID rules.
 
 When the player enters a shelter, the day does **not** automatically end. The player
 may take any available free actions (§5.1, §5.2) in any order. Afterwards, the player
@@ -356,8 +379,8 @@ may either:
 - **Choose a day-ending action** (Rest / Sharpen / Wish — §5.5), which consumes the
   Blessing and ends the day.
 
-Day-ending actions can be taken **after** free actions — the player can trade, joust,
-or modify their build and then still Rest/Sharpen before leaving.
+Day-ending actions can be taken after the Team Build action, then the player may leave or finish
+the day.
 
 ### 5.1 Always available (any shelter, Blessed or Mundane)
 
@@ -366,19 +389,16 @@ player backtracks to — without advancing the day:
 
 - **Modify team build** — swap protagonists between the bench and the active party
   (up to the party cap of 3).
-- **Modify wonder items** — reassign held wonder items among the active party
-  (one per protagonist by default).
-- **Tend plantations** — water plants at this shelter's plantation slots (§5.2),
-  if any were previously planted.
+- **Modify wonder items** — reassign held wonder items as part of Team Build (one per
+  protagonist by default).
 - **Continue the journey** — open the map and move to another node (requires
   remaining stamina).
 
-### 5.2 Sometimes available (if present at generation; any shelter, Blessed or Mundane)
+### 5.2 Legacy optional services (not generated in the current map)
 
-These are present only if the shelter rolled them at map-generation time. They are
-available **regardless of whether the shelter is Blessed or Mundane** — the Blessing
-only gates Rest/Sharpen/Wish (§5.5). Availability ends when the NPC departs (5-day
-window from first entry; see departure rules in §5.3 and §5.4):
+These specifications are **not active** for Transportation Hubs or the special Shelter. They
+remain only as deferred designs should a future node type deliberately opt in. The Blessing
+concept is likewise not a source of optional services in the current map:
 
 - **Plantation** (50% chance per shelter): the player may plant seeds in **2 slots**
   (subject to change and randomness). Drag a seed from inventory onto a slot to plant.
@@ -396,9 +416,8 @@ window from first entry; see departure rules in §5.3 and §5.4):
 - **Other functions** — teleport to another shelter, a tunnel to a secret map,
   or something unspeakable (TBD; rare).
 
-> **Zone-6 shelters (`XX-S`)** are generated Blessed with the **basics only** — build
-> mod, item assignment, and one day-ending action. They never roll plantations,
-> traders, or wanderers: there are no NPCs inside the VOID.
+> **Zone-6 Shelters (`XX-S`)** are the one-way singularity threshold. They only expose the
+> current service contract above, never legacy optional services.
 
 ### 5.3 VOID traders
 
@@ -452,22 +471,20 @@ purpose as the player — to find the cause of the VOID — and will join if pro
 **Departure:** like traders, wanderers remain at a shelter for **5 days** from the
 day the player first enters that shelter, then leave.
 
-### 5.5 Day-ending actions (consume the Blessing)
+### 5.5 Day-ending actions
 
-A Blessed shelter offers **one** of the following. Choosing one triggers a
+A service node offers the following. Choosing one triggers a
 confirmation popup: **"You will use all your stamina and the Blessing of this
 shelter to make the magic happen."** → `Yes` / `Cancel`.
 
-On `Yes`: the Blessing fades (this shelter becomes a Mundane visited node),
-**all remaining stamina is consumed** (set to 0), the day ends, and the VOID
-devour clock advances.
+On `Yes`: **all remaining stamina is consumed** (set to 0), the day ends, and the VOID devour
+clock advances.
 
 | Action | Effect |
 |--------|--------|
 | **Rest** | Restore 30% of max HP (HP is tracked as a **ratio**, shared party-wide via switch inheritance). 1/3 of any excess healing above 100% converts into a **permanent max-HP multiplier**, in additive percentage points, applied globally — e.g. resting at full HP: 30 pp excess → +10 pp ⇒ ×1.10 (a second full-HP Rest ⇒ ×1.20). |
 | **Sharpen Weapon** | Permanently increase **ATK by +10**. ATK scales direct damage: `final_dmg = base_dmg × (100 + ATK) / 100`. |
 | **Sharpen Armor** | Permanently increase **DEF by +10**. DEF reduces damage taken: `final_dmg_received = incoming_dmg × 100 / (100 + DEF)`. |
-| **Wish** | TBD — reserved for a future content pass. |
 
 > **Design note:** the "excess → max HP" rule on Rest means a player who rests at
 > full HP still gains value (10% max HP increase), but a wounded player gets both
@@ -534,18 +551,19 @@ The player must click `Finish the Day` (or use a day-ending shelter action) to e
 
 ### 7.2 Special cases
 
-- **Shelter free actions** (§5.1) do not end the day. The player can enter a shelter,
-  modify their build, tend plants, trade, or joust, then leave for another node —
-  all within the same day, as long as stamina holds out.
-- **Shelter day-ending actions** (§5.5) end the day and consume the Blessing.
+- **Service-node free actions** (§5.1) do not end the day. The player can enter a hub or special
+  Shelter, modify their team build, then leave for another node while stamina remains. The
+  special Shelter cannot route back to zones 1–5 after it has been entered.
+- **Service-node day-ending actions** (§5.5) end the day.
 - **Combat nodes** lock the player in until the goal is achieved (or they die).
   Once the goal is achieved, `Finish the Day` becomes available.
 - **? nodes** lock the player in until all event choices are resolved.
 
 ### 7.3 Clock pressure
 
-The VOID devours map rings on a fixed schedule (days 10/20/30/35/40/45; see
-`MapGDD.md` §8). Foe levels increase with the day (`FOES.gdd` §2). Both clocks push
+The VOID devours city-controlled fields on a fixed schedule (days 10/20/30/40/43/45; see
+`MapGDD.md` §8): furthest half/all LV1, furthest half/all LV2, all LV3, then every remaining
+outer city. Foe levels increase with the day (`FOES.gdd` §2). Both clocks push
 the player forward — stalling means stronger enemies and less map to work with.
 
 ### 7.4 Day-end resolution
@@ -553,10 +571,12 @@ the player forward — stalling means stronger enemies and less map to work with
 When `Finish the Day` is confirmed, the following housekeeping runs in order:
 
 1. **Day counter** increments.
-2. **VOID devour** — any ring whose devour day has arrived is consumed (see `MapGDD.md`
-   §8). **If the player's current node is devoured, the run is over** (§2.2). The
-   `Finish the Day` confirmation therefore warns when the player is standing on
-   flickering (devours-tonight) ground.
+2. **VOID devour** — any scheduled city and its controlled field are consumed (see
+   `MapGDD.md` §8). A functional node survives until **more than half** of its directly
+   connected cities are gone. A reality bridge breaks if either endpoint is consumed and
+   releases the survivor for a future bridge. **If the player's current node is devoured,
+   the run is over** (§2.2). The `Finish the Day` confirmation therefore warns when the
+   player is standing on flickering (devours-tonight) ground.
 3. **Item cooldowns** — every held wonder item's day-based cooldown decrements by 1
    (see `ITEMS.gdd` §3.1).
 4. **Perish timers** — every perishable item (held or in backpack) decrements by 1;

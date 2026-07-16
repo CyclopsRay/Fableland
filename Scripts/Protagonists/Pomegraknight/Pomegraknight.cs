@@ -28,9 +28,6 @@ public partial class Pomegraknight : CharacterController
     [Export] public float SlashRange = 130f;       // ~4m at 32px/m
     [Export] public float SlashHalfAngle = 40f;    // full 80 cone
     [Export] public float SlashKnockback = 96f;    // ~3 m/s
-    [Export] public int MagazineSize = 3;
-    [Export] public float BetweenStages = 0.25f;
-    [Export] public float ReloadTime = 0.75f;
     [Export] public float SwingPenaltyMult = 0.7f; // 30% slower
     [Export] public float SwingPenaltyDur = 0.4f;
 
@@ -85,10 +82,7 @@ public partial class Pomegraknight : CharacterController
     // in px/s from Units rather than hardcoding a raw pixel constant.
     private const float WalkSpeedThresholdMps = 0.25f;
 
-    private int _ammo;
     private int _comboStage;
-    private float _swingCd;
-    private float _reloadTimer;
     private float _baTelegraph;
 
     private float _blushCd;
@@ -107,8 +101,10 @@ public partial class Pomegraknight : CharacterController
     {
         BurnImmune = true;            // Pomegranate Shell
         MaxJumps = 1;                 // Pomegraknight: single jump
-        _ammo = MagazineSize;
+        ConfigureAmmo("Pomegraknight");
     }
+
+    protected override void OnAmmoReloaded(int restored) => _comboStage = 0;
 
     // Background-CD persistence (NODES §3.3): save/load per-skill cooldown remaining
     // so benched protagonists' cooldowns tick down at the reduced rate.
@@ -135,23 +131,17 @@ public partial class Pomegraknight : CharacterController
 
     private void TickTimers(float dt)
     {
-        if (_swingCd > 0f) _swingCd -= dt;
         if (_blushCd > 0f) _blushCd -= dt;
         if (_eCd > 0f) _eCd -= dt;
         if (_baTelegraph > 0f) _baTelegraph -= dt;
         if (_eTelegraph > 0f) _eTelegraph -= dt;
         if (_tornadoCharge > 0f) _tornadoCharge -= dt;
-        if (_reloadTimer > 0f)
-        {
-            _reloadTimer -= dt;
-            if (_reloadTimer <= 0f) { _ammo = MagazineSize; _comboStage = 0; }
-        }
     }
 
     // ── BA ────────────────────────────────────────────────────────────────
     protected override void HandleBA()
     {
-        if (_reloadTimer > 0f || _swingCd > 0f) return;
+        if (!TryConsumeAmmo()) return;
 
         float mult = IsBurning ? BurnComboMult : 1f;   // passive
         float dmg = ComboDamage[_comboStage % ComboDamage.Length] * mult;
@@ -164,10 +154,9 @@ public partial class Pomegraknight : CharacterController
 
         ApplyMovePenalty(SwingPenaltyMult, SwingPenaltyDur);
         _baTelegraph = 0.15f;
-        _swingCd = BetweenStages;
         _comboStage++;
-        _ammo--;
-        if (_ammo <= 0) _reloadTimer = ReloadTime;
+        StartAmmoAttackInterval();
+        RequestAmmoReload();
 
         if (_tornadoCharge > 0f) { ActivateTornado(); _tornadoCharge = 0f; }
     }

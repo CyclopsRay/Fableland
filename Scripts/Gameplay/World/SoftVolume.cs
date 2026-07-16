@@ -81,15 +81,22 @@ public partial class SoftVolume : Area2D
 
     private void OnBodyEntered(Node2D body)
     {
+        if (!AffectsBody(body)) return;
         if (body is CharacterController c) c.EnterSoftVolume(this);
         else if (body is BaseFoe e) e.EnterSoftVolume(this);
     }
 
     private void OnBodyExited(Node2D body)
     {
+        if (!AffectsBody(body)) return;
         if (body is CharacterController c) c.ExitSoftVolume(this);
         else if (body is BaseFoe e) e.ExitSoftVolume(this);
     }
+
+    /// <summary>Most SoftVolumes use the shared player-and-foe traversal contract.
+    /// Specialized volumes may narrow their membership without duplicating the
+    /// velocity-resistance implementation.</summary>
+    protected virtual bool AffectsBody(Node2D body) => body is CharacterController or BaseFoe;
 
     /// <summary>
     /// Gradually pulls a body's current intent velocity toward the SoftVolume cap.

@@ -83,8 +83,8 @@ public static class MapJson
             return null;
         }
 
-        if (doc.Version != 1)
-            warnings.Add($"map file '{absPath}' has unknown version {doc.Version}; best-effort parse as v1");
+        if (doc.Version > MapDocument.CurrentVersion)
+            warnings.Add($"map file '{absPath}' has unknown version {doc.Version}; best-effort parse as v{MapDocument.CurrentVersion}");
 
         Validate(doc, warnings);
         return doc;
@@ -99,6 +99,48 @@ public static class MapJson
     /// clamped to spec bounds. Every correction is reported via `warnings`, never thrown.</summary>
     private static void Validate(MapDocument doc, List<string> warnings)
     {
+        // v1 stored only World. Preserve its meaning when loading into v2's additive world
+        // filter, then normalize every new selection field so runtime code has one contract.
+        doc.Worlds ??= new List<string>();
+        if (doc.Worlds.Count == 0 && !string.IsNullOrWhiteSpace(doc.World))
+            doc.Worlds.Add(doc.World.Trim());
+        doc.HardshipLevels ??= new List<int>();
+        doc.HardshipLevels.RemoveAll(level => level < 1 || level > 6);
+        doc.Goals ??= new List<string>();
+        if (doc.Goals.Count == 0) doc.Goals.Add(CombatMapGoals.Claim);
+        for (int i = doc.Goals.Count - 1; i >= 0; i--)
+        {
+            string goal = doc.Goals[i]?.Trim().ToLowerInvariant();
+            if (goal == "collection") goal = CombatMapGoals.Claim; // friendly legacy spelling
+            if (goal != CombatMapGoals.Claim && goal != CombatMapGoals.Protect &&
+                goal != CombatMapGoals.Destroy && goal != CombatMapGoals.Slaughter)
+            {
+                warnings.Add($"unknown combat-map goal '{doc.Goals[i]}' removed");
+                doc.Goals.RemoveAt(i);
+            }
+            else doc.Goals[i] = goal;
+        }
+        if (doc.Goals.Count == 0) doc.Goals.Add(CombatMapGoals.Claim);
+
+        doc.Terrain = string.IsNullOrWhiteSpace(doc.Terrain)
+            ? CombatMapTerrain.SeaLevel : doc.Terrain.Trim().ToLowerInvariant();
+        // v0.7.0 accepted the early short forms. Preserve existing authored maps while every
+        // newly-saved document uses the clearer terrain labels shared with the overworld.
+        if (doc.Terrain == "high") doc.Terrain = CombatMapTerrain.High;
+        if (doc.Terrain == "lowground") doc.Terrain = CombatMapTerrain.Lowground;
+        if (doc.Terrain != CombatMapTerrain.SeaLevel && doc.Terrain != CombatMapTerrain.High &&
+            doc.Terrain != CombatMapTerrain.Lowground)
+        {
+            warnings.Add($"unknown combat-map terrain '{doc.Terrain}'; using {CombatMapTerrain.SeaLevel}");
+            doc.Terrain = CombatMapTerrain.SeaLevel;
+        }
+
+        doc.FoeCompositions ??= new List<FoeComposition>();
+        doc.FoeCompositions.RemoveAll(c => c == null || c.Level < 0 || c.Level > 6 ||
+            c.CrabWeight < 0 || c.SeagullWeight < 0 || c.CrabWeight + c.SeagullWeight <= 0);
+        doc.FoeSpawnRules ??= new FoeSpawnRules();
+        doc.Version = MapDocument.CurrentVersion;
+
         doc.Layers ??= new List<MapLayerData>();
 
         bool hasBattlefield = false;
@@ -156,7 +198,12 @@ public static class MapJson
         var failures = new List<string>();
 
         var doc = MapDocument.CreateNew("Self Test Map");
-        doc.World = "TestWorld";
+        doc.Worlds.Add("TestWorld");
+        doc.HardshipLevels.Add(2);
+        doc.Goals = new List<string> { CombatMapGoals.Destroy };
+        doc.Terrain = CombatMapTerrain.High;
+        doc.FoeCompositions.Add(new FoeComposition { Level = 2, CrabWeight = 50, SeagullWeight = 50 });
+        doc.FoeSpawnRules = new FoeSpawnRules { CrabMaxCellY = 4, SeagullMinCellY = 5 };
         doc.Canvas.Color = "#123456";
 
         var farview = MapLayerData.CreateFarview("Sky");
@@ -223,6 +270,20 @@ public static class MapJson
         Check(a.Id == b.Id, "Id");
         Check(a.Name == b.Name, "Name");
         Check(a.World == b.World, "World");
+        Check(a.Worlds.Count == b.Worlds.Count, "Worlds.Count");
+        Check(a.HardshipLevels.Count == b.HardshipLevels.Count, "HardshipLevels.Count");
+        Check(a.Goals.Count == b.Goals.Count, "Goals.Count");
+        Check(a.Terrain == b.Terrain, "Terrain");
+        Check(a.FoeCompositions.Count == b.FoeCompositions.Count, "FoeCompositions.Count");
+        int cn = Math.Min(a.FoeCompositions.Count, b.FoeCompositions.Count);
+        for (int i = 0; i < cn; i++)
+        {
+            Check(a.FoeCompositions[i].Level == b.FoeCompositions[i].Level, $"FoeCompositions[{i}].Level");
+            Check(a.FoeCompositions[i].CrabWeight == b.FoeCompositions[i].CrabWeight, $"FoeCompositions[{i}].CrabWeight");
+            Check(a.FoeCompositions[i].SeagullWeight == b.FoeCompositions[i].SeagullWeight, $"FoeCompositions[{i}].SeagullWeight");
+        }
+        Check(a.FoeSpawnRules?.CrabMaxCellY == b.FoeSpawnRules?.CrabMaxCellY, "FoeSpawnRules.CrabMaxCellY");
+        Check(a.FoeSpawnRules?.SeagullMinCellY == b.FoeSpawnRules?.SeagullMinCellY, "FoeSpawnRules.SeagullMinCellY");
         Check(a.CreatedUtc == b.CreatedUtc, "CreatedUtc");
         Check(a.ModifiedUtc == b.ModifiedUtc, "ModifiedUtc");
         Check(a.Canvas.Type == b.Canvas.Type, "Canvas.Type");

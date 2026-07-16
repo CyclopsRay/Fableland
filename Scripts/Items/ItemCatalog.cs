@@ -27,6 +27,7 @@ public static class ItemCatalog
         ("qiongfeng_emperors_claw", "QiongFeng Emperor's Claw"),
         ("weird_mushroom", "A Weird Mushroom"),
         ("rotten_mushroom", "A Rotten Mushroom"),
+        ("twisted_reality", "TwistedReality"),
     };
 
     /// <summary>The catalog's DisplayName for an id, or the id itself as a fallback (never

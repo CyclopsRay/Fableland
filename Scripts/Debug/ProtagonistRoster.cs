@@ -5,13 +5,13 @@ namespace Fableland.Debug;
 
 /// <summary>
 /// Debug-layer registry of every implemented protagonist scene, keyed by an Id that equals the
-/// character scene's root node <c>Name</c> (both "Pomegraknight" and "PumpKing" scenes are rooted
-/// on a node named exactly that). This is NOT the real protagonist-grant economy
+/// character scene's root node <c>Name</c> (each listed scene is rooted on a node named
+/// exactly like its Id). This is NOT the real protagonist-grant economy
 /// (<c>RunState.Owned</c>) — it exists so debug mode can spawn any implemented body regardless of
 /// what a real run has unlocked. When the real economy grows to cover every character, this
 /// registry may graduate into it or simply stay as the debug-only source of truth.
 ///
-/// Future characters (Pixolotl, Cleopastar, Sifu Pangda) append one line to <see cref="Entries"/>.
+/// Future characters (Pixolotl, Sifu Pangda) append one line to <see cref="Entries"/>.
 /// </summary>
 public static class ProtagonistRoster
 {
@@ -19,6 +19,7 @@ public static class ProtagonistRoster
     {
         ("Pomegraknight", "res://Scenes/Pomegraknight.tscn"),
         ("PumpKing", "res://Scenes/PumpKing.tscn"),
+        ("Cleopastar", "res://Scenes/Cleopastar.tscn"),
     };
 
     private static readonly Dictionary<string, PackedScene> _cache = new();

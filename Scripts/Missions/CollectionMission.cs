@@ -87,7 +87,9 @@ public sealed class CollectionMission : Mission
         if (_completing || _arena?.WonderCorePickupScene == null) return;
         var node = _arena.WonderCorePickupScene.Instantiate<WonderCorePickup>();
         _arena.Entities.AddChild(node);
-        node.GlobalPosition = _arena.RandomPlacementPoint(_rng);
+        // Claim maps author Level Goal tiles as Wonder Core spawn points. The arena keeps a
+        // normal-placement fallback for legacy maps and direct-F5 debug play.
+        node.GlobalPosition = _arena.RandomLevelGoalPoint(_rng);
         var core = new Core { Node = node, Despawn = DespawnTime };
         node.Collected += () => OnCollected(core);
         _cores.Add(core);

@@ -35,9 +35,9 @@ Standing rule from these: every new character should bring **one new engine verb
 (wall-stick, beat-timing, quantized shields, swarm control) — if a kit is only new
 numbers on old verbs, it's a skin, not a character.
 
-## 2. New realms / worlds (each needs: palette, 2 barrier flavours, foe pair, node gimmick)
+## 2. New realms / worlds (each needs: palette, terrain/coast identity, foe pair, node gimmick)
 
-| World | Palette | Point barrier / Area barrier | Gimmick |
+| World | Palette | Landmark / terrain identity | Gimmick |
 |-------|---------|------------------------------|---------|
 | **Gui Lin** (owed to Pangda — TBD #19) | ink-wash green/grey | broken moon bridge / mist sea | Mist: nodes hide their type icon until adjacent (mist-of-war *inside* a revealed world). |
 | **Kingdom of Horror** (owed to PumpKing — TBD #20) | orange/black | scarecrow effigy / graveyard marsh | Day/night flip: its nodes are stronger-but-richer if entered on even days. |

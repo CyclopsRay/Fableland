@@ -43,7 +43,7 @@ reconstructing them at launch.
 | Dev milestone | Marketing capture |
 |---|---|
 | v0.4.0 foes | Crab/Seagull GIFs — evolution flash + spawn-on-death cascade are naturally clip-able |
-| v0.5.0 nodes | First full-run clip; the atlas map (Voronoi territories, causeways, VOID) is the money shot — record pan/zoom flyovers per seed |
+| v0.8.0 map | First full-run clip; the atlas map (irregular realms, contour lines, causeways, VOID) is the money shot — record pan/zoom/rotation flyovers per seed |
 | v0.6.0 items | "Cursed item" content (THE VOID's phantoms) — strongest hook for roguelike audiences |
 | Each character | Reveal post: poster + kit summary table + one signature-mechanic GIF |
 

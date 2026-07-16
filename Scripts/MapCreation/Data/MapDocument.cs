@@ -17,12 +17,48 @@ using System.Text.Json.Serialization;
 /// </summary>
 public sealed class MapDocument
 {
-    public int Version { get; set; } = 1;
+    public const int CurrentVersion = 2;
+
+    public int Version { get; set; } = CurrentVersion;
     public string Id { get; set; } = "";
     public string Name { get; set; } = "Untitled";
 
-    /// <summary>Free string naming the overworld world this map belongs to; empty if none.</summary>
+    /// <summary>
+    /// Legacy single-world field from v1. It remains readable so existing user maps do not
+    /// disappear; v2 authors use <see cref="Worlds"/> instead. An empty value means all worlds.
+    /// </summary>
     public string World { get; set; } = "";
+
+    /// <summary>
+    /// Overworld world ids this combat map can serve (world name or abbreviation). Empty means
+    /// all worlds. Multiple entries are intentionally ORed: a seashore may later serve several
+    /// coastal realms without a duplicate map file.
+    /// </summary>
+    public List<string> Worlds { get; set; } = new();
+
+    /// <summary>Combat-node hardship levels this map can serve (1..6). Empty means all levels.</summary>
+    public List<int> HardshipLevels { get; set; } = new();
+
+    /// <summary>
+    /// Combat goals this map can serve. Canonical values are claim, protect, destroy, and
+    /// slaughter. New maps default to claim; the runtime maps claim to the Collection mission.
+    /// </summary>
+    public List<string> Goals { get; set; } = new() { CombatMapGoals.Claim };
+
+    /// <summary>
+    /// Terrain label used by combat-map selection. Sea-level is the default; high-ground and
+    /// low-ground are assigned by the overworld's seeded altitude field when applicable.
+    /// </summary>
+    public string Terrain { get; set; } = CombatMapTerrain.SeaLevel;
+
+    /// <summary>Optional per-level foe mix. A Level of 0 supplies this map's default mix.</summary>
+    public List<FoeComposition> FoeCompositions { get; set; } = new();
+
+    /// <summary>
+    /// Optional cell-row eligibility rules for authored foe spawners. Null values mean that foe
+    /// type may use every spawn marker; values are compared to the marker's authored grid Y.
+    /// </summary>
+    public FoeSpawnRules FoeSpawnRules { get; set; } = new();
 
     public string CreatedUtc { get; set; } = "";
     public string ModifiedUtc { get; set; } = "";
@@ -48,10 +84,16 @@ public sealed class MapDocument
         string nowIso = DateTime.UtcNow.ToString("o");
         return new MapDocument
         {
-            Version = 1,
+            Version = CurrentVersion,
             Id = Guid.NewGuid().ToString("N"),
             Name = string.IsNullOrEmpty(name) ? "Untitled" : name,
             World = "",
+            Worlds = new List<string>(),
+            HardshipLevels = new List<int>(),
+            Goals = new List<string> { CombatMapGoals.Claim },
+            Terrain = CombatMapTerrain.SeaLevel,
+            FoeCompositions = new List<FoeComposition>(),
+            FoeSpawnRules = new FoeSpawnRules(),
             CreatedUtc = nowIso,
             ModifiedUtc = nowIso,
             Canvas = new CanvasData(),
@@ -66,6 +108,39 @@ public sealed class MapDocument
             },
         };
     }
+}
+
+/// <summary>String constants deliberately kept in Map Creation data so authored map JSON never
+/// depends on the Run/orchestration layer's mission enum.</summary>
+public static class CombatMapGoals
+{
+    public const string Claim = "claim";
+    public const string Protect = "protect";
+    public const string Destroy = "destroy";
+    public const string Slaughter = "slaughter";
+}
+
+/// <summary>Canonical combat-map terrain labels. These are map-selection data, not physics.</summary>
+public static class CombatMapTerrain
+{
+    public const string SeaLevel = "sea-level";
+    public const string High = "high-ground";
+    public const string Lowground = "low-ground";
+}
+
+/// <summary>Weighted crab/seagull composition for one hardship level (0 = map default).</summary>
+public sealed class FoeComposition
+{
+    public int Level { get; set; }
+    public int CrabWeight { get; set; } = 60;
+    public int SeagullWeight { get; set; } = 40;
+}
+
+/// <summary>Grid-Y eligibility rules for map-authored foe spawn tiles.</summary>
+public sealed class FoeSpawnRules
+{
+    public int? CrabMaxCellY { get; set; }
+    public int? SeagullMinCellY { get; set; }
 }
 
 /// <summary>

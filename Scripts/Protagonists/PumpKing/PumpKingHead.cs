@@ -31,8 +31,11 @@ public partial class PumpKingHead : CharacterBody2D
     private Vector2 _velocity;
     private Node2D _owner;
     private float _dmgMult = 1f;
-    private Action<Vector2> _onExplode;
+    private Action _onResolved;
     private bool _autonomous;
+    private float _explosionRadius;
+    private float _explosionDamage;
+    private float _explosionKnockback;
 
     private bool _initialized;
     private bool _exploded;
@@ -53,12 +56,16 @@ public partial class PumpKingHead : CharacterBody2D
     }
 
     /// <summary>Called by the launching skill right after AddChild (so it runs after _Ready).</summary>
-    public void Init(Vector2 launchVelocity, Node2D owner, float scaleMult, float dmgMult, Action<Vector2> onExplode)
+    public void Init(Vector2 launchVelocity, Node2D owner, float scaleMult, float dmgMult,
+        float explosionRadius, float explosionDamage, float explosionKnockback, Action onResolved)
     {
         _owner = owner;   // kept for reference/debug only — collision mask 14 already excludes
                            // the Player layer, so no physical collision exception is needed.
         _dmgMult = dmgMult;
-        _onExplode = onExplode;
+        _explosionRadius = explosionRadius;
+        _explosionDamage = explosionDamage;
+        _explosionKnockback = explosionKnockback;
+        _onResolved = onResolved;
         _velocity = launchVelocity;
 
         _sprite.Scale = _baseSpriteScale * scaleMult;
@@ -148,10 +155,13 @@ public partial class PumpKingHead : CharacterBody2D
 
         // An autonomous head that goes off BY ITSELF (still-timer/lifetime while
         // PumpKing is off in Soul Form) plays the visual but deals NO area damage —
-        // exact port of the Unity behaviour. A deliberate manual detonate (BA, once
-        // PumpKing is back and Rolling — see ExitSoul) still counts, autonomous or not:
-        // the GDD says he "can still manually detonate after Soul ends."
-        if (!_autonomous || manual) _onExplode?.Invoke(GlobalPosition);
+        // exact port of the Unity behaviour. Every resolved explosion still notifies
+        // its owner-state so the universal magazine can reload. A deliberate manual
+        // detonate (BA, once PumpKing is back and Rolling — see ExitSoul) deals area
+        // damage even when autonomous.
+        bool dealsAreaDamage = !_autonomous || manual;
+        if (dealsAreaDamage) DealExplosion();
+        _onResolved?.Invoke();
 
         _velocity = Vector2.Zero;
 
@@ -163,5 +173,22 @@ public partial class PumpKingHead : CharacterBody2D
         _anim.Play("explode");
 
         _freeTimer = ExplosionAnimHold;
+    }
+
+    /// <summary>Explosion ownership lives on the projectile, not a transient
+    /// protagonist body, so a rolling head continues to damage foes after Tab.</summary>
+    private void DealExplosion()
+    {
+        foreach (Node n in GetTree().GetNodesInGroup("enemy"))
+        {
+            if (n is not BaseFoe foe) continue;
+            Vector2 to = foe.GlobalPosition - GlobalPosition;
+            float distance = to.Length();
+            if (distance - foe.HitRadius > _explosionRadius) continue;
+
+            Vector2 knock = (distance > 0.01f ? to / distance : Vector2.Right) * _explosionKnockback;
+            foe.TakeHit(new HitInfo(_explosionDamage, knock), GlobalPosition);
+        }
+        ShakeCamera2D.Instance?.AddTrauma(0.35f);
     }
 }

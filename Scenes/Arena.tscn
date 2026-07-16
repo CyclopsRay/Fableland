@@ -35,6 +35,7 @@ DestroyObjectiveScene = ExtResource("14")
 BossCrabScene = ExtResource("12")
 FireHazardScene = ExtResource("8")
 FreezeHazardScene = ExtResource("9")
+DebugCombatMapPath = "res://Maps/seashore.json"
 
 [node name="Background" type="ColorRect" parent="." groups=["arena_canvas"]]
 mouse_filter = 2

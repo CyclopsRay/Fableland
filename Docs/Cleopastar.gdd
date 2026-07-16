@@ -1,4 +1,4 @@
-# Cleopastar — GDD v2.0
+# Cleopastar — GDD v2.2
 
 > **Ported from the Unity `GloryOfFableland` source.** Numbers reflect the shipped Unity
 > kit; Godot movement derives from `Units.cs` (all speeds/distances in meters·seconds).
@@ -54,9 +54,14 @@ Deep purple hime cut — straight blunt bangs across the forehead, straight side
 
 ## Resource System — Glows
 
-Cleopastar's primary resource. Every **1.5 seconds**, she generates 1 Glow on one of her star spikes, stacking up to **5 Glows maximum**. Glows are lost on death. Each Glow is spent by BA to launch one star.
+Cleopastar's primary resource is a universal-ammo magazine: **5 Glows maximum**, one
+Glow spent per BA. A successful shot triggers a **1.5 s** reload; each completed reload
+restores **1 Glow** and repeats while the magazine is below capacity. A later shot
+restarts the single reload timer. Glows are lost on death; respawn starts empty with a
+fresh reload timer.
 
-Glow generation is continuous and independent of the current count — the timer always ticks, pausing only at the 5-Glow cap.
+At most **5 CleoStars may exist at once**, counting every movement/effect combination.
+If five exist, BA does nothing even if a Glow is available.
 
 ---
 
@@ -66,7 +71,7 @@ Each star has two **independent, aggregatable** statuses that combine freely:
 
 | | **Normal effect** | **Blackhole effect** |
 |---|-------------------|---------------------|
-| **Stationary** | Immature (hover / fall / platform) | Stationary Blackhole |
+| **Stationary** | Immature (hover / fall / SoftVolume) | Stationary Blackhole |
 | **Gliding** | Gliding star | Gliding Blackhole |
 
 **Nut's Decree (Shift)** controls the movement axis: Stationary → Gliding.
@@ -80,25 +85,28 @@ Neither skill affects the other axis. A Gliding Blackhole keeps flying; a Statio
 #### Stationary
 A star is Stationary when first launched (Immature) and remains so unless Nut's Decree is cast.
 
-**Flight phase:** The star flies in a **straight line** at **12 m/s** in the aimed direction for a minimum of **6 m** (the release input is buffered until this threshold is met). It can hit enemies during this phase.
+**Flight phase:** The star flies in a **straight line toward the mouse cursor** at
+**12 m/s** for **8–60 m**. Releasing BA is buffered until the 8 m minimum is met; it
+automatically ends at the 60 m maximum. It can hit enemies during this phase.
 
 **Hover phase:** Once the flight phase ends, the star stops in place and **hovers for 1 second**.
 
 **Fall phase:** After the hover, the star begins falling:
-- Falls at **0.5 m/s** (unoccupied)
-- Falls at **1 m/s** while Cleopastar is standing on it
-- Acts as a **one-way platform** for Cleopastar only — she can land, stand, jump off, and drop through by pressing down
-- Cleopastar cannot stand on Gliding stars or stars with Blackhole effect active
-- Standing on a star does not consume it
+- Falls at **0.5 m/s** while unoccupied
+- Its **1 m core is a Cleopastar-only SoftVolume** with **StagnationIndex 0.1**;
+  Cleopastar falls and moves through it rather than standing on it. If she presses
+  jump while inside it with no normal jump charges remaining, it triggers its Normal
+  explosion, vanishes, and provides that jump launch.
+- Gliding and Blackhole stars do not provide this SoftVolume jump support
 
-* **Lifetime:** 15 seconds from launch
+* **Lifetime:** 16 seconds from launch
 
 #### Gliding
-A star enters Gliding when **Nut's Decree** is cast, regardless of its current effect status. It flies in the chosen direction:
+A star enters Gliding when **Nut's Decree** is cast, regardless of its current effect status. Its captured aim point determines the initial direction only: each star passes through that point and continues along the same line until it hits Ground/Platform, collides under its effect rules, or expires. It passes through SoftVolumes.
 
-* **Speed:** 12 m/s → 30 m/s, accelerating linearly over **1.5 seconds**
+* **Speed:** 20 m/s → 40 m/s, accelerating linearly over **1.5 seconds**
 * Speed and damage scaling share the same `t` value
-* **Lifetime:** 10 seconds from entering Gliding
+* **Lifetime:** 3 seconds from entering Gliding
 
 ---
 
@@ -107,24 +115,28 @@ A star enters Gliding when **Nut's Decree** is cast, regardless of its current e
 #### Normal
 The star's default effect. On collision (contact within the trigger radius):
 
-* **Stationary star:** 40 DMG in a **2 m radius** explosion, then vanishes. Applies StarSicking.
-* **Gliding star:** scaled DMG **40→100** (same `t` as speed), knockback **0→6 m/s** radially outward, then vanishes. Applies StarSicking.
+The visible Normal star core is **1 m in diameter**. Its **2 m trigger/explosion
+radius** is gameplay space, not its rendered body.
+
+* **Stationary star:** 30 DMG in a **2 m radius** explosion, then vanishes. Cleopastar never takes damage from her own stars.
+* **Gliding star:** scaled DMG **30→100** (same `t` as speed), knockback **0→6 m/s** radially outward, then vanishes.
 
 #### Blackhole
 Applied by **Apep's Maw**, regardless of movement status. The Blackhole effect is a larger, slower star with a gravity pull:
 
+* **Visible core:** **2.5 m diameter**. The pull ring is **6 m in diameter**
+  (**3 m pull radius**) and is rendered as a subtle indicator rather than a solid disc.
 * **Collision radius:** expanded to **3 m** (from 2 m)
 * **Contact damage:** 0 — the Blackhole deals no direct hit damage
-* **Passive pull (always active):** Enemies and foes within **6 m** are continuously pulled toward the star at **15 m/s**
+* **Passive pull (always active):** Enemies and foes within **3 m** are continuously pulled toward the star at **15 m/s**
 * **On collision (within 3 m) or ground/platform contact — 4-tick sequence (0.8 s, one tick every 0.2 s):**
-  * Applies to all enemies within **6 m** per tick:
+  * Applies to all enemies within **3 m** per tick:
     * 10 DMG
     * 15 m/s pull toward center
     * 0.2 s Stun
     * **Execute** any target with HP below 10% of their max
 * After the 4th tick the star vanishes
 * The passive pull continues throughout the tick sequence
-* Does **not** apply StarSicking
 
 If the star also has Gliding status, it continues moving at its current speed while the passive pull and tick sequence are active.
 
@@ -140,20 +152,8 @@ Apep's Maw cast on a Blackhole star restores the Normal effect. The star's movem
 - Glows are displayed on Cleopastar's star spikes (visual only — no numeric HUD)
 - Lost on death; timer resets and begins again on respawn
 
-**StarSicking (stackable buff, applied to enemies):**
-Every direct damage hit from a CleoStar — Immature explosion or Gliding impact — first deals its damage, then attempts to apply one stack of **StarSicking** to the target:
-- **Effect per stack:** Reduce all star damage received by **35%**
-- **Max stacks:** 2 (70% reduction at full stacks)
-- **Timer:** A **single shared timer** counts down from **1.5 seconds**. When it expires, one stack is removed and the timer resets to 1.5 s for the remaining stack (if any). Any hit that adds or would add a stack also **resets the timer to 1.5 s**.
-- **On hit with 2 stacks already active:** no stack added, timer reset to 1.5 s
-- Blackhole tick damage does **not** apply or refresh StarSicking
-
-*Note: This single-timer-per-buff model is the intended universal pattern for all stackable buffs in the game. The timer always belongs to the buff instance, not to individual stacks.*
-
-**Consecutive Gliding hit reduction:**
-The StarSicking buff is the primary gate on repeated star damage. A target hit by one Gliding star at 1 stack takes 65% DMG on the next hit; at 2 stacks, 30% DMG. The buff refreshes on each hit, so sustained fire keeps the target at maximum reduction.
-
-*Balance intent: 3 Gliding stars at max damage, target at 0 stacks → 100 + 65 + 30 = 195 DMG (survives 200 HP). 4 stars → 225 DMG (lethal).*
+There is no StarSicking debuff. Repeated-hit reduction belongs solely to the Shift
+volley that created Gliding stars; Normal stationary explosions are never reduced.
 
 ---
 
@@ -161,12 +161,15 @@ The StarSicking buff is the primary gate on repeated star damage. A target hit b
 
 **Resource:** 1 Glow per shot
 
-Cleopastar extends her free hand and flicks a star in the aimed direction. The star flies in a **straight line** at a fixed speed. Holding LMB extends how far the star travels before stopping; releasing LMB (or reaching the 6 m minimum) ends the flight phase.
+Cleopastar extends her free hand and flicks a star toward the mouse cursor. The star
+flies in a **straight line** at a fixed speed. Holding LMB extends its flight;
+releasing LMB ends it once the 8 m minimum has been met, and 60 m ends it automatically.
 
 * **Launch speed:** Fixed **12 m/s**, no charge variation
-* **Minimum flight distance:** **6 m** — even a single click guarantees the star travels at least 6 m before stopping
+* **Flight distance:** **8 m minimum / 60 m maximum** — even a single click guarantees 8 m
 * **Hover:** After the flight phase ends, the star stops in place for **1 second** before entering its fall phase
 * Stars fly in a **direct line** — no arc, no gravity during flight
+* **BA interval:** **0.5 s** after flight ends. A release before 8 m starts this interval when the buffered release is honored at 8 m (0.67 s flight time).
 * If fired with 0 Glows, the input is ignored silently
 * The star immediately enters **Immature** state on spawn
 
@@ -178,13 +181,18 @@ Cleopastar extends her free hand and flicks a star in the aimed direction. The s
 
 *Named for Nut, Egyptian goddess of the star-filled sky who arches over all creation and governs the stars.*
 
-Cleopastar raises her ankh cane and points it in a chosen direction. All **Stationary** stars simultaneously enter **Gliding** movement, flying in that exact direction — regardless of their current effect status. A Stationary Blackhole becomes a Gliding Blackhole.
+Cleopastar raises her ankh cane and captures the mouse's **world-space aim point**. All
+**Stationary** stars simultaneously enter Gliding movement toward that same captured
+point — each star therefore takes its own converging line — regardless of effect
+status. A Stationary Blackhole becomes a Gliding Blackhole.
 
-* **Direction input:** Mouse/Keyboard: angle from Cleopastar's position to mouse cursor | Gamepad: right analog stick
+* **Aim input:** Mouse/Keyboard: captured mouse world point at cast time
 * Already-Gliding stars are unaffected by this cast
-* **Tactical geometry:**
-  * Stars arranged perpendicular to Shift direction → spread across a wide area
-  * Stars arranged parallel to Shift direction → clustered burst on a single point
+* **Consecutive Gliding reduction:** Stars moved by this Shift are marked as its
+  volley. On one target, the first marked Gliding impact deals full damage; the next
+  deals **35% less**; the third and later deal **70% less**. This applies only to
+  marked Normal Gliding impacts, never to Stationary Normal explosions or Blackhole
+  ticks. A later Shift is a new volley and starts a fresh full-damage sequence.
 * The 3 s cooldown reflects a minimum delay between volleys rather than a meaningful resource gate — star availability (Glows) is the primary constraint
 
 ---
@@ -199,7 +207,7 @@ Cleopastar collapses a target star's effect into a **Blackhole** — this is a *
 
 **Target selection:** The star with the smallest angle from the vector (Cleopastar's position → mouse cursor) is selected. Ties broken by proximity.
 
-* **Normal → Blackhole:** star's collision radius expands to 3 m, direct damage becomes 0, passive 6 m pull activates. Movement continues unchanged.
+* **Normal → Blackhole:** star's collision radius expands to 3 m, direct damage becomes 0, passive 3 m pull activates. Movement continues unchanged.
 * **Blackhole → Normal:** restores the star to Normal effect. Movement continues unchanged.
 * Works as both a zone-denial tool (plant a Stationary Blackhole to block pursuit) and a combo finisher (send a Gliding Blackhole through a group to pull them in, letting the ticks fire mid-flight)
 
@@ -207,18 +215,9 @@ Cleopastar collapses a target star's effect into a **Blackhole** — this is a *
 
 ### Ultimate — Constellation Reign
 
-**Duration:** 6 seconds
-
-Cleopastar raises her ankh cane, entering a regal stance. During this period:
-
-* All airborne **Immature** stars stop falling — they hang suspended, zone-controlling the battlefield
-* All cooldowns (Shift, E) and the passive Glow generation interval are reduced by **50%**
-  * Shift: 3 s → 1.5 s
-  * E: 12 s → 6 s
-  * Glow generation: 1.5 s → 0.75 s
-* When the Ult ends, all suspended stars resume falling at their normal 0.5 m/s
-* Suspended stars **glow brighter** while frozen — a visible warning to the opponent that a mass drop is coming
-* Stars that enter Gliding or Blackhole state during the Ult are not frozen
+**Deferred.** No Cleopastar Ultimate is in the current implementation scope. The prior
+Constellation Reign concept is retained in document history only and must be redesigned
+against the eventual project-wide Ultimate model before it returns to the kit.
 
 ---
 
@@ -226,11 +225,11 @@ Cleopastar raises her ankh cane, entering a regal stance. During this period:
 
 | Skill | Name | CD | Key Mechanic |
 |-------|------|----|--------------|
-| Passive | Starlight Charge | 1.5 s / Glow | Trickle generation up to 5; StarSicking debuff (−35% star DMG/stack, max 2) |
-| BA | Star Shot | — (Glow-gated) | Fixed 12 m/s straight line, min 6 m, hover then fall |
-| Shift | Nut's Decree | 3 s | All Stationary stars → Gliding in chosen direction |
+| Passive | Starlight Charge | 1.5 s / Glow | 5-Glow universal-ammo magazine; reload 1 per 1.5 s |
+| BA | Star Shot | 0.5 s after flight ends | Fixed 12 m/s straight line, 8–60 m, hover then fall; 5 active-star cap |
+| Shift | Nut's Decree | 3 s | All Stationary stars glide toward one captured aim point; consecutive hits reduce 35% then 70% |
 | E | Apep's Maw | 12 s | Normal ↔ Blackhole toggle (two-way) |
-| Ult | Constellation Reign | — | Freeze Immature stars; 50% CDR on Shift, E, Glow gen for 6 s |
+| Ult | Constellation Reign | — | Deferred; not implemented in this scope |
 
 ---
 
@@ -240,15 +239,15 @@ Cleopastar raises her ankh cane, entering a regal stance. During this period:
                     NORMAL EFFECT              BLACKHOLE EFFECT
                  ┌─────────────────────┬──────────────────────────┐
   STATIONARY     │  Hover → Fall       │  Stationary gravity well │
-  (Immature)     │  2 m radius         │  6 m pull aura           │
-                 │  40 DMG on hit      │  3 m trigger → 4-tick seq│
-                 │  Applies StarSicking│  No direct DMG           │
+  (Immature)     │  2 m radius         │  3 m pull radius         │
+                 │  30 DMG on hit      │  3 m trigger → 4-tick seq│
+                 │  SoftVolume jump use│  No direct DMG           │
                  ├─────────────────────┼──────────────────────────┤
-  GLIDING        │  12→30 m/s          │  12→30 m/s (keeps flying)│
-                 │  2 m radius         │  6 m pull aura           │
-                 │  40→100 DMG on hit  │  3 m trigger → 4-tick seq│
+  GLIDING        │  20→40 m/s          │  20→40 m/s (keeps flying)│
+                 │  2 m radius         │  3 m pull radius         │
+                 │  30→100 DMG on hit  │  3 m trigger → 4-tick seq│
                  │  0→6 m/s knockback  │  No direct DMG           │
-                 │  Applies StarSicking│  Ticks fire mid-flight   │
+                 │ Shift-volley reduction│ Ticks fire mid-flight  │
                  └─────────────────────┴──────────────────────────┘
 
 Nut's Decree  → moves any star from Stationary row to Gliding row (effect unchanged)
@@ -266,47 +265,50 @@ in via Tab. See `NODES.gdd` §3.3 (Switch Protagonist).
 
 ## Design Notes
 
-* Cleopastar rewards patience and spatial positioning. Her power scales with how many Immature stars she has arranged before committing a Shift.
-* Apep's Maw creates genuine tension in the opposing player: engaging her risks walking into a Blackhole's passive pull. The 6 m pull radius relative to the 3 m trigger means the opponent must act from farther away than feels natural.
+* Cleopastar rewards patience and spatial positioning. Her power scales with how many Immature stars she has arranged before committing a converging Shift volley.
+* Apep's Maw creates genuine tension in the opposing player: engaging her risks walking into a Blackhole's passive pull. Its 3 m pull radius matches the 6 m-diameter ring, while its 3 m trigger keeps the detonation boundary readable.
 * Nut's Decree's 3 s cooldown is intentionally low — it is not the resource gate. Glows are. This lets skilled play feel fluid and expressive.
-* The Gliding consecutive-hit reduction prevents one Shift cast from trivially deleting a target with 5 stacked stars, while still making 4-star volleys lethal.
+* The per-Shift Gliding reduction prevents one converging five-star volley from trivially deleting a target, without weakening Normal stationary-star damage.
 * The Nut / Apep naming pair carries genuine mythological weight: Nut commands the stars, Apep devours them. Cleopastar *is* Nut; Apep's Maw is the weapon she wields against her enemies.
-* Suggested HP: 180 — lower than average, reinforcing the need for self-defense tools (Blackhole zone denial, star platform mobility) and careful positioning.
+* Suggested HP: 180 — lower than average, reinforcing the need for self-defense tools (Blackhole zone denial, star SoftVolume mobility) and careful positioning.
 
 ---
 
 ## Implementation Notes
 
 ### Ammo System
-Glows use `currentAmmo` / `magazineSize` from the base `CharacterController` ammo system. `magazineSize = 5`. Trickle regeneration is implemented by overriding `UpdateAmmo()` with a 1.5 s delta timer that increments `currentAmmo` by 1. `AutoTriggerReplenishOnShot` is overridden to `false` to suppress the base reload coroutine. This ensures full compatibility with future roguelite ammo modifiers.
+Glows use the shared universal-ammo system: capacity **5**, reload amount **1**, reload
+delay **1.5 s**, successful-shot trigger, timer reset on a later shot, and repeated
+reloads while below capacity. The system, not this character, owns the timer and
+attack-speed modifier hook.
 
 ### BA Flight & Hover
-The star is launched at fixed 12 m/s in a straight line using `rb.linearVelocity` (no gravity during flight). A distance accumulator tracks how far the star has traveled. Once LMB is released AND the 6 m minimum is met, the star enters the hover phase: velocity is zeroed and a 1-second coroutine begins. After the coroutine, the star enters its fall phase at 0.5 m/s. The minimum 6 m is enforced by delaying the release-response until the threshold is crossed — a release before 6 m is buffered and applied when 6 m is reached.
+The star is launched at fixed 12 m/s in a straight line toward the captured mouse point,
+with no gravity during flight. A distance accumulator enforces the 8 m minimum and 60 m
+maximum. Once release is valid (or the maximum is reached), the star hovers for one
+second, then falls at 0.5 m/s. Input press/release is buffered outside physics; star
+motion belongs in `_PhysicsProcess`.
 
-### Star Platform Collision
-Immature stars use two colliders on the prefab root:
-- `CircleCollider2D (Is Trigger: true)` — enemy and ground hit detection
-- `BoxCollider2D (Is Trigger: false)` + `PlatformEffector2D (useOneWay: true)` — platform for Cleopastar only
-
-On star spawn, `Physics2D.IgnoreCollision(platformCollider, nonOwnerCollider, true)` is called for all non-owner characters. When the star enters Gliding or Blackhole state, the platform collider is disabled entirely.
-
-Drop-through (pressing down while standing on a star) is deferred to post-prototype.
+### Star SoftVolume and jump override
+A hovering/falling Normal star contains a Cleopastar-only `SoftVolume` whose circular
+interior matches its 1 m visual core and has `StagnationIndex = 0.1`. It has no
+Platform-layer body, so stars cannot collide with or stand on each other. Cleopastar's
+jump override checks the active stars only after normal jump charges are exhausted; if
+she is inside one, it consumes that star, invokes its Normal explosion, and authorizes
+the ordinary jump launch. Gliding and Blackhole states disable the volume.
 
 ### Blackhole Pull vs. CharacterController
-The base `CharacterController` overwrites `rb.linearVelocity` every `FixedUpdate` via `HandleMovement()`, which means `AddForce` has no effect on player characters. The Blackhole applies its pull via an `externalForce` field added to `CharacterController`:
+Blackhole pull uses a **source-keyed continuous external-velocity contribution** of
+**15 m/s toward the star** inside its **3 m radius**. It must not repeatedly call the decaying
+`AddImpulse(Δv)` channel. The contribution is cleared as soon as the target leaves the
+3 m radius or the star vanishes.
 
-```csharp
-// CharacterController.cs — new field
-public Vector2 externalForce = Vector2.zero;
-
-// Inside HandleMovement(), after normal velocity is applied:
-rb.linearVelocity += externalForce;
-externalForce = Vector2.zero; // consumed each frame
-```
-
-The CleoStar Blackhole sets `cc.externalForce += pullDir * 15f` each `FixedUpdate`. `BaseFoe` characters have no such constraint — `rb.linearVelocity` can be set directly.
-
-This base class change is minimal and non-breaking for existing characters.
+### Spawn-terrain collision
+The effect trigger radius is deliberately larger than the rendered core, so it is not
+used to collide with terrain. A second, core-sized terrain probe blocks only Ground and
+Platform. It ignores terrain for the first **0.2 s** after launch, then checks any body
+still overlapping when the waiver expires. This removes the FirePoint/near-wall false
+positive without allowing a star to remain inside intended terrain.
 
 ---
 
@@ -332,4 +334,27 @@ Character poster, same design as the reference image. Cleopastar stands in a thr
 
 ---
 
-*Last Updated: May 2026 | Version: 2.0 | Source: Unity CharacterGDD.md*
+## Decisions log
+
+- **Five active stars and a 60 m flight ceiling.** Cleopastar can prepare a meaningful
+  formation without filling the arena with unbounded projectiles or firing across the
+  entire map.
+- **Shift converges on a captured point.** Each star now has its own path to the same
+  aim point, passes through it, and is stopped only by terrain/collision/lifetime. This
+  makes setup geometry and prediction central to her sniper identity.
+- **Repeated-hit reduction is a Shift-volley rule, not a target debuff.** Normal
+  stationary-star explosions retain their full damage and there is no lingering
+  StarSicking state on foes.
+- **Star SoftVolume consumes only on an exhausted jump.** It is an enterable, momentary
+  movement tool rather than a physical landing surface; its ordinary Normal explosion
+  never hurts Cleo.
+- **Shift volleys do not share reduction.** Every Shift creates a fresh per-target
+  sequence, keeping its reward readable and preventing old projectiles from carrying
+  invisible damage history into a later cast.
+- **Ammo persists while benched.** Ammo count and reload progress follow the normal
+  background cooldown schedule, preventing Tab from becoming a free reload.
+- **Ultimate deferred.** It will return only after the game-wide Ultimate model exists.
+
+---
+
+*Last Updated: July 2026 | Version: 2.2 | Source: Unity CharacterGDD.md*

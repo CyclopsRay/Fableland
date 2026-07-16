@@ -26,8 +26,8 @@ public sealed class ProtectMission : Mission
 
         _core = arena.ProtectCoreScene.Instantiate<ProtectCore>();
         arena.Entities.AddChild(_core);
-        _core.GlobalPosition = new Vector2(
-            (ArenaBuilder.PlayLeft + ArenaBuilder.PlayRight) * 0.5f, ArenaBuilder.GroundTopY - 44f);
+        // Protect maps author the Level Goal tile as the Condensed Wonder Core's position.
+        _core.GlobalPosition = arena.RandomLevelGoalPoint(rng);
         float perHit = 18f * FoeStats.ForLevel(arena.FoeLevel).AtkMult;
         _core.Configure(MissionTable.ProtectCoreHp(nodeLevel), perHit);
     }

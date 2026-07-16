@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
 using Godot;
+using Fableland.Data;
 using Fableland.Map;
+using Fableland.MapCreation.Runtime;
 using Fableland.Debug;
 
 namespace Fableland.Run;
@@ -22,6 +25,7 @@ public partial class RunState : Node
 {
     public static RunState Instance;
     public const int MaxStamina = 5;
+    public const string TwistedRealityItemId = "twisted_reality";
 
     // ---- identity / clock ----
     public string Seed;
@@ -42,7 +46,7 @@ public partial class RunState : Node
     // ---- party & inventory (stubs beyond the party for now) ----
     public readonly List<ProtagonistState> Owned = new();
     public readonly List<string> ActiveBuild = new();
-    public int ActiveProtagonistIndex;   // zero-based index into ActiveBuild — which party member is controlled
+    public int ActiveProtagonistIndex;   // chosen starting slot for the NEXT battle; Arena owns its local cursor
     public int WonderCores;
     public readonly List<ItemInstance> Items = new();
 
@@ -104,6 +108,10 @@ public partial class RunState : Node
         Owned.Clear();
         Owned.Add(new ProtagonistState("Pomegraknight"));
         Owned.Add(new ProtagonistState("PumpKing"));
+        // The vertical slice exposes every implemented protagonist through the real
+        // bench so Team Build can exercise the complete switch flow. Cleopastar starts
+        // benched; the default active pair remains Pomegraknight + PumpKing.
+        Owned.Add(new ProtagonistState("Cleopastar"));
         ActiveBuild.Clear();
         ActiveBuild.Add("Pomegraknight");
         ActiveBuild.Add("PumpKing");
@@ -145,7 +153,7 @@ public partial class RunState : Node
         CurrentNodeId = nodeId;
 
         var kind = node?.Kind ?? NodeKind.Combat;
-        CurrentAdventure = new AdventureContext
+        var adventure = new AdventureContext
         {
             NodeId = nodeId,
             NodeLevel = node?.Level ?? 1,
@@ -153,16 +161,29 @@ public partial class RunState : Node
             Kind = kind,
             Day = Day,
             IsRevisitCombat = revisitCombat,
+            Terrain = node?.Terrain ?? "sea-level",
         };
-
+        // The overworld selects an authored combat map once and snapshots only its path into
+        // the handshake. The arena never reaches back into the map graph or rolls selection.
+        if (node?.IsCombat == true)
+        {
+            var selected = CombatMapCatalog.Select(Seed, node.Id, node.Zone, node.Level,
+                adventure.Mission, adventure.Terrain);
+            adventure.CombatMapPath = selected?.AbsolutePath ?? "";
+            if (selected == null)
+                GD.PushWarning($"[RunState] no combat map matched {node.Zone} LV{node.Level} {adventure.Mission} {adventure.Terrain}; using legacy Arena.");
+        }
         bool isCombat = kind == NodeKind.Combat || kind == NodeKind.Boss;
+        if (isCombat) adventure.BattleTeam = CaptureBattleTeam();
+        CurrentAdventure = adventure;
         if (isCombat) Stamina = 0; // entering any combat node depletes all stamina (NODES §2.3)
 
         string scene = kind switch
         {
             NodeKind.Combat or NodeKind.Boss => "res://Scenes/Arena.tscn",
+            NodeKind.TransportHub => "res://Scenes/Shelter.tscn",
             NodeKind.Shelter => "res://Scenes/Shelter.tscn",
-            NodeKind.QuestionMark => "res://Scenes/Event.tscn",
+            NodeKind.Event => "res://Scenes/Event.tscn",
             _ => null, // River (and any future inert kind): no Adventure scene — stay on the map
         };
         if (scene == null) { CurrentAdventure = null; return; }
@@ -184,6 +205,11 @@ public partial class RunState : Node
                 bool newlyDone = CompletedNodeIds.Add(node.Id);
                 DebugManager.Instance?.LogMission($"Goal {CurrentAdventure?.Mission} at {CurrentAdventure?.NodeId} {(newlyDone ? "SUCCEEDED" : "re-completed")} (total goals: {GoalsSucceeded + (newlyDone ? 1 : 0)})");
                 if (newlyDone && node.IsCombat) GoalsSucceeded++;
+                if (newlyDone && node.Kind == NodeKind.Boss && node.WorldIndex == 0 && !HasTwistedReality())
+                {
+                    AddItem(TwistedRealityItemId);
+                    DayEndNotes.Add("The capital yields TwistedReality.");
+                }
             }
             ApplyRewards(rewards);
         }
@@ -261,6 +287,7 @@ public partial class RunState : Node
         InVoid = true;
         foreach (var n in Graph.Nodes)
             if (n.WorldIndex != -1) n.Devoured = true; // everything outside zone 6
+        Graph.BreakRealityBridgesAtDevouredEndpoints();
     }
 
     // ============================================================= mutators (single owner of truth)
@@ -331,9 +358,99 @@ public partial class RunState : Node
         DebugManager.Instance?.LogItem(defId, ItemsCollected);
     }
 
+    /// <summary>Whether the unique cross-realm key is owned, either in a held slot or backpack.</summary>
+    public bool HasTwistedReality()
+    {
+        foreach (var item in Items)
+            if (item.DefId == TwistedRealityItemId) return true;
+        foreach (var protagonist in Owned)
+            if (protagonist.HeldItemDefId == TwistedRealityItemId) return true;
+        return false;
+    }
+
+    /// <summary>Gets the held copy of TwistedReality. Its skill only works while equipped.</summary>
+    private ProtagonistState HeldTwistedReality()
+    {
+        foreach (var protagonist in Owned)
+            if (protagonist.HeldItemDefId == TwistedRealityItemId) return protagonist;
+        return null;
+    }
+
+    /// <summary>Checks whether TwistedReality can create its next permanent bridge.</summary>
+    public bool CanCreateRealityBridge(string originId, out string reason)
+    {
+        reason = null;
+        var origin = FindNode(originId);
+        var holder = HeldTwistedReality();
+        if (Graph == null || origin == null) { reason = "No map destination is available."; return false; }
+        if (holder == null) { reason = "Hold TwistedReality at a Transportation Hub first."; return false; }
+        if (holder.HeldItemDayCooldownRemaining > 0)
+        {
+            reason = $"TwistedReality re-forms in {holder.HeldItemDayCooldownRemaining} day(s).";
+            return false;
+        }
+        if (Stamina < MapGenTable.TwistedRealityStaminaCost) { reason = "Not enough stamina."; return false; }
+        if (origin.WorldIndex < 0 || origin.Kind != NodeKind.Combat || origin.LevelTag != "1-A"
+            || !CompletedNodeIds.Contains(origin.Id))
+        {
+            reason = "TwistedReality needs a completed 1-A city at a realm's edge.";
+            return false;
+        }
+        if (Graph.HasRealityBridge(origin))
+        {
+            reason = "This city is already anchored to another reality.";
+            return false;
+        }
+        if (FindClosestRealityDestination(origin) == null)
+        {
+            reason = "No eligible city remains in another realm.";
+            return false;
+        }
+        return true;
+    }
+
     /// <summary>
-    /// Move a wonder item into a protagonist's single held slot (v0.6.0 stub — no passive/skill/
-    /// cooldown side effects; that is T30 §4 future work). Signature takes a ProtagonistState by
+    /// Spend one stamina and create a permanent cross-realm edge. The caller can then travel
+    /// through it using normal map movement, without a second item use.
+    /// </summary>
+    public bool TryCreateRealityBridge(string originId, out MapNode destination, out string reason)
+    {
+        destination = null;
+        if (!CanCreateRealityBridge(originId, out reason)) return false;
+        var origin = FindNode(originId);
+        destination = FindClosestRealityDestination(origin);
+        if (destination == null || !Graph.AddRealityBridge(origin, destination))
+        {
+            destination = null;
+            reason = "Reality could not find a stable destination.";
+            return false;
+        }
+        Stamina -= MapGenTable.TwistedRealityStaminaCost;
+        HeldTwistedReality().HeldItemDayCooldownRemaining = MapGenTable.TwistedRealityCooldownDays;
+        reason = null;
+        return true;
+    }
+
+    private MapNode FindClosestRealityDestination(MapNode origin)
+    {
+        MapNode best = null;
+        foreach (var candidate in Graph.Nodes)
+        {
+            if (candidate.WorldIndex < 0 || candidate.WorldIndex == origin.WorldIndex || candidate.Devoured
+                || Graph.HasRealityBridge(candidate)) continue;
+            if (best == null
+                || candidate.Pos.DistanceSquaredTo(origin.Pos) < best.Pos.DistanceSquaredTo(origin.Pos)
+                || (Mathf.IsEqualApprox(candidate.Pos.DistanceSquaredTo(origin.Pos), best.Pos.DistanceSquaredTo(origin.Pos))
+                    && (candidate.WorldIndex < best.WorldIndex
+                        || (candidate.WorldIndex == best.WorldIndex && string.CompareOrdinal(candidate.Id, best.Id) < 0))))
+                best = candidate;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Move a wonder item into a protagonist's single held slot. The item instance's daily
+    /// cooldown follows it; TwistedReality is the current gameplay user of that state. Signature takes a ProtagonistState by
     /// reference (not an id) so the shelter Team Build menu can assign to either a real Owned
     /// protagonist OR an ephemeral debug-only one that is not in Owned — RunState remains the one
     /// writer of the Items backpack either way. <paramref name="fromBackpack"/> is true for a real
@@ -347,42 +464,165 @@ public partial class RunState : Node
         // Bump whatever was previously held back to the backpack — but ONLY if it came from the
         // backpack. A previously-held debug catalog item vanishes (it was never in the economy).
         if (!string.IsNullOrEmpty(p.HeldItemDefId) && p.HeldItemFromBackpack)
-            Items.Add(new ItemInstance(p.HeldItemDefId));
+            Items.Add(new ItemInstance(p.HeldItemDefId)
+            {
+                DayCooldownRemaining = p.HeldItemDayCooldownRemaining,
+            });
         // Consume the incoming item from the backpack only when it's a real backpack item. A debug
         // catalog item isn't in Items, so nothing is removed and — crucially — nothing is granted.
+        int incomingCooldown = 0;
         if (fromBackpack)
         {
             int idx = Items.FindIndex(it => it.DefId == defId);
-            if (idx >= 0) Items.RemoveAt(idx);
+            if (idx >= 0)
+            {
+                incomingCooldown = Items[idx].DayCooldownRemaining;
+                Items.RemoveAt(idx);
+            }
         }
         p.HeldItemDefId = defId;
         p.HeldItemFromBackpack = fromBackpack;
+        p.HeldItemDayCooldownRemaining = incomingCooldown;
         // NOTE(T30 §4): benching a protagonist should auto-return its held item to the backpack;
         // deferred until party-benching UI lands. No perish/cooldown/passive hooks in this stub.
     }
 
     /// <summary>Return a protagonist's held item to the backpack, clearing the slot. A real backpack
     /// item goes back to Items; a debug-conjured catalog item (HeldItemFromBackpack == false)
-    /// simply vanishes so it never pollutes the real economy. Null-tolerant. No side effects
-    /// (T30 §4 future work).</summary>
+    /// simply vanishes so it never pollutes the real economy. Null-tolerant. The daily cooldown
+    /// is preserved for real backpack instances.</summary>
     public void UnholdItem(ProtagonistState p)
     {
         if (p == null || string.IsNullOrEmpty(p.HeldItemDefId)) return;
-        if (p.HeldItemFromBackpack) Items.Add(new ItemInstance(p.HeldItemDefId));
+        if (p.HeldItemFromBackpack)
+            Items.Add(new ItemInstance(p.HeldItemDefId)
+            {
+                DayCooldownRemaining = p.HeldItemDayCooldownRemaining,
+            });
         p.HeldItemDefId = null;
         p.HeldItemFromBackpack = false;
+        p.HeldItemDayCooldownRemaining = 0;
     }
 
-    /// <summary>
-    /// Advance <see cref="ActiveProtagonistIndex"/> to the next party member, wrapping
-    /// around. Returns the new protagonist Id. No-op (returns null) when the active build
-    /// has fewer than 2 members (NODES §3.3: Tab unavailable with 1 protagonist).
-    /// </summary>
-    public string CycleNextProtagonist()
+    /// <summary>Party size is a query so later item/meta modifiers can raise it without
+    /// rewriting the shelter UI or battle handoff.</summary>
+    public int PartyCap() => 3;
+
+    /// <summary>Validate and atomically replace the shelter-configured team order.
+    /// Only owned, unique protagonists may be fielded; a team always has at least one
+    /// member. The changed build applies to the next combat snapshot, never in place
+    /// during an existing battle.</summary>
+    public bool TrySetActiveBuild(IReadOnlyList<string> ids, out string error)
     {
-        if (ActiveBuild.Count < 2) return null;
-        ActiveProtagonistIndex = (ActiveProtagonistIndex + 1) % ActiveBuild.Count;
-        return ActiveBuild[ActiveProtagonistIndex];
+        if (ids == null || ids.Count == 0)
+        {
+            error = "A team needs at least one protagonist.";
+            return false;
+        }
+        if (ids.Count > PartyCap())
+        {
+            error = $"A team can field at most {PartyCap()} protagonists.";
+            return false;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in ids)
+        {
+            if (string.IsNullOrWhiteSpace(id) || FindProtagonist(id) == null)
+            {
+                error = $"'{id}' is not in the owned roster.";
+                return false;
+            }
+            if (!seen.Add(id))
+            {
+                error = "A protagonist can occupy only one team slot.";
+                return false;
+            }
+        }
+
+        ActiveBuild.Clear();
+        foreach (string id in ids) ActiveBuild.Add(id);
+        ActiveProtagonistIndex = 0;
+        error = null;
+        return true;
+    }
+
+    /// <summary>Place an owned protagonist at a shelter team slot. Selecting a current
+    /// member reorders it; selecting a benched member replaces the selected occupied
+    /// slot or fills the next empty one.</summary>
+    public bool TrySetActiveBuildSlot(int slot, string id, out string error)
+    {
+        if (slot < 0 || slot >= PartyCap())
+        {
+            error = "That team slot does not exist.";
+            return false;
+        }
+        if (FindProtagonist(id) == null)
+        {
+            error = $"'{id}' is not in the owned roster.";
+            return false;
+        }
+
+        var next = ValidActiveBuild();
+        int existing = next.IndexOf(id);
+        if (existing >= 0)
+        {
+            next.RemoveAt(existing);
+            next.Insert(Math.Min(slot, next.Count), id);
+        }
+        else if (slot < next.Count)
+        {
+            next[slot] = id;
+        }
+        else
+        {
+            next.Add(id);
+        }
+        return TrySetActiveBuild(next, out error);
+    }
+
+    public bool TryRemoveActiveBuildSlot(int slot, out string error)
+    {
+        var next = ValidActiveBuild();
+        if (slot < 0 || slot >= next.Count)
+        {
+            error = "That team slot is already empty.";
+            return false;
+        }
+        if (next.Count <= 1)
+        {
+            error = "A team needs at least one protagonist.";
+            return false;
+        }
+        next.RemoveAt(slot);
+        return TrySetActiveBuild(next, out error);
+    }
+
+    /// <summary>Capture a safe, immutable battle order from the editable shelter team.
+    /// Corrupt legacy state falls back to the first owned protagonist rather than
+    /// letting Arena silently hydrate one character as another.</summary>
+    public BattleTeamSnapshot CaptureBattleTeam()
+    {
+        var ids = ValidActiveBuild();
+        if (ids.Count == 0 && Owned.Count > 0) ids.Add(Owned[0].Id);
+
+        string selected = ActiveProtagonistIndex >= 0 && ActiveProtagonistIndex < ActiveBuild.Count
+            ? ActiveBuild[ActiveProtagonistIndex] : null;
+        int initialIndex = selected == null ? 0 : ids.IndexOf(selected);
+        return new BattleTeamSnapshot(ids.ToArray(), initialIndex < 0 ? 0 : initialIndex);
+    }
+
+    private List<string> ValidActiveBuild()
+    {
+        var valid = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in ActiveBuild)
+        {
+            if (valid.Count >= PartyCap()) break;
+            if (string.IsNullOrWhiteSpace(id) || FindProtagonist(id) == null) continue;
+            if (seen.Add(id)) valid.Add(id);
+        }
+        return valid;
     }
 
     /// <summary>Find a protagonist's run state by Id from the Owned roster. Null if not found.</summary>

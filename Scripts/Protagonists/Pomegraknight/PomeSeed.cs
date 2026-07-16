@@ -6,8 +6,8 @@ using System.Collections.Generic;
 /// E. Seeds of the same wave share a hit registry so the first seed to strike a
 /// target deals full damage and later seeds of that wave deal the reduced amount.
 ///
-/// After landing on Ground or a Platform (while falling), a seed lingers there for
-/// a few seconds — a spent seed still bites a foe that walks into it before fading.
+/// Ground and Platform resolve a seed immediately without a damage hit, as specified
+/// by Pomegraknight.gdd. SoftVolumes are Areas, so seeds pass through them.
 /// </summary>
 public partial class PomeSeed : Area2D
 {
@@ -16,14 +16,11 @@ public partial class PomeSeed : Area2D
     [Export] public float DamageFirst = 30f;
     [Export] public float DamageSubsequent = 6f;
     [Export] public float BurnDuration = 2f;
-    [Export] public float LingerTime = 3f;   // rest on the ground after landing
 
     private Vector2 _velocity;
     private HashSet<ulong> _waveHits;
     private bool _burning;
-    private bool _landed;
     private float _life = 6f;
-    private float _lingerTimer;
     private float _dmgMult = 1f;
 
     /// <summary>Called by the spawner right after AddChild (so it runs after _Ready).</summary>
@@ -49,13 +46,6 @@ public partial class PomeSeed : Area2D
     public override void _PhysicsProcess(double delta)
     {
         float dt = (float)delta;
-
-        if (_landed)
-        {
-            _lingerTimer -= dt;
-            if (_lingerTimer <= 0f) QueueFree();
-            return;
-        }
 
         _velocity.Y += FallGravity * dt;
         Position += _velocity * dt;
@@ -86,13 +76,8 @@ public partial class PomeSeed : Area2D
             return;
         }
 
-        // Ground / Platform (or any non-foe body): land and linger, but only when
-        // falling — this lets a rising seed pass up through a one-way platform.
-        if (!_landed && _velocity.Y > 0f)
-        {
-            _landed = true;
-            _velocity = Vector2.Zero;
-            _lingerTimer = LingerTime;
-        }
+        // Ground / Platform (or another terrain body) resolves the projectile without
+        // applying its enemy hit or Burning effect.
+        QueueFree();
     }
 }

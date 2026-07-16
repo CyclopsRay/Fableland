@@ -50,10 +50,10 @@ The contract, already in place for Pomegraknight:
 
 ## 4. Map & UI art
 
-- Atlas barriers are **"marked, not arted"** — the backlog is the two-flavour table in
-  `MapGDD.md` §11 (6 worlds × point landmark + area terrain). Area barriers want
-  tileable terrain belts; point barriers want single landmark sprites. Palette per
-  world is fixed in `MapGDD.md` §2.
+- Atlas terrain is deliberately restrained for now: irregular coast, subtle altitude tint, and
+  contour strokes make each realm legible without implying a blocked route. A future art pass
+  may replace these with shoreline, biome, and contour assets, but must preserve road clarity
+  and the semantic distinction of map icons. Palette per world is fixed in `MapGDD.md` §2.
 - Map iconography is currently semantic shapes (circle/diamond/triangle/?) — an easy,
   high-value art pass later, but **keep silhouettes distinct at min zoom**.
 - UI assets live in `Sprites/UI/` (mugshots by HP band, cooldown rings, ult fill).

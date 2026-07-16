@@ -59,8 +59,9 @@ public sealed class AdvanceDayStep : IDayStep
 
 /// <summary>
 /// VOID devour (MapGDD §8). Preserves the exact semantics MapController.EndDay used to have:
-/// nodes are eaten on the day that just ENDED (== rs.Day - 1, since AdvanceDayStep already
-/// incremented). Orphaned function nodes (all neighbours eaten) go too. If the player's current
+/// city fields are eaten on the day that just ENDED (== rs.Day - 1, since AdvanceDayStep already
+/// incremented). Functional nodes go only when a strict majority of their connected cities is
+/// gone. If the player's current
 /// node is now devoured, the run is over (NODES §2.2).
 /// </summary>
 public sealed class VoidDevourStep : IDayStep
@@ -72,33 +73,50 @@ public sealed class VoidDevourStep : IDayStep
         int endedDay = rs.Day - 1; // AdvanceDayStep ran first; compare against the day just ended
 
         int devouredCount = 0;
-        string devouredTag = null;
+        int devouredCities = 0;
+        int devouredFunctions = 0;
         foreach (var n in rs.Graph.Nodes)
         {
             if (n.Devoured) continue;
-            if (VoidSchedule.DevourDay.TryGetValue(n.LevelTag, out int d) && d == endedDay)
+            if (VoidSchedule.ShouldDevour(rs.Graph, n, endedDay))
             {
                 n.Devoured = true;
                 devouredCount++;
-                devouredTag = n.LevelTag;
+                devouredCities++;
             }
         }
 
-        // Function nodes sit on edges between combat nodes; once every neighbour is eaten the
-        // function node is orphaned, so the VOID takes it too (no floating shelters).
+        // Functional nodes sit on roads. They remain as long as at least half of their directly
+        // connected cities survive; the distinct zone-6 Shelter is never part of this rule.
         foreach (var n in rs.Graph.Nodes)
         {
-            if (n.Devoured || n.WorldIndex != -2) continue; // -2 == function node
-            bool anyAlive = false;
+            if (n.Devoured || n.WorldIndex < 0
+                || (n.Kind != NodeKind.TransportHub && n.Kind != NodeKind.Event)) continue;
+            int connectedCities = 0;
+            int devouredCitiesAroundNode = 0;
             foreach (var e in rs.Graph.EdgesOf(n))
-                if (!e.Other(n).Devoured) { anyAlive = true; break; }
-            if (!anyAlive) { n.Devoured = true; devouredCount++; }
+            {
+                MapNode other = e.Other(n);
+                if (!other.IsCombat) continue;
+                connectedCities++;
+                if (other.Devoured) devouredCitiesAroundNode++;
+            }
+            if (connectedCities > 0 && devouredCitiesAroundNode * 2 > connectedCities)
+            {
+                n.Devoured = true;
+                devouredCount++;
+                devouredFunctions++;
+            }
         }
+
+        int brokenBridges = rs.Graph.BreakRealityBridgesAtDevouredEndpoints();
 
         // Describe what happened for the day-end summary toast (T30 §5 residual) — this step only
         // appends a note; RunState.EndDay owns rendering it.
-        if (devouredTag != null)
-            rs.DayEndNotes.Add($"The VOID devoured {devouredTag} ({devouredCount} node{(devouredCount == 1 ? "" : "s")}).");
+        if (devouredCount > 0)
+            rs.DayEndNotes.Add($"The VOID devoured {devouredCities} city field{(devouredCities == 1 ? "" : "s")} and {devouredFunctions} function node{(devouredFunctions == 1 ? "" : "s")}.");
+        if (brokenBridges > 0)
+            rs.DayEndNotes.Add($"{brokenBridges} reality bridge{(brokenBridges == 1 ? "" : "s")} collapsed; surviving endpoints are free again.");
 
         // Standing on ground the VOID just ate = death (the third death source, NODES §2.2).
         var cur = rs.FindNode(rs.CurrentNodeId);
@@ -107,11 +125,16 @@ public sealed class VoidDevourStep : IDayStep
     }
 }
 
-/// <summary>Day-based item cooldowns decrement (held items only). Stub — items land v0.6.0 (T30 §4).</summary>
+/// <summary>Day-based item cooldowns decrement for held items only.</summary>
 public sealed class ItemCdsStep : IDayStep
 {
     public string Name => "ItemCds";
-    public void Run(RunState rs) { /* TODO(v0.6.0): tick held items' DayCdRemaining. */ }
+    public void Run(RunState rs)
+    {
+        foreach (var protagonist in rs.Owned)
+            if (protagonist.HeldItemDayCooldownRemaining > 0)
+                protagonist.HeldItemDayCooldownRemaining--;
+    }
 }
 
 /// <summary>Perishable items decrement (held AND backpack); expiry may convert. Stub — v0.6.0.</summary>

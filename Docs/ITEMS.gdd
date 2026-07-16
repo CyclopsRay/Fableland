@@ -5,17 +5,12 @@ cooldown), features/tags, lifecycle patterns, and the item catalog.
 
 Implementation target: `Scripts/Items/`. First landing: **v0.6.0**.
 
-> **Status (v0.6.0):** only a deliberately **minimal stub** has landed — `Scripts/Items/
-> ItemCatalog.cs` (id + display name for the 13 catalog items below; NO passive/skill/
-> cooldown/tag/RolledStats), a single `ProtagonistState.HeldItemDefId` slot, `RunState.
-> HoldItem/UnholdItem` bookkeeping, and a first **Team Build** menu at the shelter for
-> assigning a held item to a protagonist (`Scripts/Nodes/ShelterController.cs`). Everything
-> else in this document — passives, item skills, day-based and second-based cooldowns (§3),
-> the Perishable/Convertible/Plantable/Possession/Eternal tag behaviours (§4), lifecycle
-> conversion/harvest (§5), acquisition sources beyond a placeholder reward, and day-end
-> resolution hooks — is **still unimplemented and remains future work** (see
-> `Docs/Tech/T30-FEATURE-BLUEPRINTS.md` §4 for the full design). Do not read the sections
-> below as shipped behaviour.
+> **Status (v0.9.0):** the inventory remains deliberately small — catalog display data, one held
+> slot per protagonist, and Transportation-Hub equipment management — but `TwistedReality` is
+> now a shipped exception: the starting LV4 awards it, its held map skill creates a permanent
+> bridge, and its five-day cooldown ticks at day-end. Other passives, skills, lifecycle tags,
+> rolled stats, perish/conversion, and day/second cooldown systems remain future work; do not
+> read the rest of this document as shipped behaviour unless it is explicitly marked v0.9.0.
 
 ---
 
@@ -32,8 +27,9 @@ items mean more options, but only a few can be active at once.
 | **Held slot** | 1 per protagonist (3 max with a full party) | Passive is active; skill is usable; cooldown ticks down at day-end resolution. |
 | **Backpack** | Unlimited | Items are carried but **inert** — no passive, skill unavailable, cooldown does **not** tick. |
 
-The player can swap items between backpack and held slots at any **shelter node**
-(Blessed or Mundane; see `NODES.gdd` §5.1). Held slots are per-protagonist.
+The player can swap items between backpack and held slots at any **Transportation Hub**
+(which currently reuses the shelter service scene; see `NODES.gdd` §5.1). Held slots are
+per-protagonist.
 
 **Benching rule:** when a protagonist is benched, their held item **auto-returns to
 the backpack**. Team build and item assignment can only be changed at a shelter node,
@@ -222,7 +218,7 @@ world crack + teleport, then claw faints.*
 | Domain | Description | Examples |
 |--------|-------------|----------|
 | **Combat** | Passive + skill both function inside the arena. Cooldown is second-based. | FanChen's Heart, Yukai's Rope, The Forgotten Kashaya, THE VOID (skill is combat-only) |
-| **Exploration** | Passive and/or skill affect the overworld map. Cooldown is day-based. | QiongFeng Emperor's Claw |
+| **Exploration** | Passive and/or skill affect the overworld map. Cooldown is day-based. | QiongFeng Emperor's Claw, TwistedReality |
 | **Hybrid** | Combat passive + world-map skill, or vice versa. May have both CD types. | DD (combat passive + day-based skill), Pome's Bravery (combat passive + single-use skill → plantable), Pixolotl's Feather (combat passive + day-rewind skill), A Weird Mushroom (single-use combat buff + next-day world effect) |
 
 ### 6.2 By lifecycle archetype
@@ -244,6 +240,7 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | Pixolotl's Wish | — | — | ✓ (7d) | — | — |
 | Forgotten Kashaya | — | — | — | — | — |
 | QiongFeng Emperor's Claw | — | ✓ (on trigger) | — | — | — |
+| TwistedReality | — | — | — | — | — |
 | A Weird Mushroom | ✓ (2d) | ✓ (→Rotten) | — | — | — |
 | A Rotten Mushroom | — | — | ✓ (4d) | — | — |
 
@@ -400,7 +397,27 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 > current outer world, and "unopened chests" = combat/function nodes the player
 > skipped. The world-crack is a dramatic irreversible action — use wisely.
 
-### 7.12 A Weird Mushroom
+### 7.12 TwistedReality
+
+| Field | Value |
+|-------|-------|
+| Domain | Exploration (cross-realm key) |
+| Lifecycle | Static, unique boss reward |
+| Passive | — |
+| Skill | **Map only.** While held and standing on a completed `1-A` combat node, transport to the geometrically closest available node in another realm. Ties resolve by deterministic realm order and node id; devoured nodes are excluded. The move costs 1 stamina, follows normal destination-node rules, and creates a permanent reality bridge between the two nodes. Both endpoints are ineligible for another bridge while that bridge exists. If the VOID devours either endpoint, the bridge breaks and the surviving endpoint is released. |
+| CD | **5 days** (day-based). Starts ready when acquired; no valid destination means no activation and no cooldown. |
+| Tags | — |
+| Acquisition | Guaranteed first-success reward for the starting realm's LV4 boss (`MapGDD.md` §5). |
+
+> **Design note:** TwistedReality is the intended first cross-realm traversal mechanism. It
+> delays realm hopping until the player has cleared their home capital, then limits repeat travel
+> without making late-run routing permanently unavailable. A successful use leaves behind a
+> normal-stamina bridge; its two endpoints stay locked until it breaks. VOID devour of either
+> endpoint removes the bridge and releases the survivor, without refunding the cooldown. It
+> follows the normal held-item and day-cooldown rules; placing it in the backpack makes its
+> skill unavailable and pauses its cooldown.
+
+### 7.13 A Weird Mushroom
 
 | Field | Value |
 |-------|-------|
@@ -425,7 +442,7 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | CD | — (single use) |
 | Tags | `Perishable`, `Convertible` |
 
-### 7.13 A Rotten Mushroom
+### 7.14 A Rotten Mushroom
 
 | Field | Value |
 |-------|-------|
@@ -452,6 +469,7 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | Foes holding + using items in combat | **TODO** — future content pass |
 | Combat-node mission rewards (guaranteed items) | `NODES.gdd` §4 |
 | Question-mark node item events | `NODES.gdd` §6 (TODO) |
+| TwistedReality cross-realm map skill | `MapGDD.md` §5 |
 | Day-end resolution (CD tick, perish tick) | `NODES.gdd` §7 |
 | Run-performance tracking (collected items) | `NODES.gdd` §8 |
 
@@ -503,3 +521,7 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
   rolled stats, same as Pixolotl's Wish and A Rotten Mushroom. This also resolves a
   pre-existing conflict with `T30-FEATURE-BLUEPRINTS.md` §4, whose `ItemInstance.RolledStats`
   comment already assumed a "60–140% rolls" inheritance model project-wide.
+- **(v0.9.0) TwistedReality is a held exploration key.** The first LV4 victory in the
+  starting realm awards it ready. Its 5-day cooldown gates new cross-realm bridges; every
+  successful use permanently joins its two locked endpoints with a normal map edge. Its held-item
+  contract preserves the existing inventory and day-end rules.

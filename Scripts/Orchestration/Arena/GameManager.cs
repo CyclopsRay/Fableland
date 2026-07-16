@@ -3,6 +3,8 @@ using Fableland.Map;
 using Fableland.Missions;
 using Fableland.Run;
 using Fableland.Debug;
+using Fableland.MapCreation.Data;
+using Fableland.MapCreation.Runtime;
 
 /// <summary>
 /// The arena's integrator (T30 §3, NODES §4). Owns the "Entities"/foe-spawn plumbing the
@@ -42,6 +44,12 @@ public partial class GameManager : Node2D
     [Export] public int DebugFoeLevel = 1;
     [Export] public int DebugDay = 1;
 
+    /// <summary>
+    /// Optional direct-F5 map preview. It is ignored whenever RunState supplied a selected map,
+    /// so debug convenience can never override a real node's deterministic selection.
+    /// </summary>
+    [Export] public string DebugCombatMapPath = "";
+
     [Export] public float RespawnDelay = 1.2f;
 
     /// <summary>The "Entities" child every spawned foe/pickup/objective is parented under.</summary>
@@ -59,11 +67,23 @@ public partial class GameManager : Node2D
     private CharacterController _player;
     private Godot.Collections.Array<Node> _foeSpawnMarkers;
     private System.Collections.Generic.List<Vector2> _surfacePoints = new();
+    private readonly System.Collections.Generic.List<CombatMapSpawnPoint> _authoredEnemySpawns = new();
+    private readonly System.Collections.Generic.List<Vector2> _authoredLevelGoalSpawns = new();
+    private readonly System.Collections.Generic.List<Vector2> _authoredRespawnSpawns = new();
+    private bool _usingAuthoredMap;
+    private float _authoredMapWidth;
+    private float _authoredMapHeight;
+    private Vector2 _authoredCharacterSpawn;
+    private int _nextRespawnIndex;
+    private FoeSpawnRules _authoredFoeSpawnRules;
 
     private DetRandom _rng;
     private Mission _mission;
     private ProtagonistState _protagonist;   // hydrated protagonist for HP write-back
-    private int _activePartyIndex;           // index into RunState.ActiveBuild (NODES §3.3)
+    // Captured once from AdventureContext on arena entry. The shelter's editable
+    // ActiveBuild is intentionally never consulted by the live battle loop.
+    private string[] _battlePartyIds = System.Array.Empty<string>();
+    private int _battlePartyIndex;
     private float _switchCd;                 // Tab cooldown remaining (12s per NODES §3.3)
     private const float SwitchCooldown = 12f;
     private bool _hasRun;
@@ -85,11 +105,18 @@ public partial class GameManager : Node2D
         _hud = GetNode<Hud>(HudPath);
         _player = GetTree().GetFirstNodeInGroup("player") as CharacterController;
 
-        // Debug-mode protagonist override (D1): apply BEFORE any RunState/mission/SetupPlayer
-        // wiring below, so nothing has to be re-wired — SetupPlayer(rs) further down wires the
-        // swapped-in body with zero extra code. Byte-for-byte no-op when debug is off or no
-        // selection exists.
-        if (DebugManager.Instance != null && DebugManager.Instance.Enabled
+        var rs = RunState.Instance;
+        var adv = rs?.CurrentAdventure;
+        _hasRun = adv != null;
+
+        // A real battle starts from the immutable team snapshot in its adventure
+        // handoff, not the Pomegraknight scene baked into Arena.tscn and not the
+        // mutable shelter list. This is the sole team-build → battle boundary.
+        if (_hasRun) ConfigureBattleParty(rs, adv);
+
+        // Direct-F5 debug selection remains a separate test convenience. It does not
+        // rewrite a real run's captured party or its shelter configuration.
+        if (!_hasRun && DebugManager.Instance != null && DebugManager.Instance.Enabled
             && DebugManager.Instance.SelectedProtagonistId is string selId
             && _player != null && selId != _player.Name.ToString())
         {
@@ -99,10 +126,6 @@ public partial class GameManager : Node2D
         }
 
         _foeSpawnMarkers = GetTree().GetNodesInGroup("enemy_spawn");
-
-        var rs = RunState.Instance;
-        var adv = rs?.CurrentAdventure;
-        _hasRun = adv != null;
 
         string nodeId = adv?.NodeId ?? "debug";
         _nodeLevel = adv?.NodeLevel ?? 1;
@@ -120,10 +143,17 @@ public partial class GameManager : Node2D
         // GD.Randf/Randi/System.Random.
         _rng = _hasRun ? rs.Rng.Sub("arena:" + nodeId) : new DetRandom("debug-arena");
 
-        var platformTex = GD.Load<Texture2D>("res://Sprites/platform_placeholder.svg");
-        _surfacePoints = ArenaBuilder.Build(_world, _hazards, _rng, platformTex, FireHazardScene, FreezeHazardScene);
+        string combatMapPath = !string.IsNullOrWhiteSpace(adv?.CombatMapPath)
+            ? adv.CombatMapPath : (!_hasRun ? DebugCombatMapPath : "");
+        _usingAuthoredMap = TryBuildSelectedMap(combatMapPath);
+        if (!_usingAuthoredMap)
+        {
+            var platformTex = GD.Load<Texture2D>("res://Sprites/platform_placeholder.svg");
+            _surfacePoints = ArenaBuilder.Build(_world, _hazards, _rng, platformTex, FireHazardScene, FreezeHazardScene);
+        }
 
         Spawner = new FoeSpawner(this, _rng.Sub("spawn")) { Enabled = false }; // armed after grace
+        ApplySelectedMapFoeComposition(combatMapPath);
 
         _mission = CreateMission(_missionType);
         _mission.Setup(this, _nodeLevel, _rng.Sub("mission"));
@@ -150,6 +180,95 @@ public partial class GameManager : Node2D
         _ => new CollectionMission(),
     };
 
+    /// <summary>
+    /// Replace the legacy Arena geometry with the combat map selected by RunState. The map path
+    /// is already frozen in AdventureContext, so re-entering a failed node uses the same arena
+    /// and this scene never queries the overworld graph directly.
+    /// </summary>
+    private bool TryBuildSelectedMap(string mapPath)
+    {
+        if (string.IsNullOrWhiteSpace(mapPath)) return false;
+        if (mapPath.StartsWith("res://") || mapPath.StartsWith("user://"))
+            mapPath = ProjectSettings.GlobalizePath(mapPath);
+        MapDocument document = CombatMapCatalog.LoadDocument(mapPath);
+        if (document == null) return false;
+
+        ClearChildren(_world);
+        ClearChildren(_hazards);
+        CombatMapBuild build = CombatMapRuntime.Build(document, _world, _hazards);
+        _usingAuthoredMap = true;
+        _authoredMapWidth = build.WidthPx;
+        _authoredMapHeight = build.HeightPx;
+        _authoredEnemySpawns.AddRange(build.EnemySpawns);
+        _authoredLevelGoalSpawns.AddRange(build.LevelGoalSpawns);
+        _authoredRespawnSpawns.AddRange(build.RespawnSpawns);
+        _authoredFoeSpawnRules = document.FoeSpawnRules;
+
+        if (build.CharacterSpawns.Count == 0)
+            GD.PushWarning("[GameManager] authored map '" + document.Name + "' has no Character Spawn; keeping the scene fallback.");
+        if (build.EnemySpawns.Count == 0)
+            GD.PushWarning("[GameManager] authored map '" + document.Name + "' has no Enemy Spawn; periodic foes are suppressed.");
+        if (_missionType != MissionType.Slaughter && build.LevelGoalSpawns.Count == 0)
+            GD.PushWarning("[GameManager] authored map '" + document.Name + "' has no Level Goal marker for " + _missionType + "; using fallback placement.");
+
+        if (_player != null && build.CharacterSpawns.Count > 0)
+        {
+            Vector2 start = build.CharacterSpawns[0];
+            _authoredCharacterSpawn = start;
+            _player.GlobalPosition = start;
+            _player.SetSpawnPoint(start); // AddChild/_Ready captured the old scene position.
+        }
+        if (_authoredRespawnSpawns.Count == 0 && _player != null)
+            GD.PushWarning("[GameManager] authored map '" + document.Name + "' has no Respawn Point; using its Character Spawn.");
+
+        var camera = _player?.GetNodeOrNull<Camera2D>("Camera2D");
+        if (camera != null)
+        {
+            camera.LimitLeft = 0;
+            camera.LimitTop = 0;
+            camera.LimitRight = Mathf.CeilToInt(_authoredMapWidth);
+            camera.LimitBottom = Mathf.CeilToInt(_authoredMapHeight);
+        }
+
+        var backdrop = GetNodeOrNull<ColorRect>("Background");
+        if (backdrop != null && !string.IsNullOrWhiteSpace(document.Canvas?.Color))
+        {
+            try { backdrop.Color = new Color(document.Canvas.Color); }
+            catch { GD.PushWarning("[GameManager] invalid canvas color on authored map '" + document.Name + "'; keeping Arena backdrop."); }
+        }
+
+        DebugManager.Instance?.LogMission("Combat map: " + document.Name + " (" + document.Id + ")");
+        return true;
+    }
+
+    private static void ClearChildren(Node parent)
+    {
+        if (parent == null) return;
+        foreach (Node child in parent.GetChildren())
+        {
+            parent.RemoveChild(child);
+            child.QueueFree();
+        }
+    }
+
+    private void ApplySelectedMapFoeComposition(string mapPath)
+    {
+        if (!_usingAuthoredMap || string.IsNullOrWhiteSpace(mapPath)) return;
+        if (mapPath.StartsWith("res://") || mapPath.StartsWith("user://"))
+            mapPath = ProjectSettings.GlobalizePath(mapPath);
+        MapDocument document = CombatMapCatalog.LoadDocument(mapPath);
+        if (document?.FoeCompositions == null) return;
+
+        FoeComposition selected = null;
+        for (int i = 0; i < document.FoeCompositions.Count; i++)
+        {
+            FoeComposition entry = document.FoeCompositions[i];
+            if (entry?.Level == _nodeLevel) { selected = entry; break; }
+            if (entry?.Level == 0) selected = entry;
+        }
+        if (selected != null) Spawner.SetComposition(selected.CrabWeight, selected.SeagullWeight);
+    }
+
     private void SetupPlayer(RunState rs)
     {
         if (_player == null) return;
@@ -159,16 +278,21 @@ public partial class GameManager : Node2D
         _hud.SetPlayer(_player);
         _hud.SetHp(_player.CurrentHP, _player.MaxHP, _player.Shield, _player.TempHP);
 
-        if (_hasRun && rs.ActiveBuild.Count > 0)
+        if (_hasRun && _battlePartyIds.Length > 0)
         {
-            // Find the protagonist state for the active party slot (NODES §3.3).
-            _activePartyIndex = rs.ActiveProtagonistIndex;
-            _protagonist = ResolveProtagonistForSlot(rs, _activePartyIndex);
+            // Resolve only through the frozen battle order captured at node entry.
+            _protagonist = rs.FindProtagonist(_battlePartyIds[_battlePartyIndex]);
+            if (_protagonist == null)
+            {
+                GD.PushError($"GameManager: captured battle member '{_battlePartyIds[_battlePartyIndex]}' is no longer owned.");
+                return;
+            }
             float baseMaxHp = _player.MaxHP;   // authored default, captured before hydrating
             _player.HydrateRun(baseMaxHp, _protagonist.MaxHpPercentPoints, _protagonist.HpRatio,
                                 _protagonist.BonusAtk, _protagonist.BonusDef);
             // Restore saved cooldown remaining from the protagonist's run state (background-CD, NODES §3.3)
             _player.LoadCooldownsFromState(_protagonist);
+            _player.LoadAmmoFromState(_protagonist);
             _hud.SetLivesVisible(false);       // permadeath in a run — lives don't apply (NODES §2.2)
             UpdateNextMugshot();
         }
@@ -184,27 +308,37 @@ public partial class GameManager : Node2D
     /// the party has fewer than 2 members.</summary>
     private void UpdateNextMugshot()
     {
-        var rs = RunState.Instance;
-        if (!_hasRun || rs == null || rs.ActiveBuild.Count < 2)
+        if (!_hasRun || _battlePartyIds.Length < 2)
         {
             _hud.SetNextProtagonist(null);
             return;
         }
-        int nextIdx = (rs.ActiveProtagonistIndex + 1) % rs.ActiveBuild.Count;
-        _hud.SetNextProtagonist(rs.ActiveBuild[nextIdx]);
+        int nextIdx = (_battlePartyIndex + 1) % _battlePartyIds.Length;
+        _hud.SetNextProtagonist(_battlePartyIds[nextIdx]);
     }
 
-    /// <summary>Find the <see cref="ProtagonistState"/> for a party slot, safely.
-    /// Falls back to Owned[0] when ActiveBuild and Owned are out of sync (shouldn't happen,
-    /// but RunState is the truth — Owned always has at least the start protagonist).</summary>
-    private static ProtagonistState ResolveProtagonistForSlot(RunState rs, int slot)
+    /// <summary>Install the party snapshot that belongs to this combat entry and replace
+    /// Arena.tscn's authoring placeholder with its selected starting protagonist.</summary>
+    private void ConfigureBattleParty(RunState rs, AdventureContext adventure)
     {
-        if (slot >= 0 && slot < rs.ActiveBuild.Count)
+        BattleTeamSnapshot snapshot = adventure?.BattleTeam ?? rs?.CaptureBattleTeam();
+        _battlePartyIds = snapshot?.MemberIds ?? System.Array.Empty<string>();
+        _battlePartyIndex = snapshot?.InitialIndex ?? 0;
+        if (_battlePartyIds.Length == 0 || _player == null)
         {
-            var p = rs.FindProtagonist(rs.ActiveBuild[slot]);
-            if (p != null) return p;
+            GD.PushError("GameManager: combat entry has no valid battle team.");
+            return;
         }
-        return rs.Owned.Count > 0 ? rs.Owned[0] : null;
+
+        string initialId = _battlePartyIds[_battlePartyIndex];
+        if (_player.Name.ToString() == initialId) return;
+        PackedScene scene = ProtagonistRoster.GetScene(initialId);
+        if (scene == null)
+        {
+            GD.PushError($"GameManager: battle member '{initialId}' has no registered scene.");
+            return;
+        }
+        _player = ReplacePlayerNode(_player, scene);
     }
 
     /// <summary>
@@ -217,7 +351,7 @@ public partial class GameManager : Node2D
     {
         if (DebugManager.Instance == null || !DebugManager.Instance.Enabled) return false;
         if (_player == null || !IsInstanceValid(_player)) return false;
-        if (_ended) return false;                       // debug match already over
+        if (_ended || _goalResolved) return false;      // match already over
         if (_player.HpRatio <= 0f) return false;         // dead body awaiting respawn/run-end
         if (_player.Name.ToString() == id) return false; // already worn
         var scene = ProtagonistRoster.GetScene(id);
@@ -249,10 +383,10 @@ public partial class GameManager : Node2D
         if (_switchCd > 0f) return;
         if (_player == null || !IsInstanceValid(_player)) return;
         if (_player.HpRatio <= 0f) return; // dead — permadeath, switching won't save you
-        if (_ended) return;
+        if (_ended || _goalResolved) return;
 
         var rs = RunState.Instance;
-        if (rs.ActiveBuild.Count < 2) return; // short party — nothing to cycle to
+        if (_battlePartyIds.Length < 2) return; // short party — nothing to cycle to
 
         // Capture the outgoing protagonist's HP ratio BEFORE cycling — the incoming
         // protagonist inherits it (NODES §3.3: "HP ratio inheritance").
@@ -262,13 +396,19 @@ public partial class GameManager : Node2D
         WriteBackHp();
         _player.SaveCooldownsToState(_protagonist);
 
-        // Cycle to the next party member (RunState owns the index)
-        string nextId = rs.CycleNextProtagonist();
-        if (nextId == null) return;
+        // The Arena owns this combat-local cursor. Never reread the editable
+        // shelter build after battle entry.
+        int nextIndex = (_battlePartyIndex + 1) % _battlePartyIds.Length;
+        string nextId = _battlePartyIds[nextIndex];
 
         // Carry the HP ratio into the incoming protagonist's run state
         var incoming = rs.FindProtagonist(nextId);
-        if (incoming != null) incoming.HpRatio = carriedRatio;
+        if (incoming == null)
+        {
+            GD.PushError($"GameManager: captured battle member '{nextId}' is no longer owned.");
+            return;
+        }
+        incoming.HpRatio = carriedRatio;
 
         var scene = ProtagonistRoster.GetScene(nextId);
         if (scene == null)
@@ -281,10 +421,11 @@ public partial class GameManager : Node2D
         _player.HpChanged -= OnPlayerHpChanged;
         _player.Died -= OnPlayerDied;
 
+        _battlePartyIndex = nextIndex;
         _player = ReplacePlayerNode(_player, scene);
 
         // Re-wire everything for the new body: signals, HUD, hydration from the new protagonist's
-        // run state. SetupPlayer reads the updated ActiveProtagonistIndex from RunState.
+        // run state. SetupPlayer reads the captured party's local cursor.
         SetupPlayer(rs);
 
         // Apply the switch cooldown
@@ -292,7 +433,7 @@ public partial class GameManager : Node2D
 
         UpdateNextMugshot();
 
-        DebugManager.Instance?.LogSystem($"Protagonist switch → {nextId} ({rs.ActiveBuild.Count}-party, {SwitchCooldown}s CD)");
+        DebugManager.Instance?.LogSystem($"Protagonist switch → {nextId} ({_battlePartyIds.Length}-party, {SwitchCooldown}s CD)");
     }
 
     /// <summary>
@@ -304,17 +445,18 @@ public partial class GameManager : Node2D
     {
         if (!_hasRun) return;
         var rs = RunState.Instance;
-        int n = rs.ActiveBuild.Count;
+        int n = _battlePartyIds.Length;
         if (n < 2) return;
         float bgRate = 1f / (2f * n - 2f);
         float bgDt = dt * bgRate;
         for (int i = 0; i < n; i++)
         {
-            if (i == _activePartyIndex) continue; // active protagonist ticks at 1× in its own _Process
-            var p = rs.FindProtagonist(rs.ActiveBuild[i]);
+            if (i == _battlePartyIndex) continue; // active protagonist ticks at 1× in its own _Process
+            var p = rs.FindProtagonist(_battlePartyIds[i]);
             if (p == null) continue;
             if (p.ShiftCdRemaining > 0f) p.ShiftCdRemaining = Mathf.Max(0f, p.ShiftCdRemaining - bgDt);
             if (p.ESkillCdRemaining > 0f) p.ESkillCdRemaining = Mathf.Max(0f, p.ESkillCdRemaining - bgDt);
+            AmmoController.TickPersisted(p, bgDt);
         }
     }
 
@@ -327,6 +469,7 @@ public partial class GameManager : Node2D
     {
         Vector2 pos = old.GlobalPosition;
         Node parent = old.GetParent();
+        var oldCamera = old.GetNodeOrNull<Camera2D>("Camera2D");
 
         var np = scene.Instantiate<CharacterController>();
         parent.AddChild(np);              // _Ready runs here — configure after
@@ -337,7 +480,28 @@ public partial class GameManager : Node2D
         // _Ready already latched _spawnPoint at the scene-file origin (it runs inside AddChild,
         // before the line above) — re-anchor it or a debug-lives Respawn() teleports to (0,0).
         np.SetSpawnPoint(pos);
-        np.GetNodeOrNull<Camera2D>("Camera2D")?.MakeCurrent();
+
+        // Camera2D currentness is not inherited through a body replacement. Explicitly
+        // retire the outgoing camera and make the incoming character's camera current
+        // before the old node is deferred for deletion.
+        if (oldCamera != null) oldCamera.Enabled = false;
+        var newCamera = np.GetNodeOrNull<Camera2D>("Camera2D");
+        if (newCamera == null)
+            GD.PushError($"GameManager: protagonist '{np.Name}' has no Camera2D child.");
+        else
+        {
+            // An authored combat map overwrites the original body's scene-default
+            // limits during setup; a swap must retain those runtime bounds too.
+            if (oldCamera != null)
+            {
+                newCamera.LimitLeft = oldCamera.LimitLeft;
+                newCamera.LimitTop = oldCamera.LimitTop;
+                newCamera.LimitRight = oldCamera.LimitRight;
+                newCamera.LimitBottom = oldCamera.LimitBottom;
+            }
+            newCamera.Enabled = true;
+            newCamera.MakeCurrent();
+        }
 
         // Foes poll GetFirstNodeInGroup("player") every tick — QueueFree alone leaves the dying
         // node in the group until end of frame, so pull it out of the group immediately.
@@ -458,6 +622,12 @@ public partial class GameManager : Node2D
         _goalResolved = true;
         Spawner.Enabled = false;   // FOES §11: the cap only gates the periodic spawner anyway
 
+        // Resolution is a terminal combat state: both sides stop taking damage while
+        // the reward/Finish Day flow is visible. The controller-level gate covers
+        // direct hits, hazards, and already-running damage-over-time effects.
+        if (_player != null && IsInstanceValid(_player))
+            _player.Invincible = true;
+
         // All living foes become invincible — the mission is over, the player shouldn't
         // be able to farm kills or take stray damage after the objective resolves.
         foreach (var node in GetTree().GetNodesInGroup("foe"))
@@ -575,7 +745,11 @@ public partial class GameManager : Node2D
             return;
         }
         await ToSignal(GetTree().CreateTimer(RespawnDelay), SceneTreeTimer.SignalName.Timeout);
-        if (!_ended) _player.Respawn();
+        if (!_ended)
+        {
+            _player.SetSpawnPoint(NextRespawnPoint());
+            _player.Respawn();
+        }
     }
 
     private void EndGameDebug(string message)
@@ -591,6 +765,23 @@ public partial class GameManager : Node2D
     /// aerial ⇒ 3–5 m above ground (C1: seagulls patrol at spawn height).</summary>
     public Vector2 RandomFoeSpawn(DetRandom rng, bool aerial)
     {
+        if (_usingAuthoredMap && _authoredEnemySpawns.Count > 0)
+        {
+            var eligible = new System.Collections.Generic.List<CombatMapSpawnPoint>();
+            for (int i = 0; i < _authoredEnemySpawns.Count; i++)
+            {
+                CombatMapSpawnPoint point = _authoredEnemySpawns[i];
+                if (IsEligibleFoeSpawn(point, aerial)) eligible.Add(point);
+            }
+            if (eligible.Count > 0)
+            {
+                CombatMapSpawnPoint nest = eligible[rng.Range(0, eligible.Count - 1)];
+                if (aerial)
+                    return nest.Position - new Vector2(0f, Units.Px(rng.Range(3, 5)));
+                return nest.Position;
+            }
+        }
+
         float x = PickSpawnX(rng);
         if (aerial)
         {
@@ -598,6 +789,27 @@ public partial class GameManager : Node2D
             return new Vector2(x, ArenaBuilder.GroundTopY - upPx);
         }
         return new Vector2(x, ArenaBuilder.GroundTopY - 20f);
+    }
+
+    /// <summary>Whether this map contains at least one valid nest for crab (ground) or seagull
+    /// (aerial) spawning. With no authored map the legacy Arena markers remain valid.</summary>
+    public bool HasFoeSpawnFor(bool aerial)
+    {
+        if (!_usingAuthoredMap) return true;
+        for (int i = 0; i < _authoredEnemySpawns.Count; i++)
+            if (IsEligibleFoeSpawn(_authoredEnemySpawns[i], aerial)) return true;
+        return false;
+    }
+
+    private bool IsEligibleFoeSpawn(CombatMapSpawnPoint point, bool aerial)
+    {
+        if (!aerial)
+        {
+            int? maxY = _authoredFoeSpawnRules?.CrabMaxCellY;
+            return !maxY.HasValue || point.CellY <= maxY.Value;
+        }
+        int? minY = _authoredFoeSpawnRules?.SeagullMinCellY;
+        return !minY.HasValue || point.CellY >= minY.Value;
     }
 
     private float PickSpawnX(DetRandom rng)
@@ -614,9 +826,37 @@ public partial class GameManager : Node2D
     /// ArenaBuilder's platform surface points and ground-level points within the play space.</summary>
     public Vector2 RandomPlacementPoint(DetRandom rng)
     {
+        if (_usingAuthoredMap)
+        {
+            if (_surfacePoints.Count > 0 && rng.Chance(0.5))
+                return _surfacePoints[rng.Range(0, _surfacePoints.Count - 1)];
+            float authoredX = rng.Range((int)Units.Px(2f), Mathf.Max((int)Units.Px(2f), (int)_authoredMapWidth - (int)Units.Px(2f)));
+            return new Vector2(authoredX, Mathf.Max(Units.Px(2f), _authoredMapHeight - MapGrid.PixelsPerCell * 2f - Units.Px(1f)));
+        }
         if (_surfacePoints.Count > 0 && rng.Chance(0.5))
             return _surfacePoints[rng.Range(0, _surfacePoints.Count - 1)];
         float x = rng.Range((int)ArenaBuilder.PlayLeft, (int)ArenaBuilder.PlayRight);
         return new Vector2(x, ArenaBuilder.GroundTopY - 30f);
+    }
+
+    /// <summary>
+    /// Mission objective placement: claim uses these for Wonder Core spawns, protect for the
+    /// Condensed Core, and destroy for enemy objectives. Slaughter never calls this method.
+    /// Missing markers degrade to normal arena placement, while content validation logs the gap.
+    /// </summary>
+    public Vector2 RandomLevelGoalPoint(DetRandom rng)
+    {
+        if (_authoredLevelGoalSpawns.Count > 0)
+            return _authoredLevelGoalSpawns[rng.Range(0, _authoredLevelGoalSpawns.Count - 1)];
+        return RandomPlacementPoint(rng);
+    }
+
+    private Vector2 NextRespawnPoint()
+    {
+        if (_authoredRespawnSpawns.Count == 0)
+            return _usingAuthoredMap ? _authoredCharacterSpawn : _player?.GlobalPosition ?? Vector2.Zero;
+        Vector2 point = _authoredRespawnSpawns[_nextRespawnIndex % _authoredRespawnSpawns.Count];
+        _nextRespawnIndex++;
+        return point;
     }
 }

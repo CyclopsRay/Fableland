@@ -9,6 +9,48 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.8.1** — **Realm fields, one-way threshold, and city-based VOID pressure.** Every outer
+  realm now rolls 3–5 Transportation Hubs and 4–6 degree-two Event nodes, with every new
+  road/spoke rejected if it would cross or cover an existing path. Capitals sit beyond a central
+  buffer, leaving an `XX-S` **Shelter** between each LV4 and LV5; this special Shelter crosses
+  the singularity one-way and, like all current Hubs, only provides Rest, both Sharpen actions,
+  and Team Build. Each outer city owns a deterministic clipped control field visible through the
+  new Fields overlay. VOID devour now consumes the field: farthest half/all LV1 on days 10/20,
+  farthest half/all LV2 on 30/40, all LV3 on 43, and all remaining outer cities on 45. Function
+  nodes require a strict majority of their connected cities to have fallen. Reality bridges break
+  if either endpoint is devoured and release their surviving endpoint for later reuse. (Verified:
+  `dotnet build` and 120 deterministic seed maps for topology, field, devour, Shelter, and bridge
+  invariants.)
+- **0.8.0** — **Outer-world map reconstruction.** The five selected worlds receive seeded angular
+  placement shares that sum to exactly 360°, but form five independent soft-edged flower petals:
+  narrow beside the VOID and broad at asymmetric outer tips, with real sea gaps instead of
+  adjoining wedges. Fixed-count combat nodes scatter first, then rank by
+  VOID distance as LV4, LV3, `2-B`, `2-A`, `1-B`, `1-A`; every outer-world node reaches its inner
+  `4-1` landmark through a short Euclidean spanning tree plus loops. The two final routes are
+  always `LV3 → ? → LV4` and `LV3 → Shelter → LV4`, with their LV3 assignment seeded. Each world
+  additionally rolls 1–3 Shelters and 1–3 Question Marks. A new global distance-sorted bridge
+  pass selects 7–9 inter-world links (maximum two per realm pair), preserves a connected realm
+  graph, and may insert a midpoint Shelter/Question function node. The former Voronoi territories
+  and gameplay-looking barriers are removed: the atlas now draws triangulated coastlines, flat
+  height tint/contours, and roads only, while the central VOID retains its existing generation.
+  Map controls now use left-drag pan, right-drag player-pivot rotation, and the existing wheel
+  zoom. Legacy combat-map terrain values `high`/`lowground` migrate to the canonical
+  `high-ground`/`low-ground`. (Verification: `dotnet build`, 0 errors/warnings; 100 seeded maps
+  checked for deterministic generation, placement-share totals, separated coasts, concave-coast
+  triangulation, distance-ranked levels, local-road length, boss reachability, bridge rules,
+  function routes/counts, and terrain labels.)
+- **0.7.0** — **Authored combat maps are live.** Combat-node entry now deterministically selects
+  a map by its authored world(s), hardship level(s), goal, and terrain instead of always using
+  the fixed Arena. Map documents are v2 (v1's singular world field migrates safely): empty
+  world/hardship filters mean all, goals default to claim/Collection, and terrain defaults to
+  sea-level (high and lowground are ready for future overworld terrain generation). The new
+  **Seashore** map is a real vertical slice for Pomegraknight's VanillaKindom (VK), levels 1–2,
+  claim, sea-level: its character and respawn points, four Wonder Core goal points, map collision,
+  and enemy nests load into the normal mission loop. Seashore mixes crabs/seagulls 50/50; crab
+  nests are authored at rows ≤4, seagull nests at rows ≥5, and periodic spawning is now one foe
+  every 4 seconds. Goal tiles are mission-relative: claim→Wonder Core points,
+  protect→Condensed Core, destroy→enemy objectives, slaughter→unused. The map editor now exposes
+  these attributes and spawn rules in **Map info**. (Verification: static checks + `dotnet build`.)
 - **0.6.18** — **Map Creation playtest and environmental traversal.** The editor can now
   instantiate its current map with Pomegraknight, authored runtime collision, camera-anchored
   parallax, looping farview art, and deterministic opt-in Farview SoftVolumes. Effect-area
@@ -1330,10 +1372,10 @@ Cleopastar has the most complex projectile management:
   - Stationary: hovers at position, 0.5 m/s fall
   - Gliding: accelerates 12→30 m/s over 1.5s
   - Blackhole: pull radius 6m, 15 m/s force, contact triggers 4-tick damage sequence
-  - Star platform: Cleo can stand on her own stationary stars
-- **Glow generation**: custom ammo system (1 glow per 1.5s, max 5)
-- **StarSicking debuff**: stackable -35% damage per stack, shared timer
-- **Ult**: freezes stationary-normal stars, 50% CDR
+  - Star platform: Cleo landing consumes a stationary Normal star in an immediate explosion
+- **Glow generation**: shared ammo system (5-capacity, 1 Glow/1.5 s reload)
+- **Shift volley reduction**: repeated Normal Gliding impacts on one target deal -35%, then -70%
+- **Ult**: deferred
 
 ---
 

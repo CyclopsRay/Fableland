@@ -235,8 +235,12 @@ public partial class MapBrowser : Control
         nameLabel.AddThemeFontSizeOverride("font_size", 20);
         vbox.AddChild(nameLabel);
 
-        string world = string.IsNullOrEmpty(doc.World) ? "—" : doc.World;
+        string world = doc.Worlds is { Count: > 0 } ? string.Join(", ", doc.Worlds)
+            : string.IsNullOrEmpty(doc.World) ? "All worlds" : doc.World;
         vbox.AddChild(new Label { Text = "World: " + world });
+        string levels = doc.HardshipLevels is { Count: > 0 } ? string.Join(", ", doc.HardshipLevels) : "all";
+        string goals = doc.Goals is { Count: > 0 } ? string.Join(", ", doc.Goals) : CombatMapGoals.Claim;
+        vbox.AddChild(new Label { Text = "LV: " + levels + "  ·  " + goals + "  ·  " + doc.Terrain });
 
         vbox.AddChild(new Label { Text = BattlefieldDims(doc) });
 

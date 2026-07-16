@@ -234,9 +234,9 @@ holds. `ForceFade(duration)` is called when RANIBOBER consumes the frame — it
 captures the current alpha and fades to 0 over `duration` seconds, then self-destroys.
 
 ### Ammo
-Magazine = 3 (baVolleyCount). `AutoTriggerReplenishOnShot` = true (default). Reload
-begins when magazine empties — 0.75 s windup, instant refill to 3. During SOBRECARGA,
-`fireSpeedArray` and `replenishWindup` are swapped to faster values.
+Magazine = 3 (baVolleyCount). The shared ammo controller requests reload when the
+magazine empties — 0.75 s windup, instant refill to 3. During SOBRECARGA, its base
+attack interval and reload delay are replaced by the faster values.
 
 ### RANIBOBER Stacks
 Separate from the base cooldown system (`eCooldown = 0`). Stacks charge passively at

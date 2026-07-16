@@ -102,6 +102,27 @@ Rest 30%/⅓-excess→max-HP pp, Sharpen +10 ATK | +10 DEF, joust 3 min (both si
 trader 15%/min-3 (map-wide), NPC 5-day window, devour days (10/20/30/35/40/45), stamina 5.
 v0.6.0: the full item catalog incl. mushroom outcome table (18×5+10%), perish/harvest
 timers, inheritance ranges (60–140%).
+v0.7.0: combat-map metadata (`worlds`, hardship levels, goals, terrain), map foe composition
+weights, and optional foe-spawn row limits. Defaults are all worlds/all hardships/claim/
+sea-level; the Seashore vertical slice is VK, hardship 1–2, claim, sea-level, 50/50 crab/seagull,
+with crab rows ≤4 and seagull rows ≥5.
+v0.8.0: outer-world angular placement shares (sum 360°), independent soft-coast petal framing,
+distance-ranked level assignment, spatial-tree/loop counts, a 7–9 bridge budget with a two-bridge
+per-world-pair cap, 50% bridge-function chance / 50:50 function type, per-world 1–3 Shelter +
+1–3 Question-Mark rolls, the required seeded LV3→? / LV3→Shelter boss approaches, and altitude
+thresholds. Canonical terrain values are now `low-ground`, `sea-level`, and `high-ground`; old map
+JSON values `lowground` and `high` migrate on load.
+v0.9.0: one-island coastline/no-islet constraint, a fixed pentagonal VOID target-area ratio,
+five variable-width river corridors, equal level-1/level-2 total city counts with A/B sublevels,
+realm-local road/loop budgets, altitude contour thresholds, and TwistedReality's one-stamina /
+5-day cross-realm map skill. Each use creates a reality bridge and locks its endpoints while the
+bridge remains. The old bridge budget, pair cap, and bridge-function rolls are retired.
+v0.9.1: reserve an inner VOID buffer and an `XX-S` one-way Shelter between each LV4 and LV5;
+per realm roll 3–5 Transportation Hubs and 4–6 Event nodes; reject road/hub spokes that would
+cross or overlap a path; city-control field boundaries; and VOID days 10/20 (furthest half/all
+LV1), 30/40 (furthest half/all LV2), 43 (all LV3), 45 (all remaining outer cities). Functional
+nodes require a strict majority of connected cities to be devoured, and reality bridges break /
+release the surviving endpoint when the VOID consumes either endpoint.
 Characters: each kit's skill-summary table verbatim.
 Arena events: tsunami warning/recovery/cooldown, storm tint, gust schedule, wind pulse,
 and subsequent event definitions. Canvas colours stay hex data; Godot colours are made only

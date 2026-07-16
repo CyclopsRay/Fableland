@@ -27,7 +27,7 @@ When two docs could own a rule, the table below decides; the *other* doc links t
 - Every doc ends with a **Decisions log**: what was decided, and *why*. When you change
   your mind later, you'll need the why.
 - Unknowns are marked **TBD** loudly, never papered over. TBDs feed the registry (§6).
-- Implementation notes live in the GDD (see Cleopastar's `externalForce` note) so the
+- Implementation notes live in the GDD (see Cleopastar's Blackhole-pull note) so the
   engineering hat doesn't rediscover constraints.
 - Units are meters/seconds/days — never pixels (engineering converts via `Units.cs`).
 
@@ -49,13 +49,13 @@ it has:
    growth is the additive HP/ATK/DEF pools, not a per-character level ladder).
 8. **Design notes** — the character's win condition, weakness, and intended counterplay.
 9. **Implementation notes** — which base-class systems it uses (ammo/magazine, shield,
-   externalForce…), any base-class changes needed (keep them minimal + non-breaking).
+   continuous-force sources…), any base-class changes needed (keep them minimal + non-breaking).
 10. **Image generation prompts** — sprite sheet (frame list!) + poster.
 
 Design constraints to respect:
 - Kits build on the shared `CharacterController` systems (ammo/magazine, shield pool,
   statuses, externalVel). If a kit needs a new base system, that's a *base* feature
-  first — spec it standalone (like the `externalForce` note in Cleopastar's GDD).
+  first — spec it standalone (like the Blackhole-pull note in Cleopastar's GDD).
 - Every character needs an answer to swarms and an exploitable weakness (Pomegraknight:
   Fire Tornado / freeze-slow; Pixolotl: bubble fan / fragility).
 - HP band so far: 150 (fragile controller) — 300 (tank). Justify placement in notes.
@@ -101,8 +101,8 @@ Extend `ITEMS.gdd` §7 (catalog) and §6.3 (tag matrix):
   scaling (anti-stagnation). New mechanics should push forward-motion, not camping.
 - **Player survives non-boss failure.** Only combat death and boss-timer expiry kill
   (`NODES.gdd` §2). Don't add new instant-death conditions casually.
-- **Stackable buffs use the single-shared-timer model** (StarSicking): one timer per
-  buff instance; any application resets it; expiry removes one stack. Universal.
+- **Stackable buffs use the single-shared-timer model:** one timer per buff instance;
+  any application resets it; expiry removes one stack. Universal.
 - **50%-uptime power windows** (Blush 5 s/10 s, SOBRECARGA 3.2 s/12.8 s ≈ 25%) — burst
   windows define character rhythm; pick uptime deliberately and write it down.
 

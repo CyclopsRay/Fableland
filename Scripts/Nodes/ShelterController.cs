@@ -25,13 +25,17 @@ public partial class ShelterController : CanvasLayer
     private Button _rest, _sharpenWeapon, _sharpenArmor, _teamBuild, _finishDay, _back;
 
     private string _nodeId;
+    private bool _isVoidShelter;
 
     // ---- Team Build overlay (v0.6.0 M1) ----
     private Panel _teamBuildPanel;
+    private HBoxContainer _teamSlots;
     private VBoxContainer _rosterList;
     private VBoxContainer _backpackList;
     private Label _teamBuildStatus;
     private string _selectedProtagId;
+    private int _selectedTeamSlot = -1;
+    private string _teamBuildMessage;
     /// <summary>Ephemeral, debug-only ProtagonistStates for roster entries not in RunState.Owned
     /// (e.g. PumpKing before it's granted for real). NEVER added to Owned/ActiveBuild — pure
     /// display/assignment scratch state, cached so selections persist across refreshes.</summary>
@@ -50,6 +54,7 @@ public partial class ShelterController : CanvasLayer
 
         var rs = RunState.Instance;
         _nodeId = rs?.CurrentAdventure?.NodeId ?? "(debug)";
+        _isVoidShelter = rs?.FindNode(_nodeId)?.Kind == Fableland.Map.NodeKind.Shelter;
 
         _rest.Pressed += () => Blessing("Rest — restore 30% max HP (excess → permanent max HP).",
             () => rs?.RestBlessing());
@@ -74,8 +79,10 @@ public partial class ShelterController : CanvasLayer
         bool blessed = rs?.IsShelterBlessed(_nodeId) ?? true;
         int stamina = rs?.Stamina ?? RunState.MaxStamina;
 
-        _title.Text = $"Shelter {_nodeId}  (placeholder)";
-        _status.Text = blessed ? "Blessed — one day-ending action available." : "Mundane — the Blessing is spent.";
+        _title.Text = _isVoidShelter ? $"Last Shelter {_nodeId}" : $"Transportation Hub {_nodeId}";
+        _status.Text = _isVoidShelter
+            ? "The singularity has closed behind you. Rest, sharpen, or rebuild before the VOID."
+            : (blessed ? "Blessed — one day-ending action available." : "Mundane — the Blessing is spent.");
 
         // Blessed shelter's day-ending actions grey out once Mundane (NODES §5).
         _rest.Disabled = !blessed;
@@ -83,6 +90,7 @@ public partial class ShelterController : CanvasLayer
         _sharpenArmor.Disabled = !blessed;
         // Leaving is free but needs stamina to actually move on the map (NODES §5).
         _back.Disabled = stamina <= 0;
+        _back.Text = _isVoidShelter ? "Continue into the VOID" : "Back to Map";
     }
 
     /// <summary>A day-ending Blessing action: GDD confirm text → apply effect, consume Blessing, end day.</summary>
@@ -162,8 +170,12 @@ public partial class ShelterController : CanvasLayer
         titleRow.AddChild(closeBtn);
         vbox.AddChild(titleRow);
 
-        var helpLabel = new Label { Text = "Select a protagonist, then click an item to assign it." };
+        var helpLabel = new Label { Text = "Select a team slot, then choose an owned roster member. Select a protagonist to assign items." };
         vbox.AddChild(helpLabel);
+
+        vbox.AddChild(new Label { Text = "Active team — Tab order for the next battle" });
+        _teamSlots = new HBoxContainer();
+        vbox.AddChild(_teamSlots);
 
         vbox.AddChild(new Label { Text = "Roster" });
         var rosterScroll = new ScrollContainer
@@ -195,6 +207,7 @@ public partial class ShelterController : CanvasLayer
     /// available regardless of Blessed state or stamina; see the wiring comment in _Ready).</summary>
     private void OpenTeamBuild()
     {
+        _teamBuildMessage = null;
         RepositionTeamBuildPanel();
         RefreshTeamBuild();
         _teamBuildPanel.Visible = true;
@@ -253,6 +266,42 @@ public partial class ShelterController : CanvasLayer
             if (!stillPresent) _selectedProtagId = null; // e.g. debug toggled off mid-panel
         }
 
+        // ---- editable next-battle team slots ----
+        foreach (Node c in _teamSlots.GetChildren()) c.QueueFree();
+        BattleTeamSnapshot teamSnapshot = rs?.CaptureBattleTeam();
+        string[] teamIds = teamSnapshot?.MemberIds ?? System.Array.Empty<string>();
+        int partyCap = rs?.PartyCap() ?? 3;
+        for (int slot = 0; slot < partyCap; slot++)
+        {
+            int targetSlot = slot; // do not capture the mutable for-loop variable
+            bool occupied = targetSlot < teamIds.Length;
+            string id = occupied ? teamIds[targetSlot] : "Empty";
+            var column = new VBoxContainer();
+            var slotButton = new Button
+            {
+                Text = (targetSlot == _selectedTeamSlot ? "> " : "") +
+                       $"{targetSlot + 1}: {id}" + (targetSlot == _selectedTeamSlot ? " <" : ""),
+                CustomMinimumSize = new Vector2(125, 32),
+                Disabled = rs == null,
+            };
+            slotButton.Pressed += () =>
+            {
+                _selectedTeamSlot = targetSlot;
+                _teamBuildMessage = $"Team slot {targetSlot + 1} selected.";
+                RefreshTeamBuild();
+            };
+            column.AddChild(slotButton);
+
+            var removeButton = new Button
+            {
+                Text = "Remove",
+                Disabled = rs == null || !occupied || teamIds.Length <= 1,
+            };
+            removeButton.Pressed += () => RemoveTeamSlot(targetSlot);
+            column.AddChild(removeButton);
+            _teamSlots.AddChild(column);
+        }
+
         // ---- roster rows ----
         foreach (Node c in _rosterList.GetChildren()) c.QueueFree();
         foreach (var (id, state) in roster)
@@ -263,6 +312,15 @@ public partial class ShelterController : CanvasLayer
             var selectBtn = new Button { Text = marker, CustomMinimumSize = new Vector2(160, 32) };
             selectBtn.Pressed += () => { _selectedProtagId = id; RefreshTeamBuild(); };
             row.AddChild(selectBtn);
+
+            bool isOwned = rs?.FindProtagonist(id) != null;
+            var teamButton = new Button
+            {
+                Text = isOwned ? "Set team" : "[DBG only]",
+                Disabled = !isOwned || _selectedTeamSlot < 0,
+            };
+            teamButton.Pressed += () => SetTeamSlot(id);
+            row.AddChild(teamButton);
 
             string heldText = string.IsNullOrEmpty(state.HeldItemDefId) ? "(empty)" : ItemCatalog.DisplayName(state.HeldItemDefId);
             row.AddChild(new Label { Text = heldText, CustomMinimumSize = new Vector2(200, 0) });
@@ -314,9 +372,64 @@ public partial class ShelterController : CanvasLayer
             }
         }
 
-        _teamBuildStatus.Text = _selectedProtagId == null
+        string selectionHint = _selectedProtagId == null
             ? "Select a protagonist, then click an item to assign it."
-            : $"Selected: {_selectedProtagId}";
+            : $"Item target: {_selectedProtagId}";
+        string teamHint = _selectedTeamSlot < 0
+            ? "Select a team slot to change the next battle's Tab order."
+            : $"Team target: slot {_selectedTeamSlot + 1}.";
+        _teamBuildStatus.Text = string.IsNullOrEmpty(_teamBuildMessage)
+            ? teamHint + " " + selectionHint
+            : _teamBuildMessage + " " + selectionHint;
+    }
+
+    private void SetTeamSlot(string id)
+    {
+        if (_selectedTeamSlot < 0)
+        {
+            _teamBuildMessage = "Select a team slot first.";
+            RefreshTeamBuild();
+            return;
+        }
+
+        var rs = RunState.Instance;
+        if (rs == null)
+        {
+            _teamBuildMessage = "No active run is available.";
+            RefreshTeamBuild();
+            return;
+        }
+        if (!rs.TrySetActiveBuildSlot(_selectedTeamSlot, id, out string error))
+        {
+            _teamBuildMessage = error ?? "Unable to change the team.";
+            RefreshTeamBuild();
+            return;
+        }
+
+        _teamBuildMessage = $"Placed {id} in the next battle's team.";
+        RefreshTeamBuild();
+    }
+
+    private void RemoveTeamSlot(int slot)
+    {
+        var rs = RunState.Instance;
+        if (rs == null)
+        {
+            _teamBuildMessage = "No active run is available.";
+            RefreshTeamBuild();
+            return;
+        }
+        if (!rs.TryRemoveActiveBuildSlot(slot, out string error))
+        {
+            _teamBuildMessage = error ?? "Unable to remove that team member.";
+            RefreshTeamBuild();
+            return;
+        }
+
+        if (_selectedTeamSlot >= rs.ActiveBuild.Count)
+            _selectedTeamSlot = rs.ActiveBuild.Count - 1;
+        _teamBuildMessage = "Removed from the next battle's team.";
+        RefreshTeamBuild();
     }
 
     /// <summary>Assign a wonder item (by DefId) to the currently-selected roster protagonist.

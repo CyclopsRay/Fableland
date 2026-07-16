@@ -15,7 +15,7 @@ FoeRegistry["crab"]        → FoeDef      (stats ref, scene ref, skill set)
 ItemRegistry["pomes_bravery"] → ItemDef  (tags, CDs, passive mods, skill, conversion)
 MissionRegistry["collection"] → MissionDef (factory for the strategy object)
 EventRegistry["weird_well"]   → EventDef  (?-node event script)
-WorldRegistry["VK"]           → WorldDef  (palette, barriers, foe pool, name)
+WorldRegistry["VK"]           → WorldDef  (palette, terrain/coast identity, foe pool, name)
 ```
 
 Rules:
@@ -49,7 +49,7 @@ patching the flow:
 
 | Socket | Shape | Existing/planned users |
 |--------|-------|------------------------|
-| Damage pipeline stages (T10 §4) | fixed order, tap points | statuses, items (thorns, lifesteal), StarSicking-style stacks |
+| Damage pipeline stages (T10 §4) | fixed order, tap points | statuses, items (thorns, lifesteal), stackable effects |
 | `OnDeath()` hook | virtual, fires before `QueueFree` | Crab spawn-on-death; loot drops; ult-charge credit |
 | Day-end resolution | **ordered step list**, registered centrally (NODES §7.4 order is law) | devour, item CDs, perish, NPC departure, stamina; future: plantation growth, phantom movement |
 | Modifier stack (30-DATA §3) | add/clear by source key | every buff, item passive, mushroom outcome |

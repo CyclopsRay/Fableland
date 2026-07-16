@@ -59,6 +59,17 @@ public partial class MapEditor : Control
 	private Label _unsavedDotLabel;
 
 	private ConfirmationDialog _discardConfirmDialog;
+	// Combat-map selection metadata (world / hardship / goal / terrain + immediate spawn tuning).
+	// Kept as a single dialog because it belongs to the whole document, not to any visual layer.
+	private AcceptDialog _mapAttributesDialog;
+	private LineEdit _mapWorldsEdit;
+	private LineEdit _mapHardshipEdit;
+	private LineEdit _mapGoalsEdit;
+	private OptionButton _mapTerrainSelect;
+	private SpinBox _mapCrabWeight;
+	private SpinBox _mapSeagullWeight;
+	private SpinBox _mapCrabMaxY;
+	private SpinBox _mapSeagullMinY;
 
 	private readonly System.Collections.Generic.List<(Button Btn, EditorState.EditorTool Tool)> _toolButtons = new();
 
@@ -234,6 +245,10 @@ public partial class MapEditor : Control
 
 		_mapNameLabel = new Label { Text = _state.Document.Name, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
 		hbox.AddChild(_mapNameLabel);
+
+		var mapInfoBtn = new Button { Text = "Map info", TooltipText = "World, hardship, goal, terrain, and foe-spawn rules" };
+		mapInfoBtn.Pressed += OpenMapAttributes;
+		hbox.AddChild(mapInfoBtn);
 
 		// Enters an isolated runtime playtest of this map.
 		var playBtn = new Button
@@ -516,7 +531,175 @@ public partial class MapEditor : Control
 		AddChild(_discardConfirmDialog);
 		_discardConfirmDialog.Confirmed += () =>
 			GetTree().ChangeSceneToFile("res://Scenes/MapCreation/MapBrowser.tscn");
+		BuildMapAttributesDialog();
 	}
+
+	private void BuildMapAttributesDialog()
+	{
+		_mapAttributesDialog = new AcceptDialog { Title = "Combat Map Attributes", MinSize = new Vector2I(430, 410) };
+		AddChild(_mapAttributesDialog);
+		var body = new VBoxContainer();
+		body.AddThemeConstantOverride("separation", 6);
+		_mapAttributesDialog.AddChild(body);
+		body.AddChild(new Label { Text = "Empty world/level fields mean all. Goals are comma-separated: claim, protect, destroy, slaughter." });
+
+		_mapWorldsEdit = AddMetadataTextField(body, "Worlds (names or abbreviations)");
+		_mapHardshipEdit = AddMetadataTextField(body, "Hardship levels (1–6, comma-separated)");
+		_mapGoalsEdit = AddMetadataTextField(body, "Goals (comma-separated)");
+
+		body.AddChild(new Label { Text = "Terrain" });
+		_mapTerrainSelect = new OptionButton();
+		_mapTerrainSelect.AddItem("Sea-level", 0);
+		_mapTerrainSelect.AddItem("High-ground", 1);
+		_mapTerrainSelect.AddItem("Low-ground", 2);
+		body.AddChild(_mapTerrainSelect);
+
+		body.AddChild(new Label { Text = "Foe composition (map default; weights)" });
+		var weights = new HBoxContainer();
+		weights.AddChild(new Label { Text = "Crab", CustomMinimumSize = new Vector2(56f, 0f) });
+		_mapCrabWeight = MakeMetadataSpin(0, 1000, 60); weights.AddChild(_mapCrabWeight);
+		weights.AddChild(new Label { Text = "Seagull", CustomMinimumSize = new Vector2(64f, 0f) });
+		_mapSeagullWeight = MakeMetadataSpin(0, 1000, 40); weights.AddChild(_mapSeagullWeight);
+		body.AddChild(weights);
+
+		body.AddChild(new Label { Text = "Foe-spawn marker row rules (−1 means no limit)" });
+		var rows = new HBoxContainer();
+		rows.AddChild(new Label { Text = "Crab max Y", CustomMinimumSize = new Vector2(92f, 0f) });
+		_mapCrabMaxY = MakeMetadataSpin(-1, 255, -1); rows.AddChild(_mapCrabMaxY);
+		rows.AddChild(new Label { Text = "Seagull min Y", CustomMinimumSize = new Vector2(98f, 0f) });
+		_mapSeagullMinY = MakeMetadataSpin(-1, 255, -1); rows.AddChild(_mapSeagullMinY);
+		body.AddChild(rows);
+
+		_mapAttributesDialog.GetOkButton().Text = "Apply";
+		_mapAttributesDialog.Confirmed += ApplyMapAttributes;
+	}
+
+	private static LineEdit AddMetadataTextField(Container parent, string label)
+	{
+		parent.AddChild(new Label { Text = label });
+		var field = new LineEdit();
+		parent.AddChild(field);
+		return field;
+	}
+
+	private static SpinBox MakeMetadataSpin(int min, int max, int value) => new()
+	{
+		MinValue = min,
+		MaxValue = max,
+		Step = 1,
+		Value = value,
+		CustomMinimumSize = new Vector2(64f, 0f),
+	};
+
+	private void OpenMapAttributes()
+	{
+		if (_mapAttributesDialog == null || _state?.Document == null) return;
+		MapDocument doc = _state.Document;
+		_mapWorldsEdit.Text = string.Join(", ", doc.Worlds ?? new List<string>());
+		_mapHardshipEdit.Text = string.Join(", ", doc.HardshipLevels ?? new List<int>());
+		_mapGoalsEdit.Text = string.Join(", ", doc.Goals ?? new List<string> { CombatMapGoals.Claim });
+		_mapTerrainSelect.Select(doc.Terrain == CombatMapTerrain.High ? 1 : doc.Terrain == CombatMapTerrain.Lowground ? 2 : 0);
+
+		FoeComposition composition = FindDefaultComposition(doc);
+		_mapCrabWeight.Value = composition?.CrabWeight ?? 60;
+		_mapSeagullWeight.Value = composition?.SeagullWeight ?? 40;
+		_mapCrabMaxY.Value = doc.FoeSpawnRules?.CrabMaxCellY ?? -1;
+		_mapSeagullMinY.Value = doc.FoeSpawnRules?.SeagullMinCellY ?? -1;
+		_mapAttributesDialog.PopupCentered();
+	}
+
+	private void ApplyMapAttributes()
+	{
+		MapDocument doc = _state?.Document;
+		if (doc == null) return;
+		var beforeWorlds = new List<string>(doc.Worlds ?? new List<string>());
+		var beforeLevels = new List<int>(doc.HardshipLevels ?? new List<int>());
+		var beforeGoals = new List<string>(doc.Goals ?? new List<string>());
+		string beforeTerrain = doc.Terrain;
+		var beforeCompositions = CopyCompositions(doc.FoeCompositions);
+		var beforeRules = CopyRules(doc.FoeSpawnRules);
+
+		var afterWorlds = ParseWords(_mapWorldsEdit.Text, false);
+		var afterLevels = ParseLevels(_mapHardshipEdit.Text);
+		var afterGoals = ParseWords(_mapGoalsEdit.Text, true);
+		string afterTerrain = _mapTerrainSelect.Selected == 1 ? CombatMapTerrain.High
+			: _mapTerrainSelect.Selected == 2 ? CombatMapTerrain.Lowground : CombatMapTerrain.SeaLevel;
+		var afterCompositions = new List<FoeComposition>
+		{
+			new() { Level = 0, CrabWeight = (int)_mapCrabWeight.Value, SeagullWeight = (int)_mapSeagullWeight.Value },
+		};
+		var afterRules = new FoeSpawnRules
+		{
+			CrabMaxCellY = _mapCrabMaxY.Value < 0 ? null : (int)_mapCrabMaxY.Value,
+			SeagullMinCellY = _mapSeagullMinY.Value < 0 ? null : (int)_mapSeagullMinY.Value,
+		};
+
+		void Apply(List<string> worlds, List<int> levels, List<string> goals, string terrain,
+			List<FoeComposition> comps, FoeSpawnRules rules)
+		{
+			doc.Worlds = new List<string>(worlds);
+			doc.World = doc.Worlds.Count == 1 ? doc.Worlds[0] : ""; // v1 card compatibility
+			doc.HardshipLevels = new List<int>(levels);
+			doc.Goals = new List<string>(goals);
+			doc.Terrain = terrain;
+			doc.FoeCompositions = CopyCompositions(comps);
+			doc.FoeSpawnRules = CopyRules(rules);
+		}
+
+		_state.Commands.Push(new PropertyEditCommand("Edit Combat Map Attributes",
+			() => Apply(afterWorlds, afterLevels, afterGoals, afterTerrain, afterCompositions, afterRules),
+			() => Apply(beforeWorlds, beforeLevels, beforeGoals, beforeTerrain, beforeCompositions, beforeRules)));
+		_state.RaiseStateChanged();
+	}
+
+	private static FoeComposition FindDefaultComposition(MapDocument doc)
+	{
+		if (doc?.FoeCompositions == null) return null;
+		for (int i = 0; i < doc.FoeCompositions.Count; i++)
+			if (doc.FoeCompositions[i]?.Level == 0) return doc.FoeCompositions[i];
+		return null;
+	}
+
+	private static List<string> ParseWords(string text, bool goals)
+	{
+		var values = new List<string>();
+		foreach (string part in (text ?? "").Split(',', System.StringSplitOptions.RemoveEmptyEntries))
+		{
+			string value = part.Trim();
+			if (value.Length == 0) continue;
+			value = goals ? value.ToLowerInvariant() : value;
+			if (goals && value == "collection") value = CombatMapGoals.Claim;
+			if (!values.Contains(value)) values.Add(value);
+		}
+		if (goals && values.Count == 0) values.Add(CombatMapGoals.Claim);
+		return values;
+	}
+
+	private static List<int> ParseLevels(string text)
+	{
+		var values = new List<int>();
+		foreach (string part in (text ?? "").Split(',', System.StringSplitOptions.RemoveEmptyEntries))
+		{
+			if (!int.TryParse(part.Trim(), out int level) || level < 1 || level > 6 || values.Contains(level)) continue;
+			values.Add(level);
+		}
+		return values;
+	}
+
+	private static List<FoeComposition> CopyCompositions(List<FoeComposition> source)
+	{
+		var copy = new List<FoeComposition>();
+		if (source == null) return copy;
+		foreach (FoeComposition entry in source)
+			if (entry != null) copy.Add(new FoeComposition { Level = entry.Level, CrabWeight = entry.CrabWeight, SeagullWeight = entry.SeagullWeight });
+		return copy;
+	}
+
+	private static FoeSpawnRules CopyRules(FoeSpawnRules source) => new()
+	{
+		CrabMaxCellY = source?.CrabMaxCellY,
+		SeagullMinCellY = source?.SeagullMinCellY,
+	};
 
 	/// <summary>Legacy editor hint retained for layout compatibility; the runtime playtest
 	/// provides its own fixed-screen hint so a Camera2D cannot move it.</summary>

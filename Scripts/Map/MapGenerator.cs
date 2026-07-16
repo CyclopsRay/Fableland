@@ -2,496 +2,971 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Godot;
+using Fableland.Data;
+using Fableland.MapCreation.Data;
 using Fableland.Run;
 
 namespace Fableland.Map;
 
 /// <summary>
-/// Procedural world-map generator. Everything is driven by the run seed through a
-/// single <see cref="DetRandom"/>, so a seed reproduces the whole map exactly.
-///
-/// Pipeline (per the map GDD, Docs/MapGDD.md):
-///   1. pick 5 worlds, lay out combat nodes on 72° fans (levels 1-A..4)
-///   2. intra-world edges (higher-node links, siblings, the fixed lv3/lv4 links)
-///   3. inter-world edges (the lv3 ring, plus 2-A/1-A cross links)
-///   4. function nodes (edge crossings, then per-edge probability) — shelter / questionmark
-///   5. zone 6 (the VOID): 5 lv5 nodes round the lake, the river ring, the lv6 core
+/// Seeded v0.9 overworld generator. Five storybook realms retain their individual rosters but
+/// share one organic island. Five rivers cut that island into the realm polygons; only runtime
+/// TwistedReality bridges may cross between them.
 /// </summary>
 public static class MapGenerator
 {
-    // World layout. Radii shrink from the outer rim (level 1-A) toward the VOID.
-    // LayoutScale blows the whole map up uniformly (v0.3.2, for the rendered atlas + camera):
-    // a uniform scale preserves all topology/crossings, so a given seed yields the same map,
-    // just bigger. Both views project world→screen in MapController (Project), no Camera2D.
     public const float LayoutScale = 1.8f;
     public static readonly Vector2 Center = new(576, 340);
-
-    // Outer edge of the playable disc (just past level 1-A) — used to size world islands/wedges.
     public const float RimRadius = 300f * LayoutScale + 30f;
 
-    private static readonly Dictionary<string, float> Radius = new()
-    {
-        ["1-A"] = 300f * LayoutScale, ["1-B"] = 262f * LayoutScale,
-        ["2-A"] = 224f * LayoutScale, ["2-B"] = 190f * LayoutScale,
-        ["3"] = 150f * LayoutScale, ["4"] = 110f * LayoutScale,
-        ["5"] = 78f * LayoutScale,   // ring of lv5 nodes — sits INSIDE the zone-6 disc, around the lake
-    };
-    private const float Zone6Radius = 96f * LayoutScale; // dark disc bounding zone 6 (lv5 ring is inside it)
-    private const float RiverRadius = 38f * LayoutScale;
-    private const float LakeRadius = 58f * LayoutScale;
+    // The regular pentagon's radius is derived after the coast is known. This bootstrap value
+    // settles near 120 px at the intended island scale.
+    private const float DefaultZone6Radius = 120f;
+    private const float Level5Radius = 86f;
+    private const float RiverRadius = 43f;
+    private const float LakeRadius = 66f;
+    private const float MinNodeSpacing = 44f;
+    private const float FirstRiverBoundaryDeg = -126f;
 
-    // Outer→inner ordering of the outer-zone sublevels.
-    private static readonly string[] OuterTags = { "1-A", "1-B", "2-A", "2-B", "3", "4" };
-
-    // The active character always starts in their home world (zone index 0).
-    // Pomegraknight's home is VanillaKindom (pink). Other playable characters will
-    // pass their own home abbr when they unlock.
     public const string PomegraknightHome = "VK";
+
+    private sealed class WorldPlan
+    {
+        public int N1A;
+        public int N1B;
+        public int N2A;
+        public int N2B;
+        public int CombatCount => N1A + N1B + N2A + N2B + 3;
+    }
+
+    private sealed class NodePlacement
+    {
+        public int Ordinal;
+        public Vector2 Pos;
+        public float Altitude;
+        public string Tag;
+        public int Level;
+        public NodeKind Kind;
+    }
+
+    private sealed class CoastProfile
+    {
+        private readonly float _phaseA;
+        private readonly float _phaseB;
+        private readonly float _phaseC;
+        private readonly float _bias;
+
+        public CoastProfile(DetRandom rng)
+        {
+            _phaseA = (float)(rng.NextDouble() * Mathf.Tau);
+            _phaseB = (float)(rng.NextDouble() * Mathf.Tau);
+            _phaseC = (float)(rng.NextDouble() * Mathf.Tau);
+            _bias = ((float)rng.NextDouble() - 0.5f) * 20f;
+        }
+
+        public float RadiusAt(float degrees)
+        {
+            float a = Mathf.DegToRad(degrees);
+            float noise = Mathf.Sin(a * 2f + _phaseA) * MapGenTable.CoastIrregularity * 0.48f
+                        + Mathf.Sin(a * 3f + _phaseB) * MapGenTable.CoastIrregularity * 0.28f
+                        + Mathf.Sin(a * 5f + _phaseC) * MapGenTable.CoastIrregularity * 0.14f;
+            return Mathf.Clamp(RimRadius + _bias + noise, RimRadius - 58f, RimRadius + 46f);
+        }
+    }
+
+    private sealed class RoadCandidate
+    {
+        public MapNode A;
+        public MapNode B;
+        public Vector2[] Route;
+        public float Length;
+    }
 
     public static MapGraph Generate(string seed, string homeAbbr = PomegraknightHome)
     {
-        var rng = new DetRandom(seed);
-        var g = new MapGraph { Seed = seed, Center = Center, Zone6Radius = Zone6Radius, RiverRadius = RiverRadius, LakeRadius = LakeRadius };
-
-        // --- pick 5 of 6 worlds, in ring order. The home world is always present and
-        //     placed at index 0 (the start zone); the other 4 are random from the rest. ---
-        var pool = new List<WorldDef>(WorldDef.Pool);
-        var home = pool.Find(w => w.Abbr == homeAbbr) ?? pool[0];
-        pool.RemoveAll(w => w.Abbr == home.Abbr);
-        rng.Shuffle(pool);
-        g.Worlds = new List<WorldDef> { home };
-        g.Worlds.AddRange(pool.Take(4));
-
-        // nodes[worldIndex][tag] = ordered list of combat nodes in that sublevel
-        var byWorld = new List<Dictionary<string, List<MapNode>>>();
-
-        for (int w = 0; w < 5; w++)
+        seed ??= "";
+        var graph = new MapGraph
         {
-            var world = g.Worlds[w];
-            float worldCenterDeg = -90f + w * 72f; // world 0 faces up; worlds go clockwise
-            var slot = new Dictionary<string, List<MapNode>>();
-
-            // per-world node counts
-            int n1a = rng.Chance(0.5) ? 4 : 3;
-            int n1b = rng.Chance(0.5) ? 4 : 3;
-            int n2a = rng.Range(2, 4);            // 2..4
-            int n2b = rng.Chance(0.5) ? 3 : 2;    // 2 or 3
-
-            // level-1 numbering runs across 1-A then 1-B; same for level-2.
-            int lvl1Run = 1;
-            slot["1-A"] = PlaceRow(g, world, w, worldCenterDeg, "1-A", 1, n1a, ref lvl1Run, NodeKind.Combat);
-            slot["1-B"] = PlaceRow(g, world, w, worldCenterDeg, "1-B", 1, n1b, ref lvl1Run, NodeKind.Combat);
-
-            int lvl2Run = 1;
-            slot["2-A"] = PlaceRow(g, world, w, worldCenterDeg, "2-A", 2, n2a, ref lvl2Run, NodeKind.Combat);
-            slot["2-B"] = PlaceRow(g, world, w, worldCenterDeg, "2-B", 2, n2b, ref lvl2Run, NodeKind.Combat);
-
-            int lvl3Run = 1;
-            slot["3"] = PlaceRow(g, world, w, worldCenterDeg, "3", 3, 2, ref lvl3Run, NodeKind.Combat);
-
-            int lvl4Run = 1;
-            slot["4"] = PlaceRow(g, world, w, worldCenterDeg, "4", 4, 1, ref lvl4Run, NodeKind.Boss);
-
-            byWorld.Add(slot);
-        }
-
-        // --- (2) intra-world edges ---
-        for (int w = 0; w < 5; w++)
-            BuildIntraWorldEdges(g, byWorld[w], rng);
-
-        // --- (3) inter-world edges ---
-        BuildInterWorldEdges(g, byWorld, rng);
-
-        // --- (5) zone 6 (build before function nodes so lv4 shelters into the VOID exist,
-        //         but keep its edges out of the crossing/probability passes via Visible=false) ---
-        BuildZone6(g, byWorld);
-
-        // --- (4) function nodes (zone 1-5 visible edges only) ---
-        GenerateFunctionNodes(g, rng);
-
-        // start: a random 1-A node in the first world; guarantee its cross-world lv1 link
-        g.StartNode = rng.Pick(byWorld[0]["1-A"]);
-
-        // --- (6) mission roll (NODES §4.1) ---
-        RollMissions(g, seed);
-
-        g.BuildAdjacency();
-        return g;
-    }
-
-    // ---- mission roll -----------------------------------------------------------
-
-    /// <summary>
-    /// Assign a <see cref="MissionType"/> to every combat node (NODES §4.1). LV4/LV6/Boss-kind
-    /// nodes are structurally Boss (never rolled); LV1/2/3/5 combat nodes roll 60:15:10:10
-    /// Collection:Protect:Destroy:Slaughter.
-    ///
-    /// Rolls from a DEDICATED sub-stream (<c>DetRandom(seed+"M")</c>) — it never touches the
-    /// layout stream, so a given seed's map geometry is byte-for-byte UNCHANGED (same trick the
-    /// atlas uses with seed+"R"). Iteration over g.Nodes is deterministic (insertion order).
-    /// </summary>
-    private static void RollMissions(MapGraph g, string seed)
-    {
-        var mrng = new DetRandom(seed + "M");
-        foreach (var n in g.Nodes)
-        {
-            if (!n.IsCombat) continue;
-            if (n.Kind == NodeKind.Boss || n.Level == 4 || n.Level == 6)
-            {
-                n.Mission = MissionType.Boss; // structural
-                continue;
-            }
-            // 60:15:10:10 over Collection/Protect/Destroy/Slaughter (weights sum to 95).
-            int r = mrng.Range(0, 94);
-            n.Mission = r < 60 ? MissionType.Collection
-                      : r < 75 ? MissionType.Protect
-                      : r < 85 ? MissionType.Destroy
-                               : MissionType.Slaughter;
-        }
-    }
-
-    // ---- combat-node placement --------------------------------------------------
-
-    private static List<MapNode> PlaceRow(MapGraph g, WorldDef world, int w, float worldCenterDeg,
-        string tag, int level, int count, ref int runningIndex, NodeKind kind)
-    {
-        const float usableDeg = 56f; // nodes use 56° of the 72° fan, leaving a ~16° gap between worlds
-        float r = Radius[tag];
-        float startDeg = worldCenterDeg - usableDeg / 2f;
-        var row = new List<MapNode>();
-        for (int k = 0; k < count; k++)
-        {
-            float deg = count == 1
-                ? worldCenterDeg
-                : startDeg + (k + 0.5f) / count * usableDeg;
-            float rad = Mathf.DegToRad(deg);
-            var pos = g.Center + new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * r;
-            var node = new MapNode
-            {
-                Id = $"{world.Abbr}-{level}-{runningIndex}",
-                Kind = kind,
-                WorldIndex = w,
-                Zone = world.Abbr,
-                LevelTag = tag,
-                Level = level,
-                Pos = pos,
-                Color = world.Color.Lightened(0.15f),
-            };
-            g.Nodes.Add(node);
-            row.Add(node);
-            runningIndex++;
-        }
-        return row;
-    }
-
-    // ---- intra-world edges ------------------------------------------------------
-
-    private static void BuildIntraWorldEdges(MapGraph g, Dictionary<string, List<MapNode>> slot, DetRandom rng)
-    {
-        // (a) each node links to its closest higher (next-inner) node(s).
-        // Chain: 1-A→1-B→2-A→2-B→3. (3→4 is fixed, handled below.)
-        for (int i = 0; i < 4; i++)
-        {
-            string tag = OuterTags[i];
-            string innerTag = OuterTags[i + 1];
-            var higher = slot[innerTag];
-            foreach (var n in slot[tag])
-            {
-                var closest = higher.OrderBy(h => n.Pos.DistanceSquaredTo(h.Pos)).ToList();
-                var h0 = closest[0];
-                var h1 = closest.Count > 1 ? closest[1] : null;
-                if (h1 != null && rng.Chance(0.20))
-                {
-                    AddEdge(g, n, h0, h0.Level);
-                    AddEdge(g, n, h1, h1.Level);
-                }
-                else if (rng.Chance(0.70) || h1 == null)
-                {
-                    AddEdge(g, n, h0, h0.Level);
-                    if (h1 != null) g.FailedCandidates.Add((n, h1)); // nearer link kept, farther one blocked
-                }
-                else
-                {
-                    AddEdge(g, n, h1, h1.Level);
-                    g.FailedCandidates.Add((n, h0)); // farther link kept, nearest one blocked
-                }
-            }
-        }
-
-        // (b) sibling links within a sublevel: lv1 30%, lv2 50%.
-        AddSiblings(g, slot["1-A"], 0.30, rng);
-        AddSiblings(g, slot["1-B"], 0.30, rng);
-        AddSiblings(g, slot["2-A"], 0.50, rng);
-        AddSiblings(g, slot["2-B"], 0.50, rng);
-
-        // (c) lv3 nodes always link to lv4 and to their sibling lv3.
-        var l3 = slot["3"];
-        var boss = slot["4"][0];
-        foreach (var n in l3) AddEdge(g, n, boss, 4);
-        if (l3.Count == 2) AddEdge(g, l3[0], l3[1], 3);
-    }
-
-    private static void AddSiblings(MapGraph g, List<MapNode> row, double prob, DetRandom rng)
-    {
-        for (int k = 0; k + 1 < row.Count; k++)
-            if (rng.Chance(prob))
-                AddEdge(g, row[k], row[k + 1], row[k].Level);
-            else
-                g.FailedCandidates.Add((row[k], row[k + 1])); // adjacent siblings that didn't link
-    }
-
-    // ---- inter-world edges ------------------------------------------------------
-
-    private static void BuildInterWorldEdges(MapGraph g, List<Dictionary<string, List<MapNode>>> byWorld, DetRandom rng)
-    {
-        // lv3 ring: world i's 3-2 links to world i+1's 3-1 (wrap around), forming a full ring.
-        for (int w = 0; w < 5; w++)
-        {
-            int nw = (w + 1) % 5;
-            var here = byWorld[w]["3"];
-            var next = byWorld[nw]["3"];
-            AddEdge(g, here[here.Count - 1], next[0], 3);
-        }
-
-        // 2-A: 60% chance to link to the adjacent world (last node → next world's first).
-        // 1-A: 30% chance. (2-B and 1-B never link across worlds.)
-        bool startHasCross = false;
-        for (int w = 0; w < 5; w++)
-        {
-            int nw = (w + 1) % 5;
-            if (rng.Chance(0.60))
-            {
-                var a = byWorld[w]["2-A"];
-                var b = byWorld[nw]["2-A"];
-                AddEdge(g, a[a.Count - 1], b[0], 2);
-            }
-            if (rng.Chance(0.30))
-            {
-                var a = byWorld[w]["1-A"];
-                var b = byWorld[nw]["1-A"];
-                AddEdge(g, a[a.Count - 1], b[0], 1);
-                if (w == 0 || nw == 0) startHasCross = true;
-            }
-        }
-
-        // The start world (index 0) must have a 1-A cross-world edge.
-        if (!startHasCross)
-        {
-            var a = byWorld[0]["1-A"];
-            var b = byWorld[1]["1-A"];
-            AddEdge(g, a[a.Count - 1], b[0], 1);
-        }
-    }
-
-    // ---- function nodes ---------------------------------------------------------
-
-    private static void GenerateFunctionNodes(MapGraph g, DetRandom rng)
-    {
-        var letterCount = new Dictionary<int, int>();
-
-        // (b) edge crossings: replace the two crossing edges with 4 edges into a new
-        //     function node at the intersection. Rescan until no visible pair crosses.
-        while (true)
-        {
-            var visible = g.Edges.Where(e => e.Visible).ToList();
-            (MapEdge, MapEdge, Vector2)? hit = null;
-            for (int i = 0; i < visible.Count && hit == null; i++)
-                for (int j = i + 1; j < visible.Count; j++)
-                {
-                    var e1 = visible[i];
-                    var e2 = visible[j];
-                    if (e1.Touches(e2.A) || e1.Touches(e2.B)) continue; // shared endpoint
-                    if (SegmentsIntersect(e1.A.Pos, e1.B.Pos, e2.A.Pos, e2.B.Pos, out var p))
-                    {
-                        hit = (e1, e2, p);
-                        break;
-                    }
-                }
-            if (hit == null) break;
-
-            var (ce1, ce2, point) = hit.Value;
-            int lvl = Math.Max(ce1.Level, ce2.Level);
-            var fn = MakeFunctionNode(g, rng, lvl, point, ref letterCount, forceShelter: false);
-            var (a1, b1, a2, b2) = (ce1.A, ce1.B, ce2.A, ce2.B);
-            g.Edges.Remove(ce1);
-            g.Edges.Remove(ce2);
-            foreach (var end in new[] { a1, b1, a2, b2 })
-            {
-                var e = new MapEdge(end, fn, lvl) { Considered = true };
-                g.Edges.Add(e);
-            }
-        }
-
-        // (c/d) per-edge probability on not-yet-considered visible edges.
-        //   lv4 100% (always shelter), lv3 50%, lv2 25%, lv1 10%.
-        var candidates = g.Edges.Where(e => e.Visible && !e.Considered).ToList();
-        foreach (var e in candidates)
-        {
-            if (e.Considered) continue; // may have been consumed already
-            double p = e.Level switch { 4 => 1.0, 3 => 0.50, 2 => 0.25, 1 => 0.10, _ => 0.0 };
-            if (!rng.Chance(p)) { e.Considered = true; continue; }
-
-            bool forceShelter = e.Level == 4;
-            var mid = (e.A.Pos + e.B.Pos) * 0.5f;
-            var fn = MakeFunctionNode(g, rng, e.Level, mid, ref letterCount, forceShelter);
-            var a = e.A;
-            var b = e.B;
-            g.Edges.Remove(e);
-            g.Edges.Add(new MapEdge(a, fn, e.Level) { Considered = true });
-            g.Edges.Add(new MapEdge(fn, b, e.Level) { Considered = true });
-        }
-
-        // (e) Guarantee variety: lv1 and lv2 fire rarely (10% / 25%), so a level can end up with
-        //     no shelter or no question mark. For each of levels 1 & 2, if a kind is missing, add
-        //     it on a random un-split level-L city→city edge.
-        foreach (int lvl in new[] { 1, 2 })
-        {
-            bool hasShelter = false, hasQuestion = false;
-            foreach (var n in g.Nodes)
-                if (n.WorldIndex == -2 && n.Level == lvl)
-                {
-                    if (n.Kind == NodeKind.Shelter) hasShelter = true;
-                    else if (n.Kind == NodeKind.QuestionMark) hasQuestion = true;
-                }
-
-            foreach (var kind in new[] { NodeKind.Shelter, NodeKind.QuestionMark })
-            {
-                if (kind == NodeKind.Shelter ? hasShelter : hasQuestion) continue;
-                // un-split = neither endpoint is already a function node (WorldIndex -2)
-                var open = g.Edges.Where(e => e.Visible && e.Level == lvl
-                                              && e.A.WorldIndex != -2 && e.B.WorldIndex != -2).ToList();
-                if (open.Count == 0) continue;
-                var e = rng.Pick(open);
-                var fn = MakeFunctionNode(g, rng, lvl, (e.A.Pos + e.B.Pos) * 0.5f, ref letterCount, false, kind);
-                var (a, b) = (e.A, e.B);
-                g.Edges.Remove(e);
-                g.Edges.Add(new MapEdge(a, fn, lvl) { Considered = true });
-                g.Edges.Add(new MapEdge(fn, b, lvl) { Considered = true });
-            }
-        }
-    }
-
-    private static MapNode MakeFunctionNode(MapGraph g, DetRandom rng, int level, Vector2 pos,
-        ref Dictionary<int, int> letterCount, bool forceShelter, NodeKind? forceKind = null)
-    {
-        int idx = letterCount.TryGetValue(level, out var c) ? c : 0;
-        letterCount[level] = idx + 1;
-        // forceKind pins the kind (used to guarantee variety); else forceShelter, else 40/60 roll.
-        bool shelter = forceKind.HasValue ? forceKind.Value == NodeKind.Shelter
-                                          : forceShelter || rng.Chance(0.40);
-        var node = new MapNode
-        {
-            Id = $"{level}-{(char)('a' + idx)}",
-            Kind = shelter ? NodeKind.Shelter : NodeKind.QuestionMark,
-            WorldIndex = -2, // function node: belongs to an edge, not a world
-            Zone = "",
-            LevelTag = level.ToString(),
-            Level = level,
-            Pos = pos,
-            Color = shelter ? new Color(0.85f, 0.70f, 0.40f) : new Color(0.55f, 0.80f, 0.95f),
+            Seed = seed,
+            Center = Center,
+            Zone6Radius = DefaultZone6Radius,
+            RiverRadius = RiverRadius,
+            LakeRadius = LakeRadius,
         };
-        g.Nodes.Add(node);
-        return node;
+
+        var worldRng = new DetRandom(seed);
+        var pool = new List<WorldDef>(WorldDef.Pool);
+        WorldDef home = pool.Find(world => world.Abbr == homeAbbr) ?? pool[0];
+        pool.RemoveAll(world => world.Abbr == home.Abbr);
+        worldRng.Shuffle(pool);
+        graph.Worlds = new List<WorldDef> { home };
+        graph.Worlds.AddRange(pool.Take(MapGenTable.RealmCount - 1));
+
+        var countRng = new DetRandom(seed + ":outer-counts");
+        var plans = new List<WorldPlan>();
+        for (int i = 0; i < graph.Worlds.Count; i++)
+        {
+            int n1a = countRng.Chance(0.5) ? MapGenTable.SublevelMaxCities : MapGenTable.SublevelMinCities;
+            int n1b = countRng.Chance(0.5) ? MapGenTable.SublevelMaxCities : MapGenTable.SublevelMinCities;
+            int total = n1a + n1b;
+            int low = total / 2;
+            int high = total - low;
+            bool highFirst = countRng.Chance(0.5);
+            plans.Add(new WorldPlan
+            {
+                N1A = n1a,
+                N1B = n1b,
+                N2A = highFirst ? high : low,
+                N2B = highFirst ? low : high,
+            });
+        }
+
+        graph.Landmasses = BuildRealmLandmasses(graph, new DetRandom(seed + ":landmasses"));
+        var byWorld = new List<Dictionary<string, List<MapNode>>>();
+        for (int world = 0; world < graph.Worlds.Count; world++)
+        {
+            byWorld.Add(PlaceWorldNodes(graph, graph.Worlds[world], world, plans[world],
+                graph.Landmasses[world], new DetRandom(seed + ":nodes:" + graph.Worlds[world].Abbr)));
+        }
+
+        for (int world = 0; world < graph.Worlds.Count; world++)
+        {
+            BuildIntraRealmNetwork(graph, byWorld[world], graph.Worlds[world], world,
+                graph.Landmasses[world], new DetRandom(seed + ":roads:" + graph.Worlds[world].Abbr));
+            PlaceEventNodes(graph, graph.Worlds[world], world, graph.Landmasses[world],
+                new DetRandom(seed + ":events:" + graph.Worlds[world].Abbr));
+        }
+        BuildCityControlFields(graph);
+
+        // The central layout deliberately keeps its five boss gates and its existing day rules.
+        BuildZone6(graph, byWorld);
+        graph.StartNode = new DetRandom(seed + ":start").Pick(byWorld[0]["1-A"]);
+        RollMissions(graph, seed);
+        graph.BuildAdjacency();
+
+        VerifyGeometry(graph);
+        VerifyRealmReachability(graph, byWorld);
+        VerifyRealmIsolation(graph);
+        VerifyFunctionalCounts(graph);
+        return graph;
     }
 
-    // ---- zone 6 (the VOID) ------------------------------------------------------
+    // ---- one island / five river realms --------------------------------------
 
-    private static void BuildZone6(MapGraph g, List<Dictionary<string, List<MapNode>>> byWorld)
+    private static List<WorldLandmass> BuildRealmLandmasses(MapGraph graph, DetRandom rng)
     {
-        // 5 lv5 nodes on the lake rim, each aligned with (and linked to) one world's boss.
-        float r5 = Radius["5"];
-        var lv5 = new List<MapNode>();
-        for (int w = 0; w < 5; w++)
+        var profile = new CoastProfile(rng.Sub("coast"));
+        graph.IslandCoast = new Vector2[MapGenTable.IslandCoastSamples];
+        for (int i = 0; i < graph.IslandCoast.Length; i++)
         {
-            float deg = -90f + w * 72f;
-            float rad = Mathf.DegToRad(deg);
-            var pos = g.Center + new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * r5;
+            float angle = -180f + 360f * i / graph.IslandCoast.Length;
+            graph.IslandCoast[i] = graph.Center + Polar(angle, profile.RadiusAt(angle));
+        }
+        float pentagonUnitArea = 0.5f * MapGenTable.RealmCount * Mathf.Sin(Mathf.Tau / MapGenTable.RealmCount);
+        graph.Zone6Radius = Mathf.Sqrt(PolygonArea(graph.IslandCoast) * MapGenTable.VoidAreaFraction / pentagonUnitArea);
+        graph.VoidPentagon = RegularPolygon(graph.Center, graph.Zone6Radius, MapGenTable.RealmCount,
+            FirstRiverBoundaryDeg);
+
+        for (int i = 0; i < MapGenTable.RealmCount; i++)
+        {
+            float boundary = FirstRiverBoundaryDeg + 360f * i / MapGenTable.RealmCount;
+            graph.RealmRivers.Add(BuildRealmRiver(graph, i, boundary, profile, rng.Sub("river:" + i)));
+        }
+
+        Vector2 highland = graph.Center + Polar((float)rng.NextDouble() * 360f,
+            RimRadius * (0.24f + (float)rng.NextDouble() * 0.20f));
+        Vector2 lowland = graph.Center + Polar((float)rng.NextDouble() * 360f,
+            RimRadius * (0.48f + (float)rng.NextDouble() * 0.25f));
+        float highRadius = 125f + (float)rng.NextDouble() * 56f;
+        float lowRadius = 130f + (float)rng.NextDouble() * 62f;
+        float noisePhase = (float)(rng.NextDouble() * Mathf.Tau);
+
+        var lands = new List<WorldLandmass>(MapGenTable.RealmCount);
+        for (int i = 0; i < MapGenTable.RealmCount; i++)
+        {
+            float startBoundary = FirstRiverBoundaryDeg + 360f * i / MapGenTable.RealmCount;
+            float endBoundary = startBoundary + 360f / MapGenTable.RealmCount;
+            float centerAngle = (startBoundary + endBoundary) * 0.5f;
+            MapRiver lowRiver = graph.RealmRivers[i];
+            MapRiver highRiver = graph.RealmRivers[(i + 1) % MapGenTable.RealmCount];
+
+            var coast = new List<Vector2>();
+            // Low-angle river bank faces this realm; advance to the coast.
+            coast.AddRange(lowRiver.RightBank);
+            for (int sample = 1; sample < MapGenTable.RealmOuterCoastSamples; sample++)
+            {
+                float t = (float)sample / MapGenTable.RealmOuterCoastSamples;
+                float angle = Mathf.Lerp(startBoundary + MapGenTable.RiverMaxHalfWidthDeg,
+                    endBoundary - MapGenTable.RiverMaxHalfWidthDeg, t);
+                coast.Add(graph.Center + Polar(angle, profile.RadiusAt(angle)));
+            }
+            // High-angle river bank faces this realm; return to the VOID.
+            for (int p = highRiver.LeftBank.Length - 1; p >= 0; p--) coast.Add(highRiver.LeftBank[p]);
+
+            var land = new WorldLandmass
+            {
+                WorldIndex = i,
+                CenterAngleDeg = centerAngle,
+                MapCenter = graph.Center,
+                IslandCenter = graph.Center + Polar(centerAngle,
+                    (graph.Zone6Radius + MapGenTable.RealmCapitalVoidBuffer + RimRadius) * 0.56f),
+                RadialAxis = Polar(centerAngle, 1f),
+                TangentAxis = Polar(centerAngle, 1f).Rotated(Mathf.Pi * 0.5f),
+                InnerRadius = graph.Zone6Radius + MapGenTable.RealmCapitalVoidBuffer,
+                OuterRadius = RimRadius,
+                Coast = coast.ToArray(),
+                HighlandCenter = highland,
+                LowlandCenter = lowland,
+                HighlandRadius = highRadius,
+                LowlandRadius = lowRadius,
+                NoisePhase = noisePhase,
+            };
+            land.Bounds = BoundsOf(land.Coast);
+            lands.Add(land);
+        }
+        return lands;
+    }
+
+    private static MapRiver BuildRealmRiver(MapGraph graph, int boundaryIndex, float baseAngle,
+        CoastProfile profile, DetRandom rng)
+    {
+        int samples = MapGenTable.RiverSamples;
+        var left = new Vector2[samples];
+        var right = new Vector2[samples];
+        float phaseA = (float)(rng.NextDouble() * Mathf.Tau);
+        float phaseB = (float)(rng.NextDouble() * Mathf.Tau);
+        float maxHalfWidth = Mathf.Lerp(MapGenTable.RiverMinHalfWidthDeg, MapGenTable.RiverMaxHalfWidthDeg,
+            (float)rng.NextDouble());
+        float bend = 1.2f + (float)rng.NextDouble() * 2.4f;
+        for (int i = 0; i < samples; i++)
+        {
+            float t = (float)i / (samples - 1);
+            float eased = t * t * (3f - 2f * t);
+            float centerAngle = baseAngle + Mathf.Sin(t * Mathf.Pi + phaseA) * bend * Mathf.Sin(t * Mathf.Pi);
+            float widthWave = Mathf.Sin(t * Mathf.Tau * 1.5f + phaseB) * 0.25f;
+            float halfWidth = Mathf.Max(0f, eased * maxHalfWidth * (1f + widthWave));
+            float radius = Mathf.Lerp(graph.Zone6Radius, profile.RadiusAt(centerAngle), t);
+            left[i] = graph.Center + Polar(centerAngle - halfWidth, radius);
+            right[i] = graph.Center + Polar(centerAngle + halfWidth, radius);
+        }
+
+        var poly = new List<Vector2>(samples * 2);
+        poly.AddRange(left);
+        for (int i = right.Length - 1; i >= 0; i--) poly.Add(right[i]);
+        return new MapRiver
+        {
+            BoundaryIndex = boundaryIndex,
+            LeftBank = left,
+            RightBank = right,
+            Polygon = poly.ToArray(),
+        };
+    }
+
+    // ---- city placement and level ranking -------------------------------------
+
+    private static Dictionary<string, List<MapNode>> PlaceWorldNodes(MapGraph graph, WorldDef world,
+        int worldIndex, WorldPlan plan, WorldLandmass land, DetRandom rng)
+    {
+        var placements = new List<NodePlacement>();
+        Vector2 bossPos = SampleCapitalPosition(graph, land, rng);
+        placements.Add(new NodePlacement
+        {
+            Ordinal = 0,
+            Pos = bossPos,
+            Altitude = land.AltitudeAt(bossPos),
+            Tag = "4",
+            Level = 4,
+            Kind = NodeKind.Boss,
+        });
+        float bossDistance = bossPos.DistanceTo(graph.Center);
+        for (int ordinal = 1; ordinal < plan.CombatCount; ordinal++)
+        {
+            Vector2 pos = SampleNodePosition(graph, land, placements, rng, bossDistance + 14f);
+            placements.Add(new NodePlacement { Ordinal = ordinal, Pos = pos, Altitude = land.AltitudeAt(pos) });
+        }
+
+        var byVoidDistance = placements.OrderBy(node => node.Pos.DistanceSquaredTo(graph.Center))
+            .ThenBy(node => node.Ordinal).ToList();
+        var ranks = new (string Tag, int Level, NodeKind Kind, int Count)[]
+        {
+            ("4", 4, NodeKind.Boss, 1),
+            ("3", 3, NodeKind.Combat, 2),
+            ("2-B", 2, NodeKind.Combat, plan.N2B),
+            ("2-A", 2, NodeKind.Combat, plan.N2A),
+            ("1-B", 1, NodeKind.Combat, plan.N1B),
+            ("1-A", 1, NodeKind.Combat, plan.N1A),
+        };
+        int ranked = 0;
+        foreach (var rank in ranks)
+        {
+            for (int i = 0; i < rank.Count; i++)
+            {
+                NodePlacement node = byVoidDistance[ranked++];
+                node.Tag = rank.Tag;
+                node.Level = rank.Level;
+                node.Kind = rank.Kind;
+            }
+        }
+
+        var slots = new Dictionary<string, List<MapNode>>();
+        int level1Index = 1;
+        int level2Index = 1;
+        string[] outputOrder = { "1-A", "1-B", "2-A", "2-B", "3", "4" };
+        foreach (string tag in outputOrder)
+        {
+            var group = placements.Where(node => node.Tag == tag)
+                .OrderByDescending(node => node.Pos.DistanceSquaredTo(graph.Center))
+                .ThenBy(node => node.Ordinal).ToList();
+            var generated = new List<MapNode>(group.Count);
+            foreach (NodePlacement placement in group)
+            {
+                int index = placement.Level switch
+                {
+                    1 => level1Index++,
+                    2 => level2Index++,
+                    _ => generated.Count + 1,
+                };
+                var node = new MapNode
+                {
+                    Id = $"{world.Abbr}-{placement.Level}-{index}",
+                    Kind = placement.Kind,
+                    WorldIndex = worldIndex,
+                    Zone = world.Abbr,
+                    LevelTag = placement.Tag,
+                    Level = placement.Level,
+                    Pos = placement.Pos,
+                    Color = world.Color.Lightened(0.15f),
+                    Altitude = placement.Altitude,
+                    Terrain = TerrainFor(placement.Altitude),
+                };
+                graph.Nodes.Add(node);
+                generated.Add(node);
+            }
+            slots[tag] = generated;
+        }
+        return slots;
+    }
+
+    private static Vector2 SampleCapitalPosition(MapGraph graph, WorldLandmass land, DetRandom rng)
+    {
+        for (int attempt = 0; attempt < 100; attempt++)
+        {
+            float radialJitter = 22f + (float)rng.NextDouble() * 20f;
+            float lateralJitter = ((float)rng.NextDouble() - 0.5f) * 26f;
+            Vector2 candidate = graph.Center + land.RadialAxis * (land.InnerRadius + radialJitter)
+                + land.TangentAxis * lateralJitter;
+            if (land.Contains(candidate)) return candidate;
+        }
+        return SampleLandPoint(graph, land, rng, 0.02f, 0.16f);
+    }
+
+    private static Vector2 SampleNodePosition(MapGraph graph, WorldLandmass land,
+        List<NodePlacement> placed, DetRandom rng, float minVoidDistance)
+    {
+        for (int attempt = 0; attempt < 360; attempt++)
+        {
+            Vector2 candidate = SampleLandPoint(graph, land, rng, 0f, 1f);
+            if (candidate.DistanceTo(graph.Center) <= minVoidDistance) continue;
+            bool clear = placed.All(other => candidate.DistanceSquaredTo(other.Pos) >= MinNodeSpacing * MinNodeSpacing);
+            if (clear) return candidate;
+        }
+        return SampleLandPoint(graph, land, rng, 0.24f, 0.72f);
+    }
+
+    private static Vector2 SampleLandPoint(MapGraph graph, WorldLandmass land, DetRandom rng,
+        float minProgress, float maxProgress)
+    {
+        for (int attempt = 0; attempt < 320; attempt++)
+        {
+            float x = Mathf.Lerp(land.Bounds.Position.X, land.Bounds.End.X, (float)rng.NextDouble());
+            float y = Mathf.Lerp(land.Bounds.Position.Y, land.Bounds.End.Y, (float)rng.NextDouble());
+            var candidate = new Vector2(x, y);
+            if (!land.Contains(candidate)) continue;
+            float progress = (candidate.DistanceTo(graph.Center) - land.InnerRadius) /
+                             Mathf.Max(1f, RimRadius - land.InnerRadius);
+            if (progress >= minProgress && progress <= maxProgress) return candidate;
+        }
+        return land.IslandCenter;
+    }
+
+    private static string TerrainFor(float altitude) => altitude switch
+    {
+        < 0.34f => CombatMapTerrain.Lowground,
+        > 0.65f => CombatMapTerrain.High,
+        _ => CombatMapTerrain.SeaLevel,
+    };
+
+    // ---- local roads, hubs, and events ----------------------------------------
+
+    private static void BuildIntraRealmNetwork(MapGraph graph, Dictionary<string, List<MapNode>> slots,
+        WorldDef world, int worldIndex, WorldLandmass land, DetRandom rng)
+    {
+        MapNode boss = slots["4"][0];
+        List<MapNode> lv3 = slots["3"];
+        var nonCapitalCities = graph.Nodes.Where(node => node.WorldIndex == worldIndex && node.IsCombat && node != boss)
+            .OrderBy(node => node.Id).ToList();
+        var allCities = graph.Nodes.Where(node => node.WorldIndex == worldIndex && node.IsCombat)
+            .OrderBy(node => node.Id).ToList();
+
+        // Reserve both final approaches before local roads can occupy their geometry. The hub's
+        // optional cluster spokes are added later, after the kingdom spine is complete.
+        int preferredHubLv3 = rng.Chance(0.5) ? 0 : 1;
+        bool approachesReserved = false;
+        for (int attempt = 0; attempt < 2 && !approachesReserved; attempt++)
+        {
+            int hubLv3 = (preferredHubLv3 + attempt) % 2;
+            int initialNodeCount = graph.Nodes.Count;
+            int initialEdgeCount = graph.Edges.Count;
+            try
+            {
+                AddCapitalApproachHub(graph, lv3[hubLv3], boss, world, worldIndex, land, allCities);
+                approachesReserved = AddRoad(graph, lv3[1 - hubLv3], boss, land);
+            }
+            catch (InvalidOperationException)
+            {
+                approachesReserved = false;
+            }
+            if (!approachesReserved)
+            {
+                graph.Nodes.RemoveRange(initialNodeCount, graph.Nodes.Count - initialNodeCount);
+                graph.Edges.RemoveRange(initialEdgeCount, graph.Edges.Count - initialEdgeCount);
+            }
+        }
+        if (!approachesReserved)
+            throw new InvalidOperationException($"{world.Abbr} could not reserve two non-crossing LV3 approaches");
+
+        var connected = new HashSet<MapNode> { lv3[0] };
+        while (connected.Count < nonCapitalCities.Count)
+        {
+            RoadCandidate best = null;
+            foreach (MapNode a in nonCapitalCities)
+            {
+                if (!connected.Contains(a)) continue;
+                foreach (MapNode b in nonCapitalCities)
+                {
+                    if (connected.Contains(b) || !TryBuildRoute(graph, land, a, b, out Vector2[] route)) continue;
+                    var candidate = new RoadCandidate { A = a, B = b, Route = route, Length = RouteLength(route) };
+                    if (best == null || candidate.Length < best.Length ||
+                        (Mathf.IsEqualApprox(candidate.Length, best.Length) &&
+                         string.CompareOrdinal(a.Id + b.Id, best.A.Id + best.B.Id) < 0))
+                        best = candidate;
+                }
+            }
+            if (best == null || !AddRoad(graph, best.A, best.B, best.Route))
+                throw new InvalidOperationException($"{world.Abbr} has no legal non-crossing local road candidate");
+            connected.Add(best.B);
+        }
+
+        int loopBudget = rng.Range(MapGenTable.LocalRoadLoopsMin, MapGenTable.LocalRoadLoopsMax);
+        for (int extra = 0; extra < loopBudget; extra++)
+        {
+            var candidates = new List<RoadCandidate>();
+            for (int a = 0; a < nonCapitalCities.Count; a++)
+            for (int b = a + 1; b < nonCapitalCities.Count; b++)
+            {
+                if (GraphHasEdge(graph, nonCapitalCities[a], nonCapitalCities[b]) ||
+                    !TryBuildRoute(graph, land, nonCapitalCities[a], nonCapitalCities[b], out Vector2[] route)) continue;
+                candidates.Add(new RoadCandidate { A = nonCapitalCities[a], B = nonCapitalCities[b], Route = route, Length = RouteLength(route) });
+            }
+            if (candidates.Count == 0) break;
+            candidates.Sort((a, b) => a.Length != b.Length ? a.Length.CompareTo(b.Length) :
+                string.CompareOrdinal(a.A.Id + a.B.Id, b.A.Id + b.B.Id));
+            RoadCandidate selected = candidates[rng.Range(0, Mathf.Min(4, candidates.Count - 1))];
+            AddRoad(graph, selected.A, selected.B, selected.Route);
+        }
+
+        MapNode mandatoryHub = graph.Nodes.Single(node => node.WorldIndex == worldIndex && node.Id == $"{world.Abbr}-H-1");
+        TryAddHubSpokes(graph, mandatoryHub, allCities, land);
+
+        int targetHubs = rng.Range(MapGenTable.TransportationHubsPerRealmMin, MapGenTable.TransportationHubsPerRealmMax);
+        int hubCount = 1;
+        for (int serial = 2; hubCount < targetHubs; serial++)
+        {
+            var choices = graph.Edges.Where(edge => edge.Kind == MapEdgeKind.Road &&
+                edge.A.WorldIndex == worldIndex && edge.B.WorldIndex == worldIndex &&
+                edge.A.IsCombat && edge.B.IsCombat && !IsLv3BossApproach(edge)).OrderBy(edge =>
+                edge.A.Pos.DistanceSquaredTo(land.IslandCenter) + edge.B.Pos.DistanceSquaredTo(land.IslandCenter)).ToList();
+            if (choices.Count == 0) break;
+            int pickCount = Mathf.Min(5, choices.Count);
+            MapEdge edge = choices[rng.Range(0, pickCount - 1)];
+            if (InsertTransportationHub(graph, edge, world, worldIndex, land, allCities, serial)) hubCount++;
+        }
+        if (hubCount < MapGenTable.TransportationHubsPerRealmMin)
+            throw new InvalidOperationException($"{world.Abbr} could not place the required Transportation Hubs");
+    }
+
+    private static bool IsLv3BossApproach(MapEdge edge) =>
+        (edge.A.Kind == NodeKind.Boss && edge.B.Level == 3) || (edge.B.Kind == NodeKind.Boss && edge.A.Level == 3);
+
+    private static void AddCapitalApproachHub(MapGraph graph, MapNode lv3, MapNode boss, WorldDef world,
+        int worldIndex, WorldLandmass land, List<MapNode> cities)
+    {
+        if (!TryBuildRoute(graph, land, lv3, boss, out Vector2[] route))
+            throw new InvalidOperationException($"{world.Abbr} could not route its hub approach");
+        Vector2 pos = PointAlong(route, 0.52f);
+        SplitRoute(route, 0.52f, out Vector2[] left, out Vector2[] right);
+        MapNode hub = CreateTransportHub(world, worldIndex, land, pos, 1, 4);
+        graph.Nodes.Add(hub);
+        if (!AddRoad(graph, lv3, hub, left) || !AddRoad(graph, hub, boss, right))
+            throw new InvalidOperationException($"{world.Abbr} could not split its hub approach");
+    }
+
+    private static bool InsertTransportationHub(MapGraph graph, MapEdge edge, WorldDef world, int worldIndex,
+        WorldLandmass land, List<MapNode> cities, int serial)
+    {
+        float fraction = 0.46f + (float)new DetRandom(graph.Seed + ":hub:" + worldIndex + ":" + serial).NextDouble() * 0.08f;
+        Vector2 pos = PointAlong(edge.Route, fraction);
+        SplitRoute(edge.Route, fraction, out Vector2[] left, out Vector2[] right);
+        MapNode hub = CreateTransportHub(world, worldIndex, land, pos, serial, edge.Level);
+        graph.Edges.Remove(edge);
+        graph.Nodes.Add(hub);
+        if (!AddRoad(graph, edge.A, hub, left) || !AddRoad(graph, hub, edge.B, right))
+        {
+            graph.Nodes.Remove(hub);
+            graph.Edges.RemoveAll(candidate => candidate.Touches(hub));
+            graph.Edges.Add(edge);
+            return false;
+        }
+        TryAddHubSpokes(graph, hub, cities, land);
+        return true;
+    }
+
+    private static MapNode CreateTransportHub(WorldDef world, int worldIndex, WorldLandmass land, Vector2 pos,
+        int serial, int level) => new()
+    {
+        Id = $"{world.Abbr}-H-{serial}",
+        Kind = NodeKind.TransportHub,
+        WorldIndex = worldIndex,
+        Zone = world.Abbr,
+        LevelTag = level.ToString(),
+        Level = level,
+        Pos = pos,
+        Color = new Color(0.85f, 0.70f, 0.40f),
+        Altitude = land.AltitudeAt(pos),
+        Terrain = TerrainFor(land.AltitudeAt(pos)),
+    };
+
+    private static void TryAddHubSpokes(MapGraph graph, MapNode hub, List<MapNode> cities, WorldLandmass land)
+    {
+        int spokes = 0;
+        foreach (MapNode city in cities.OrderBy(node => node.Pos.DistanceSquaredTo(hub.Pos)).ThenBy(node => node.Id))
+        {
+            if (GraphHasEdge(graph, hub, city)) continue;
+            // A hub never paints a road over an existing route. Once its next close spoke would
+            // cross, this junction is complete rather than forcing a cluttered kingdom knot.
+            if (!AddRoad(graph, hub, city, land)) break;
+            if (++spokes >= MapGenTable.HubClusterCities) break;
+        }
+    }
+
+    private static void PlaceEventNodes(MapGraph graph, WorldDef world, int worldIndex, WorldLandmass land, DetRandom rng)
+    {
+        int target = rng.Range(MapGenTable.EventNodesPerRealmMin, MapGenTable.EventNodesPerRealmMax);
+        for (int serial = 1; serial <= target; serial++)
+        {
+            var choices = graph.Edges.Where(edge => edge.Kind == MapEdgeKind.Road &&
+                edge.A.WorldIndex == worldIndex && edge.B.WorldIndex == worldIndex &&
+                edge.A.IsCombat && edge.B.IsCombat).ToList();
+            if (choices.Count == 0) break;
+            MapEdge edge = rng.Pick(choices);
+            float fraction = 0.46f + (float)rng.NextDouble() * 0.08f;
+            Vector2 pos = PointAlong(edge.Route, fraction);
+            SplitRoute(edge.Route, fraction, out Vector2[] left, out Vector2[] right);
             var node = new MapNode
             {
-                Id = $"XX-5-{w + 1}",
-                Kind = NodeKind.Combat,
-                WorldIndex = -1,
-                Zone = "XX",
-                LevelTag = "5",
-                Level = 5,
-                Pos = pos,
-                Color = new Color(0.30f, 0.25f, 0.45f),
+                Id = $"{world.Abbr}-E-{serial}", Kind = NodeKind.Event, WorldIndex = worldIndex, Zone = world.Abbr,
+                LevelTag = edge.Level.ToString(), Level = edge.Level, Pos = pos, Color = new Color(0.55f, 0.80f, 0.95f),
+                Altitude = land.AltitudeAt(pos), Terrain = TerrainFor(land.AltitudeAt(pos)),
             };
-            g.Nodes.Add(node);
+            graph.Edges.Remove(edge);
+            graph.Nodes.Add(node);
+            if (!AddRoad(graph, edge.A, node, left) || !AddRoad(graph, node, edge.B, right))
+                throw new InvalidOperationException($"event route in {world.Abbr} crossed an existing road");
+        }
+        int placed = graph.Nodes.Count(node => node.WorldIndex == worldIndex && node.Kind == NodeKind.Event);
+        if (placed < MapGenTable.EventNodesPerRealmMin)
+            throw new InvalidOperationException($"{world.Abbr} could not place the required Event nodes");
+    }
+
+    private static bool AddRoad(MapGraph graph, MapNode a, MapNode b, WorldLandmass land)
+    {
+        if (!TryBuildRoute(graph, land, a, b, out Vector2[] route)) return false;
+        return AddRoad(graph, a, b, route);
+    }
+
+    private static bool AddRoad(MapGraph graph, MapNode a, MapNode b, Vector2[] route)
+    {
+        if (route == null || route.Length < 2 || RouteCrossesExistingRoad(graph, a, b, route)) return false;
+        graph.AddEdge(new MapEdge(a, b, Mathf.Max(a.Level, b.Level), visible: true, kind: MapEdgeKind.Road, route: route));
+        return true;
+    }
+
+    private static bool TryBuildRoute(MapGraph graph, WorldLandmass land, MapNode a, MapNode b, out Vector2[] route)
+    {
+        var candidates = new List<Vector2[]>();
+        if (SegmentInside(land, a.Pos, b.Pos)) candidates.Add(new[] { a.Pos, b.Pos });
+        Vector2[] vias =
+        {
+            land.IslandCenter,
+            land.MapCenter + land.RadialAxis * Mathf.Lerp(land.InnerRadius, land.OuterRadius, 0.34f),
+            land.MapCenter + land.RadialAxis * Mathf.Lerp(land.InnerRadius, land.OuterRadius, 0.72f),
+        };
+        foreach (Vector2 via in vias)
+            if (land.Contains(via) && SegmentInside(land, a.Pos, via) && SegmentInside(land, via, b.Pos))
+                candidates.Add(new[] { a.Pos, via, b.Pos });
+        foreach (Vector2[] candidate in candidates)
+            if (!RouteCrossesExistingRoad(graph, a, b, candidate)) { route = candidate; return true; }
+        route = Array.Empty<Vector2>();
+        return false;
+    }
+
+    private static bool SegmentInside(WorldLandmass land, Vector2 a, Vector2 b)
+    {
+        const int samples = 18;
+        for (int i = 0; i <= samples; i++)
+            if (!land.Contains(a.Lerp(b, (float)i / samples))) return false;
+        return true;
+    }
+
+    private static float RouteLength(Vector2[] route)
+    {
+        float length = 0f;
+        for (int i = 1; i < route.Length; i++) length += route[i - 1].DistanceTo(route[i]);
+        return length;
+    }
+
+    private static Vector2 PointAlong(Vector2[] route, float fraction)
+    {
+        if (route == null || route.Length == 0) return Vector2.Zero;
+        if (route.Length == 1) return route[0];
+        float total = RouteLength(route);
+        float wanted = total * Mathf.Clamp(fraction, 0f, 1f);
+        float seen = 0f;
+        for (int i = 1; i < route.Length; i++)
+        {
+            float segment = route[i - 1].DistanceTo(route[i]);
+            if (seen + segment >= wanted)
+                return route[i - 1].Lerp(route[i], segment <= 0f ? 0f : (wanted - seen) / segment);
+            seen += segment;
+        }
+        return route[^1];
+    }
+
+    private static void SplitRoute(Vector2[] route, float fraction, out Vector2[] left, out Vector2[] right)
+    {
+        float total = RouteLength(route);
+        float wanted = total * Mathf.Clamp(fraction, 0f, 1f);
+        float seen = 0f;
+        var first = new List<Vector2> { route[0] };
+        for (int i = 1; i < route.Length; i++)
+        {
+            Vector2 start = route[i - 1];
+            Vector2 end = route[i];
+            float length = start.DistanceTo(end);
+            if (seen + length >= wanted)
+            {
+                Vector2 split = start.Lerp(end, length <= 0f ? 0f : (wanted - seen) / length);
+                first.Add(split);
+                var second = new List<Vector2> { split };
+                for (int remain = i; remain < route.Length; remain++) second.Add(route[remain]);
+                left = first.ToArray();
+                right = second.ToArray();
+                return;
+            }
+            first.Add(end);
+            seen += length;
+        }
+        left = new[] { route[0], route[^1] };
+        right = new[] { route[^1], route[^1] };
+    }
+
+    /// <summary>Reject an added road when any segment crosses or overlaps an existing road away
+    /// from a common endpoint. This keeps hub spokes from painting over the kingdom's road map.</summary>
+    private static bool RouteCrossesExistingRoad(MapGraph graph, MapNode a, MapNode b, Vector2[] route)
+    {
+        foreach (MapEdge edge in graph.Edges)
+        {
+            if (edge.Kind != MapEdgeKind.Road) continue;
+            for (int i = 1; i < route.Length; i++)
+            for (int j = 1; j < edge.Route.Length; j++)
+            {
+                if (!SegmentsIntersect(route[i - 1], route[i], edge.Route[j - 1], edge.Route[j], out Vector2 point,
+                        out bool overlaps)) continue;
+                if (overlaps || !IsSharedRoadEndpoint(point, a, b, edge)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool IsSharedRoadEndpoint(Vector2 point, MapNode a, MapNode b, MapEdge edge)
+    {
+        const float epsilon = 0.05f;
+        bool At(Vector2 p, Vector2 q) => p.DistanceSquaredTo(q) <= epsilon * epsilon;
+        return (At(point, a.Pos) && (edge.A == a || edge.B == a)) ||
+               (At(point, b.Pos) && (edge.A == b || edge.B == b));
+    }
+
+    private static bool SegmentsIntersect(Vector2 a, Vector2 b, Vector2 c, Vector2 d, out Vector2 point, out bool overlaps)
+    {
+        const float epsilon = 0.0001f;
+        Vector2 r = b - a;
+        Vector2 s = d - c;
+        float denom = Cross(r, s);
+        Vector2 delta = c - a;
+        overlaps = false;
+        point = Vector2.Zero;
+        if (Mathf.Abs(denom) < epsilon)
+        {
+            if (Mathf.Abs(Cross(delta, r)) >= epsilon) return false;
+            float rr = r.LengthSquared();
+            if (rr < epsilon) return false;
+            float t0 = delta.Dot(r) / rr;
+            float t1 = (d - a).Dot(r) / rr;
+            float min = Mathf.Max(0f, Mathf.Min(t0, t1));
+            float max = Mathf.Min(1f, Mathf.Max(t0, t1));
+            if (min > max + epsilon) return false;
+            point = a.Lerp(b, Mathf.Clamp((min + max) * 0.5f, 0f, 1f));
+            overlaps = max - min > epsilon;
+            return true;
+        }
+        float t = Cross(delta, s) / denom;
+        float u = Cross(delta, r) / denom;
+        if (t < -epsilon || t > 1f + epsilon || u < -epsilon || u > 1f + epsilon) return false;
+        point = a.Lerp(b, Mathf.Clamp(t, 0f, 1f));
+        return true;
+    }
+
+    private static float Cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
+
+    /// <summary>Every outer-realm land position is assigned to its nearest city by a clipped
+    /// Voronoi field. These fields drive the atlas boundary view and city-owned VOID devour.</summary>
+    private static void BuildCityControlFields(MapGraph graph)
+    {
+        for (int world = 0; world < graph.Landmasses.Count; world++)
+        {
+            var cities = graph.Nodes.Where(node => node.WorldIndex == world && node.IsCombat).ToList();
+            WorldLandmass land = graph.Landmasses[world];
+            foreach (MapNode city in cities)
+            {
+                var polygon = new List<Vector2>(land.Coast);
+                foreach (MapNode other in cities)
+                {
+                    if (other == city) continue;
+                    Vector2 normal = other.Pos - city.Pos;
+                    if (normal.LengthSquared() < 0.0001f) continue;
+                    float boundary = (other.Pos.LengthSquared() - city.Pos.LengthSquared()) * 0.5f;
+                    ClipToHalfPlane(ref polygon, normal, boundary);
+                    if (polygon.Count < 3) break;
+                }
+                city.ControlledField = polygon.ToArray();
+            }
+        }
+    }
+
+    private static void ClipToHalfPlane(ref List<Vector2> polygon, Vector2 normal, float boundary)
+    {
+        var output = new List<Vector2>();
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            Vector2 current = polygon[i];
+            Vector2 next = polygon[(i + 1) % polygon.Count];
+            float currentValue = normal.Dot(current) - boundary;
+            float nextValue = normal.Dot(next) - boundary;
+            bool currentInside = currentValue <= 0f;
+            bool nextInside = nextValue <= 0f;
+            if (currentInside) output.Add(current);
+            if (currentInside != nextInside)
+            {
+                float t = currentValue / (currentValue - nextValue);
+                output.Add(current.Lerp(next, t));
+            }
+        }
+        polygon = output;
+    }
+
+    // ---- zone 6 topology -------------------------------------------------------
+
+    private static void BuildZone6(MapGraph graph, List<Dictionary<string, List<MapNode>>> byWorld)
+    {
+        var lv5 = new List<MapNode>();
+        for (int world = 0; world < MapGenTable.RealmCount; world++)
+        {
+            float degrees = -90f + world * 72f;
+            Vector2 pos = graph.Center + Polar(degrees, Level5Radius);
+            var node = new MapNode
+            {
+                Id = $"XX-5-{world + 1}", Kind = NodeKind.Combat, WorldIndex = -1, Zone = "XX",
+                LevelTag = "5", Level = 5, Pos = pos, Color = new Color(0.30f, 0.25f, 0.45f),
+            };
+            graph.Nodes.Add(node);
             lv5.Add(node);
 
-            // boss(4-1) → shelter → lv5, all invisible (zone 6 edges aren't drawn as lines).
-            var boss = byWorld[w]["4"][0];
-            var shelterPos = (boss.Pos + pos) * 0.5f;
+            MapNode boss = byWorld[world]["4"][0];
+            // Cities stand further from the pentagonal VOID than before, leaving this distinct
+            // one-way Shelter as the final rest point between each LV4 capital and its LV5 gate.
             var shelter = new MapNode
             {
-                Id = $"XX-S-{w + 1}",
-                Kind = NodeKind.Shelter,
-                WorldIndex = -1,
-                Zone = "XX",
-                LevelTag = "5",
-                Level = 5,
-                Pos = shelterPos,
-                Color = new Color(0.85f, 0.70f, 0.40f),
+                Id = $"XX-S-{world + 1}", Kind = NodeKind.Shelter, WorldIndex = -1, Zone = "XX",
+                LevelTag = "S", Level = 5, Pos = (boss.Pos + pos) * 0.5f,
+                Color = new Color(0.95f, 0.78f, 0.36f),
             };
-            g.Nodes.Add(shelter);
-            AddEdge(g, boss, shelter, 5, visible: false);
-            AddEdge(g, shelter, node, 5, visible: false);
+            graph.Nodes.Add(shelter);
+            graph.AddEdge(new MapEdge(boss, shelter, 5, visible: false, kind: MapEdgeKind.VoidPassage));
+            graph.AddEdge(new MapEdge(shelter, node, 5, visible: false, kind: MapEdgeKind.VoidPassage));
         }
 
-        // River of the VOID: a single hub node on the ring; every lv5 node links to it
-        // (so the player can hop between lv5 nodes in one step). Drawn as a ring, not a line.
         var river = new MapNode
         {
-            Id = "XX-R",
-            Kind = NodeKind.River,
-            WorldIndex = -1,
-            Zone = "XX",
-            LevelTag = "R",
-            Level = 5,
-            Pos = g.Center + new Vector2(0, -RiverRadius),
-            Color = new Color(0.20f, 0.30f, 0.55f),
+            Id = "XX-R", Kind = NodeKind.River, WorldIndex = -1, Zone = "XX", LevelTag = "R", Level = 5,
+            Pos = graph.Center + new Vector2(0, -graph.RiverRadius), Color = new Color(0.20f, 0.30f, 0.55f),
         };
-        g.Nodes.Add(river);
-        foreach (var n in lv5) AddEdge(g, n, river, 5, visible: false);
+        graph.Nodes.Add(river);
+        foreach (MapNode node in lv5)
+            graph.AddEdge(new MapEdge(node, river, 5, visible: false, kind: MapEdgeKind.VoidPassage));
 
-        // Level 6: the core, one edge to the river.
         var core = new MapNode
         {
-            Id = "XX-6-1",
-            Kind = NodeKind.Boss,
-            WorldIndex = -1,
-            Zone = "XX",
-            LevelTag = "6",
-            Level = 6,
-            Pos = g.Center,
-            Color = new Color(0.10f, 0.05f, 0.15f),
+            Id = "XX-6-1", Kind = NodeKind.Boss, WorldIndex = -1, Zone = "XX", LevelTag = "6", Level = 6,
+            Pos = graph.Center, Color = new Color(0.10f, 0.05f, 0.15f),
         };
-        g.Nodes.Add(core);
-        AddEdge(g, river, core, 6, visible: false);
+        graph.Nodes.Add(core);
+        graph.AddEdge(new MapEdge(river, core, 6, visible: false, kind: MapEdgeKind.VoidPassage));
     }
 
-    // ---- helpers ----------------------------------------------------------------
-
-    private static void AddEdge(MapGraph g, MapNode a, MapNode b, int level, bool visible = true)
+    private static void RollMissions(MapGraph graph, string seed)
     {
-        g.Edges.Add(new MapEdge(a, b, level, visible));
+        var rng = new DetRandom(seed + "M");
+        foreach (MapNode node in graph.Nodes)
+        {
+            if (!node.IsCombat) continue;
+            if (node.Kind == NodeKind.Boss || node.Level == 4 || node.Level == 6)
+            {
+                node.Mission = MissionType.Boss;
+                continue;
+            }
+            int roll = rng.Range(0, 94);
+            node.Mission = roll < 60 ? MissionType.Collection
+                         : roll < 75 ? MissionType.Protect
+                         : roll < 85 ? MissionType.Destroy
+                                     : MissionType.Slaughter;
+        }
     }
 
-    /// <summary>Proper segment intersection with an interior crossing point (excludes shared endpoints).</summary>
-    private static bool SegmentsIntersect(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4, out Vector2 point)
+    // ---- validation ------------------------------------------------------------
+
+    private static void VerifyGeometry(MapGraph graph)
     {
-        point = Vector2.Zero;
-        Vector2 r = p2 - p1;
-        Vector2 s = p4 - p3;
-        float denom = r.X * s.Y - r.Y * s.X;
-        if (Mathf.Abs(denom) < 1e-6f) return false; // parallel/collinear
-        Vector2 qp = p3 - p1;
-        float t = (qp.X * s.Y - qp.Y * s.X) / denom;
-        float u = (qp.X * r.Y - qp.Y * r.X) / denom;
-        const float eps = 1e-3f;
-        if (t <= eps || t >= 1f - eps || u <= eps || u >= 1f - eps) return false;
-        point = p1 + t * r;
-        return true;
+        if (graph.IslandCoast.Length < 3 || graph.VoidPentagon.Length != MapGenTable.RealmCount ||
+            graph.RealmRivers.Count != MapGenTable.RealmCount || graph.Landmasses.Count != MapGenTable.RealmCount)
+            throw new InvalidOperationException("incomplete island geometry");
+        foreach (MapRiver river in graph.RealmRivers)
+        {
+            if (river.Polygon.Length < 6 || river.LeftBank.Length < 2 || river.RightBank.Length < 2)
+                throw new InvalidOperationException("invalid realm-divider river");
+            if (river.LeftBank[0].DistanceTo(graph.Center) > graph.Zone6Radius + 0.1f ||
+                river.LeftBank[^1].DistanceTo(graph.Center) < RimRadius - 90f)
+                throw new InvalidOperationException("river does not connect the VOID to the coast");
+        }
+        float voidRatio = PolygonArea(graph.VoidPentagon) / Mathf.Max(1f, PolygonArea(graph.IslandCoast));
+        if (Mathf.Abs(voidRatio - MapGenTable.VoidAreaFraction) > 0.001f)
+            throw new InvalidOperationException($"VOID area ratio {voidRatio:F4} is outside the target tolerance");
+        foreach (MapNode node in graph.Nodes)
+        {
+            if (node.WorldIndex >= 0 && !graph.Landmasses[node.WorldIndex].Contains(node.Pos))
+                throw new InvalidOperationException($"outer node {node.Id} escaped its realm polygon");
+        }
+    }
+
+    private static void VerifyRealmReachability(MapGraph graph, List<Dictionary<string, List<MapNode>>> byWorld)
+    {
+        for (int world = 0; world < byWorld.Count; world++)
+        {
+            MapNode boss = byWorld[world]["4"][0];
+            var reached = new HashSet<MapNode> { boss };
+            var queue = new Queue<MapNode>();
+            queue.Enqueue(boss);
+            while (queue.Count > 0)
+            {
+                MapNode current = queue.Dequeue();
+                foreach (MapEdge edge in graph.EdgesOf(current))
+                {
+                    MapNode next = edge.Other(current);
+                    if (next.WorldIndex != world || !reached.Add(next)) continue;
+                    queue.Enqueue(next);
+                }
+            }
+            foreach (MapNode node in graph.Nodes)
+                if (node.WorldIndex == world && !reached.Contains(node))
+                    throw new InvalidOperationException($"realm {graph.Worlds[world].Abbr} has {node.Id} unreachable from its capital");
+        }
+    }
+
+    private static void VerifyRealmIsolation(MapGraph graph)
+    {
+        foreach (MapEdge edge in graph.Edges)
+        {
+            if (edge.A.WorldIndex >= 0 && edge.B.WorldIndex >= 0 && edge.A.WorldIndex != edge.B.WorldIndex)
+                throw new InvalidOperationException("generation created an illegal cross-realm edge");
+        }
+    }
+
+    private static void VerifyFunctionalCounts(MapGraph graph)
+    {
+        foreach (WorldLandmass land in graph.Landmasses)
+        {
+            int hubs = graph.Nodes.Count(node => node.WorldIndex == land.WorldIndex && node.Kind == NodeKind.TransportHub);
+            int events = graph.Nodes.Count(node => node.WorldIndex == land.WorldIndex && node.Kind == NodeKind.Event);
+            if (hubs < MapGenTable.TransportationHubsPerRealmMin || hubs > MapGenTable.TransportationHubsPerRealmMax)
+                throw new InvalidOperationException($"realm {land.WorldIndex} has {hubs} Transportation Hubs outside its budget");
+            if (events < MapGenTable.EventNodesPerRealmMin || events > MapGenTable.EventNodesPerRealmMax)
+                throw new InvalidOperationException($"realm {land.WorldIndex} has {events} Event nodes outside its budget");
+            int level1 = graph.Nodes.Count(node => node.WorldIndex == land.WorldIndex && node.IsCombat && node.Level == 1);
+            int level2 = graph.Nodes.Count(node => node.WorldIndex == land.WorldIndex && node.IsCombat && node.Level == 2);
+            if (level1 != level2)
+                throw new InvalidOperationException($"realm {land.WorldIndex} has unequal level-1/level-2 counts ({level1}/{level2})");
+            if (graph.Nodes.Any(node => node.WorldIndex == land.WorldIndex && node.IsCombat && node.ControlledField.Length < 3))
+                throw new InvalidOperationException($"realm {land.WorldIndex} has a city without a controlled field");
+        }
+    }
+
+    private static bool GraphHasEdge(MapGraph graph, MapNode a, MapNode b) => graph.Edges.Any(edge =>
+        (edge.A == a && edge.B == b) || (edge.A == b && edge.B == a));
+
+    private static Rect2 BoundsOf(Vector2[] points)
+    {
+        float minX = points[0].X, maxX = points[0].X, minY = points[0].Y, maxY = points[0].Y;
+        for (int i = 1; i < points.Length; i++)
+        {
+            minX = Mathf.Min(minX, points[i].X);
+            maxX = Mathf.Max(maxX, points[i].X);
+            minY = Mathf.Min(minY, points[i].Y);
+            maxY = Mathf.Max(maxY, points[i].Y);
+        }
+        return new Rect2(new Vector2(minX, minY), new Vector2(maxX - minX, maxY - minY));
+    }
+
+    private static float PolygonArea(Vector2[] points)
+    {
+        float twiceArea = 0f;
+        for (int i = 0; i < points.Length; i++)
+        {
+            Vector2 a = points[i];
+            Vector2 b = points[(i + 1) % points.Length];
+            twiceArea += a.X * b.Y - b.X * a.Y;
+        }
+        return Mathf.Abs(twiceArea) * 0.5f;
+    }
+
+    private static Vector2[] RegularPolygon(Vector2 center, float radius, int sides, float startDeg)
+    {
+        var points = new Vector2[sides];
+        for (int i = 0; i < sides; i++) points[i] = center + Polar(startDeg + i * (360f / sides), radius);
+        return points;
+    }
+
+    private static Vector2 Polar(float degrees, float radius)
+    {
+        float radians = Mathf.DegToRad(degrees);
+        return new Vector2(Mathf.Cos(radians), Mathf.Sin(radians)) * radius;
     }
 }

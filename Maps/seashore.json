@@ -1,0 +1,125 @@
+{
+  "Version": 2,
+  "Id": "seashore_collect_vk_l1_l2",
+  "Name": "Seashore",
+  "World": "VanillaKindom",
+  "Worlds": ["VK"],
+  "HardshipLevels": [1, 2],
+  "Goals": ["claim"],
+  "Terrain": "sea-level",
+  "FoeCompositions": [
+    { "Level": 0, "CrabWeight": 50, "SeagullWeight": 50 }
+  ],
+  "FoeSpawnRules": {
+    "CrabMaxCellY": 4,
+    "SeagullMinCellY": 5
+  },
+  "CreatedUtc": "2026-07-15T00:00:00.0000000Z",
+  "ModifiedUtc": "2026-07-15T00:00:00.0000000Z",
+  "Canvas": { "Type": "solidColor", "Color": "#6DB8D8", "ModeId": null },
+  "Layers": [
+    {
+      "Role": "farview", "Name": "Sea Sky", "ParallaxX": 0.55, "ParallaxY": 0.55,
+      "Loop": false, "Collision": false, "Tint": null, "Opacity": 1.0,
+      "SwayAmplitudePx": 0.0, "SwayPeriodSec": 4.0, "AutoScrollX": 0.0, "AutoScrollY": 0.0,
+      "GridW": 32, "GridH": 12,
+      "Tiles": [
+        { "DefId": "deco.sun", "X": 24, "Y": 1 },
+        { "DefId": "softvolume.cloud2x1", "X": 7, "Y": 1 },
+        { "DefId": "softvolume.cloud3x2", "X": 15, "Y": 2 }
+      ]
+    },
+    {
+      "Role": "battlefield", "Name": "Battlefield", "ParallaxX": 1.0, "ParallaxY": 1.0,
+      "Loop": false, "Collision": true, "Tint": null, "Opacity": 1.0,
+      "SwayAmplitudePx": 0.0, "SwayPeriodSec": 4.0, "AutoScrollX": 0.0, "AutoScrollY": 0.0,
+      "GridW": 32, "GridH": 12,
+      "Tiles": [
+        { "DefId": "ground.sand", "X": 0, "Y": 10 },
+        { "DefId": "ground.sand", "X": 1, "Y": 10 },
+        { "DefId": "ground.sand", "X": 2, "Y": 10 },
+        { "DefId": "ground.sand", "X": 3, "Y": 10 },
+        { "DefId": "ground.sand", "X": 4, "Y": 10 },
+        { "DefId": "ground.sand", "X": 5, "Y": 10 },
+        { "DefId": "ground.sand", "X": 6, "Y": 10 },
+        { "DefId": "ground.sand", "X": 7, "Y": 10 },
+        { "DefId": "ground.sand", "X": 8, "Y": 10 },
+        { "DefId": "ground.sand", "X": 9, "Y": 10 },
+        { "DefId": "ground.sand", "X": 10, "Y": 10 },
+        { "DefId": "ground.sand", "X": 11, "Y": 10 },
+        { "DefId": "ground.sand", "X": 12, "Y": 10 },
+        { "DefId": "ground.sand", "X": 13, "Y": 10 },
+        { "DefId": "ground.sand", "X": 14, "Y": 10 },
+        { "DefId": "ground.sand", "X": 15, "Y": 10 },
+        { "DefId": "ground.sand", "X": 16, "Y": 10 },
+        { "DefId": "ground.sand", "X": 17, "Y": 10 },
+        { "DefId": "ground.sand", "X": 18, "Y": 10 },
+        { "DefId": "ground.sand", "X": 19, "Y": 10 },
+        { "DefId": "ground.sand", "X": 20, "Y": 10 },
+        { "DefId": "ground.sand", "X": 21, "Y": 10 },
+        { "DefId": "ground.sand", "X": 22, "Y": 10 },
+        { "DefId": "ground.sand", "X": 23, "Y": 10 },
+        { "DefId": "ground.sand", "X": 24, "Y": 10 },
+        { "DefId": "ground.sand", "X": 25, "Y": 10 },
+        { "DefId": "ground.sand", "X": 26, "Y": 10 },
+        { "DefId": "ground.sand", "X": 27, "Y": 10 },
+        { "DefId": "ground.sand", "X": 28, "Y": 10 },
+        { "DefId": "ground.sand", "X": 29, "Y": 10 },
+        { "DefId": "ground.sand", "X": 30, "Y": 10 },
+        { "DefId": "ground.sand", "X": 31, "Y": 10 },
+
+        { "DefId": "ground.stone", "X": 0, "Y": 0 },
+        { "DefId": "ground.stone", "X": 0, "Y": 1 },
+        { "DefId": "ground.stone", "X": 0, "Y": 2 },
+        { "DefId": "ground.stone", "X": 0, "Y": 3 },
+        { "DefId": "ground.stone", "X": 0, "Y": 4 },
+        { "DefId": "ground.stone", "X": 0, "Y": 5 },
+        { "DefId": "ground.stone", "X": 0, "Y": 6 },
+        { "DefId": "ground.stone", "X": 0, "Y": 7 },
+        { "DefId": "ground.stone", "X": 0, "Y": 8 },
+        { "DefId": "ground.stone", "X": 0, "Y": 9 },
+        { "DefId": "ground.stone", "X": 31, "Y": 0 },
+        { "DefId": "ground.stone", "X": 31, "Y": 1 },
+        { "DefId": "ground.stone", "X": 31, "Y": 2 },
+        { "DefId": "ground.stone", "X": 31, "Y": 3 },
+        { "DefId": "ground.stone", "X": 31, "Y": 4 },
+        { "DefId": "ground.stone", "X": 31, "Y": 5 },
+        { "DefId": "ground.stone", "X": 31, "Y": 6 },
+        { "DefId": "ground.stone", "X": 31, "Y": 7 },
+        { "DefId": "ground.stone", "X": 31, "Y": 8 },
+        { "DefId": "ground.stone", "X": 31, "Y": 9 },
+
+        { "DefId": "platform.wood", "X": 8, "Y": 8 },
+        { "DefId": "platform.wood", "X": 16, "Y": 7 },
+        { "DefId": "platform.wood", "X": 24, "Y": 8 },
+        { "DefId": "softvolume.palm_tree", "X": 4, "Y": 6 },
+        { "DefId": "platform.bench", "X": 27, "Y": 8 },
+
+        { "DefId": "spawn.character", "X": 3, "Y": 9 },
+        { "DefId": "spawn.respawn", "X": 3, "Y": 9 },
+        { "DefId": "spawn.respawn", "X": 16, "Y": 9 },
+        { "DefId": "spawn.respawn", "X": 28, "Y": 9 },
+
+        { "DefId": "spawn.enemy", "X": 6, "Y": 3 },
+        { "DefId": "spawn.enemy", "X": 25, "Y": 4 },
+        { "DefId": "spawn.enemy", "X": 11, "Y": 6 },
+        { "DefId": "spawn.enemy", "X": 21, "Y": 7 },
+
+        { "DefId": "goal.level", "X": 7, "Y": 9 },
+        { "DefId": "goal.level", "X": 13, "Y": 9 },
+        { "DefId": "goal.level", "X": 19, "Y": 9 },
+        { "DefId": "goal.level", "X": 25, "Y": 9 }
+      ]
+    },
+    {
+      "Role": "closeview", "Name": "Foreground", "ParallaxX": 1.0, "ParallaxY": 1.0,
+      "Loop": false, "Collision": false, "Tint": null, "Opacity": 1.0,
+      "SwayAmplitudePx": 0.0, "SwayPeriodSec": 4.0, "AutoScrollX": 0.0, "AutoScrollY": 0.0,
+      "GridW": 32, "GridH": 12,
+      "Tiles": [
+        { "DefId": "deco.caution_sign", "X": 29, "Y": 8 },
+        { "DefId": "deco.sand_castle", "X": 20, "Y": 8 }
+      ]
+    }
+  ]
+}

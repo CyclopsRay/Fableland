@@ -427,7 +427,7 @@ The unsaved-changes dot derives from stack position vs. last-saved marker.
 
 ## 9. Runtime contract
 
-- `MapPlaytestController` (ORCHESTRATION layer) is the delivered first consumer:
+- `MapPlaytestController` (ORCHESTRATION layer) is the editor-only consumer:
   `MapDocument → isolated Node2D runtime`. It builds `StaticBody2D`/`Area2D` per tile
   from `effectArea`, collision layers from `Units.Layer*` (Ground → layer 3, Platform
   → 4 one-way, Hazard → 6, SoftVolume → the existing SoftVolume scene), then spawns
@@ -437,13 +437,30 @@ The unsaved-changes dot derives from stack position vs. last-saved marker.
   `ArenaEnvironmentController` can tint that visual root in one operation; future
   responsive/destructible tiles opt in through data tags and receive only visual or
   runtime-instance changes. Events never mutate the authored `MapDocument` during combat.
-- Combat code never reads map files; RunState hands the instantiator the chosen map id
-  + node seed (the T10 §3 handshake). `ArenaBuilder`'s procedural platforms become one
-  consumer of the same tile-placement API.
-- The later `MapInstantiator` for normal adventures reuses this construction policy,
-  resolves rule zones from the supplied node seed, and owns the persistent encounter
-  runtime. The editor's Preview-generation button remains the authoring surface for
-  inspecting a rule roll before committing it.
+- `CombatMapCatalog` + `CombatMapRuntime` are the normal-adventure consumers. At
+  `RunState.BeginAdventure`, the catalog scans built-in `res://Maps/*.json` and authored
+  `user://maps/*.json`, filters by the node snapshot, sorts candidates by immutable map id,
+  and makes one deterministic `DetRandom(seed + ":combat-map:" + nodeId)` choice. Only the
+  selected absolute path enters `AdventureContext`; `GameManager` reloads that exact map and
+  never reads the overworld graph. No match is a logged content error and falls back to the
+  legacy Arena, preserving direct-F5 debugging.
+- `MapDocument` v2 owns combat-map selection data. `worlds` (empty = all),
+  `hardshipLevels` (empty = all), `goals` (new-map default `claim`), and `terrain`
+  (default `sea-level`) are conjunctive filters. Values within `worlds`/`goals` are ORed.
+  `claim` is the map-data name for the runtime `Collection` mission. Canonical terrain values are
+  `sea-level`, `high-ground`, and `low-ground`; each outer-world node receives one from its
+  seeded altitude field. Legacy `high` and `lowground` values migrate on load. v1's singular
+  `world` field is likewise migrated into v2 `worlds`.
+- Battlefield marker tiles have gameplay meaning at runtime: `spawn.character` positions the
+  entering player; `spawn.respawn` cycles the debug-lives respawn point; `spawn.enemy` is a foe
+  nest; `goal.level` supplies Wonder Core points for claim, the Condensed Core point for protect,
+  and destroy-objective points for destroy. Slaughter does not consult `goal.level`. Missing
+  markers log a warning and use the legacy placement fallback so a bad custom map cannot crash a
+  permadeath run.
+- Map data also owns `foeCompositions` (level 0 = map default; crab/seagull weights) and optional
+  `foeSpawnRules` keyed to authored marker-row Y. The periodic spawner produces one foe every
+  4 s, filters types with no eligible nest *before* its weighted roll, and each spawned foe
+  captures the selected marker as its patrol origin.
 
 ## 10. Architecture & file map
 
@@ -467,6 +484,9 @@ Scripts/MapCreation/
     Tools/                 one class per tool (§7.2), registry-listed
   Playtest/
     MapPlaytestController.cs  isolated runtime map builder (§7.1a, §9)
+  Runtime/
+    CombatMapCatalog.cs       deterministic selection + v1/v2 map loading
+    CombatMapRuntime.cs       normal-adventure tile/collider/marker instantiation
 Scenes/MapCreation/MapBrowser.tscn, MapEditor.tscn   (thin roots, no fabricated uid=)
 ```
 
@@ -531,3 +551,9 @@ the closeview blur shader is dropped (closeview is real scenery now, §1, not a 
   This makes a new SoftVolume's feel an additive registry entry, not a map-builder switch.
 - **Skyblue solid-color canvas v1.** Weather modes are marked in IDEAS and arrive
   with the weather system in a late version.
+- **Combat-map filters are metadata, not map-graph state.** A node snapshots world,
+  hardship, goal, and terrain; map selection is deterministic at the scene boundary, then the
+  arena receives only a chosen map path. This keeps combat independent of the overworld.
+- **`goal.level` is mission-relative.** One authoring tile stays extensible: it is a claim-core
+  spawn, protect-core placement, or destroy-target placement based on the node goal; Slaughter
+  deliberately has no use for it.

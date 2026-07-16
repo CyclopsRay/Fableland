@@ -63,11 +63,11 @@ hides + resets):
   R-restart + autoload singletons + C# events = disposed-object crashes and phantom
   work. Unsubscribe in `_ExitTree`, always. This is a perf *and* correctness rule —
   leaked handlers keep whole freed scenes reachable.
-- **The atlas map:** `MapRenderModel.Build` precomputes all polygons once per
-  generation — protect that property. Never move clipping/Voronoi math into `_Draw`.
-  `_Draw` should be dumb submission of cached convex polygons; `QueueRedraw()` fires
-  on pan/zoom/state change only. If map interaction ever stutters, suspect an
-  unconditional redraw first.
+- **The atlas map:** `MapRenderModel.Build` precomputes triangulated coastline fills, altitude
+  patches, contours, and roads once per generation — protect that property. Never move terrain
+  sampling, contour construction, or concave-coast triangulation into `_Draw`. `_Draw` should be
+  dumb submission of cached convex polygons; `QueueRedraw()` fires on pan/zoom/state change only.
+  If map interaction ever stutters, suspect an unconditional redraw first.
 - **`_Draw`-based text** (labels via `DrawString`) re-shapes text each draw — cache
   what's static, and keep node-count text out of the per-frame path.
 - **Hazard tick storms:** hazards tick per-overlapping-body per 0.25 s — cheap. But a

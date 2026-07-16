@@ -123,6 +123,7 @@ public partial class BaseFoe : CharacterBody2D
     protected float FacingDir = 1f;              // last non-zero movement dir (cone sight)
     protected Vector2 IntentVel;
     protected Vector2 ExternalVel;
+    private readonly Dictionary<string, Vector2> _continuousExternalVelocity = new();
     private float _hp;
     private float _contactTimer;
     private float _stunTimer;
@@ -153,6 +154,19 @@ public partial class BaseFoe : CharacterBody2D
     protected void StartSkill2Cooldown(float cd) => _skill2Cd = cd;
     protected void SetTelegraphTint(Color tint) { _telegraphActive = true; _telegraphTint = tint; }
     protected void ClearTelegraphTint() => _telegraphActive = false;
+
+    /// <summary>Refresh a named continuous velocity contribution from a world field.
+    /// Unlike impulse knockback, this does not decay; the field owns clearing its key.</summary>
+    public void SetContinuousExternalVelocity(string source, Vector2 velocity)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+        _continuousExternalVelocity[source] = velocity;
+    }
+
+    public void ClearContinuousExternalVelocity(string source)
+    {
+        if (!string.IsNullOrWhiteSpace(source)) _continuousExternalVelocity.Remove(source);
+    }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────
     public override void _Ready()
@@ -315,7 +329,9 @@ public partial class BaseFoe : CharacterBody2D
         if (_softVolume != null)
             IntentVel = _softVolume.ApplyVelocityResistance(IntentVel, CurrentMoveSpeed, dt);
 
-        Velocity = IntentVel + ExternalVel;
+        Vector2 continuous = Vector2.Zero;
+        foreach (Vector2 value in _continuousExternalVelocity.Values) continuous += value;
+        Velocity = IntentVel + ExternalVel + continuous;
         MoveAndSlide();
 
         if (IsOnFloor() && ExternalVel.Y > 0f) ExternalVel.Y = 0f;
@@ -417,6 +433,14 @@ public partial class BaseFoe : CharacterBody2D
     public void AddFireStack(float amount) => _fire.AddStack(amount);
     public void AddFrozenStack(float amount) => _frozenDebuff.AddStack(amount);
     public void AddImpulse(Vector2 impulse) => ExternalVel += impulse;
+
+    /// <summary>Remove this foe without awarding another damage event. Used only by
+    /// authored execute effects after their normal damage has resolved.</summary>
+    public void Execute()
+    {
+        if (_dead || Invincible) return;
+        Die();
+    }
 
     /// <summary>Kit-level burn DoT (distinct from the OnFire hazard debuff).</summary>
     public void SetBurning(float duration)

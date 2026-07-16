@@ -40,7 +40,7 @@ mouse_filter = 2
 theme_override_font_sizes/font_size = 16
 text = "Day 1   Stamina 5/5
 Traversed 1
-fights 1  camps 0  ? 0"
+fights 1  hubs 0  ? 0"
 
 [node name="DayEditor" type="HBoxContainer" parent="UI"]
 offset_left = 8.0
@@ -102,6 +102,22 @@ offset_top = 256.0
 offset_right = 190.0
 offset_bottom = 286.0
 text = "Cam: flat"
+
+[node name="RealityButton" type="Button" parent="UI"]
+offset_left = 8.0
+offset_top = 292.0
+offset_right = 190.0
+offset_bottom = 322.0
+text = "TwistedReality (locked)"
+tooltip_text = "Defeat the starting realm's LV4 boss, equip the reward at a Transportation Hub, then stand on a completed 1-A city."
+
+[node name="FieldsButton" type="Button" parent="UI"]
+offset_left = 8.0
+offset_top = 328.0
+offset_right = 190.0
+offset_bottom = 358.0
+text = "Fields: off"
+tooltip_text = "Show each city's controlled field. Devoured city fields always darken."
 
 [node name="ToastLabel" type="Label" parent="UI"]
 anchor_left = 0.0

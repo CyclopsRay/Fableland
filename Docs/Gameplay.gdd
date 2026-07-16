@@ -21,7 +21,7 @@ Implementation target: alongside `NODES.gdd` (v0.5.0).
 4. **Stats from backpack items with `Possession`** enchant (`ITEMS.gdd` §4.4)
 5. **World-setting stats** (e.g., if the world is torn apart, the background changes)
 6. **"On Game Start" effects** — some items trigger effects when combat begins
-   (e.g., A Weird Mushroom's next-day outcome; `ITEMS.gdd` §7.12)
+   (e.g., A Weird Mushroom's next-day outcome; `ITEMS.gdd` §7.13)
 
 **Base-stat notes:** ATK and DEF start at 0 (formulas in `KNOWLEDGE.md`). **Vamp**
 (omni-vamp) is a base stat starting at 0 — an additive % pool fed by items/buffs
@@ -66,15 +66,63 @@ the palm tree uses **0.1**, and an unconfigured SoftVolume retains the reusable 
 fallback. Lower values are more viscous: they impose a lower speed cap and a stronger gradual
 resistance. `GravityIndex` (0.1) and `ExternalDampingMult` (3) remain shared scene defaults.
 
+### A.2.1 Universal basic-attack ammo and reload
+
+Every playable character's BA resource is owned by one shared **AmmoController** on
+`CharacterController`; characters must not own private ammo counts or reload timers.
+This makes magazine capacity, reload behavior, and attack-speed changes from wonder
+items consistent and inspectable.
+
+| Contract | Rule |
+|---|---|
+| Capacity / current ammo | `Capacity` is the maximum available BA uses; `Current` is the sole writable count. A successful BA calls `TryConsume(1)` before it creates gameplay effects. |
+| Attack speed | The controller owns the BA-ready interval. A character supplies its base interval; wonder items modify the effective interval through the normal runtime modifier stack. |
+| Interval trigger | The character tells the controller when its BA interval begins. Default is successful consumption; a GDD may name another explicit event, such as Cleopastar's flight ending. |
+| Reload request | A character or resolved projectile calls `RequestReload()`. There is exactly one timer; a later request restarts it rather than queuing another reload. |
+| Reload result | On expiry, add `ReloadSize`, capped at capacity. A definition may repeat the timer while ammo is missing. |
+| Blocking | Reloading is non-blocking by default: a BA is legal whenever it is ready and ammo remains. A character may opt into blocking only if its GDD explicitly says so. |
+| UI | The controller emits ammo/current-capacity and reload-progress changes; presentation observes them and never mutates ammo. |
+| Death / respawn | The character definition owns its reset policy (full, empty, or another explicit state); no reload timer survives death. |
+| Benching | Ammo count and reload progress persist in protagonist state and tick at the same background rate as combat cooldowns. |
+
+Initial character definitions:
+
+| Character | Capacity | Reload size / delay | Reload request | Repeat while missing |
+|---|---:|---:|---|---|
+| Pomegraknight | 3 | 3 / 0.75 s | Each successful slash; request restarts timer | No |
+| PumpKing | 1 | 1 / 1.5 s | Resolved head explosion | No |
+| Cleopastar | 5 | 1 / 1.5 s | Each successful Star Shot; request restarts timer | Yes |
+
+Pomegraknight's interval begins when a slash is consumed. Cleopastar's begins **0.5 s**
+after her flight ends (including a buffered early release at 8 m); PumpKing's head state
+is its BA gate. Ammo/reload progress for a benched protagonist is persisted and advances
+at the normal background-cooldown rate.
+
+All values are balance data in `CharacterTable`; scene exports are wiring only. The
+current vertical slice covers Pomegraknight, PumpKing, and Cleopastar.
+
+### A.2.2 Projectile collision baseline
+
+Unless a GDD explicitly opts out, a projectile collides with **Ground** and
+**Platform**, and passes through **SoftVolumes**. Its own GDD decides whether that
+terrain collision detonates, lands, bounces, or otherwise resolves it. Cleopastar's
+Gliding stars pass their Shift aim point and continue until a Ground/Platform collision,
+an effect collision, or lifetime expiry.
+
 ### A.3 Switch Protagonist (Tab, 12 s CD)
 
 The player controls **one protagonist at a time**. The three active party members form
 a **fixed sequence** set at the shelter. Pressing Tab switches to the next protagonist.
+Entering combat freezes that ordered team into a battle snapshot; its local switch
+cursor lasts for the whole arena visit. Changing the shelter build never mutates a
+fight already in progress, and its first snapshot member is the body spawned at battle
+start.
 
 | Rule | Detail |
 |------|--------|
 | HP ratio inheritance | Incoming protagonist inherits the outgoing protagonist's current HP ratio |
 | Cooldown penalty | Background protagonists' CDs tick at **⅕ speed** |
+| Ammo / reload | Ammo and reload timers persist; pending reloads tick at **⅕ speed** |
 | Landing effect | Each protagonist triggers a unique landing effect on switch-in |
 | Item CDs | Held items on background protagonists tick at ⅕ speed (combat CDs only) |
 | Death | Active protagonist death = permadeath (bench is not extra lives) |
@@ -200,6 +248,8 @@ Opens a new menu with three protagonist cards on the left. Each card shows:
 - "Change" button below
 
 **Interactions:**
+- **Select a team slot, then an owned protagonist** → set or reorder the next battle's
+  Tab sequence (up to three members; at least one must remain).
 - **Click card** → view detailed stats on the right (HP, ATK, DEF, SPD, Vamp, lore)
 - **Click held-item circle** → open backpack to swap/remove the held item
 - **Click "Change"** → show protagonist list (benched ones selectable; current spot greyed)

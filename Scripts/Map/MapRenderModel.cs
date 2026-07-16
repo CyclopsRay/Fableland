@@ -6,358 +6,369 @@ using Godot;
 namespace Fableland.Map;
 
 /// <summary>
-/// The "rendered atlas" precompute: turns the topological <see cref="MapGraph"/> into a
-/// real-worldmap layout without touching gameplay. Each combat/function node becomes a
-/// weighted Voronoi (power-diagram) *territory* — a city plus its regime area — clipped to
-/// its realm's island. Borders between neighbouring territories are classified: a graph edge
-/// => a road; no edge => a barrier (themed per world). Cross-realm links render as golden
-/// sea causeways; zone 6 is a central pentagon.
-///
-/// This is DATA ONLY (polygons, segments, labels). <see cref="MapController"/> draws it and
-/// layers live state (visited / devoured / mist) on top. Everything is derived from the run
-/// seed (positions come straight from the generator; any jitter uses a DetRandom(seed+"R")),
-/// so the atlas is reproducible.
-///
-/// For the current pass, barriers are only MARKED (a labelled point marker or a tinted region
-/// + label) — no detail art yet. See Docs/MapGDD.md §11.
+/// Pure presentation precompute for the island atlas. Land tint and contours describe the shared
+/// height field only; roads and runtime reality bridges remain the sole traversal indicators.
 /// </summary>
 public static class MapRenderModel
 {
-    // ---- per-world barrier / land theme -----------------------------------------
     public sealed class WorldTheme
     {
         public string Abbr;
-        public string PointBarrier;  // small landmark on a blocked would-be road
-        public string AreaBarrier;   // region filler between disconnected neighbours
-        public Color Land;           // territory base tint
-        public Color AreaColor;      // area-barrier tint
-        public Color PointColor;     // point-barrier marker
+        public Color Land;
     }
 
-    // Placeholder colours; art comes later. Names are the source of truth for now.
     private static readonly Dictionary<string, WorldTheme> Themes = new()
     {
-        ["SL"] = new() { Abbr = "SL", PointBarrier = "city debris",        AreaBarrier = "meteor-strike warfield", Land = new(0.95f, 0.72f, 0.45f), AreaColor = new(0.62f, 0.26f, 0.20f), PointColor = new(0.55f, 0.50f, 0.45f) },
-        ["HC"] = new() { Abbr = "HC", PointBarrier = "ruined walls",       AreaBarrier = "dark forest",            Land = new(0.66f, 0.68f, 0.72f), AreaColor = new(0.14f, 0.28f, 0.18f), PointColor = new(0.45f, 0.45f, 0.50f) },
-        ["VK"] = new() { Abbr = "VK", PointBarrier = "burned villages",    AreaBarrier = "lake",                   Land = new(0.97f, 0.72f, 0.82f), AreaColor = new(0.28f, 0.50f, 0.78f), PointColor = new(0.28f, 0.20f, 0.20f) },
-        ["TD"] = new() { Abbr = "TD", PointBarrier = "giant beast skull",  AreaBarrier = "desert",                 Land = new(0.90f, 0.82f, 0.55f), AreaColor = new(0.85f, 0.74f, 0.44f), PointColor = new(0.92f, 0.90f, 0.82f) },
-        ["PL"] = new() { Abbr = "PL", PointBarrier = "the protected throne", AreaBarrier = "abyss / quagmire",     Land = new(0.74f, 0.58f, 0.86f), AreaColor = new(0.24f, 0.14f, 0.32f), PointColor = new(0.62f, 0.46f, 0.74f) },
-        ["BM"] = new() { Abbr = "BM", PointBarrier = "deserted woodhouse", AreaBarrier = "bamboo forest",          Land = new(0.55f, 0.75f, 0.52f), AreaColor = new(0.24f, 0.52f, 0.28f), PointColor = new(0.52f, 0.36f, 0.20f) },
+        ["SL"] = new() { Abbr = "SL", Land = new(0.95f, 0.72f, 0.45f) },
+        ["HC"] = new() { Abbr = "HC", Land = new(0.66f, 0.68f, 0.72f) },
+        ["VK"] = new() { Abbr = "VK", Land = new(0.97f, 0.72f, 0.82f) },
+        ["TD"] = new() { Abbr = "TD", Land = new(0.90f, 0.82f, 0.55f) },
+        ["PL"] = new() { Abbr = "PL", Land = new(0.74f, 0.58f, 0.86f) },
+        ["BM"] = new() { Abbr = "BM", Land = new(0.55f, 0.75f, 0.52f) },
     };
-    private static readonly WorldTheme VoidTheme = new()
-    {
-        Abbr = "XX", PointBarrier = "", AreaBarrier = "the VOID",
-        Land = new(0.10f, 0.10f, 0.16f), AreaColor = new(0.05f, 0.05f, 0.10f), PointColor = new(0.2f, 0.2f, 0.3f),
-    };
+    private static readonly WorldTheme VoidTheme = new() { Abbr = "XX", Land = new(0.10f, 0.10f, 0.16f) };
 
     public static WorldTheme ThemeFor(string abbr) =>
-        abbr == "XX" ? VoidTheme : (Themes.TryGetValue(abbr, out var t) ? t : VoidTheme);
+        abbr == "XX" ? VoidTheme : (Themes.TryGetValue(abbr, out var theme) ? theme : VoidTheme);
 
-    // ---- claim radius by node kind (controls territory size) --------------------
-    // Weight in the power diagram is claimRadius²; a bigger claim => a bigger cell.
-    private static float ClaimRadius(NodeKind k) => k switch
+    public sealed class LandSurface
     {
-        NodeKind.Boss => 78f,
-        NodeKind.Combat => 66f,
-        NodeKind.River => 40f,
-        _ => 30f, // Shelter / QuestionMark — the small function territories
-    };
+        public int WorldIndex;
+        public Vector2[] Coast;
+        public List<Vector2[]> FillPieces = new();
+        public Color Fill;
+    }
 
-    // ---- output structures ------------------------------------------------------
-    public enum BorderKind { Road, Barrier }
+    public sealed class RiverSurface
+    {
+        public Vector2[] Polygon;
+        public Vector2[] LeftBank;
+        public Vector2[] RightBank;
+    }
+
+    public sealed class AltitudePatch
+    {
+        public int WorldIndex;
+        public Vector2[] Poly;
+        public Color Tint;
+    }
+
+    public sealed class ContourSegment
+    {
+        public int WorldIndex;
+        public Vector2 A, B;
+        public float Height;
+    }
 
     public sealed class Territory
     {
         public MapNode Node;
         public Vector2[] Poly;
         public Color Fill;
-        public int WorldIndex;   // 0..4 outer, -1 zone 6
     }
 
-    public sealed class BorderSeg
+    /// <summary>One outer city's clipped control field. The owning city is the source of truth
+    /// for whether this ground is alive or already consumed by the VOID.</summary>
+    public sealed class CityTerritory
     {
-        public Vector2 A, B;
-        public BorderKind Kind;
-        public int WorldIndex;   // theme owner (the world the barrier belongs to)
-    }
-
-    public sealed class PointBarrier
-    {
-        public Vector2 Pos;
-        public int WorldIndex;
-        public string Label;
-    }
-
-    public sealed class AreaLabel
-    {
-        public Vector2 Pos;
-        public int WorldIndex;
-        public string Label;
+        public MapNode City;
+        public Vector2[] Boundary;
+        public List<Vector2[]> FillPieces = new();
     }
 
     public sealed class Road
     {
         public MapNode A, B;
-        public Vector2 Ctrl;      // quadratic bezier control point
-        public bool CrossWorld;   // golden sea causeway between realms / into the VOID
+        public Vector2[] Route;
+        public MapEdgeKind Kind;
     }
 
     public sealed class RenderedMap
     {
-        public List<Territory> Territories = new();
-        public List<BorderSeg> Borders = new();     // Road + Barrier segments (barriers get themed)
-        public List<PointBarrier> Points = new();
-        public List<AreaLabel> Areas = new();
+        public List<LandSurface> Landmasses = new();
+        public Vector2[] IslandCoast = Array.Empty<Vector2>();
+        public List<RiverSurface> Rivers = new();
+        public List<AltitudePatch> AltitudePatches = new();
+        public List<ContourSegment> Contours = new();
+        public List<CityTerritory> CityTerritories = new();
         public List<Road> Roads = new();
-        public List<Vector2[]> Islands = new();      // per outer world, the landmass outline
-        public Vector2[] Pentagon;                    // zone-6 land
+        public Vector2[] Pentagon;
         public List<Territory> Zone6Cells = new();
-        public List<MapNode> Islets = new();          // XX-S shelters, isolated in the sea ring
-        public Dictionary<MapNode, int> NodeWorld = new(); // resolved realm (-1 void, -3 sea bridge)
+        public List<MapNode> Islets = new();
     }
 
-    // =============================================================================
-    public static RenderedMap Build(MapGraph g)
+    public static RenderedMap Build(MapGraph graph)
     {
-        var rm = new RenderedMap();
-
-        // Resolve every node's realm once (needed for road styling + tiling membership).
-        foreach (var n in g.Nodes) rm.NodeWorld[n] = ResolveWorld(g, n);
-
-        // Fast lookup: does a graph edge connect these two nodes?
-        var linked = new HashSet<(MapNode, MapNode)>();
-        foreach (var e in g.Edges) { linked.Add((e.A, e.B)); linked.Add((e.B, e.A)); }
-
-        // A function node (shelter / ?) is a road WAYPOINT/HUB: the generator splits a city→city
-        // edge into city→fn→city, so the direct link is gone even though a road still runs
-        // through it. Treat every pair of a function node's neighbours as linked, so their shared
-        // border reads as a road, not a barrier. (A crossing hub genuinely joins all 4 — you can
-        // hop through it — so linking all its neighbour pairs is correct.)
-        foreach (var fn in g.Nodes)
+        var rendered = new RenderedMap
         {
-            if (fn.WorldIndex != -2) continue;
-            var neigh = g.EdgesOf(fn).Select(e => e.Other(fn)).ToList();
-            for (int i = 0; i < neigh.Count; i++)
-                for (int j = i + 1; j < neigh.Count; j++)
-                {
-                    linked.Add((neigh[i], neigh[j]));
-                    linked.Add((neigh[j], neigh[i]));
-                }
-        }
-        bool Linked(MapNode a, MapNode b) => linked.Contains((a, b));
+            IslandCoast = graph.IslandCoast,
+            Pentagon = graph.VoidPentagon,
+        };
 
-        // Midpoint of each barrier border between two cities — used to place a point barrier
-        // ONLY on a blocked pass you can actually see across (kills the label spam).
-        var barrierMid = new Dictionary<(MapNode, MapNode), Vector2>();
-
-        // ---- (1) outer realms: weighted Voronoi territories per world ------------
-        int worldCount = g.Worlds.Count;
-        for (int w = 0; w < worldCount; w++)
+        for (int world = 0; world < graph.Landmasses.Count; world++)
         {
-            var island = BuildIsland(g.Center, w, worldCount);
-            rm.Islands.Add(island.ToArray());
-
-            var theme = ThemeFor(g.Worlds[w].Abbr);
-            var sites = g.Nodes.Where(n => rm.NodeWorld[n] == w && n.WorldIndex != -1).ToList();
-            if (sites.Count == 0) continue;
-
-            var cells = PowerCells(sites, island);
-
-            for (int i = 0; i < sites.Count; i++)
+            WorldLandmass land = graph.Landmasses[world];
+            rendered.Landmasses.Add(new LandSurface
             {
-                if (cells[i].Verts.Count < 3) continue;
-                Color fill = theme.Land.Lerp(g.Worlds[w].Color, 0.25f);
-                if (sites[i].WorldIndex == -2) fill = fill.Lightened(0.12f); // function territories a touch paler
-                rm.Territories.Add(new Territory { Node = sites[i], Poly = cells[i].Verts.ToArray(), Fill = fill, WorldIndex = w });
+                WorldIndex = world,
+                Coast = land.Coast,
+                FillPieces = TriangulateLand(land.Coast),
+                Fill = ThemeFor(graph.Worlds[world].Abbr).Land.Darkened(0.06f),
+            });
+            BuildAltitudePresentation(rendered, land, world);
+        }
 
-                // Borders: each cell edge sourced by another site j (i<j) is a shared frontier.
-                var (verts, srcs) = (cells[i].Verts, cells[i].Srcs);
-                for (int k = 0; k < verts.Count; k++)
-                {
-                    int j = srcs[k];
-                    if (j < 0 || j <= i) continue; // -1 coast, or already handled from the other side
-                    var a = verts[k];
-                    var b = verts[(k + 1) % verts.Count];
-                    bool road = Linked(sites[i], sites[j]);
-                    rm.Borders.Add(new BorderSeg { A = a, B = b, WorldIndex = w, Kind = road ? BorderKind.Road : BorderKind.Barrier });
-                    if (!road)
-                    {
-                        var m = (a + b) * 0.5f;
-                        barrierMid[(sites[i], sites[j])] = m;
-                        barrierMid[(sites[j], sites[i])] = m;
-                    }
-                }
-            }
-
-            // Area label: drop one at the centroid of this world's barrier midpoints.
-            var barMids = rm.Borders.Where(bd => bd.WorldIndex == w && bd.Kind == BorderKind.Barrier)
-                                    .Select(bd => (bd.A + bd.B) * 0.5f).ToList();
-            if (barMids.Count > 0)
+        foreach (MapRiver river in graph.RealmRivers)
+        {
+            rendered.Rivers.Add(new RiverSurface
             {
-                var c = Vector2.Zero;
-                foreach (var m in barMids) c += m;
-                rm.Areas.Add(new AreaLabel { Pos = c / barMids.Count, WorldIndex = w, Label = theme.AreaBarrier });
-            }
+                Polygon = river.Polygon,
+                LeftBank = river.LeftBank,
+                RightBank = river.RightBank,
+            });
         }
 
-        // ---- (2) point barriers: landmarks on blocked would-be roads -------------
-        foreach (var (a, b) in g.FailedCandidates)
+        foreach (MapNode city in graph.Nodes.Where(node => node.WorldIndex >= 0 && node.IsCombat && node.ControlledField.Length >= 3))
         {
-            if (a.WorldIndex < 0 || a.WorldIndex != b.WorldIndex) continue;   // intra-world only
-            if (!barrierMid.TryGetValue((a, b), out var pos)) continue;       // only if the cities actually border
-            rm.Points.Add(new PointBarrier { Pos = pos, WorldIndex = a.WorldIndex, Label = ThemeFor(a.Zone).PointBarrier });
+            rendered.CityTerritories.Add(new CityTerritory
+            {
+                City = city,
+                Boundary = city.ControlledField,
+                FillPieces = TriangulateLand(city.ControlledField),
+            });
         }
 
-        // ---- (3) roads (replace edges) -------------------------------------------
-        var rng = new DetRandom(g.Seed + "R");
-        foreach (var e in g.Edges)
+        foreach (MapEdge edge in graph.Edges)
         {
-            int wa = rm.NodeWorld[e.A], wb = rm.NodeWorld[e.B];
-            // The isolated XX-S shelters bridge a realm's boss to the VOID: keep those legs
-            // (as golden causeways) but drop the purely-internal zone-6 edges (lv5/river/core).
-            bool islet = (e.A.WorldIndex == -1 && e.A.Kind == NodeKind.Shelter)
-                      || (e.B.WorldIndex == -1 && e.B.Kind == NodeKind.Shelter);
-            if (wa == -1 && wb == -1 && !islet) continue;
-            bool cross = wa != wb || islet;
-            var mid = (e.A.Pos + e.B.Pos) * 0.5f;
-            var dir = (e.B.Pos - e.A.Pos);
-            var perp = new Vector2(-dir.Y, dir.X).Normalized();
-            float wobble = (float)(rng.NextDouble() - 0.5) * dir.Length() * 0.18f;
-            rm.Roads.Add(new Road { A = e.A, B = e.B, Ctrl = mid + perp * wobble, CrossWorld = cross });
+            bool isletLeg = (edge.A.WorldIndex == -1 && edge.A.Kind == NodeKind.Shelter)
+                            || (edge.B.WorldIndex == -1 && edge.B.Kind == NodeKind.Shelter);
+            // The pre-existing LV5 / river / core links are represented by the VOID art. Only
+            // small outer legs to XX-S remain visible, while realm roads and reality bridges show.
+            if (edge.A.WorldIndex == -1 && edge.B.WorldIndex == -1 && !isletLeg) continue;
+            rendered.Roads.Add(new Road { A = edge.A, B = edge.B, Route = edge.Route, Kind = edge.Kind });
         }
 
-        // ---- (4) zone 6: central pentagon + 5 lv5 territories --------------------
-        rm.Pentagon = RegularPolygon(g.Center, g.Zone6Radius, 5, -90f);
-        var lv5 = g.Nodes.Where(n => n.WorldIndex == -1 && n.Kind == NodeKind.Combat && n.LevelTag == "5").ToList();
+        var lv5 = graph.Nodes.Where(node => node.WorldIndex == -1 && node.Kind == NodeKind.Combat && node.LevelTag == "5").ToList();
         if (lv5.Count >= 3)
         {
-            var pentaCells = PowerCells(lv5, rm.Pentagon.ToList());
+            Cell[] cells = PowerCells(lv5, rendered.Pentagon.ToList());
             for (int i = 0; i < lv5.Count; i++)
-                if (pentaCells[i].Verts.Count >= 3)
-                    rm.Zone6Cells.Add(new Territory { Node = lv5[i], Poly = pentaCells[i].Verts.ToArray(), Fill = VoidTheme.Land, WorldIndex = -1 });
+                if (cells[i].Verts.Count >= 3)
+                    rendered.Zone6Cells.Add(new Territory
+                    {
+                        Node = lv5[i],
+                        Poly = cells[i].Verts.ToArray(),
+                        Fill = VoidTheme.Land,
+                    });
         }
-
-        // XX-S shelters sit isolated in the sea ring between the realms and the pentagon.
-        rm.Islets = g.Nodes.Where(n => n.WorldIndex == -1 && n.Kind == NodeKind.Shelter).ToList();
-
-        return rm;
+        rendered.Islets = graph.Nodes.Where(node => node.WorldIndex == -1 && node.Kind == NodeKind.Shelter).ToList();
+        return rendered;
     }
 
-    // ---- realm resolution -------------------------------------------------------
-    /// <summary>Realm a node belongs to: 0..4 outer world, -1 the VOID, -3 a between-realm sea bridge.</summary>
-    private static int ResolveWorld(MapGraph g, MapNode n)
+    private static void BuildAltitudePresentation(RenderedMap rendered, WorldLandmass land, int worldIndex)
     {
-        if (n.WorldIndex >= 0) return n.WorldIndex;
-        if (n.WorldIndex == -1) return -1;
-        // function node (-2): belongs to the single outer world of its neighbours; else it's a bridge.
-        var worlds = new HashSet<int>();
-        foreach (var e in g.EdgesOf(n))
+        const int grid = 22;
+        float stepX = land.Bounds.Size.X / grid;
+        float stepY = land.Bounds.Size.Y / grid;
+        if (stepX <= 0f || stepY <= 0f) return;
+
+        for (int y = 0; y < grid; y++)
+        for (int x = 0; x < grid; x++)
         {
-            var m = e.Other(n);
-            if (m.WorldIndex >= 0) worlds.Add(m.WorldIndex);
+            Vector2 topLeft = land.Bounds.Position + new Vector2(x * stepX, y * stepY);
+            Vector2 topRight = topLeft + new Vector2(stepX, 0);
+            Vector2 bottomRight = topLeft + new Vector2(stepX, stepY);
+            Vector2 bottomLeft = topLeft + new Vector2(0, stepY);
+            if (!land.Contains(topLeft) || !land.Contains(topRight) ||
+                !land.Contains(bottomRight) || !land.Contains(bottomLeft))
+                continue;
+
+            float height = land.AltitudeAt((topLeft + bottomRight) * 0.5f);
+            float delta = height - 0.5f;
+            if (Mathf.Abs(delta) > 0.035f)
+            {
+                float alpha = Mathf.Min(0.13f, Mathf.Abs(delta) * 0.30f);
+                rendered.AltitudePatches.Add(new AltitudePatch
+                {
+                    WorldIndex = worldIndex,
+                    Poly = new[] { topLeft, topRight, bottomRight, bottomLeft },
+                    Tint = delta >= 0f ? new Color(1f, 1f, 1f, alpha) : new Color(0f, 0f, 0f, alpha),
+                });
+            }
+
+            float h0 = land.AltitudeAt(topLeft);
+            float h1 = land.AltitudeAt(topRight);
+            float h2 = land.AltitudeAt(bottomRight);
+            float h3 = land.AltitudeAt(bottomLeft);
+            foreach (float level in ContourLevels)
+                AddContoursForCell(rendered, worldIndex, level, topLeft, topRight, bottomRight, bottomLeft, h0, h1, h2, h3);
         }
-        return worlds.Count == 1 ? worlds.First() : -3;
     }
 
-    // ---- island / pentagon geometry ---------------------------------------------
-    /// <summary>Convex landmass wedge for outer world w: an outer arc truncated by an inner chord.</summary>
-    private static List<Vector2> BuildIsland(Vector2 center, int w, int worldCount)
+    private static readonly float[] ContourLevels = { 0.30f, 0.44f, 0.58f, 0.72f };
+
+    private static void AddContoursForCell(RenderedMap rendered, int worldIndex, float level,
+        Vector2 a, Vector2 b, Vector2 c, Vector2 d, float ha, float hb, float hc, float hd)
     {
-        float centerDeg = -90f + w * (360f / worldCount);
-        const float half = 33f;      // fan is 72°; islands span 66°, leaving sea channels between realms
-        float ro = MapGenerator.RimRadius;
-        float ri = MapGenerator.LayoutScale * 102f; // just outside the zone-6 pentagon (r=96), inside lv4 (r=110)
-        var pts = new List<Vector2>();
-        int seg = 10;
-        for (int i = 0; i <= seg; i++) // outer arc, left→right
+        var hits = new List<Vector2>(4);
+        AddCrossing(hits, a, b, ha, hb, level);
+        AddCrossing(hits, b, c, hb, hc, level);
+        AddCrossing(hits, c, d, hc, hd, level);
+        AddCrossing(hits, d, a, hd, ha, level);
+        if (hits.Count == 2)
+            rendered.Contours.Add(new ContourSegment { WorldIndex = worldIndex, A = hits[0], B = hits[1], Height = level });
+        else if (hits.Count == 4)
         {
-            float d = centerDeg - half + (2 * half) * i / seg;
-            pts.Add(center + Polar(d, ro));
+            rendered.Contours.Add(new ContourSegment { WorldIndex = worldIndex, A = hits[0], B = hits[1], Height = level });
+            rendered.Contours.Add(new ContourSegment { WorldIndex = worldIndex, A = hits[2], B = hits[3], Height = level });
         }
-        pts.Add(center + Polar(centerDeg + half, ri)); // inner corners (chord truncates the tip)
-        pts.Add(center + Polar(centerDeg - half, ri));
-        return pts;
     }
 
-    private static Vector2[] RegularPolygon(Vector2 c, float r, int n, float startDeg)
+    private static void AddCrossing(List<Vector2> hits, Vector2 a, Vector2 b, float ha, float hb, float level)
     {
-        var pts = new Vector2[n];
-        for (int i = 0; i < n; i++) pts[i] = c + Polar(startDeg + i * (360f / n), r);
-        return pts;
+        if ((ha >= level) == (hb >= level) || Mathf.Abs(hb - ha) < 0.0001f) return;
+        float t = Mathf.Clamp((level - ha) / (hb - ha), 0f, 1f);
+        hits.Add(a.Lerp(b, t));
     }
 
-    private static Vector2 Polar(float deg, float r)
+    /// <summary>Godot fills only convex polygons, so cache ear-clipped triangles for each realm.</summary>
+    private static List<Vector2[]> TriangulateLand(Vector2[] coast)
     {
-        float rad = Mathf.DegToRad(deg);
-        return new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * r;
+        var pieces = new List<Vector2[]>();
+        if (coast == null || coast.Length < 3) return pieces;
+        var remaining = Enumerable.Range(0, coast.Length).ToList();
+        bool clockwise = SignedArea(coast) < 0f;
+        int guard = 0;
+        while (remaining.Count > 3 && guard++ < coast.Length * coast.Length)
+        {
+            bool clipped = false;
+            for (int i = 0; i < remaining.Count; i++)
+            {
+                int previous = remaining[(i - 1 + remaining.Count) % remaining.Count];
+                int current = remaining[i];
+                int next = remaining[(i + 1) % remaining.Count];
+                if (!IsConvex(coast[previous], coast[current], coast[next], clockwise)) continue;
+                bool containsOther = false;
+                foreach (int point in remaining)
+                {
+                    if (point == previous || point == current || point == next) continue;
+                    if (PointInTriangle(coast[point], coast[previous], coast[current], coast[next]))
+                    {
+                        containsOther = true;
+                        break;
+                    }
+                }
+                if (containsOther) continue;
+                pieces.Add(new[] { coast[previous], coast[current], coast[next] });
+                remaining.RemoveAt(i);
+                clipped = true;
+                break;
+            }
+            if (!clipped) break;
+        }
+        if (remaining.Count == 3)
+            pieces.Add(new[] { coast[remaining[0]], coast[remaining[1]], coast[remaining[2]] });
+        return pieces;
     }
 
-    // ---- weighted Voronoi (power diagram) ---------------------------------------
+    private static float SignedArea(Vector2[] poly)
+    {
+        float area = 0f;
+        for (int i = 0; i < poly.Length; i++)
+        {
+            Vector2 a = poly[i];
+            Vector2 b = poly[(i + 1) % poly.Length];
+            area += a.X * b.Y - b.X * a.Y;
+        }
+        return area * 0.5f;
+    }
+
+    private static bool IsConvex(Vector2 a, Vector2 b, Vector2 c, bool clockwise)
+    {
+        float cross = Cross(b - a, c - b);
+        return clockwise ? cross < -0.001f : cross > 0.001f;
+    }
+
+    private static bool PointInTriangle(Vector2 point, Vector2 a, Vector2 b, Vector2 c)
+    {
+        float ab = Cross(b - a, point - a);
+        float bc = Cross(c - b, point - b);
+        float ca = Cross(a - c, point - c);
+        return (ab >= -0.001f && bc >= -0.001f && ca >= -0.001f) ||
+               (ab <= 0f && bc <= 0f && ca <= 0f);
+    }
+
+    private static float Cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
+
+    private static float ClaimRadius(NodeKind kind) => kind switch
+    {
+        NodeKind.Boss => 78f,
+        NodeKind.Combat => 66f,
+        NodeKind.River => 40f,
+        _ => 30f,
+    };
+
     private struct Cell { public List<Vector2> Verts; public List<int> Srcs; }
 
-    /// <summary>
-    /// Power-diagram cells for <paramref name="sites"/>, each clipped to the convex
-    /// <paramref name="clip"/> polygon. Each cell edge is tagged with the index of the
-    /// neighbouring site that produced it (-1 = the clip boundary / coast).
-    /// </summary>
     private static Cell[] PowerCells(List<MapNode> sites, List<Vector2> clip)
     {
-        int n = sites.Count;
-        var weights = sites.Select(s => { float r = ClaimRadius(s.Kind); return r * r; }).ToArray();
-        var cells = new Cell[n];
-        for (int i = 0; i < n; i++)
+        int count = sites.Count;
+        float[] weights = sites.Select(site =>
+        {
+            float radius = ClaimRadius(site.Kind);
+            return radius * radius;
+        }).ToArray();
+        var cells = new Cell[count];
+        for (int i = 0; i < count; i++)
         {
             var verts = new List<Vector2>(clip);
             var srcs = Enumerable.Repeat(-1, clip.Count).ToList();
             Vector2 pi = sites[i].Pos;
-            for (int j = 0; j < n && verts.Count >= 3; j++)
+            for (int j = 0; j < count && verts.Count >= 3; j++)
             {
                 if (j == i) continue;
                 Vector2 pj = sites[j].Pos;
-                Vector2 nrm = pj - pi;
-                if (nrm.LengthSquared() < 1e-6f) continue;
-                // keep half-plane: |x-pi|² - wi <= |x-pj|² - wj  ⇔  nrm·x <= c
+                Vector2 normal = pj - pi;
+                if (normal.LengthSquared() < 1e-6f) continue;
                 float c = (pj.LengthSquared() - pi.LengthSquared() - (weights[j] - weights[i])) * 0.5f;
-                ClipHalfPlane(ref verts, ref srcs, nrm, c, j);
+                ClipHalfPlane(ref verts, ref srcs, normal, c, j);
             }
             cells[i] = new Cell { Verts = verts, Srcs = srcs };
         }
         return cells;
     }
 
-    /// <summary>
-    /// Sutherland–Hodgman clip of a polygon by the half-plane { x : nrm·x &lt;= c }.
-    /// srcs[k] is the source tag of the edge leaving vertex k; new edges laid along the
-    /// clip line are tagged <paramref name="clipSrc"/>. Subject stays convex (island ∩ planes).
-    /// </summary>
-    private static void ClipHalfPlane(ref List<Vector2> verts, ref List<int> srcs, Vector2 nrm, float c, int clipSrc)
+    private static void ClipHalfPlane(ref List<Vector2> verts, ref List<int> srcs, Vector2 normal, float c, int source)
     {
-        var outV = new List<Vector2>();
-        var outS = new List<int>();
-        int m = verts.Count;
-        for (int i = 0; i < m; i++)
+        var outputVerts = new List<Vector2>();
+        var outputSrcs = new List<int>();
+        for (int i = 0; i < verts.Count; i++)
         {
-            Vector2 cur = verts[i], nxt = verts[(i + 1) % m];
-            int s = srcs[i];
-            float fCur = nrm.Dot(cur) - c;
-            float fNxt = nrm.Dot(nxt) - c;
-            bool inCur = fCur <= 0f, inNxt = fNxt <= 0f;
-            if (inCur)
+            Vector2 current = verts[i];
+            Vector2 next = verts[(i + 1) % verts.Count];
+            float fCurrent = normal.Dot(current) - c;
+            float fNext = normal.Dot(next) - c;
+            bool currentInside = fCurrent <= 0f;
+            bool nextInside = fNext <= 0f;
+            if (currentInside)
             {
-                outV.Add(cur); outS.Add(s);
-                if (!inNxt)
+                outputVerts.Add(current);
+                outputSrcs.Add(srcs[i]);
+                if (!nextInside)
                 {
-                    float t = fCur / (fCur - fNxt);
-                    outV.Add(cur.Lerp(nxt, t)); outS.Add(clipSrc); // edge from here rides the clip line
+                    float t = fCurrent / (fCurrent - fNext);
+                    outputVerts.Add(current.Lerp(next, t));
+                    outputSrcs.Add(source);
                 }
             }
-            else if (inNxt)
+            else if (nextInside)
             {
-                float t = fCur / (fCur - fNxt);
-                outV.Add(cur.Lerp(nxt, t)); outS.Add(s);           // resume the original edge to nxt
+                float t = fCurrent / (fCurrent - fNext);
+                outputVerts.Add(current.Lerp(next, t));
+                outputSrcs.Add(srcs[i]);
             }
         }
-        if (outV.Count < 3) { verts = new List<Vector2>(); srcs = new List<int>(); return; }
-        verts = outV; srcs = outS;
+        verts = outputVerts.Count >= 3 ? outputVerts : new List<Vector2>();
+        srcs = outputVerts.Count >= 3 ? outputSrcs : new List<int>();
     }
 }

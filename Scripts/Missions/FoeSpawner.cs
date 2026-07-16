@@ -18,13 +18,29 @@ public sealed class FoeSpawner
     /// <summary>Periodic spawner on/off. Slaughter/Boss disable it and drive waves themselves.</summary>
     public bool Enabled = true;
     public int Cap = 6;                 // gates ONLY the periodic spawner (FOES §11)
-    public float Interval = 3f;
+    /// <summary>Current authored prototype cadence: one ambient foe every four seconds.</summary>
+    public float Interval = 4f;
+    private int _crabWeight = 60;
+    private int _seagullWeight = 40;
     private float _timer;
 
     public FoeSpawner(GameManager arena, DetRandom rng)
     {
         _arena = arena;
         _rng = rng;
+        _timer = Interval; // first ambient foe arrives after one full authored interval
+    }
+
+    /// <summary>
+    /// Apply the selected map's level composition. Values are weights, not probabilities; invalid
+    /// entries retain the safe legacy 60/40 mix. Eligibility is resolved separately from map
+    /// spawn markers, so a type is never generated only to discover it has no valid nest.
+    /// </summary>
+    public void SetComposition(int crabWeight, int seagullWeight)
+    {
+        if (crabWeight < 0 || seagullWeight < 0 || crabWeight + seagullWeight <= 0) return;
+        _crabWeight = crabWeight;
+        _seagullWeight = seagullWeight;
     }
 
     /// <summary>Periodic trickle spawn (the ambient arena population).</summary>
@@ -44,16 +60,27 @@ public sealed class FoeSpawner
     /// group in _Ready so they can't starve the cap — review fix, v0.5.0).</summary>
     public int LiveFoeCount() => _arena.GetTree().GetNodesInGroup("foe").Count;
 
-    /// <summary>Spawn a whole wave at once (Slaughter/Boss adds). 60/40 crab/seagull per slot.</summary>
+    /// <summary>Spawn a whole wave at once (Slaughter/Boss adds), using the selected map mix.</summary>
     public void SpawnWave(int count, int level)
     {
         for (int i = 0; i < count; i++) SpawnOne(level);
     }
 
-    /// <summary>Spawn a single foe (60% crab / 40% seagull) at the given level.</summary>
+    /// <summary>
+    /// Spawn a single foe using this map's weights after filtering types that have no eligible
+    /// nest. Crab and seagull instances capture their final spawn origin on their first physics
+    /// frame, so that selected marker is also their patrol nest.
+    /// </summary>
     public BaseFoe SpawnOne(int level)
     {
-        bool crab = _rng.NextDouble() < 0.6;
+        bool crabAllowed = _arena.HasFoeSpawnFor(aerial: false);
+        bool seagullAllowed = _arena.HasFoeSpawnFor(aerial: true);
+        if (!crabAllowed && !seagullAllowed) return null;
+        if (!crabAllowed) return SpawnSeagull(level);
+        if (!seagullAllowed) return SpawnCrab(level);
+
+        int total = _crabWeight + _seagullWeight;
+        bool crab = _rng.Range(1, total) <= _crabWeight;
         return crab ? SpawnCrab(level) : SpawnSeagull(level);
     }
 

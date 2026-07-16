@@ -61,7 +61,7 @@ PumpKing builds a **shield pool** by pumping up (E). The shield is active only i
 
 ### Basic Attack — Fire Head / Detonate Head
 
-**Magazine:** 1 (one head). **Replenish windup:** 0.5 s after explosion (instant refill).
+**Magazine:** 1 (one head). **Replenish windup:** 1.5 s after explosion (instant refill).
 
 **In Normal state — Fire Head:**
 PumpKing launches his head as a rolling projectile in the aimed direction. The head:
@@ -88,7 +88,7 @@ Manual detonation via BA press. The head explodes immediately.
 - **15 m/s knockback** outward from center — against a foe's 1200 px/s² deceleration this
   travels exactly 3 m, i.e. to the edge of the blast radius itself
 - Spawns explosion VFX (prefab, auto-scaled to match radius)
-- Starts the 0.5 s head reload windup
+- Starts the 1.5 s head reload windup
 - State returns to Normal (or Soul → Normal/Rolling if soul form ended)
 
 **Firing segments:** head can be aimed in two cones — front (−60° to 60°) and back
@@ -145,7 +145,7 @@ stacks to 0) or Soul Form is entered (shield cleared, stacks reset).
 | Skill | Name | CD | Key Mechanic |
 |-------|------|----|--------------|
 | Passive | Pumpkin Shell | — | Shield pool (max 100); speed penalty per pump stack (0–40%) |
-| BA | Fire/Detonate Head | 0.5 s (reload windup) | Launch rolling head (30 contact DMG); detonate for 3 m / 50 DMG AoE |
+| BA | Fire/Detonate Head | 1.5 s (reload windup) | Launch rolling head (30 contact DMG); detonate for 3 m / 50 DMG AoE |
 | Shift | Soul Form | 12 s | 6 s free-flight, 5 m/s speed, 0.5 s windup |
 | E | Pump Up | 0.5 s (inner CD) | +20 shield/stack, max 5; head grows; speed penalty |
 
@@ -264,12 +264,12 @@ Shield pool is managed via `currentShield`/`maxShield` from the base `CharacterC
 ### Neck Head Visibility
 The neck head child GameObject (`NeckHead`) has its own SpriteRenderer and Animator
 (`PK_Head_Neck_AC`). It's hidden when the head is fired, shown again on reload
-completion (`OnHeadReloaded()`). AutoTriggerReplenishOnShot = false — reload is
-triggered manually by the explosion callback.
+completion. The resolved explosion callback requests the shared reload.
 
 ### Ammo
-Magazine size = 1. Reload begins when the head explodes (0.5 s windup, instant refill).
-The neck head reappears when ammo reaches full.
+The shared universal-ammo system has capacity **1**, reload amount **1**, and a **1.5 s**
+reload delay. Every resolved head explosion triggers the reload; the neck head reappears
+when the magazine is full.
 
 ---
 

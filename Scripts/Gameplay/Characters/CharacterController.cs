@@ -2,6 +2,7 @@ using Godot;
 using System;
 using System.Collections.Generic;
 using Fableland.Debug;
+using Fableland.Data;
 using Fableland.Run;
 
 /// <summary>
@@ -73,6 +74,9 @@ public partial class CharacterController : CharacterBody2D
 	public float UltCharge { get; private set; }
 	public int LivesRemaining { get; private set; }
 	public bool ControlsLocked { get; set; }
+	/// <summary>Combat-side damage gate used for terminal mission resolution. Unlike
+	/// the short post-hit i-frame timer, this also suppresses hazards and DoT.</summary>
+	public bool Invincible { get; set; }
 
 	/// <summary>Per-character cooldown state for the HUD's skill icons. Base has
 	/// nothing to report; characters with a Shift/E override these.</summary>
@@ -143,6 +147,26 @@ public partial class CharacterController : CharacterBody2D
 	private readonly Dictionary<string, float> _dealtDmgBonuses = new();
 	// Aggregatable defense bonuses by source name (e.g. "Frozen" → +30).
 	private readonly Dictionary<string, float> _defenseBonuses = new();
+	// Continuous environmental movement contributions (e.g. Cleopastar Blackholes).
+	// Unlike _externalVel impulses, these are source-keyed target velocities and do not
+	// decay. The owning field refreshes/clears its own key every physics tick.
+	private readonly Dictionary<string, Vector2> _continuousExternalVelocity = new();
+	protected Vector2 ContinuousExternalVelocity
+	{
+		get
+		{
+			Vector2 total = Vector2.Zero;
+			foreach (Vector2 value in _continuousExternalVelocity.Values) total += value;
+			return total;
+		}
+	}
+
+	/// <summary>Shared basic-attack magazine. Characters configure it in InitCharacter;
+	/// the base owns ticking, persistence, reset, and item-facing speed modifiers.</summary>
+	protected AmmoController Ammo { get; private set; }
+	// The active scene node is a view of this run-state record. Keeping the binding lets
+	// a projectile that outlives a Tab switch persist a just-triggered reload safely.
+	private ProtagonistState _boundAmmoState;
 
 	private float _burnTimer;
 	private float _speedPenaltyTimer;
@@ -188,6 +212,53 @@ public partial class CharacterController : CharacterBody2D
 	/// <summary>Override for per-character stats, immunities, ammo config.</summary>
 	protected virtual void InitCharacter() { }
 
+	/// <summary>Configure this character's one shared BA magazine from pure balance data.</summary>
+	protected void ConfigureAmmo(string characterId)
+	{
+		if (!CharacterTable.TryGetAmmo(characterId, out CharacterAmmoDef def))
+		{
+			GD.PushError($"CharacterController: no ammo definition for '{characterId}'.");
+			return;
+		}
+		Ammo = new AmmoController(def);
+		Ammo.ReloadCompleted += OnAmmoReloaded;
+	}
+
+	/// <summary>Subclass hook for visual/combo state that changes when a reload completes.</summary>
+	protected virtual void OnAmmoReloaded(int restored) { }
+
+	protected bool TryConsumeAmmo(int amount = 1)
+	{
+		bool consumed = Ammo != null && Ammo.TryConsume(amount);
+		if (consumed) Ammo.Save(_boundAmmoState);
+		return consumed;
+	}
+	protected void StartAmmoAttackInterval()
+	{
+		Ammo?.StartAttackInterval();
+		Ammo?.Save(_boundAmmoState);
+	}
+	protected void RequestAmmoReload()
+	{
+		Ammo?.RequestReload();
+		Ammo?.Save(_boundAmmoState);
+	}
+	protected void SetAttackIntervalMultiplier(string source, float multiplier) => Ammo?.SetAttackIntervalMultiplier(source, multiplier);
+	protected void ClearAttackIntervalMultiplier(string source) => Ammo?.ClearAttackIntervalMultiplier(source);
+
+	/// <summary>Set or refresh a named continuous environmental velocity source. Multiple
+	/// sources add; callers must clear their key when their field no longer affects us.</summary>
+	public void SetContinuousExternalVelocity(string source, Vector2 velocity)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		_continuousExternalVelocity[source] = velocity;
+	}
+
+	public void ClearContinuousExternalVelocity(string source)
+	{
+		if (!string.IsNullOrWhiteSpace(source)) _continuousExternalVelocity.Remove(source);
+	}
+
 	/// <summary>
 	/// Hydrate the live character from its run-state (T30 §1) — called by GameManager after
 	/// spawn. MaxHP scales by the permanent additive max-HP percentage points; current HP is
@@ -212,7 +283,16 @@ public partial class CharacterController : CharacterBody2D
 	/// (the run copy). Used both on scene exit and on mid-combat protagonist switch (NODES §3.3).</summary>
 	public void WriteBackToState(ProtagonistState p)
 	{
-		if (p != null) p.HpRatio = HpRatio;
+		if (p == null) return;
+		p.HpRatio = HpRatio;
+		Ammo?.Save(p);
+	}
+
+	/// <summary>Restore persisted BA ammo after InitCharacter has configured it.</summary>
+	public void LoadAmmoFromState(ProtagonistState p)
+	{
+		_boundAmmoState = p;
+		Ammo?.Load(p);
 	}
 
 	/// <summary>Save this character's current skill cooldown remaining times to a
@@ -250,6 +330,7 @@ public partial class CharacterController : CharacterBody2D
 		if (_dead) { if (ShowDebugRanges) QueueRedraw(); return; }
 
 		UpdateTimers(dt);
+		Ammo?.Tick(dt);
 		UpdateStatus(dt);
 		if (!Frozen) HandleAbilities();
 
@@ -334,7 +415,8 @@ public partial class CharacterController : CharacterBody2D
 		else
 		{
 			if (_intentVel.Y > 0f) _intentVel.Y = 0f;
-			RefreshJumps();   // touching ground/platform refreshes jumps
+			if (ShouldRefreshJumpsFromFloor())
+				RefreshJumps();   // ordinary ground/platform support refreshes jumps
 		}
 
 		// A SoftVolume is not a physical floor, but its fable traversal contract grants
@@ -348,12 +430,18 @@ public partial class CharacterController : CharacterBody2D
 			if (Input.IsActionPressed("move_left")) inputDir -= 1f;
 			if (Input.IsActionPressed("move_right")) inputDir += 1f;
 
-			if (Input.IsActionJustPressed("jump") && _jumpsRemaining > 0 && _jumpCdTimer <= 0f)
+			if (Input.IsActionJustPressed("jump") && _jumpCdTimer <= 0f)
 			{
-				_intentVel.Y = JumpVelocity;
-				_jumpsRemaining--;
-				_jumpCdTimer = JumpCooldown;
-				_jumpedSinceGrounded = true;
+				bool spentNormalJump = _jumpsRemaining > 0;
+				// A character-specific support (Cleopastar's normal star) is asked
+				// only when every ordinary jump charge has been spent.
+				if (spentNormalJump || TryUseExhaustedJumpSupport())
+				{
+					_intentVel.Y = JumpVelocity;
+					if (spentNormalJump) _jumpsRemaining--;
+					_jumpCdTimer = JumpCooldown;
+					_jumpedSinceGrounded = true;
+				}
 			}
 
 			UpdateDropThrough(Input.IsActionPressed("move_down"), dt);
@@ -374,7 +462,7 @@ public partial class CharacterController : CharacterBody2D
 		float damping = ExternalDamping * (_softVolume != null ? _softVolume.ExternalDampingMult : 1f);
 		_externalVel = _externalVel.MoveToward(Vector2.Zero, damping * dt);
 
-		Velocity = _intentVel + _externalVel;
+		Velocity = _intentVel + _externalVel + ContinuousExternalVelocity;
 		MoveAndSlide();
 		ReconcileCollisions();
 
@@ -391,6 +479,14 @@ public partial class CharacterController : CharacterBody2D
 		_coyoteConsumed = false;
 		_jumpedSinceGrounded = false;
 	}
+
+	/// <summary>Most solid floors restore jump charges. A character may opt out for a
+	/// transient support surface that should be consumed only by an exhausted jump.</summary>
+	protected virtual bool ShouldRefreshJumpsFromFloor() => true;
+
+	/// <summary>Optional last-resort support, considered only after normal jump charges
+	/// are exhausted. Returning true authorizes the normal jump launch for this input.</summary>
+	protected virtual bool TryUseExhaustedJumpSupport() => false;
 
 	/// <summary>Zero the velocity channels that ran into a surface, so gravity/knockback
 	/// don't accumulate against a wall or floor.</summary>
@@ -571,6 +667,7 @@ public partial class CharacterController : CharacterBody2D
 	/// pure passive trigger (no damage); for others it deals DoT.</summary>
 	public void SetBurning(float duration)
 	{
+		if (Invincible) return;
 		IsBurning = true;
 		_burnTimer = Mathf.Max(_burnTimer, duration);
 		Sprite.SelfModulate = new Color(1f, 0.55f, 0.35f);
@@ -583,7 +680,7 @@ public partial class CharacterController : CharacterBody2D
 	/// (hitstun) window during which control is off and animation is frozen.</summary>
 	public void TakeHit(HitInfo hit)
 	{
-		if (_dead || _invulnTimer > 0f) return;
+		if (_dead || Invincible || _invulnTimer > 0f) return;
 
 		float dealt = hit.Damage * DefenseMultiplier;
 		dealt = AbsorbDamage(dealt);
@@ -607,7 +704,7 @@ public partial class CharacterController : CharacterBody2D
 	/// post-hit invuln window — so standing in one should keep hurting you.</summary>
 	public void ApplyHazard(float damage, Vector2 knockback)
 	{
-		if (_dead) return;
+		if (_dead || Invincible) return;
 
 		// Respawn invincibility also blocks hazard damage
 		if (_invulnTimer > 0f) return;
@@ -632,10 +729,20 @@ public partial class CharacterController : CharacterBody2D
 
 	/// <summary>Add integer "points" to the stackable OnFire hazard debuff (decays
 	/// itself as damage over time; see <see cref="DecayingDebuff"/>).</summary>
-	public void AddFireStack(float amount) { _fire.AddStack(amount); DebugManager.Instance?.LogStatus("OnFire", amount); }
+	public void AddFireStack(float amount)
+	{
+		if (Invincible) return;
+		_fire.AddStack(amount);
+		DebugManager.Instance?.LogStatus("OnFire", amount);
+	}
 
 	/// <summary>Add integer "points" to the stackable Frozen hazard debuff.</summary>
-	public void AddFrozenStack(float amount) { _frozenDebuff.AddStack(amount); DebugManager.Instance?.LogStatus("Frozen", amount); }
+	public void AddFrozenStack(float amount)
+	{
+		if (Invincible) return;
+		_frozenDebuff.AddStack(amount);
+		DebugManager.Instance?.LogStatus("Frozen", amount);
+	}
 
 	/// <summary>Set/clear a named, aggregatable defense contribution (e.g. a skill's
 	/// temporary damage mitigation). Defense is the only damage-taken lever — there's
@@ -648,7 +755,7 @@ public partial class CharacterController : CharacterBody2D
 
 	private void ApplyDotDamage(float amount)
 	{
-		if (_dead) return;
+		if (_dead || Invincible) return;
 		float dealt = amount * DefenseMultiplier;
 		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogDotDmg(dealt, IsBurning ? "Burn" : _fire.Active ? "OnFire" : "Frozen");
@@ -698,6 +805,7 @@ public partial class CharacterController : CharacterBody2D
 		_frozenDebuff.Clear();
 		_dealtDmgBonuses.Clear();
 		_defenseBonuses.Clear();
+		_continuousExternalVelocity.Clear();
 		TempHP = 0f;
 		Died?.Invoke();
 	}
@@ -715,6 +823,7 @@ public partial class CharacterController : CharacterBody2D
 	public void Respawn()
 	{
 		_dead = false;
+		Invincible = false;
 		CurrentHP = MaxHP;
 		GlobalPosition = _spawnPoint;
 		Velocity = _intentVel = _externalVel = Vector2.Zero;
@@ -724,6 +833,8 @@ public partial class CharacterController : CharacterBody2D
 		_frozenDebuff.Clear();
 		_dealtDmgBonuses.Clear();
 		_defenseBonuses.Clear();
+		_continuousExternalVelocity.Clear();
+		Ammo?.ResetForRespawn();
 		TempHP = 0f;
 		Sprite.Modulate = Colors.White;
 		Sprite.SelfModulate = _baseTint;

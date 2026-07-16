@@ -99,8 +99,8 @@ These override convenience. Every department doc assumes them.
 7. **Aggregatable modifiers, keyed by source.** Buffs/debuffs/defense/damage multipliers
    are dictionaries keyed by source string that sum — never a single float that gets
    overwritten (the existing `DamageDealtMultiplier` / `_defenseBonuses` pattern).
-   The **single-timer stackable buff** model (Cleopastar's StarSicking) is the universal
-   pattern for stacking buffs: one timer per buff instance, not per stack.
+   The **single-timer stackable-buff** model is the universal pattern for stacking
+   buffs: one timer per buff instance, not per stack.
 
 ## 4. The change workflow (any feature, any size)
 

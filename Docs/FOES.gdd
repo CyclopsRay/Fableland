@@ -338,6 +338,13 @@ A level-1 combat node on day 35 spawns level-5 foes with a simple objective. A l
 boss node on day 12 spawns level-2 foes with a complex objective. The player balances
 pushing deeper nodes against letting days accumulate.
 
+**Authored map spawn contract (v0.7.0):** a combat map carries a per-hardship crab/seagull
+weight table (level 0 = its default) and optional enemy-spawn row limits. The periodic spawner
+ticks every **4 s**, filters crab/seagull types that lack an eligible map marker, then makes the
+weighted choice. The selected marker is the foe's nest/spawn origin; map-defined crab limits use
+`cellY <= crabMax`, while seagull limits use `cellY >= seagullMin`. Seashore uses 50/50 and
+`crabMax=4`, `seagullMin=5`.
+
 ---
 
 ## 11. Arena foe cap

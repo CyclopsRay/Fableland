@@ -93,6 +93,112 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### An enterable character-specific field needs a membership filter, not a Platform body (v0.8.1, Cleopastar star fix)
+- **Symptom:** using a Platform-layer child to make Cleopastar's stars usable also let that body
+  collide with other stars and forced the jump interaction to depend on floor contacts.
+- **Rule:** when a feature is meant to be entered rather than stood on, model it as a `SoftVolume`
+  with the appropriate `StagnationIndex` and no physics layer. If it belongs to one character,
+  narrow `SoftVolume.AffectsBody` in a subtype and use that volume's overlap membership for the
+  character-specific input check.
+- **Why:** a physical platform creates collision relationships with every other platform-aware
+  object. An Area membership expresses the actual rule—“inside this star”—without inventing
+  unwanted terrain or projectile contacts.
+
+### Collision-layer constants use the project’s plural `LayerFoes` name (v0.8.1, Cleopastar build fix)
+- **Symptom:** the new Cleopastar terrain/effect split failed to compile after referring to a
+  nonexistent `Units.LayerFoe` constant.
+- **Rule:** use the exact shared `Units` constants—`LayerPlayer`, `LayerFoes`, `LayerGround`,
+  `LayerPlatform`, `LayerProjectile`, and `LayerHazard`—rather than inferring a singular name.
+- **Why:** collision layers are a project-wide API. A one-character spelling variation prevents
+  the whole game assembly from building and is easier to avoid than diagnose later.
+
+### Effect range must not double as projectile terrain geometry (v0.8.1, Cleopastar spawn-terrain fix)
+- **Symptom:** Cleopastar's 2–3 m effect circle was also her terrain collider, so a star fired
+  from the hand could begin overlapped with a nearby floor or wall and explode at launch.
+- **Rule:** use the compact rendered core for terrain blocking and retain the larger effect shape
+  only for foes. A launch-only terrain waiver must resolve still-overlapping terrain when it ends,
+  because ignored `BodyEntered` events are not replayed by Godot.
+- **Why:** damage range and physical footprint answer different gameplay questions. Separating
+  them removes spawn false positives without turning a large AoE into a tiny contact effect.
+
+### A special one-way support must not silently refresh ordinary jump charges (v0.8.1, Cleopastar star-platform fix)
+- **Symptom:** Cleopastar's star used the normal Platform layer, so the shared floor logic
+  restored her jump charges every frame; its Area trigger then consumed it merely when she touched
+  it. The intended exhausted-jump interaction could never occur.
+- **Rule:** retain the physical one-way platform for collision, but give the character controller
+  a narrow virtual hook to decline ordinary jump refresh on that support and a second hook used
+  only when normal charges are exhausted. The star is consumed only after that second hook accepts
+  the jump request; Area overlap alone must be inert for the owner.
+- **Why:** platform collision answers “can this body stand here?”, not “should this surface grant
+  a normal resource refill?” Treating those as the same rule erases deliberate movement costs.
+
+### A live arena must own a frozen team snapshot, not reread the shelter build (v0.8.1, party-switch fix)
+- **Symptom:** changing `ActiveBuild` then switching could hydrate the wrong protagonist or make
+  a roster member unreachable, because the arena's active index and the mutable shelter list
+  could disagree. The hardcoded Pome scene also ignored a legitimate first team member.
+- **Rule:** validate the editable team at combat entry, put an immutable ordered copy on the
+  adventure handoff, and let the arena own a local switch cursor for the rest of that battle.
+  Shelter changes apply only to the next snapshot; runtime body creation resolves from the
+  snapshot's first member.
+- **Why:** a team editor and an in-progress encounter have different ownership and lifetimes.
+  Sharing their mutable cursor turns routine UI edits into combat-state corruption.
+
+### Body swaps must transfer the current camera before retiring the old body (v0.8.1, party-switch fix)
+- **Symptom:** after a protagonist switch the outgoing `Camera2D` could remain current or leave
+  no enabled current camera, so the view stopped following the newly-controlled character.
+- **Rule:** during every runtime body replacement, explicitly disable the old character camera,
+  enable the new character camera, and call `MakeCurrent()` before queuing the old body for
+  deletion. A scene's camera node is not automatically inherited by its replacement.
+- **Why:** camera ownership is node-local while player control is logical state. Replacing one
+  does not implicitly transfer the other.
+
+### Mission resolution must gate player damage at the shared controller (v0.8.1, resolution fix)
+- **Symptom:** foes were marked invincible when a level ended, but hazards and damage-over-time
+  could still reduce the player's HP while the reward/Finish Day flow was on screen.
+- **Rule:** set player invincibility on mission resolution and enforce it in every shared intake
+  path: direct hits, hazards, status application, and DoT. Clear that terminal gate on respawn.
+- **Why:** resolving the mission is a combat-state boundary, not merely a foe-spawn change;
+  guarding only one incoming-damage path leaves delayed effects able to violate the contract.
+
+### Projectile terrain rules come from the GDD, not a convenient lingering effect (v0.8.1, PomeSeed fix)
+- **Symptom:** Pome seeds were left as damaging linger fields after touching terrain, even though
+  Pomegraknight.gdd says Ground and Platform destroy them without applying a hit.
+- **Rule:** every projectile must explicitly implement its GDD's terrain resolution; otherwise use
+  the shared default of Ground/Platform blocking and SoftVolume pass-through. Do not retain a
+  prior "land and linger" behaviour merely because the projectile already has an Area2D shape.
+- **Why:** terrain interaction is combat balance, not rendering polish. A one-line collision
+  branch can silently turn an arc projectile into persistent zone denial.
+
+### Reserve mandatory capital approaches before discretionary non-crossing roads (v0.8.1, map fix)
+- **Symptom:** after ordinary local roads had been emitted first, the required second LV3→LV4
+  approach could have no legal route left once road crossings and overlaps were prohibited.
+- **Rule:** reserve both mandatory boss approaches before growing the optional spanning-tree,
+  loop, and hub-spoke roads; later routes must route around those fixed approaches.
+- **Why:** non-crossing topology is order-sensitive. Treating a mandatory path as an afterthought
+  can make an otherwise valid realm impossible to finish without breaking the art constraint.
+
+### Procedural map generation still needs its run-data contracts imported (v0.9.0, build fix)
+- **Symptom:** the rewritten `MapGenerator` did not compile because its mission rolls referenced
+  `MissionType` without importing the `Fableland.Run` namespace.
+- **Rule:** when moving a generator into the map layer, explicitly import every data contract it
+  writes (`MissionType`, terrain labels, and so on); do not assume nearby map namespaces expose
+  run data transitively.
+- **Why:** C# namespaces are not inherited by directory location, so a pure generator can compile
+  only when all cross-layer contracts are named deliberately.
+
+### Functional map nodes inherit visual ring labels, not combat devour membership (v0.9.0, VOID fix)
+- **Symptom:** a Transportation Hub or Event could be eaten merely because its display
+  `LevelTag` matched the day schedule, even when an adjacent city still survived.
+- **Rule:** apply `VoidSchedule` directly to combat nodes only. Functional nodes use the separate
+  all-neighbours-devoured orphan rule, regardless of their borrowed display level.
+- **Why:** an edge-splitting node is spatial infrastructure, not a city in a combat ring; its tag
+  is useful for presentation but cannot safely be treated as lifecycle ownership.
+
+### C# local declarations cannot reuse a later method-scope name inside a nested block (v0.7.0, combat-map build fix)
+- **Symptom:** `GameManager.RandomPlacementPoint` failed to compile after the authored-map branch introduced a local `x`, while the legacy fallback below still declared its own `x`.
+- **Rule:** in C#, give branch-specific locals distinct names when any enclosing method block declares the same identifier, even if their source ranges do not overlap in execution. Use descriptive names such as `authoredX` at integration boundaries.
+- **Why:** local-variable scope is determined by the containing block, not just runtime reachability; a minor fallback branch can therefore invalidate an otherwise isolated feature path.
+
 ### Platform defaults are full footprints; the effect painter is the only source of bespoke platform geometry (v0.6.18, Map Creation collision clarification)
 - **Symptom:** the bench, sun lounger, and lifeguard tower had legacy narrow registry rectangles as fallbacks while the effect painter also stored the authored shape. This made it difficult to tell whether collision came from the active painted mask or an old built-in region.
 - **Rule:** platform TileDefs leave `EffectArea` null, which means their complete footprint is the default collider. A narrower platform surface or a compound tower landing exists only as a saved `TileEffectStore` mask. The painter override remains per tile kind and wins completely; use Clear only to return to the full-footprint fallback.
@@ -718,56 +824,68 @@ is a mistake already paid for once.
   the map while node markers/labels stay upright (a Camera2D rotates/squashes the icons too).
   So hit-testing compares `InputEventMouseButton.Position` (screen) against **`Project(node.Pos)`**
   — do NOT reintroduce `GetGlobalMousePosition()`/a camera without revisiting this. Wheel = zoom
-  (`_zoom`); right/middle-drag = pan (`_pan`, Flat mode only). UI is a `CanvasLayer`, consumed
-  before `_UnhandledInput`. **An earlier v0.3.2 note here said the map used a Camera2D — that was
-  reverted; ignore any stale mention.**
-- Generation order matters: combat nodes → intra-world edges → inter-world edges → **zone 6**
-  → function nodes. Zone 6 is built *before* the function pass but its edges are
-  `Visible=false`, which is also what excludes them from the crossing/probability passes.
+  (`_zoom`); left-drag pans (`_pan`); right-drag centres the player and rotates around that token.
+  UI is a `CanvasLayer`, consumed before `_UnhandledInput`. **An earlier v0.3.2 note here said
+  the map used a Camera2D — that was reverted; ignore any stale mention.**
+- Generation order matters (v0.8.0): choose worlds and deterministic placement shares → frame
+  separate flower-petal coasts → scatter combat nodes → rank level tags by distance to the VOID →
+  boss-rooted intra-world tree/loops → local function nodes → distance-selected bridges →
+  **zone 6**. Zone 6 retains its previous construction and hidden edges; the new outer-world
+  work must never alter its clock or geometry rules.
 - Content of nodes (fights, shelter/question-mark effects) is **not implemented** — nodes
   differ by icon only. Difficulty/reward scaling by level is documented, not coded.
 
-### Rendered "atlas" map view (reference, v0.3.2)
+### Rendered "atlas" map view (reference, v0.8.0)
 - Two views, toggled by the **View** button (`_rendered`, defaults to atlas): the original
   **schematic** (`MapController._Draw` fall-through) and the **atlas** (`MapControllerAtlas.cs`,
   a partial of `MapController`). Both read the SAME `MapGraph` + live state — the atlas adds no
   gameplay, only a rendered layer.
 - `MapRenderModel.Build(graph)` precomputes the atlas (`MapRenderModel.RenderedMap`) after
-  `MapGenerator.Generate`: per-realm **weighted Voronoi (power-diagram)** territories (cell area
-  set by `ClaimRadius(kind)²` — combat big, function small), clipped to a convex island wedge via
-  `ClipHalfPlane` (Sutherland–Hodgman; each cell edge is tagged with the neighbour site that made
-  it, so a shared border is a **road** if a graph edge links the two, else a themed **barrier**).
-  Zone 6 is a central **pentagon** with 5 lv5 territories; XX-S shelters are isolated sea islets;
-  cross-realm edges are **golden causeways**. Determinism preserved (jitter uses `DetRandom(seed+"R")`).
+  `MapGenerator.Generate`: each outer realm is one separate, irregular deterministic petal at
+  its allocated centre angle, narrow beside the VOID and broad at its outer cap. Height tint
+  patches and contour strokes sample the same saved
+  altitude field that classifies nodes as `sea-level`, `low-ground`, or `high-ground`. Roads are
+  the only route cue. Zone 6 is still a central **pentagon** with 5 lv5 territories; XX-S
+  shelters are isolated sea islets; cross-realm edges are **golden causeways**.
 - **`MapGenerator.LayoutScale` (1.8) blows the whole map up uniformly.** A uniform scale preserves
   every crossing/midpoint, so a given seed yields the identical map, just bigger — safe to change.
   `MapGenerator.RimRadius` is the outer playable radius (used to size islands + the schematic wedge).
-- Barriers are **marked, not arted** (per current scope), and each realm has TWO kinds:
-  **AREA** = a thick themed terrain belt drawn along every disconnected frontier (reads as
-  terrain: lake / desert / bamboo forest…), one name label per realm; **POINT** = a small
-  landmark diamond on a *blocked would-be road* (a `MapGraph.FailedCandidates` pair that also
-  shares a territory border — the adjacency filter in `Build` via `barrierMid` kills the label
-  spam), name shown once per realm. Both live in `MapRenderModel.Themes` (`.AreaBarrier` /
-  `.PointBarrier` names, `.AreaColor` / `.PointColor`).
-- **Barrier vs road classification treats a function node as a road HUB** (v0.3.3): the generator
-  splits `city→city` into `city→fn→city`, so `Build` also links every pair of a function node's
-  neighbours in the `linked` set — otherwise the shared border reads as a false barrier even
-  though a road runs through the shelter/`?`. Don't remove this or the "connected but walled-off"
-  bug returns.
-- **Edge-levels 1 & 2 are guaranteed both a shelter AND a `?`** (`MapGenerator`, pass (e)): those
-  levels fire rarely (10% / 25%), so a post-pass adds any missing kind on a random un-split edge.
+- No territory/barrier layer exists in outer worlds. Coastlines are decorative limits against open
+  sea, not a statement that a route is blocked. Do not revive a disconnected-frontier classifier:
+  it conflicts with the gameplay graph and creates false navigation cues.
+- Every outer node must reach its local 4-1. The generator uses a spatial spanning tree rooted at
+  its two LV3 nodes, adds loops, then places exactly one LV3 → `?` → 4-1 route and one distinct
+  LV3 → Shelter → 4-1 route. It additionally places 1–3 Shelters and 1–3 `?` nodes per world;
+  the two boss approaches do not count toward those totals.
 - **Entering ANY zone-6 node = crossing the singularity** (`MapController.EnterVoid`, v0.3.3):
   `_inVoid` latches, **all `WorldIndex != -1` nodes are devoured at once** (no gradual outer
   devour once inside — it's one-way), and the day readout shows **`???`** (time unknowable). The
   atlas renders devoured land as dim "dead ruins" (not black) so the explored map stays legible.
   Lore + rule in `Docs/MapGDD.md` §7.
-- **View modes (v0.3.3)**, cycled by the Cam button: `Flat` (top-down, pan/zoom), `BossUp`
+- **View modes (v0.3.3)**, cycled by the Cam button: `Flat` (top-down), `BossUp`
   (tilted, map spins so the central VOID/boss is always up, player pinned near the bottom),
   `HeadingUp` (tilted, spins so the last step taken points up — set `_lastMoveDir` in `TryMove`).
   Rotation/tilt are smoothed in `_Process`; tilt is an affine vertical foreshorten (`_tilt`),
   NOT true perspective — true book/trapezoid perspective would need a SubViewport→3D quad.
-- `DrawColoredPolygon` assumes **convex** polygons — all atlas cells/islands/pentagon are convex
-  (convex clip ∩ half-planes), so don't feed it a concave polygon or the fill renders wrong.
+- `DrawColoredPolygon` assumes **convex** polygons. An irregular outer coast is concave, so submit
+  its cached triangulated fill (and its altitude patches) separately; never feed the whole coast
+  to that primitive or its fill renders wrong.
+
+### Outer-map geometry must be ranked after scatter and bridged from actual distance (v0.8.0, map fix)
+- **Symptom:** pre-assigned radial level bands could leave distant nodes connected by implausibly
+  long local roads, while fixed ring bridges no longer matched separated realm islands.
+- **Rule:** scatter first, then assign LV4/LV3/2-B/2-A/1-B/1-A by increasing VOID distance. Build
+  local roads from a Euclidean spanning tree, and select 7–9 cross-world bridges from globally
+  distance-sorted candidates with a two-per-world-pair cap and a connectivity check.
+- **Why:** level tags and bridges are topology derived from the generated geometry; deciding them
+  before the geometry exists creates both false progression and visibly bad connections.
+
+### LINQ `Average` returns `double` for integral selectors (v0.8.0, outer-map generator build fix)
+- **Symptom:** assigning `plans.Average(p => p.CombatCount)` directly to a `float` failed with
+  `CS0266`.
+- **Rule:** explicitly cast an integral `Average` to `float` (or use a float selector) at Godot
+  math boundaries.
+- **Why:** the LINQ overload produces `double`; C# does not implicitly narrow it to `float`.
 
 ### Getting a `Font` for `_Draw` without a Control (reference, v0.2.3)
 - **Symptom risk:** `ThemeDB.Singleton.FallbackFont` is easy to get wrong across binding

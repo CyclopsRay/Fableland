@@ -23,15 +23,9 @@ using Fableland.Debug;
 /// </summary>
 public partial class MapController : Node2D
 {
-    // The VOID devour schedule now lives on the map layer as VoidSchedule.DevourDay (shared with
-    // RunState's day-end pipeline). Kept here as an alias so view code reads it unchanged.
-    private static Dictionary<string, int> DevourDay => VoidSchedule.DevourDay;
-
     private const int MaxStamina = RunState.MaxStamina;
     private const float NodeRadius = 11f;
     private const float ClickRadius = 18f;
-    private const float WedgeDeg = 62f;    // world background wedge width (< 72° so worlds show a gap)
-
     private static readonly Color Gold = new(0.91f, 0.76f, 0.42f);
     private static readonly Color VisitedGrey = new(0.42f, 0.42f, 0.47f);
 
@@ -68,14 +62,20 @@ public partial class MapController : Node2D
     public enum ViewMode { Flat, BossUp, HeadingUp }
     private ViewMode _mode = ViewMode.Flat;
     private float _zoom = 1f;
-    private Vector2 _pan;              // Flat-mode pan (screen px)
-    private bool _dragging;
+    private Vector2 _pan;              // screen-space map offset from left-drag panning
+    private bool _leftPointerDown;
+    private bool _leftPanning;
+    private bool _rightRotating;
+    private bool _playerRotationPivot;
+    private Vector2 _leftPressPos;
+    private float _manualRotation;
     private float _rot, _rotTarget;    // view rotation (radians), smoothed toward the target
     private float _tilt = 1f;          // vertical foreshorten — the "tilted book on a table" look
     private Vector2 _lastMoveDir = new(0, -1);
     private Vector2 _anchor;           // screen point the focus is pinned to (recomputed each _Draw)
     private const float TiltFactor = 0.62f;   // how far the map leans back in the tilted modes
     private static readonly Vector2 ZoomLimit = new(0.2f, 4f);
+    private const float DragThresholdPx = 7f;
 
     // UI
     private LineEdit _seedEdit;
@@ -83,6 +83,9 @@ public partial class MapController : Node2D
     private Button _mistButton;
     private Button _renderButton;
     private Button _viewModeButton;
+    private Button _realityButton;
+    private Button _fieldsButton;
+    private bool _showCityFields;
 
     // Debug day editor — visible only when DebugManager.Enabled is true.
     private Control _dayEditor;
@@ -112,6 +115,10 @@ public partial class MapController : Node2D
 
         _viewModeButton = GetNode<Button>("UI/ViewModeButton");
         _viewModeButton.Pressed += OnCycleViewMode;
+        _realityButton = GetNode<Button>("UI/RealityButton");
+        _realityButton.Pressed += OnTwistedReality;
+        _fieldsButton = GetNode<Button>("UI/FieldsButton");
+        _fieldsButton.Pressed += OnToggleCityFields;
         _renderButton.Text = _rendered ? "View: atlas" : "View: schematic";
         UpdateViewModeButton();
 
@@ -185,6 +192,8 @@ public partial class MapController : Node2D
     {
         _mode = (ViewMode)(((int)_mode + 1) % 3);
         _pan = Vector2.Zero;
+        _playerRotationPivot = false;
+        _manualRotation = 0f;
         UpdateViewModeButton();
         QueueRedraw();
     }
@@ -197,8 +206,9 @@ public partial class MapController : Node2D
     };
 
     // ---- view projection -------------------------------------------------------
-    /// <summary>World point the view is pinned on: map center (Flat) or the player (tilted modes).</summary>
-    private Vector2 Focus() => _mode == ViewMode.Flat ? MapGenerator.Center : _tokenPos;
+    /// <summary>World point the view is pinned on. A manual right-drag explicitly promotes the
+    /// player token to the centre pivot, independent of the selected presentation mode.</summary>
+    private Vector2 Focus() => _playerRotationPivot || _mode != ViewMode.Flat ? _tokenPos : MapGenerator.Center;
 
     /// <summary>World → screen: rotate so the heading points up, foreshorten (tilt), zoom, pin the focus.</summary>
     private Vector2 Project(Vector2 world)
@@ -213,20 +223,21 @@ public partial class MapController : Node2D
     /// <summary>Font size that scales with zoom (so labels grow/shrink with the map), min 7px.</summary>
     private int FontSize(int s) => Mathf.Max(7, Mathf.RoundToInt(s * _zoom));
 
-    /// <summary>Screen point the focus is pinned to: center (Flat) or near the bottom (tilted modes).</summary>
+    /// <summary>Screen point the focus is pinned to. Manual rotation always centres the player
+    /// so the map turns around the current position exactly as the map-control contract requires.</summary>
     private Vector2 ComputeAnchor()
     {
         var vp = GetViewport().GetVisibleRect().Size;
-        return _mode == ViewMode.Flat ? vp / 2f : new Vector2(vp.X / 2f, vp.Y * 0.72f);
+        return _playerRotationPivot || _mode == ViewMode.Flat ? vp / 2f : new Vector2(vp.X / 2f, vp.Y * 0.72f);
     }
 
     /// <summary>Desired view rotation so the heading (toward-boss, or last step) points straight up.</summary>
     private float RotTarget()
     {
-        if (_mode == ViewMode.Flat) return 0f;
+        if (_mode == ViewMode.Flat) return _manualRotation;
         var h = _mode == ViewMode.BossUp ? MapGenerator.Center - _tokenPos : _lastMoveDir;
         if (h.LengthSquared() < 1e-4f) h = MapGenerator.Center - _tokenPos;
-        return h.LengthSquared() < 1e-4f ? _rotTarget : h.Angle() + Mathf.Pi / 2f;
+        return (h.LengthSquared() < 1e-4f ? _rotTarget : h.Angle() + Mathf.Pi / 2f) + _manualRotation;
     }
 
     private void OnToggleRender()
@@ -234,6 +245,71 @@ public partial class MapController : Node2D
         _rendered = !_rendered;
         _renderButton.Text = _rendered ? "View: atlas" : "View: schematic";
         QueueRedraw();
+    }
+
+    private void OnToggleCityFields()
+    {
+        _showCityFields = !_showCityFields;
+        _fieldsButton.Text = _showCityFields ? "Fields: on" : "Fields: off";
+        QueueRedraw();
+    }
+
+    private void UpdateTwistedRealityButton()
+    {
+        if (_realityButton == null) return;
+        var rs = RunState.Instance;
+        string reason = "Unavailable.";
+        bool ready = rs != null && _current != null && rs.CanCreateRealityBridge(_current.Id, out reason);
+        _realityButton.Disabled = !ready;
+        _realityButton.Text = ready ? "TwistedReality" : "TwistedReality (locked)";
+        _realityButton.TooltipText = ready ? "Create a permanent bridge to the closest foreign node." : reason ?? "Unavailable.";
+    }
+
+    /// <summary>Uses the held map key. Its one-stamina activation includes the first crossing;
+    /// later crossings use the resulting normal edge and never use the item again.</summary>
+    private void OnTwistedReality()
+    {
+        var rs = RunState.Instance;
+        if (rs == null || _current == null) return;
+        if (!rs.TryCreateRealityBridge(_current.Id, out MapNode destination, out string reason))
+        {
+            ShowMapToast(reason ?? "TwistedReality cannot stabilize here.");
+            UpdateTwistedRealityButton();
+            return;
+        }
+
+        MapNode from = _current;
+        rs.PreviousNodeId = from.Id;
+        rs.CurrentNodeId = destination.Id;
+        _current = destination;
+        _lastMoveDir = destination.Pos - from.Pos;
+        _render = MapRenderModel.Build(_graph); // include the newly persistent violet edge immediately
+
+        bool wasVisited = _visited.Contains(destination);
+        bool triggers = (!wasVisited && destination.Kind != NodeKind.River)
+                        || (destination.IsCombat && !IsCompleted(destination))
+                        || destination.Kind == NodeKind.TransportHub
+                        || destination.Kind == NodeKind.Shelter
+                        || (destination.Kind == NodeKind.Event && !IsResolvedEvent(destination));
+        if (triggers)
+        {
+            rs.BeginAdventure(destination.Id);
+            return;
+        }
+        rs.MarkNodeVisited(destination.Id);
+        _visited.Add(destination);
+        AddRevealed(destination);
+        ShowMapToast($"Reality bridge anchored at {destination.Id}.");
+        UpdateInfo();
+        QueueRedraw();
+    }
+
+    private void ShowMapToast(string text)
+    {
+        if (_toastLabel == null || string.IsNullOrEmpty(text)) return;
+        _toastLabel.Text = text;
+        _toastLabel.Visible = true;
+        _toastTimer = ToastDuration;
     }
 
     /// <summary>Start a fresh run on this seed (debug dice / seed entry), then re-sync the view.</summary>
@@ -259,8 +335,7 @@ public partial class MapController : Node2D
     {
         var rs = RunState.Instance;
         if (rs == null) return;
-        bool flickers = _current != null
-                        && DevourDay.TryGetValue(_current.LevelTag, out int d) && d == rs.Day;
+        bool flickers = _current != null && VoidSchedule.IsFlickering(_graph, _current, rs.Day);
         string text = flickers
             ? "Finish the Day?\n\nWARNING: you are standing on flickering ground — the VOID\n" +
               "devours it tonight. Finishing the day here ENDS THE RUN."
@@ -279,8 +354,8 @@ public partial class MapController : Node2D
         QueueRedraw();
     }
 
-    /// <summary>Region a node belongs to for mist purposes: world abbr, "XX", or null for function nodes.</summary>
-    private static string Region(MapNode n) => n.WorldIndex == -1 ? "XX" : (n.WorldIndex == -2 ? null : n.Zone);
+    /// <summary>Region a node belongs to for mist purposes: its realm abbreviation or XX.</summary>
+    private static string Region(MapNode n) => n.WorldIndex == -1 ? "XX" : n.Zone;
 
     private void AddRevealed(MapNode n) { var r = Region(n); if (r != null) _revealed.Add(r); }
 
@@ -303,18 +378,20 @@ public partial class MapController : Node2D
 
     private void UpdateInfo()
     {
-        int fights = 0, camps = 0, marks = 0;
+        int fights = 0, hubs = 0, shelters = 0, marks = 0;
         foreach (var n in _visited)
         {
             if (n.Kind == NodeKind.Combat || n.Kind == NodeKind.Boss) fights++;
-            else if (n.Kind == NodeKind.Shelter) camps++;
-            else if (n.Kind == NodeKind.QuestionMark) marks++;
+            else if (n.Kind == NodeKind.TransportHub) hubs++;
+            else if (n.Kind == NodeKind.Shelter) shelters++;
+            else if (n.Kind == NodeKind.Event) marks++;
         }
         // Inside the VOID, time is unknowable — the black hole ate the clock.
         string day = _inVoid ? "???" : _day.ToString();
         _infoLabel.Text = $"Day {day}   Stamina {_stamina}/{MaxStamina}\n" +
                           $"Traversed {_visited.Count}\n" +
-                          $"fights {fights}  camps {camps}  ? {marks}";
+                          $"fights {fights}  hubs {hubs}  shelter {shelters}  ? {marks}";
+        UpdateTwistedRealityButton();
     }
 
     /// <summary>Adjust the current day by <paramref name="delta"/> (debug only, clamped to ≥1).
@@ -426,8 +503,9 @@ public partial class MapController : Node2D
             if (!rs.InVoid && target.WorldIndex == -1) rs.EnterVoid();
             bool trig = (!_visited.Contains(target) && target.Kind != NodeKind.River)
                      || (target.IsCombat && !IsCompleted(target))
+                     || target.Kind == NodeKind.TransportHub
                      || target.Kind == NodeKind.Shelter
-                     || (target.Kind == NodeKind.QuestionMark && !IsResolvedEvent(target));
+                     || (target.Kind == NodeKind.Event && !IsResolvedEvent(target));
             if (trig) { rs.BeginAdventure(target.Id); return; }
             rs.MarkNodeVisited(target.Id);
             _visited.Add(target);
@@ -465,8 +543,9 @@ public partial class MapController : Node2D
         bool triggers =
             (!visited && target.Kind != NodeKind.River)                  // any brand-new node w/ content
             || (target.IsCombat && !IsCompleted(target))                 // failed combat re-attempt
-            || target.Kind == NodeKind.Shelter                           // shelter always opens
-            || (target.Kind == NodeKind.QuestionMark && !IsResolvedEvent(target)); // unresolved "?"
+            || target.Kind == NodeKind.TransportHub                      // hub always opens
+            || target.Kind == NodeKind.Shelter                           // one-way VOID shelter always opens
+            || (target.Kind == NodeKind.Event && !IsResolvedEvent(target)); // unresolved "?"
 
         if (triggers)
         {
@@ -516,43 +595,86 @@ public partial class MapController : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        // Wheel zooms; right/middle-drag pans (Flat mode only — tilted modes follow the player).
-        if (@event is InputEventMouseButton wheel)
+        // The wheel keeps its established zoom behaviour.
+        if (@event is InputEventMouseButton wheel && wheel.Pressed &&
+            wheel.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
-            if (wheel.Pressed && wheel.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
-            {
-                _zoom = Mathf.Clamp(_zoom * (wheel.ButtonIndex == MouseButton.WheelUp ? 1.12f : 1f / 1.12f),
-                                    ZoomLimit.X, ZoomLimit.Y);
-                QueueRedraw();
-                return;
-            }
-            if (wheel.ButtonIndex is MouseButton.Right or MouseButton.Middle)
-            {
-                _dragging = wheel.Pressed && _mode == ViewMode.Flat;
-                return;
-            }
-        }
-        if (@event is InputEventMouseMotion motion && _dragging)
-        {
-            _pan += motion.Relative;
+            _zoom = Mathf.Clamp(_zoom * (wheel.ButtonIndex == MouseButton.WheelUp ? 1.12f : 1f / 1.12f),
+                                ZoomLimit.X, ZoomLimit.Y);
             QueueRedraw();
             return;
         }
 
-        if (@event is not InputEventMouseButton mb || !mb.Pressed || mb.ButtonIndex != MouseButton.Left)
+        if (@event is InputEventMouseButton button)
+        {
+            if (button.ButtonIndex == MouseButton.Left)
+            {
+                if (button.Pressed)
+                {
+                    _leftPointerDown = true;
+                    _leftPanning = false;
+                    _leftPressPos = button.Position;
+                    if (_toastLabel != null && _toastLabel.Visible) _toastLabel.Visible = false;
+                }
+                else
+                {
+                    // A left press becomes a node selection only when it never crossed the drag
+                    // threshold. This prevents a pan release from accidentally entering combat.
+                    if (_leftPointerDown && !_leftPanning) TrySelectAt(button.Position);
+                    _leftPointerDown = false;
+                    _leftPanning = false;
+                }
+                return;
+            }
+
+            if (button.ButtonIndex == MouseButton.Right)
+            {
+                _rightRotating = button.Pressed;
+                if (button.Pressed)
+                {
+                    // Re-centre before changing angle: the token is the exact rotation centre.
+                    _playerRotationPivot = true;
+                    _pan = Vector2.Zero;
+                }
+                return;
+            }
+        }
+
+        if (@event is InputEventMouseMotion motion)
+        {
+            if (_leftPointerDown)
+            {
+                if (!_leftPanning && motion.Position.DistanceSquaredTo(_leftPressPos) >= DragThresholdPx * DragThresholdPx)
+                    _leftPanning = true;
+                if (_leftPanning)
+                {
+                    // Screen-space panning deliberately follows the cursor one-to-one.
+                    _pan += motion.Relative;
+                    QueueRedraw();
+                }
+                return;
+            }
+
+            if (_rightRotating)
+            {
+                _playerRotationPivot = true;
+                _manualRotation += motion.Relative.X * 0.009f;
+                QueueRedraw();
+            }
             return;
+        }
 
-        // Dismiss-on-click: any left click clears the day-end toast (doesn't consume the click —
-        // the same click still resolves as a move below).
-        if (_toastLabel != null && _toastLabel.Visible) _toastLabel.Visible = false;
+    }
 
-        // Hit-test in SCREEN space: compare the cursor to each node's PROJECTED position.
+    /// <summary>Hit-test only on a true left click (not after a drag), in projected screen space.</summary>
+    private void TrySelectAt(Vector2 screenPosition)
+    {
         MapNode target = null;
         float best = ClickRadius * ClickRadius;
         foreach (var n in _graph.Nodes)
         {
             if (n.Devoured) continue;
-            float d = Project(n.Pos).DistanceSquaredTo(mb.Position);
+            float d = Project(n.Pos).DistanceSquaredTo(screenPosition);
             if (d < best) { best = d; target = n; }
         }
         if (target != null) TryMove(target, VisitedSteps());
@@ -566,12 +688,6 @@ public partial class MapController : Node2D
         string r = Region(n);
         if (r == "XX") return _revealed.Contains("XX");
         if (r != null) return _revealed.Contains(r);
-        // function node: visible if it touches a combat/boss node in a revealed outer world
-        foreach (var e in _graph.EdgesOf(n))
-        {
-            var m = e.Other(n);
-            if (m.WorldIndex >= 0 && _revealed.Contains(m.Zone)) return true;
-        }
         return false;
     }
 
@@ -589,6 +705,16 @@ public partial class MapController : Node2D
             if (!_mist || _revealed.Contains(_graph.Worlds[w].Abbr))
                 DrawWedge(w, _graph.Worlds[w].Color);
 
+        DrawCityTerritories();
+
+        if (_render != null)
+            foreach (var river in _render.Rivers)
+            {
+                DrawColoredPolygon(ProjectPoly(river.Polygon), new Color(0.18f, 0.38f, 0.66f));
+                DrawPolyline(ProjectPoly(river.LeftBank), new Color(0.70f, 0.84f, 1f, 0.78f), Scaled(1.2f));
+                DrawPolyline(ProjectPoly(river.RightBank), new Color(0.70f, 0.84f, 1f, 0.78f), Scaled(1.2f));
+            }
+
         // Zone 6 (the VOID): dark disc containing the lv5 ring, the lake, the river ring.
         bool voidSeen = !_mist || _revealed.Contains("XX");
         DrawCircle(Project(_graph.Center), Scaled(_graph.Zone6Radius), new Color(0.02f, 0.02f, 0.04f));
@@ -604,7 +730,10 @@ public partial class MapController : Node2D
         {
             if (!e.Visible || e.A.Devoured || e.B.Devoured) continue;
             if (_mist && !NodeVisible(e.A) && !NodeVisible(e.B)) continue;
-            DrawLine(Project(e.A.Pos), Project(e.B.Pos), new Color(0.55f, 0.55f, 0.55f, 0.75f), 1.5f);
+            Color colour = e.Kind == MapEdgeKind.RealityBridge
+                ? new Color(0.78f, 0.38f, 1f, 0.95f)
+                : new Color(0.55f, 0.55f, 0.55f, 0.75f);
+            DrawRoute(e.Route, colour, Scaled(e.Kind == MapEdgeKind.RealityBridge ? 3.5f : 1.5f));
         }
 
         // Nodes.
@@ -626,16 +755,38 @@ public partial class MapController : Node2D
 
     private void DrawWedge(int w, Color color)
     {
-        float startDeg = -90f + w * 72f - WedgeDeg / 2f;
-        var pts = new List<Vector2> { Project(_graph.Center) };
-        int seg = 12;
-        for (int i = 0; i <= seg; i++)
+        if (_render == null || w < 0 || w >= _render.Landmasses.Count) return;
+        var surface = _render.Landmasses[w];
+        foreach (var piece in surface.FillPieces)
         {
-            float deg = startDeg + WedgeDeg * i / seg;
-            float rad = Mathf.DegToRad(deg);
-            pts.Add(Project(_graph.Center + new Vector2(Mathf.Cos(rad), Mathf.Sin(rad)) * MapGenerator.RimRadius));
+            var projected = new Vector2[piece.Length];
+            for (int p = 0; p < piece.Length; p++) projected[p] = Project(piece[p]);
+            DrawColoredPolygon(projected, new Color(color.R, color.G, color.B, 0.12f));
         }
-        DrawColoredPolygon(pts.ToArray(), new Color(color.R, color.G, color.B, 0.12f));
+        DrawPolyline(Closed(ProjectPoly(surface.Coast)), new Color(color.R, color.G, color.B, 0.5f), Scaled(1.2f));
+    }
+
+    /// <summary>Draw city-owned fields on demand, and always darken a field after its city has
+    /// been devoured. The map graph owns the fields; this is presentation only.</summary>
+    private void DrawCityTerritories()
+    {
+        if (_render == null) return;
+        foreach (MapRenderModel.CityTerritory territory in _render.CityTerritories)
+        {
+            MapNode city = territory.City;
+            if (_mist && !_revealed.Contains(city.Zone)) continue;
+            if (city.Devoured)
+            {
+                foreach (Vector2[] piece in territory.FillPieces)
+                    DrawColoredPolygon(ProjectPoly(piece), new Color(0.05f, 0.03f, 0.08f, 0.68f));
+            }
+            if (_showCityFields)
+            {
+                Color line = city.Devoured ? new Color(0.85f, 0.28f, 0.40f, 0.92f)
+                    : new Color(1f, 0.94f, 0.62f, 0.44f);
+                DrawPolyline(Closed(ProjectPoly(territory.Boundary)), line, Scaled(city.Devoured ? 1.7f : 1f));
+            }
+        }
     }
 
     private void DrawFrontier(MapNode n)
@@ -651,7 +802,7 @@ public partial class MapController : Node2D
         var p = Project(n.Pos);
         float r = Scaled(NodeRadius);
         float alpha = 1f;
-        if (DevourDay.TryGetValue(n.LevelTag, out int d) && d == _day)
+        if (VoidSchedule.IsFlickering(_graph, n, _day))
             alpha = 0.45f + 0.45f * Mathf.Sin(_time * 8f);
 
         if (reachable)
@@ -669,10 +820,13 @@ public partial class MapController : Node2D
             case NodeKind.Boss:
                 DrawDiamond(p, r + Scaled(3f), c);
                 break;
-            case NodeKind.Shelter:
+            case NodeKind.TransportHub:
                 DrawTriangle(p, r + Scaled(1f), c);
                 break;
-            case NodeKind.QuestionMark:
+            case NodeKind.Shelter:
+                DrawRect(new Rect2(p - new Vector2(r, r), new Vector2(r * 2f, r * 2f)), c);
+                break;
+            case NodeKind.Event:
                 DrawCircle(p, r, c);
                 DrawString(_font, p + new Vector2(-4, 5), "?",
                     HorizontalAlignment.Left, -1, 14, new Color(0, 0, 0, alpha));

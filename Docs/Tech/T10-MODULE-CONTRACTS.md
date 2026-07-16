@@ -66,7 +66,7 @@ implicit in `TakeHit`/`ApplyHazard`; keep this canonical order when extending:
 5. Shield absorption              (currentShield before HP — PumpKing/Pangda)
 6. HP application + events        (HpChanged, popups, hitflash, shake, ult-charge credit)
 7. Reactions                      (knockback AddImpulse, stun window, on-hit passives:
-                                   thorns/Kashaya, lifesteal/Zhen Qi, StarSicking-style stacks)
+                                   thorns/Kashaya, lifesteal/Zhen Qi, stackable effects)
 ```
 
 New effects declare their stage. Lifesteal reads the **post-mitigation** number from
