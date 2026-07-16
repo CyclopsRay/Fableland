@@ -592,6 +592,31 @@ perish timers, and the 5-stamina refresh all run normally. There are no plantati
 NPCs in the VOID, and devour is moot (the outer ring is already consumed). Only the day
 *display* is unknowable.
 
+### 7.5 Run checkpoints, slots, and pause
+
+The title screen's **Play** button presents exactly **three save slots**. An empty slot
+starts a fresh seeded run; an occupied slot continues its saved run. Each slot stores a
+versioned run snapshot, including the seed and durable map mutations (currently VOID
+devour state and reality bridges), current/previous node, team build, party HP/base-stat
+state/cooldowns/ammo, backpack item instances, shelter/event resolution, and run counters.
+The map section is intentionally a distinct extensibility boundary: future authored-map
+or world changes are added there rather than serializing the derived seeded graph.
+
+From the **map** or an active **battle**, **Esc** pauses the game and presents
+**Continue**, **Settings**, and **Save & Quit**. Continue resumes the frozen scene.
+Save & Quit writes the active slot and returns to title. An unfinished battle does not
+serialize live foes, projectiles, or mission timers: Continue rebuilds the same
+deterministic node encounter from its node contract, retaining the saved party/build/HP
+state. This avoids a brittle live-combat snapshot while never leaving a player stranded
+on an exhausted combat node. Settings is the reserved entry point for the later
+versioned meta save (unlocks/settings/statistics).
+
+The game also writes a checkpoint immediately after every **non-terminal mission
+resolution** (goal achieved or survivable timeout/failure) and after successful
+**Finish the Day** resolution. Death and run victory erase the slot, preserving
+permadeath. Snapshots write through a temporary same-directory file then replace the
+slot, and unknown newer fields survive a load/rewrite by an older build.
+
 ---
 
 ## 8. Level 5 & 6 (TODO)
@@ -723,3 +748,8 @@ designed in a future content pass.
   placeholder events ship as the pipeline proof.
 - **(v0.5.0) Day-end visibility:** the map shows a one-shot toast summarizing the
   day-end pipeline's effects (new day, what the VOID devoured, stamina restored).
+- **(unreleased) Checkpointed runs use three player-selected slots.** Map/battle Esc
+  pauses with Continue, Settings, and Save & Quit. We save durable RunState data at
+  non-terminal mission resolution and day end; Save & Quit during an unfinished battle
+  restarts that deterministic encounter on Continue rather than serializing live combat
+  objects. This preserves a safe checkpoint without weakening permadeath.

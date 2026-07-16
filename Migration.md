@@ -9,6 +9,14 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.9.0** — **Run slots, safe checkpoints, and pause.** Play now opens three persistent
+  save slots: empty starts a run, occupied continues it. Versioned atomic snapshots retain the
+  seed, map deltas (VOID/devour + reality bridges), node state, party/build/base stats, backpack,
+  and counters while preserving unknown future fields. Esc in Map or Arena opens Continue,
+  Settings, and Save & Quit. Battle checkpoints preserve the party and restart the same
+  deterministic unfinished node rather than serializing live combat. Non-terminal goal/time
+  resolution and Finish the Day auto-save; death/victory erase the slot. (Verification: `dotnet
+  build`, 0 errors/warnings; static scene/input checks.)
 - **0.8.1** — **Realm fields, one-way threshold, and city-based VOID pressure.** Every outer
   realm now rolls 3–5 Transportation Hubs and 4–6 degree-two Event nodes, with every new
   road/spoke rejected if it would cross or cover an existing path. Capitals sit beyond a central

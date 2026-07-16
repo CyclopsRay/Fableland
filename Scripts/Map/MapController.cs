@@ -3,6 +3,7 @@ using Godot;
 using Fableland.Map;
 using Fableland.Run;
 using Fableland.Debug;
+using Fableland.UI;
 
 /// <summary>
 /// Root of the Map scene — the <b>Exploration-mode view + input layer</b> (v0.5.0). All run
@@ -595,6 +596,13 @@ public partial class MapController : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
+        if (@event.IsActionPressed("pause"))
+        {
+            GetViewport().SetInputAsHandled();
+            PauseMenu.Open(this, () => RunState.Instance?.SaveAndQuit() ?? false);
+            return;
+        }
+
         // The wheel keeps its established zoom behaviour.
         if (@event is InputEventMouseButton wheel && wheel.Pressed &&
             wheel.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)

@@ -145,16 +145,23 @@ testable headlessly. **No other code path may perform any of these effects.**
 
 ## 6. Save / load
 
-- **Meta save** (`user://meta.json`): unlocks, settings, stats. Versioned (T20 §5).
-- **Run snapshot** (`user://run.json`): serialize RunState (seed + day + node states +
-  party + inventory instances + NPC/plantation state). Written at each day-end (a
-  natural checkpoint), deleted on death/victory — permadeath means *no mid-combat
-  save*, and day-end granularity makes save-scumming unattractive without punishing
-  crashes (a crash costs at most the current day — acceptable, and rule T00 #4 says
-  crashes must not happen anyway).
+- **Meta save** (`user://meta.json`, future): unlocks, settings, stats. Versioned (T20 §5).
+- **Run slots** (`user://saves/slot_1.json` … `slot_3.json`): exactly three versioned
+  RunState snapshots. Serialize seed, day/stamina/VOID, node-state sets, durable map
+  deltas (devoured ids + reality bridges), party/build/base state, item instances, and
+  run counters. The seeded `MapGraph` is re-derived then its durable delta is applied;
+  reserve `MapSaveData` for future authored-map changes.
+- **Checkpoint policy:** save after every non-terminal mission resolution and after
+  successful day-end resolution, plus explicit map/battle **Save & Quit**. A live battle
+  checkpoint stores the run/party and a resume-node marker, then reconstructs the same
+  deterministic encounter on Continue; do not serialize transient foes/projectiles/
+  mission timers. Delete the active slot on death or victory.
 - Serialize **instance state, not derived state** (never save effective stats — they
   recompute from base + modifiers).
-- Write via temp-file + rename (atomic-ish); read tolerates missing file (fresh run).
+- Every DTO has public properties plus `[JsonExtensionData]`; the loader switches by
+  version through explicit migration functions and preserves unknown fields on rewrite.
+  Write via temp-file + same-directory rename (atomic-ish); read tolerates a missing
+  slot (fresh run). `SaveGameService.RoundTripSelfTest` is a no-file regression hook.
 
 ## 7. Shelter / event scenes (v0.5.0)
 
@@ -173,5 +180,6 @@ Map/Finish-the-Day buttons per NODES §1: availability is a pure function
 `(nodeType, missionStatus, choicesResolved) → {mapEnabled, finishEnabled, canMove}` —
 implement literally as that function with a unit test per GDD row, because these
 gating rules are exactly what regresses silently. Confirmation popup is one reusable
-scene. The pause-while-map-open uses `GetTree().Paused` + process-mode exemptions for
-the map layer (set `ProcessMode` deliberately on the map CanvasLayer).
+scene. The map/battle pause uses `GetTree().Paused`; its overlay must process **Always**
+while the arena/missions do not tick. A manager that otherwise uses Always (the arena's
+debug restart flow) explicitly returns before combat work while the tree is paused.

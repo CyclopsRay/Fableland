@@ -5,6 +5,7 @@ using Fableland.Run;
 using Fableland.Debug;
 using Fableland.MapCreation.Data;
 using Fableland.MapCreation.Runtime;
+using Fableland.UI;
 
 /// <summary>
 /// The arena's integrator (T30 §3, NODES §4). Owns the "Entities"/foe-spawn plumbing the
@@ -550,6 +551,10 @@ public partial class GameManager : Node2D
             return;
         }
 
+        // This node normally processes while paused for the debug win/restart path above. A real
+        // pause menu must freeze every combat timer, spawn, and mission tick instead.
+        if (GetTree().Paused) return;
+
         // 3-second pre-combat grace period: no foe spawns, mission timer frozen, countdown
         // shown so the player can orient before the fight begins. Must run BEFORE
         // Spawner.Tick so the spawner is already disabled on the very first frame.
@@ -651,6 +656,11 @@ public partial class GameManager : Node2D
             bool success = _mission.Status == MissionStatus.Succeeded;
             RunState.Instance.ReportGoal(success, success ? _mission.Reward() : null);
 
+            // Goal and non-fatal timer expiry are checkpoints. This happens after ReportGoal so
+            // node completion/rewards/failure bounce are durable before the player can Finish Day.
+            if (!RunState.Instance.SaveActiveRun(out string saveError))
+                GD.PushError($"[GameManager] Mission-resolution save failed: {saveError}");
+
             if (success && _mission.IsFinalBoss)
             {
                 RunState.Instance.EndRun(RunEndKind.Victory);
@@ -706,6 +716,8 @@ public partial class GameManager : Node2D
                 return;
             }
             RunState.Instance.ReportGoal(true, _mission.Reward());
+            if (!RunState.Instance.SaveActiveRun(out string saveError))
+                GD.PushError($"[GameManager] Debug-skip save failed: {saveError}");
             if (_mission.IsFinalBoss)
             {
                 RunState.Instance.EndRun(RunEndKind.Victory);
@@ -720,6 +732,24 @@ public partial class GameManager : Node2D
     {
         if (_hasRun && _player != null)
             _player.WriteBackToState(_protagonist);
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (!@event.IsActionPressed("pause")) return;
+        GetViewport().SetInputAsHandled();
+        PauseMenu.Open(this, SaveBattleAndQuit);
+    }
+
+    /// <summary>Pause-menu checkpoint boundary. The active body owns live HP, ammo, and skill
+    /// cooldowns, so copy them into its ProtagonistState before RunState serializes the run.</summary>
+    private bool SaveBattleAndQuit()
+    {
+        if (!_hasRun || RunState.Instance == null) return false;
+        WriteBackHp();
+        if (_player != null && _protagonist != null)
+            _player.SaveCooldownsToState(_protagonist);
+        return RunState.Instance.SaveAndQuit(resumeUnfinishedBattle: !_goalResolved);
     }
 
     // ── Player death ──────────────────────────────────────────────────────────────────────

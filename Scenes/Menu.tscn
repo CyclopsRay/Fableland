@@ -43,4 +43,42 @@ text = "Map Creation"
 [node name="StartButton" type="Button" parent="Center/VBox"]
 custom_minimum_size = Vector2(200, 56)
 layout_mode = 2
-text = "Start"
+text = "Play"
+
+[node name="SlotPanel" type="VBoxContainer" parent="Center"]
+visible = false
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Heading" type="Label" parent="Center/SlotPanel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Choose a Save Slot"
+horizontal_alignment = 1
+
+[node name="Slot1" type="Button" parent="Center/SlotPanel"]
+custom_minimum_size = Vector2(340, 72)
+layout_mode = 2
+text = "Slot 1"
+
+[node name="Slot2" type="Button" parent="Center/SlotPanel"]
+custom_minimum_size = Vector2(340, 72)
+layout_mode = 2
+text = "Slot 2"
+
+[node name="Slot3" type="Button" parent="Center/SlotPanel"]
+custom_minimum_size = Vector2(340, 72)
+layout_mode = 2
+text = "Slot 3"
+
+[node name="Status" type="Label" parent="Center/SlotPanel"]
+visible = false
+layout_mode = 2
+autowrap_mode = 2
+horizontal_alignment = 1
+
+[node name="BackButton" type="Button" parent="Center/SlotPanel"]
+custom_minimum_size = Vector2(340, 46)
+layout_mode = 2
+text = "Back"

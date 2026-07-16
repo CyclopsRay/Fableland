@@ -93,6 +93,17 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### An unreadable save slot is not an empty save slot (v0.9.0, save-slot review)
+- **Symptom:** the title slot picker represented a corrupt or newer-version file as
+  unoccupied; selecting it then followed the "new game" path and could overwrite the only
+  recoverable copy of that save.
+- **Rule:** preserve the distinction among empty, valid, and unreadable slots all the way to
+  the UI action. Only a genuinely missing slot may start a new run; a loader diagnostic must be
+  shown without writing to that slot.
+- **Why:** persistence failures are data-loss risks, not ordinary menu states. Treating an
+  unreadable file as absence turns a recoverable compatibility or disk issue into irreversible
+  loss at the first click.
+
 ### An enterable character-specific field needs a membership filter, not a Platform body (v0.8.1, Cleopastar star fix)
 - **Symptom:** using a Platform-layer child to make Cleopastar's stars usable also let that body
   collide with other stars and forced the jump interaction to depend on floor contacts.

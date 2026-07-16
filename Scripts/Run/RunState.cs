@@ -77,10 +77,108 @@ public partial class RunState : Node
     private readonly DayEndPipeline _pipeline = new();
     private Dictionary<string, MapNode> _nodeById;
 
-    public override void _EnterTree() => Instance = this;
+    // Save ownership: a loaded DTO is retained only to preserve its unknown forward-compatible
+    // JSON fields when this build writes it again. Gameplay continues to read/write this class.
+    private RunSaveData _saveTemplate;
+    public int ActiveSaveSlot { get; private set; } = -1;
+    private string _pendingBattleResumeNodeId;
+
+    public override void _EnterTree()
+    {
+        Instance = this;
+        if (OS.IsDebugBuild() && !SaveGameService.RoundTripSelfTest(out string error))
+            GD.PushError($"[RunState] Save DTO self-test failed: {error}");
+    }
     public override void _ExitTree() { if (Instance == this) Instance = null; }
 
     // ============================================================= run lifecycle
+
+    /// <summary>Read-only title-menu summaries for the three player-visible save slots.</summary>
+    public SaveSlotInfo[] GetSaveSlots()
+    {
+        var slots = new SaveSlotInfo[SaveGameService.SlotCount];
+        for (int i = 0; i < slots.Length; i++) slots[i] = SaveGameService.GetSlotInfo(i);
+        return slots;
+    }
+
+    /// <summary>Start a fresh seeded run in the selected slot and immediately claim it with an
+    /// initial snapshot. The title UI never has to know the save-file format.</summary>
+    public bool StartNewRunInSlot(int slot, string seed, out string error)
+    {
+        error = null;
+        if (slot < 0 || slot >= SaveGameService.SlotCount)
+        {
+            error = "Save slot is out of range.";
+            return false;
+        }
+        ActiveSaveSlot = slot;
+        NewRun(seed);
+        return SaveActiveRun(out error);
+    }
+
+    /// <summary>Hydrate a slot into RunState. A normal checkpoint resumes on the map; an
+    /// unfinished battle is rebuilt from its deterministic node contract, never from live
+    /// mission/foe/projectile objects.</summary>
+    public bool TryLoadRunFromSlot(int slot, out string error)
+    {
+        error = null;
+        if (!SaveGameService.TryRead(slot, out RunSaveData save, out error)) return false;
+        try
+        {
+            HydrateSave(save);
+            ActiveSaveSlot = slot;
+            _saveTemplate = save;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"Could not restore save slot {slot + 1}: {ex.Message}";
+            GD.PushError($"[RunState] {error}");
+            return false;
+        }
+    }
+
+    /// <summary>Write the active slot. Runs launched directly for debugging default to slot 1 so
+    /// the same pause command remains useful outside the title menu.</summary>
+    public bool SaveActiveRun(out string error)
+    {
+        if (Graph == null) { error = "There is no run to save."; return false; }
+        if (ActiveSaveSlot < 0) ActiveSaveSlot = 0;
+        return SaveGameService.TryWrite(ActiveSaveSlot, BuildSaveData(), out error);
+    }
+
+    /// <summary>Checkpoint the run, return to the title screen, and leave no live Adventure
+    /// handshake behind. This is the shared Save &amp; Quit endpoint for map and arena pause menus.</summary>
+    public bool SaveAndQuit(bool resumeUnfinishedBattle = false)
+    {
+        _pendingBattleResumeNodeId = resumeUnfinishedBattle && CurrentAdventure != null
+            && (CurrentAdventure.Kind == NodeKind.Combat || CurrentAdventure.Kind == NodeKind.Boss)
+            ? CurrentAdventure.NodeId : null;
+        CurrentAdventure = null;
+        if (!SaveActiveRun(out string error))
+        {
+            GD.PushError($"[RunState] Save & Quit failed: {error}");
+            return false;
+        }
+        GetTree().Paused = false;
+        GetTree().ChangeSceneToFile("res://Scenes/Menu.tscn");
+        return true;
+    }
+
+    /// <summary>Enter a just-loaded run. Battle Save &amp; Quit restarts the same unfinished node
+    /// immediately, with the persisted party/HP/build but a fresh deterministic encounter. All
+    /// other checkpoints land on the map.</summary>
+    public void ResumeLoadedRun()
+    {
+        string battleNodeId = _pendingBattleResumeNodeId;
+        _pendingBattleResumeNodeId = null;
+        if (!string.IsNullOrEmpty(battleNodeId))
+        {
+            BeginAdventure(battleNodeId);
+            return;
+        }
+        ReturnToMap();
+    }
 
     /// <summary>Start a brand-new run: generate the map, reset everything, day 1, stamina full.</summary>
     public void NewRun(string seed)
@@ -98,6 +196,9 @@ public partial class RunState : Node
         RunFinished = false;
         LastEndKind = RunEndKind.Death;
         CurrentAdventure = null;
+        _saveTemplate = null;
+        _pendingBattleResumeNodeId = null;
+        if (ActiveSaveSlot < 0) ActiveSaveSlot = 0;
 
         VisitedNodeIds.Clear();
         CompletedNodeIds.Clear();
@@ -255,6 +356,8 @@ public partial class RunState : Node
             var parts = new List<string> { $"Day {dayLabel} begins." };
             parts.AddRange(DayEndNotes);
             LastDayEndSummary = string.Join(" ", parts);
+            if (!SaveActiveRun(out string saveError))
+                GD.PushError($"[RunState] Day-end save failed: {saveError}");
             ReturnToMap();
         }
     }
@@ -274,6 +377,13 @@ public partial class RunState : Node
         if (RunFinished) return;
         RunFinished = true;
         LastEndKind = kind;
+        _pendingBattleResumeNodeId = null;
+        // Permadeath and victory close the run; retaining the checkpoint would turn a terminal
+        // state into a Continue option. Auto-saves that happened just before this call are
+        // therefore intentionally removed.
+        if (ActiveSaveSlot >= 0) SaveGameService.Delete(ActiveSaveSlot);
+        ActiveSaveSlot = -1;
+        _saveTemplate = null;
         GetTree().ChangeSceneToFile("res://Scenes/RunOver.tscn");
     }
 
@@ -638,6 +748,268 @@ public partial class RunState : Node
     {
         Owned.Add(new ProtagonistState(id));
         ProtagonistsCollected++;
+    }
+
+    // ============================================================= persistence
+
+    /// <summary>Copy the owned run state into the versioned file DTO. Static map geometry is
+    /// regenerated from Seed; this records only the durable mutations that differ per run.</summary>
+    private RunSaveData BuildSaveData()
+    {
+        RunSaveData save = _saveTemplate ?? new RunSaveData();
+        save.Version = SaveGameService.CurrentVersion;
+        save.Seed = Seed ?? "";
+        save.Day = Day;
+        save.InVoid = InVoid;
+        save.Stamina = Stamina;
+        save.CurrentNodeId = CurrentNodeId ?? "";
+        save.PreviousNodeId = PreviousNodeId ?? "";
+        save.ResumeBattleNodeId = _pendingBattleResumeNodeId ?? "";
+        save.VisitedNodeIds = SortedIds(VisitedNodeIds);
+        save.CompletedNodeIds = SortedIds(CompletedNodeIds);
+        save.MundaneShelterIds = SortedIds(MundaneShelterIds);
+        save.ResolvedEventIds = SortedIds(ResolvedEventIds);
+        save.ActiveBuild = new List<string>(ActiveBuild);
+        save.ActiveProtagonistIndex = ActiveProtagonistIndex;
+        save.WonderCores = WonderCores;
+        save.NodesTraversed = NodesTraversed;
+        save.GoalsSucceeded = GoalsSucceeded;
+        save.ProtagonistsCollected = ProtagonistsCollected;
+        save.ItemsCollected = ItemsCollected;
+        save.WorldsVisited = SortedIds(_worldsSet);
+
+        save.Map ??= new MapSaveData();
+        var devoured = new List<string>();
+        if (Graph != null)
+            foreach (MapNode node in Graph.Nodes)
+                if (node.Devoured) devoured.Add(node.Id);
+        devoured.Sort(StringComparer.Ordinal);
+        save.Map.DevouredNodeIds = devoured;
+
+        var priorBridges = save.Map.RealityBridges ?? new List<RealityBridgeSaveData>();
+        var bridges = new List<RealityBridgeSaveData>();
+        if (Graph != null)
+        {
+            foreach (MapEdge edge in Graph.Edges)
+            {
+                if (edge.Kind != MapEdgeKind.RealityBridge) continue;
+                RealityBridgeSaveData dto = FindBridgeDto(priorBridges, edge.A.Id, edge.B.Id)
+                    ?? new RealityBridgeSaveData();
+                dto.NodeAId = edge.A.Id;
+                dto.NodeBId = edge.B.Id;
+                bridges.Add(dto);
+            }
+        }
+        save.Map.RealityBridges = bridges;
+
+        var priorParty = new Dictionary<string, ProtagonistSaveData>(StringComparer.Ordinal);
+        if (save.Owned != null)
+            foreach (ProtagonistSaveData prior in save.Owned)
+                if (prior != null && !string.IsNullOrEmpty(prior.Id) && !priorParty.ContainsKey(prior.Id))
+                    priorParty.Add(prior.Id, prior);
+        var party = new List<ProtagonistSaveData>();
+        foreach (ProtagonistState protagonist in Owned)
+        {
+            ProtagonistSaveData dto = priorParty.TryGetValue(protagonist.Id, out ProtagonistSaveData prior)
+                ? prior : new ProtagonistSaveData();
+            CopyToSave(protagonist, dto);
+            party.Add(dto);
+        }
+        save.Owned = party;
+
+        var priorItems = save.Items ?? new List<ItemSaveData>();
+        var items = new List<ItemSaveData>();
+        for (int i = 0; i < Items.Count; i++)
+        {
+            ItemInstance item = Items[i];
+            ItemSaveData dto = i < priorItems.Count && priorItems[i]?.DefId == item.DefId
+                ? priorItems[i] : new ItemSaveData();
+            dto.DefId = item.DefId ?? "";
+            dto.DayCooldownRemaining = item.DayCooldownRemaining;
+            items.Add(dto);
+        }
+        save.Items = items;
+        return save;
+    }
+
+    /// <summary>Restore a version-migrated DTO. Invalid content ids are warned about and skipped
+    /// rather than making a save file unplayable after content changes.</summary>
+    private void HydrateSave(RunSaveData save)
+    {
+        if (save == null || string.IsNullOrWhiteSpace(save.Seed))
+            throw new InvalidOperationException("The save has no run seed.");
+
+        Seed = save.Seed.Trim().ToUpperInvariant();
+        Rng = new DetRandom(Seed);
+        Graph = MapGenerator.Generate(Seed);
+        _nodeById = new Dictionary<string, MapNode>();
+        foreach (MapNode node in Graph.Nodes) _nodeById[node.Id] = node;
+
+        var devoured = new HashSet<string>(save.Map?.DevouredNodeIds ?? new List<string>(), StringComparer.Ordinal);
+        foreach (MapNode node in Graph.Nodes) node.Devoured = devoured.Contains(node.Id);
+        if (save.Map?.RealityBridges != null)
+        {
+            foreach (RealityBridgeSaveData bridge in save.Map.RealityBridges)
+            {
+                MapNode a = FindNode(bridge?.NodeAId);
+                MapNode b = FindNode(bridge?.NodeBId);
+                if (!Graph.AddRealityBridge(a, b))
+                    GD.PushWarning($"[RunState] skipped invalid saved reality bridge '{bridge?.NodeAId}' ↔ '{bridge?.NodeBId}'.");
+            }
+        }
+
+        Day = Math.Max(1, save.Day);
+        Stamina = Math.Clamp(save.Stamina, 0, MaxStamina);
+        InVoid = save.InVoid;
+        RunFinished = false;
+        LastEndKind = RunEndKind.Death;
+        CurrentAdventure = null; // live arena state is not part of a checkpoint
+        MapNode resumeNode = FindNode(save.ResumeBattleNodeId);
+        _pendingBattleResumeNodeId = resumeNode?.IsCombat == true ? resumeNode.Id : null;
+        if (!string.IsNullOrEmpty(save.ResumeBattleNodeId) && _pendingBattleResumeNodeId == null)
+            GD.PushWarning($"[RunState] skipped invalid saved battle resume '{save.ResumeBattleNodeId}'.");
+        LastDayEndSummary = "";
+        DayEndNotes.Clear();
+
+        RestoreNodeIdSet(VisitedNodeIds, save.VisitedNodeIds, "visited node");
+        RestoreNodeIdSet(CompletedNodeIds, save.CompletedNodeIds, "completed node");
+        RestoreNodeIdSet(MundaneShelterIds, save.MundaneShelterIds, "mundane shelter");
+        RestoreNodeIdSet(ResolvedEventIds, save.ResolvedEventIds, "resolved event");
+
+        CurrentNodeId = FindNode(save.CurrentNodeId)?.Id ?? Graph.StartNode.Id;
+        PreviousNodeId = FindNode(save.PreviousNodeId)?.Id ?? CurrentNodeId;
+        if (!VisitedNodeIds.Contains(CurrentNodeId)) VisitedNodeIds.Add(CurrentNodeId);
+
+        Owned.Clear();
+        if (save.Owned != null)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ProtagonistSaveData protagonist in save.Owned)
+            {
+                if (protagonist == null || string.IsNullOrWhiteSpace(protagonist.Id) || !seen.Add(protagonist.Id))
+                    continue;
+                if (ProtagonistRoster.GetScene(protagonist.Id) == null)
+                {
+                    GD.PushWarning($"[RunState] skipped unknown saved protagonist '{protagonist.Id}'.");
+                    continue;
+                }
+                Owned.Add(CopyFromSave(protagonist));
+            }
+        }
+        if (Owned.Count == 0)
+        {
+            GD.PushWarning("[RunState] save had no valid protagonists; restored Pomegraknight.");
+            Owned.Add(new ProtagonistState("Pomegraknight"));
+        }
+
+        ActiveBuild.Clear();
+        var activeSeen = new HashSet<string>(StringComparer.Ordinal);
+        if (save.ActiveBuild != null)
+            foreach (string id in save.ActiveBuild)
+                if (FindProtagonist(id) != null && activeSeen.Add(id) && ActiveBuild.Count < PartyCap())
+                    ActiveBuild.Add(id);
+        if (ActiveBuild.Count == 0) ActiveBuild.Add(Owned[0].Id);
+        ActiveProtagonistIndex = Math.Clamp(save.ActiveProtagonistIndex, 0, ActiveBuild.Count - 1);
+
+        WonderCores = Math.Max(0, save.WonderCores);
+        Items.Clear();
+        if (save.Items != null)
+            foreach (ItemSaveData item in save.Items)
+            {
+                if (item == null || string.IsNullOrWhiteSpace(item.DefId))
+                {
+                    GD.PushWarning("[RunState] skipped saved item with no id.");
+                    continue;
+                }
+                Items.Add(new ItemInstance(item.DefId) { DayCooldownRemaining = Math.Max(0, item.DayCooldownRemaining) });
+            }
+
+        NodesTraversed = Math.Max(VisitedNodeIds.Count, Math.Max(0, save.NodesTraversed));
+        GoalsSucceeded = Math.Max(0, save.GoalsSucceeded);
+        ProtagonistsCollected = Math.Max(Owned.Count, Math.Max(0, save.ProtagonistsCollected));
+        ItemsCollected = Math.Max(Items.Count, Math.Max(0, save.ItemsCollected));
+        _worldsSet.Clear();
+        if (save.WorldsVisited != null)
+            foreach (string world in save.WorldsVisited)
+                if (!string.IsNullOrWhiteSpace(world)) _worldsSet.Add(world);
+        if (_worldsSet.Count == 0)
+            foreach (string nodeId in VisitedNodeIds)
+            {
+                MapNode node = FindNode(nodeId);
+                if (node?.WorldIndex >= 0) _worldsSet.Add(node.Zone);
+                else if (node?.WorldIndex == -1) _worldsSet.Add("XX");
+            }
+    }
+
+    private void RestoreNodeIdSet(HashSet<string> target, List<string> ids, string label)
+    {
+        target.Clear();
+        if (ids == null) return;
+        foreach (string id in ids)
+        {
+            if (FindNode(id) == null)
+            {
+                GD.PushWarning($"[RunState] skipped unknown saved {label} '{id}'.");
+                continue;
+            }
+            target.Add(id);
+        }
+    }
+
+    private static List<string> SortedIds(IEnumerable<string> values)
+    {
+        var result = new List<string>(values);
+        result.Sort(StringComparer.Ordinal);
+        return result;
+    }
+
+    private static RealityBridgeSaveData FindBridgeDto(List<RealityBridgeSaveData> bridges, string a, string b)
+    {
+        foreach (RealityBridgeSaveData bridge in bridges)
+            if (bridge != null && ((bridge.NodeAId == a && bridge.NodeBId == b)
+                || (bridge.NodeAId == b && bridge.NodeBId == a)))
+                return bridge;
+        return null;
+    }
+
+    private static void CopyToSave(ProtagonistState source, ProtagonistSaveData destination)
+    {
+        destination.Id = source.Id ?? "";
+        destination.HpRatio = source.HpRatio;
+        destination.BonusAtk = source.BonusAtk;
+        destination.BonusDef = source.BonusDef;
+        destination.MaxHpPercentPoints = source.MaxHpPercentPoints;
+        destination.HeldItemDefId = source.HeldItemDefId;
+        destination.HeldItemDayCooldownRemaining = source.HeldItemDayCooldownRemaining;
+        destination.HeldItemFromBackpack = source.HeldItemFromBackpack;
+        destination.ShiftCdRemaining = source.ShiftCdRemaining;
+        destination.ESkillCdRemaining = source.ESkillCdRemaining;
+        destination.AmmoInitialized = source.AmmoInitialized;
+        destination.AmmoCurrent = source.AmmoCurrent;
+        destination.AmmoAttackCooldownRemaining = source.AmmoAttackCooldownRemaining;
+        destination.AmmoReloadActive = source.AmmoReloadActive;
+        destination.AmmoReloadRemaining = source.AmmoReloadRemaining;
+    }
+
+    private static ProtagonistState CopyFromSave(ProtagonistSaveData source)
+    {
+        return new ProtagonistState(source.Id)
+        {
+            HpRatio = Math.Clamp(source.HpRatio, 0f, 1f),
+            BonusAtk = source.BonusAtk,
+            BonusDef = source.BonusDef,
+            MaxHpPercentPoints = Math.Max(0, source.MaxHpPercentPoints),
+            HeldItemDefId = source.HeldItemDefId,
+            HeldItemDayCooldownRemaining = Math.Max(0, source.HeldItemDayCooldownRemaining),
+            HeldItemFromBackpack = source.HeldItemFromBackpack,
+            ShiftCdRemaining = Math.Max(0f, source.ShiftCdRemaining),
+            ESkillCdRemaining = Math.Max(0f, source.ESkillCdRemaining),
+            AmmoInitialized = source.AmmoInitialized,
+            AmmoCurrent = Math.Max(0, source.AmmoCurrent),
+            AmmoAttackCooldownRemaining = Math.Max(0f, source.AmmoAttackCooldownRemaining),
+            AmmoReloadActive = source.AmmoReloadActive,
+            AmmoReloadRemaining = Math.Max(0f, source.AmmoReloadRemaining),
+        };
     }
 
     // ============================================================= debug
