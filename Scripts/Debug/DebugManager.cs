@@ -432,6 +432,17 @@ public partial class DebugManager : CanvasLayer
     {
         // Rebuild the full BBcode text each frame the viewer is open. For a few hundred
         // lines this is cheap; at 2000 lines it's still fine for a debug tool.
+        if (_entries.Count == 0)
+        {
+            // Log() no-ops while debug mode is off, so an empty buffer is ambiguous —
+            // say which case it is instead of leaving the pane blank.
+            _logContent.Text = Enabled
+                ? "[color=#aaaaaa]Debug mode is ON — no events logged yet.[/color]"
+                : "[color=#aaaaaa]Debug mode is OFF, so nothing has been recorded. Click the DBG button (top-right) to start logging, then reopen this panel.[/color]";
+            _logTitle.Text = "Debug Log  (0 lines, 5/Esc to close)";
+            return;
+        }
+
         var sb = new System.Text.StringBuilder();
         foreach (var e in _entries)
         {
