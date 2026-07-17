@@ -873,8 +873,8 @@ dash direction vector.
 | `Scripts/Foes/BaseFoe.cs` | `Invincible` property guarding `TakeHit` + `ApplyHazard` |
 | `Scripts/Foes/SeagullFoe.cs` | Contact damage on (20), `_dashDir` → Vector2 (toward player) |
 | `Docs/NODES.gdd` | §3.3 cooldown penalty updated to 1/(2n−2) formula |
-| `Sprites/UI/mugshot_next_pomegraknight.svg` | Placeholder pomegranate mugshot |
-| `Sprites/UI/mugshot_next_pumpking.svg` | Placeholder pumpkin mugshot |
+| `Assets/Sprites/UI/mugshot_next_pomegraknight.svg` | Placeholder pomegranate mugshot |
+| `Assets/Sprites/UI/mugshot_next_pumpking.svg` | Placeholder pumpkin mugshot |
 | `Scripts/GameVersion.cs` / `VERSION` / HUD+Map VersionLabels | 0.6.0 → 0.6.5 |
 
 ---

@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using Fableland.Items;
 
 /// <summary>
 /// Minimal HUD — HP bar, lives (debug only), the mission panel (title/progress/timer/secondary
@@ -38,6 +39,9 @@ public partial class Hud : CanvasLayer
     private Label _shiftCdLabel;
     private TextureProgressBar _eCd;
     private Label _eCdLabel;
+    private Control _itemSlot;
+    private TextureProgressBar _itemCd;
+    private Label _itemCdLabel;
 
     // Switch-protagonist slot — same pattern as Shift/E/Item slots: icon + radial CD overlay + label.
     private Control _switchSlot;
@@ -61,8 +65,8 @@ public partial class Hud : CanvasLayer
     // Keyed by protagonist Id; only the two implemented characters have entries.
     private static readonly System.Collections.Generic.Dictionary<string, string> _nextMugshotPaths = new()
     {
-        {"Pomegraknight", "res://Sprites/UI/mugshot_next_pomegraknight.svg"},
-        {"PumpKing", "res://Sprites/UI/mugshot_next_pumpking.svg"},
+        {"Pomegraknight", "res://Assets/Sprites/UI/mugshot_next_pomegraknight.svg"},
+        {"PumpKing", "res://Assets/Sprites/UI/mugshot_next_pumpking.svg"},
     };
 
     public override void _Ready()
@@ -99,6 +103,9 @@ public partial class Hud : CanvasLayer
         _shiftCdLabel = GetNode<Label>("StatusCluster/ShiftSlot/CdLabel");
         _eCd = GetNode<TextureProgressBar>("StatusCluster/ESlot/CooldownOverlay");
         _eCdLabel = GetNode<Label>("StatusCluster/ESlot/CdLabel");
+        _itemSlot = GetNode<Control>("StatusCluster/ItemSlot");
+        _itemCd = GetNode<TextureProgressBar>("StatusCluster/ItemSlot/CooldownOverlay");
+        _itemCdLabel = GetNode<Label>("StatusCluster/ItemSlot/CdLabel");
         _switchSlot = GetNode<Control>("StatusCluster/SwitchSlot");
         _switchIcon = GetNode<TextureRect>("StatusCluster/SwitchSlot/Icon");
         _switchCdOverlay = GetNode<TextureProgressBar>("StatusCluster/SwitchSlot/CooldownOverlay");
@@ -106,12 +113,12 @@ public partial class Hud : CanvasLayer
 
         _mugshotStates = new Texture2D[]
         {
-            GD.Load<Texture2D>("res://Sprites/UI/mugshot_full.svg"),
-            GD.Load<Texture2D>("res://Sprites/UI/mugshot_high.svg"),
-            GD.Load<Texture2D>("res://Sprites/UI/mugshot_mid.svg"),
-            GD.Load<Texture2D>("res://Sprites/UI/mugshot_low.svg"),
-            GD.Load<Texture2D>("res://Sprites/UI/mugshot_critical.svg"),
-            GD.Load<Texture2D>("res://Sprites/UI/mugshot_dead.svg"),
+            GD.Load<Texture2D>("res://Assets/Sprites/UI/mugshot_full.svg"),
+            GD.Load<Texture2D>("res://Assets/Sprites/UI/mugshot_high.svg"),
+            GD.Load<Texture2D>("res://Assets/Sprites/UI/mugshot_mid.svg"),
+            GD.Load<Texture2D>("res://Assets/Sprites/UI/mugshot_low.svg"),
+            GD.Load<Texture2D>("res://Assets/Sprites/UI/mugshot_critical.svg"),
+            GD.Load<Texture2D>("res://Assets/Sprites/UI/mugshot_dead.svg"),
         };
 
         // Sane defaults until GameManager pushes real mission state.
@@ -180,6 +187,17 @@ public partial class Hud : CanvasLayer
         // Dim the icon while the switch is on cooldown — same visual language as the
         // skill slots' radial fill, but on the mugshot itself.
         _switchIcon.SelfModulate = onCd ? new Color(0.35f, 0.35f, 0.35f, 1f) : Colors.White;
+    }
+
+    /// <summary>Drive the existing F/item cooldown radial. Map-only or passive-only held items
+    /// remain visible but have no radial fill, making the equipped state legible in combat.</summary>
+    public void SetHeldItem(string defId, float remaining, float max)
+    {
+        bool held = !string.IsNullOrWhiteSpace(defId);
+        _itemSlot.Visible = held;
+        if (!held) return;
+        _itemSlot.TooltipText = $"{ItemCatalog.DisplayName(defId)} — F";
+        UpdateCooldownSlot(_itemCd, _itemCdLabel, (remaining, max));
     }
 
     public void SetUltCharge(float cur, float max)

@@ -3,14 +3,16 @@
 Design doc for the wonder-item layer: slots, acquisition, anatomy (passive / skill /
 cooldown), features/tags, lifecycle patterns, and the item catalog.
 
-Implementation target: `Scripts/Items/`. First landing: **v0.6.0**.
+Implementation target: `Scripts/Items/`. The next runtime landing is the **v0.10.0
+combat-item prototype**; the earlier v0.6.0 landing supplied only catalog display data,
+one held slot, and Transportation-Hub equipment management.
 
-> **Status (v0.9.0):** the inventory remains deliberately small — catalog display data, one held
-> slot per protagonist, and Transportation-Hub equipment management — but `TwistedReality` is
-> now a shipped exception: the starting LV4 awards it, its held map skill creates a permanent
-> bridge, and its five-day cooldown ticks at day-end. Other passives, skills, lifecycle tags,
-> rolled stats, perish/conversion, and day/second cooldown systems remain future work; do not
-> read the rest of this document as shipped behaviour unless it is explicitly marked v0.9.0.
+> **Status (v0.10.0):** every held item is now an instance with persistent day/second cooldowns.
+> FanChen's Heart, Yukai's Rope, The Forgotten Kashaya, Pome's Bravery, and Pome's Seed are live
+> combat prototypes; their mission/event rewards can be equipped at a Transportation Hub and
+> activated with **F** in the arena where applicable.
+> TwistedReality is live as a possession rewind and Eidolon-bridge map skill. Planting,
+> conversion, perish, rolled stats, and the remaining catalog entries are still design-only.
 
 ---
 
@@ -24,12 +26,20 @@ items mean more options, but only a few can be active at once.
 
 | Container | Capacity | Effect |
 |-----------|----------|--------|
-| **Held slot** | 1 per protagonist (3 max with a full party) | Passive is active; skill is usable; cooldown ticks down at day-end resolution. |
-| **Backpack** | Unlimited | Items are carried but **inert** — no passive, skill unavailable, cooldown does **not** tick. |
+| **Held slot** | 1 per protagonist (3 max with a full party) | Passive is active; skill is usable; its applicable cooldown ticks (days at day-end; seconds in combat). |
+| **Backpack** | Unlimited | Items are carried but **inert** — no passive, skill unavailable, and ordinary cooldowns do **not** tick. |
 
 The player can swap items between backpack and held slots at any **Transportation Hub**
 (which currently reuses the shelter service scene; see `NODES.gdd` §5.1). Held slots are
 per-protagonist.
+
+**Backpack presentation (v0.10.1):** selecting a held-item bubble in Team Build opens a
+five-column grid of square icons. It contains every backpack instance plus all currently held
+instances; a held icon is grey and tilted but can still be clicked to swap it with the selected
+holder. The backpack portion is ordered by the catalog's stable display order, with live
+prototype items first; hovering an icon opens a cursor-adjacent label containing its name,
+passive, and skill. The approved master sheet and independently replaceable icon files live in
+`Assets/Sprites/Items/WonderItems/`.
 
 **Benching rule:** when a protagonist is benched, their held item **auto-returns to
 the backpack**. Team build and item assignment can only be changed at a shelter node,
@@ -50,6 +60,10 @@ so the player cannot bench a protagonist mid-combat or mid-exploration to shuffl
 | Plantation harvest | Harvesting a planted item yields its fruit |
 | Item conversion | Some items transform into others after use |
 | **TODO** | Foes may rarely **hold** a wonder item and use it in combat; killing them drops it |
+
+**Current prototype rewards:** Protect grants FanChen's Heart, Destroy grants The Forgotten
+Kashaya, an outer BOSS grants Yukai's Rope, and the Abandoned Cart event grants Pome's Bravery.
+The first starting-realm LV4 victory additionally grants TwistedReality.
 
 ---
 
@@ -144,8 +158,8 @@ The item can be **planted** in a plantation slot at a shelter node (see `NODES.g
 | **Inheritance** | Optional — the fruit's stats may inherit a range (e.g., 60%–140%) of the parent item's attributes, rolled at harvest time. |
 
 *Examples:*
-- Pome's Seed — 7 days, harvests 1–3× Pome's Bravery, each inheriting 60%–140% of the
-  father's rolled stats
+- Pome's Seed — 7 days; the harvest output is **TBD**, while every inherited stat rolls
+  60%–140% of the father's rolled stats
 - Pixolotl's Wish — 7 days, harvests 2× Pixolotl's Feather
 - A Rotten Mushroom — 4 days, generates 4× Weird Mushrooms with inherited HP range + random consequence
 
@@ -217,8 +231,8 @@ world crack + teleport, then claw faints.*
 
 | Domain | Description | Examples |
 |--------|-------------|----------|
-| **Combat** | Passive + skill both function inside the arena. Cooldown is second-based. | FanChen's Heart, Yukai's Rope, The Forgotten Kashaya, THE VOID (skill is combat-only) |
-| **Exploration** | Passive and/or skill affect the overworld map. Cooldown is day-based. | QiongFeng Emperor's Claw, TwistedReality |
+| **Combat** | Passive + skill both function inside the arena. Cooldown is normally second-based, unless the item definition explicitly uses a day CD. | FanChen's Heart, Yukai's Rope, The Forgotten Kashaya, THE VOID (skill is combat-only) |
+| **Exploration** | Passive and/or skill affect the overworld map. Cooldown is normally day-based. | QiongFeng Emperor's Claw, TwistedReality |
 | **Hybrid** | Combat passive + world-map skill, or vice versa. May have both CD types. | DD (combat passive + day-based skill), Pome's Bravery (combat passive + single-use skill → plantable), Pixolotl's Feather (combat passive + day-rewind skill), A Weird Mushroom (single-use combat buff + next-day world effect) |
 
 ### 6.2 By lifecycle archetype
@@ -239,13 +253,22 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | Pixolotl's Feather | — | ✓ (→Wish) | — | — | — |
 | Pixolotl's Wish | — | — | ✓ (7d) | — | — |
 | Forgotten Kashaya | — | — | — | — | — |
-| QiongFeng Emperor's Claw | — | ✓ (on trigger) | — | — | — |
+| QiongFeng Emperor's Claw | — | — (consumed on trigger) | — | — | — |
 | TwistedReality | — | — | — | — | — |
 | A Weird Mushroom | ✓ (2d) | ✓ (→Rotten) | — | — | — |
 | A Rotten Mushroom | — | — | ✓ (4d) | — | — |
 
 > **Rule:** `Eternal` and `Convertible` are mutually exclusive. No item in the catalog
 > carries both, and no future item should.
+
+### 6.4 Shared status-duration modifiers
+
+Some items extend an existing status: Pome's Bravery / Seed extend **OnFire** by
+0.2 s, and FanChen's Heart extends **Frozen** by 0.2 s. The extension applies to
+each status application received by the holder, not once to the aggregate stack.
+
+> **Implementation note (v0.10.0):** the combat-status layer uses source-aware queued duration
+> extensions, so these modifiers delay stack decay without becoming extra stacks or damage.
 
 ---
 
@@ -268,7 +291,7 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 |-------|-------|
 | Domain | Hybrid (exploration passive, combat skill) |
 | Lifecycle | Static (permanent burden) |
-| Passive | **`Eternal` `Possession`.** Every 4 days, a **VOID PHANTOM** spawns on the overworld map. The player's vision is shared by all phantoms — they see what you see. Each time the player enters a new node, all phantoms move one step toward the player's position. |
+| Passive | **`Eternal` `Possession`.** Every 4 days, a **VOID PHANTOM** spawns on the overworld map. The player's vision is shared by all phantoms — they see what you see. Each time the player challenges a new node, all phantoms move one step toward the player's position. |
 | Skill | **Combat only.** All foes lose their vision for 10 seconds. |
 | CD | 2 days (day-based) |
 | Tags | `Possession`, `Eternal` |
@@ -286,7 +309,7 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | Domain | Hybrid |
 | Lifecycle | Static |
 | Passive | Each time you pick up a wonder core, heal 2% of max HP. |
-| Skill | **Combat.** Release DD — a small bug-like creature that **crouches** on the ground. DD moves along the ground dealing **200 damage** to everything in its path. It turns around on hitting a wall. The player must **reclaim** DD (walk into it) to stow it again. |
+| Skill | **Combat.** Release DD — a small bug-like creature that **crouches** on the ground. DD moves along the ground, devouring everything damageable in its path for **200 damage**. It turns around on hitting a wall. The player must **reclaim** DD (walk into it) to stow it again. |
 | CD | 2 days (day-based) |
 | Tags | — |
 
@@ -317,7 +340,12 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | CD | — |
 | Tags | `Plantable` |
 | Harvest time | **7 days** |
-| Fruit | **1–3× Pome's Bravery** (quantity rolled at harvest). Each Bravery **inherits 60%–140%** of the father's rolled stats (same inheritance model as Pixolotl's Wish / A Rotten Mushroom, §4.3). |
+| Fruit | **TBD.** Every inheritable stat on the harvest output rolls **60%–140%** of the father's corresponding rolled stat. |
+
+> **Implementation note (v0.10.0):** Bravery and Seed now share their OnFire duration and
+> 5%-damage-heal passive in combat. Bravery's **F** skill grants 60 OnFire stacks and converts
+> the held instance into Seed immediately. The plantation system does not yet exist, so Seed's
+> planting/7-day harvest remains unavailable rather than being simulated through the backpack.
 
 ### 7.6 FanChen's Heart
 
@@ -325,7 +353,7 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 |-------|-------|
 | Domain | Combat |
 | Lifecycle | Static |
-| Passive | While Frozen: restore **30% of post-mitigation direct damage** received from enemies (effectively: Frozen = lifesteal against incoming hits). |
+| Passive | Frozen duration +0.2 s per application. While Frozen: restore **30% of post-mitigation direct damage** received from enemies (effectively: Frozen = lifesteal against incoming hits). |
 | Skill | **Combat.** Grant oneself 60 Frozen stacks. |
 | CD | 30 s (second-based) |
 | Tags | — |
@@ -337,7 +365,7 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 | Domain | Combat |
 | Lifecycle | Static |
 | Passive | While in the air: **+30 DEF**. |
-| Skill | **Combat.** Fire a rope 80 m forward. On hitting an obstacle (wall, ground, platform), the player is **dragged** to the impact point. |
+| Skill | **Combat.** Fire a rope 20 m forward. On hitting the first obstacle (wall, ground, platform), the player is **dragged** to the impact point. |
 | CD | 30 s (second-based) |
 | Tags | — |
 
@@ -388,34 +416,35 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 |-------|-------|
 | Domain | Exploration |
 | Lifecycle | Conditional trigger → consumed |
-| Passive | When the player **defeats the current world's LV4 boss**: immediately loot all **unopened chests** in that world. After looting, the world **cracks down** (becomes inaccessible — all its nodes are treated as devoured). The claw then **faints** (is removed from inventory). The player is **teleported to a still-existing shelter node** (one that has not been devoured). If no such shelter exists, the player is teleported to **a level-5 node in zone 6**. |
+| Passive | When the player **defeats the current world's LV4 boss**: immediately loot all **unopened chests** in that domain. After looting, the domain **cracks down** (becomes inaccessible). The claw then **faints** (is removed from inventory), and the player is teleported to a random valid location. |
 | Skill | — |
 | CD | — |
-| Tags | `Convertible` (consumed on trigger) |
+| Tags | — (consumed on trigger) |
 
 > **Design note:** "Chests" and "domain" are future content. For now, "domain" = the
 > current outer world, and "unopened chests" = combat/function nodes the player
-> skipped. The world-crack is a dramatic irreversible action — use wisely.
+> skipped. The world-crack is a dramatic irreversible action — use wisely. "Random valid
+> location" must be selected deterministically from an explicitly-defined eligible-node set
+> before implementation.
 
 ### 7.12 TwistedReality
 
 | Field | Value |
 |-------|-------|
-| Domain | Exploration (cross-realm key) |
+| Domain | Hybrid (possession recovery passive, exploration skill) |
 | Lifecycle | Static, unique boss reward |
-| Passive | — |
-| Skill | **Map only.** While held and standing on a completed `1-A` combat node, transport to the geometrically closest available node in another realm. Ties resolve by deterministic realm order and node id; devoured nodes are excluded. The move costs 1 stamina, follows normal destination-node rules, and creates a permanent reality bridge between the two nodes. Both endpoints are ineligible for another bridge while that bridge exists. If the VOID devours either endpoint, the bridge breaks and the surviving endpoint is released. |
-| CD | **5 days** (day-based). Starts ready when acquired; no valid destination means no activation and no cooldown. |
-| Tags | — |
+| Passive | **`Possession`.** If the player suffers a terminal failure during a BOSS adventure, TwistedReality vanishes and returns the run to the start-of-day snapshot from the most recently completed day. The restored state is then stripped of TwistedReality; it cannot be used twice. |
+| Skill | **Bridge of Eidolon — map only.** While held at a completed **Void-River peripheral city**, create an Eidolon bridge to the nearest eligible city in the closest realm. Neither endpoint may be devoured or already bridge-anchored. A bridge made from an LV4 capital instead targets the geometrically closest available LV5 city in zone 6. Every bridge has an **Eidolon Shelter** at its midpoint. The Shelter provides only Rest, Sharpen Weapon, Sharpen Armor, and Team Build; spending its Blessing immediately transfers the player to the opposite endpoint. |
+| CD | **4 days** (day-based). Starts ready when acquired; no valid destination means no activation and no cooldown. |
+| Tags | `Possession` |
 | Acquisition | Guaranteed first-success reward for the starting realm's LV4 boss (`MapGDD.md` §5). |
 
-> **Design note:** TwistedReality is the intended first cross-realm traversal mechanism. It
-> delays realm hopping until the player has cleared their home capital, then limits repeat travel
-> without making late-run routing permanently unavailable. A successful use leaves behind a
-> normal-stamina bridge; its two endpoints stay locked until it breaks. VOID devour of either
-> endpoint removes the bridge and releases the survivor, without refunding the cooldown. It
-> follows the normal held-item and day-cooldown rules; placing it in the backpack makes its
-> skill unavailable and pauses its cooldown.
+> **Design note:** "Last day" is the complete state captured at the start of the current day:
+> immediately after the preceding successful day-end resolution (or the fresh-run state on day
+> 1). Boss KO and fatal BOSS timer expiry both qualify as terminal BOSS failures. TwistedReality's
+> Possession passive therefore works from the backpack, while its bridge skill still requires the
+> item to be held. The bridge does not consume stamina; its map-changing cost is the four-day
+> cooldown and the irreversible route decision. See `MapGDD.md` §§5–7 and `NODES.gdd` §5.
 
 ### 7.13 A Weird Mushroom
 
@@ -517,11 +546,27 @@ See §5 — Static, Single-use→convert, Perishable→convert, Plantable→harv
 - **(v0.3.7) Permanent stat pools are additive** (max-HP percentage points, flat ATK,
   flat DEF) — see `30-DATA-AND-BALANCE.md` §3 and `NODES.gdd` §5.5.
 - **(v0.6.0) Pome's Seed harvest revised to match the inheritance model.** Was 4 days /
-  independently-randomized fruit; now **7 days / 60%–140% inheritance** of the father's
-  rolled stats, same as Pixolotl's Wish and A Rotten Mushroom. This also resolves a
+  independently-randomized fruit; the harvest became **7 days / 60%–140% inheritance** of
+  the father's rolled stats. The v0.10.0 design sync supersedes the previously specified fruit
+  type and quantity, but preserves that 7-day inheritance rule. This also resolves a
   pre-existing conflict with `T30-FEATURE-BLUEPRINTS.md` §4, whose `ItemInstance.RolledStats`
   comment already assumed a "60–140% rolls" inheritance model project-wide.
-- **(v0.9.0) TwistedReality is a held exploration key.** The first LV4 victory in the
-  starting realm awards it ready. Its 5-day cooldown gates new cross-realm bridges; every
-  successful use permanently joins its two locked endpoints with a normal map edge. Its held-item
-  contract preserves the existing inventory and day-end rules.
+- **(v0.10.0) TwistedReality is a possession recovery key and an Eidolon bridge-maker.** The
+  first starting-realm LV4 victory awards it ready. Any terminal BOSS failure spends it to restore
+  the last completed-day snapshot, even from the backpack. Held use builds an Eidolon Shelter at
+  the bridge midpoint; its 4-day cooldown gates further bridges. An LV4-origin bridge is the only
+  route into zone 6, so losing TwistedReality before creating one can strand the run outside.
+- **(v0.10.0 design sync) Status extensions are duration, not stack, modifiers.** Pome's
+  Bravery / Seed add 0.2 s to every OnFire application; FanChen's Heart does the same for
+  Frozen. This intentionally requires a duration-capable status representation before those
+  effects are implemented.
+- **(v0.10.0 design sync) Yukai's Rope reaches 20 m.** The prior 80 m value was superseded;
+  the first obstacle ends the rope and becomes the drag point.
+- **(v0.10.0 design sync) The Claw is consumed, not converted.** Boss victory loots and
+  cracks its domain, then teleports the player to a deterministic random valid location. The
+  eligible-location rule remains a pre-implementation TBD.
+- **(v0.10.0 design sync) Pome's Seed's harvest contents are TBD.** The confirmed rule is a
+  7-day harvest whose inheritable attributes roll at 60%–140% of the father's values; the
+  specific fruit type and quantity must be set before plantation work begins.
+- **(v0.10.0 design sync) `Pixolotl` is the canonical spelling.** The catalog id and successor
+  remain `pixolotls_wish`; the "Poxilotl" spelling in an early item list is treated as a typo.

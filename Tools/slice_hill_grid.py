@@ -38,7 +38,7 @@ ROWS = ["L1", "L2", "L3", "L4"]
 
 
 def default_out_dir(material: str) -> Path:
-    return Path("Sprites/MapCreation/Beach/Generated") / f"{material.capitalize()}HillSource"
+    return Path("Assets/Sprites/Tiles/VanillaKingdom/Ground") / f"{material.capitalize()}HillSource"
 
 
 def main():

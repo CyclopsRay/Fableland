@@ -33,14 +33,14 @@ LAYER_COLORS = ("#e8c878", "#c99d50", "#9a8264", "#66594d")
 
 def default_out(material: str) -> Path:
     return (
-        Path("Sprites/MapCreation/Beach/Generated/Guides")
+        Path("Assets/Sprites/Tiles/VanillaKingdom/Ground/Guides")
         / f"terrain_{material}_hill_guide.png"
     )
 
 
 def default_peak_out(material: str) -> Path:
     return (
-        Path("Sprites/MapCreation/Beach/Generated/Guides")
+        Path("Assets/Sprites/Tiles/VanillaKingdom/Ground/Guides")
         / f"terrain_{material}_hill_L1_peak_guide.png"
     )
 

@@ -1,8 +1,8 @@
 [gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://Scripts/Protagonists/PumpKing/PumpKingHead.cs" id="1"]
-[ext_resource type="Texture2D" path="res://Assets/Sprites/Characters/PumpKing/Pump_head/roll_pump_head_final.png" id="2"]
-[ext_resource type="Texture2D" path="res://Assets/Sprites/Characters/PumpKing/Pump_head_explode/Pump_explode_2.png" id="3"]
+[ext_resource type="Texture2D" path="res://Assets/Sprites/Protagonists/PumpKing/Pump_head/roll_pump_head_final.png" id="2"]
+[ext_resource type="Texture2D" path="res://Assets/Sprites/Protagonists/PumpKing/Pump_head_explode/Pump_explode_2.png" id="3"]
 
 [sub_resource type="CircleShape2D" id="1"]
 radius = 22.0

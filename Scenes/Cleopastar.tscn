@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://Scripts/Protagonists/Cleopastar/Cleopastar.cs" id="1"]
 [ext_resource type="PackedScene" path="res://Scenes/CleoStar.tscn" id="2"]
 [ext_resource type="Script" path="res://Scripts/UI/ShakeCamera2D.cs" id="3"]
-[ext_resource type="Texture2D" path="res://Assets/Sprites/Characters/Cleopastar/Cleo_idle/Cleo_idle1.png" id="4"]
+[ext_resource type="Texture2D" path="res://Assets/Sprites/Protagonists/Cleopastar/Cleo_idle/Cleo_idle1.png" id="4"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(48, 64)

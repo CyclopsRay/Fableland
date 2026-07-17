@@ -9,7 +9,7 @@ namespace Fableland.Missions;
 /// Destroy (NODES §4.1/§4.2): destroy all N objectives within the time limit. Objectives are
 /// stationary <see cref="DestroyObjective"/>s (report Q8) with table-driven HP, placed from the
 /// mission RNG. The ambient foe spawner keeps harassing the player. All destroyed ⇒ Succeeded;
-/// timer expiry ⇒ Failed (survivable). Reward = 1 placeholder wonder item (NODES §4.1).
+/// timer expiry ⇒ Failed (survivable). Reward = The Forgotten Kashaya prototype item (NODES §4.1).
 /// </summary>
 public sealed class DestroyMission : Mission
 {
@@ -53,7 +53,7 @@ public sealed class DestroyMission : Mission
         return r;
     }
 
-    public override RewardBundle Reward() => new() { ItemDefIds = { "placeholder" } };
+    public override RewardBundle Reward() => new() { ItemDefIds = { "forgotten_kashaya" } };
 
     public override string ProgressText => $"Objectives {_total - Remaining()}/{_total} destroyed";
     public override bool HasTimer => true;

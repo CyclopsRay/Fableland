@@ -154,8 +154,8 @@ public static class EventDefs
                         new EventChoice
                         {
                             Label = "Search the wreckage",
-                            Effects = new[] { EventEffect.GrantItem("placeholder") },
-                            ResultText = "You find a curious trinket among the debris.",
+                            Effects = new[] { EventEffect.GrantItem("pome_bravery") },
+                            ResultText = "You find Pome's Bravery, warm with a sleeping spark.",
                         },
                         new EventChoice
                         {

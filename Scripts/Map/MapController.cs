@@ -262,45 +262,27 @@ public partial class MapController : Node2D
         string reason = "Unavailable.";
         bool ready = rs != null && _current != null && rs.CanCreateRealityBridge(_current.Id, out reason);
         _realityButton.Disabled = !ready;
-        _realityButton.Text = ready ? "TwistedReality" : "TwistedReality (locked)";
-        _realityButton.TooltipText = ready ? "Create a permanent bridge to the closest foreign node." : reason ?? "Unavailable.";
+        _realityButton.Text = ready ? "Bridge of Eidolon" : "Bridge of Eidolon (locked)";
+        _realityButton.TooltipText = ready
+            ? "Build a two-leg bridge to an Eidolon Shelter. Spend that shelter's Blessing to cross."
+            : reason ?? "Unavailable.";
     }
 
-    /// <summary>Uses the held map key. Its one-stamina activation includes the first crossing;
-    /// later crossings use the resulting normal edge and never use the item again.</summary>
+    /// <summary>Uses held TwistedReality to build a bridge in place. Crossing is intentionally
+    /// deferred to the midpoint Eidolon Shelter and consumes that shelter's Blessing.</summary>
     private void OnTwistedReality()
     {
         var rs = RunState.Instance;
         if (rs == null || _current == null) return;
-        if (!rs.TryCreateRealityBridge(_current.Id, out MapNode destination, out string reason))
+        if (!rs.TryCreateRealityBridge(_current.Id, out MapNode shelter, out string reason))
         {
             ShowMapToast(reason ?? "TwistedReality cannot stabilize here.");
             UpdateTwistedRealityButton();
             return;
         }
 
-        MapNode from = _current;
-        rs.PreviousNodeId = from.Id;
-        rs.CurrentNodeId = destination.Id;
-        _current = destination;
-        _lastMoveDir = destination.Pos - from.Pos;
         _render = MapRenderModel.Build(_graph); // include the newly persistent violet edge immediately
-
-        bool wasVisited = _visited.Contains(destination);
-        bool triggers = (!wasVisited && destination.Kind != NodeKind.River)
-                        || (destination.IsCombat && !IsCompleted(destination))
-                        || destination.Kind == NodeKind.TransportHub
-                        || destination.Kind == NodeKind.Shelter
-                        || (destination.Kind == NodeKind.Event && !IsResolvedEvent(destination));
-        if (triggers)
-        {
-            rs.BeginAdventure(destination.Id);
-            return;
-        }
-        rs.MarkNodeVisited(destination.Id);
-        _visited.Add(destination);
-        AddRevealed(destination);
-        ShowMapToast($"Reality bridge anchored at {destination.Id}.");
+        ShowMapToast($"Bridge of Eidolon reaches {shelter.Id}. Travel to its shelter to cross.");
         UpdateInfo();
         QueueRedraw();
     }
@@ -491,7 +473,17 @@ public partial class MapController : Node2D
     private void TryMove(MapNode target, Dictionary<MapNode, int> vdist)
     {
         var rs = RunState.Instance;
-        if (rs == null || target == null || target == _current) return;
+        if (rs == null || target == null) return;
+
+        // A service node is its own destination: clicking the current Transportation Hub or
+        // Shelter reopens its menu without moving the token or spending stamina. Other current
+        // nodes remain inert so a combat node cannot be re-entered for free.
+        if (target == _current)
+        {
+            if (target.Kind is NodeKind.TransportHub or NodeKind.Shelter)
+                rs.BeginAdventure(target.Id);
+            return;
+        }
 
         // ---- Debug mode: jump to any non-devoured node (bypasses all checks) ----
         if (DebugManager.Instance?.Enabled == true && !target.Devoured)

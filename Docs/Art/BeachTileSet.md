@@ -32,7 +32,7 @@ collider/trigger and may be smaller than the visible art.
 | `hazard.bonfire` | Hazard | 2x1 | `Generated/hazard_bonfire_flat.png` | Flat, tiny redraw based on the old small fire. Only the central 0.35 m-radius circle is hazardous. |
 | `hazard.tsunami_trigger` | Hazard | 1x1 | editor-color marker | Single-cell pressure trigger. Runtime scene performs storm fade, sustained shake, wave spawn, restoration, then cooldown. |
 
-Paths above are relative to `Sprites/MapCreation/Beach/`.
+Paths above are relative to `Assets/Sprites/Tiles/VanillaKingdom/`.
 
 ## Source audit and decisions
 
@@ -90,7 +90,7 @@ collision target are **16x8 cells = 512x256 px**. The authored source is a 2x2 s
 
 | Field | Contract |
 |---|---|
-| Asset | `Sprites/MapCreation/Beach/Generated/hazard_tsunami_sheet_2x2.png` |
+| Asset | `Assets/Sprites/Tiles/VanillaKingdom/Hazard/hazard_tsunami_sheet_2x2.png` |
 | Source sheet | 1402x1122 px RGBA; 2 columns x 2 rows |
 | Source frame region | 701x561 px |
 | Runtime display per frame | 512x256 px (16x8 map cells) |

@@ -106,7 +106,7 @@ public static class TileManifestLoader
     }
 
     /// <summary>Sidecar convention: `foo.tile.json` next to `foo.png` in the same directory,
-    /// exposed as a `res://` path when the manifest lives under this repo's `Sprites/` tree.</summary>
+    /// exposed as a `res://` path when the manifest lives under this repo's `Assets/Sprites/` tree.</summary>
     private static string DeriveSpritePath(string manifestPath)
     {
         string fileName = Path.GetFileName(manifestPath);
@@ -118,7 +118,7 @@ public static class TileManifestLoader
         string dir = Path.GetDirectoryName(manifestPath) ?? "";
         string pngPath = Path.Combine(dir, baseName + ".png").Replace('\\', '/');
 
-        int idx = pngPath.IndexOf("Sprites/", StringComparison.Ordinal);
+        int idx = pngPath.IndexOf("Assets/Sprites/", StringComparison.Ordinal);
         return idx >= 0 ? "res://" + pngPath[idx..] : pngPath;
     }
 
@@ -140,7 +140,7 @@ public static class TileManifestLoader
             AutotileGroup = "terrain.selftest",
             AutotileKind = "layered_hill",
             Edges = new TileManifestEdges { Top = "open-air-ok", Right = "x", Bottom = "x", Left = "x" },
-            ArtSource = "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
+            ArtSource = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/terrain_beach_atlas.png",
             Prompt = "test prompt",
         };
 
@@ -160,7 +160,7 @@ public static class TileManifestLoader
             Check(def.SpriteFillFootprint, "SpriteFillFootprint");
             Check(def.AutotileGroup == "terrain.selftest", "AutotileGroup");
             Check(def.Props != null && def.Props["autotileKind"] == "layered_hill", "Props.autotileKind");
-            // The temp file lives outside Sprites/, so DeriveSpritePath can't produce a
+            // The temp file lives outside Assets/Sprites/, so DeriveSpritePath can't produce a
             // res:// path here (that prefixing is only checked by SelfTestFixtures, which
             // loads the real on-disk manifests) — just confirm the sidecar-basename
             // convention picked the right file.
@@ -191,7 +191,7 @@ public static class TileManifestLoader
     public static List<string> SelfTestFixtures(string projectRoot)
     {
         var failures = new List<string>();
-        string dir = Path.Combine(projectRoot, "Sprites", "MapCreation", "Beach", "Generated");
+        string dir = Path.Combine(projectRoot, "Assets", "Sprites", "Tiles", "VanillaKingdom", "Ground");
 
         void CheckDef(string fileName, string expectId, string expectAutotileGroup)
         {
@@ -212,7 +212,7 @@ public static class TileManifestLoader
                 if (!def.SpriteFillFootprint) failures.Add($"{fileName}: mismatch SpriteFillFootprint (want true)");
                 if (def.AutotileGroup != expectAutotileGroup)
                     failures.Add($"{fileName}: mismatch AutotileGroup (got '{def.AutotileGroup}', want '{expectAutotileGroup}')");
-                if (def.SpriteSlot == null || !def.SpriteSlot.StartsWith("res://Sprites/", StringComparison.Ordinal))
+                if (def.SpriteSlot == null || !def.SpriteSlot.StartsWith("res://Assets/Sprites/", StringComparison.Ordinal))
                     failures.Add($"{fileName}: SpriteSlot did not resolve to a res:// path (got '{def.SpriteSlot}')");
                 if (def.Edges == null || string.IsNullOrEmpty(def.Edges.Top))
                     failures.Add($"{fileName}: Edges.Top not set");

@@ -6,6 +6,7 @@ using Fableland.Debug;
 using Fableland.MapCreation.Data;
 using Fableland.MapCreation.Runtime;
 using Fableland.UI;
+using Fableland.Items;
 
 /// <summary>
 /// The arena's integrator (T30 §3, NODES §4). Owns the "Entities"/foe-spawn plumbing the
@@ -66,6 +67,7 @@ public partial class GameManager : Node2D
     private Node2D _hazards;
     private Hud _hud;
     private CharacterController _player;
+    private ItemRuntime _itemRuntime;
     private Godot.Collections.Array<Node> _foeSpawnMarkers;
     private System.Collections.Generic.List<Vector2> _surfacePoints = new();
     private readonly System.Collections.Generic.List<CombatMapSpawnPoint> _authoredEnemySpawns = new();
@@ -149,7 +151,7 @@ public partial class GameManager : Node2D
         _usingAuthoredMap = TryBuildSelectedMap(combatMapPath);
         if (!_usingAuthoredMap)
         {
-            var platformTex = GD.Load<Texture2D>("res://Sprites/platform_placeholder.svg");
+            var platformTex = GD.Load<Texture2D>("res://Assets/Sprites/Gameplay/World/platform_placeholder.svg");
             _surfacePoints = ArenaBuilder.Build(_world, _hazards, _rng, platformTex, FireHazardScene, FreezeHazardScene);
         }
 
@@ -170,6 +172,8 @@ public partial class GameManager : Node2D
         // and a later SKIP press (from a different arena visit) would invoke it.
         if (DebugManager.Instance != null)
             DebugManager.Instance.SkipRequested -= OnSkipRequested;
+        _itemRuntime?.Dispose();
+        _itemRuntime = null;
     }
 
     private static Mission CreateMission(MissionType type) => type switch
@@ -272,6 +276,8 @@ public partial class GameManager : Node2D
 
     private void SetupPlayer(RunState rs)
     {
+        _itemRuntime?.Dispose();
+        _itemRuntime = null;
         if (_player == null) return;
 
         _player.HpChanged += OnPlayerHpChanged;
@@ -294,6 +300,7 @@ public partial class GameManager : Node2D
             // Restore saved cooldown remaining from the protagonist's run state (background-CD, NODES §3.3)
             _player.LoadCooldownsFromState(_protagonist);
             _player.LoadAmmoFromState(_protagonist);
+            _itemRuntime = new ItemRuntime(_player, _protagonist);
             _hud.SetLivesVisible(false);       // permadeath in a run — lives don't apply (NODES §2.2)
             UpdateNextMugshot();
         }
@@ -302,6 +309,7 @@ public partial class GameManager : Node2D
             _hud.SetLivesVisible(true);
             _hud.SetLives(_player.LivesRemaining);
         }
+        PushItemHud();
     }
 
     /// <summary>Push the next protagonist's mugshot to the HUD (NODES §3.3).
@@ -583,12 +591,35 @@ public partial class GameManager : Node2D
         if (Input.IsActionJustPressed("switch_protagonist"))
             TrySwitchProtagonist();
 
+        _itemRuntime?.Tick(dt);
+        if (Input.IsActionJustPressed("use_item"))
+        {
+            string reason = null;
+            string activatedName = _itemRuntime?.Definition?.DisplayName;
+            bool used = _itemRuntime != null && _itemRuntime.TryUse(out reason);
+            if (!used)
+                _hud.ShowToast(reason ?? "No held combat item.");
+            else
+            {
+                bool converted = _itemRuntime.RebindRequested;
+                string newName = _protagonist?.HeldItemDefId != null
+                    ? ItemCatalog.DisplayName(_protagonist.HeldItemDefId) : null;
+                if (converted)
+                {
+                    _itemRuntime.Dispose();
+                    _itemRuntime = new ItemRuntime(_player, _protagonist);
+                }
+                _hud.ShowToast(converted ? $"{activatedName} became {newName}." : $"{activatedName} activated.");
+            }
+        }
+
         // Background cooldown tick for benched protagonists (NODES §3.3): recover at
         // rate = 1/(2n−2) — 2-party → 0.5×, 3-party → 0.25×, 4-party → 0.167×.
         TickBackgroundCooldowns(dt);
 
         // Push switch-protagonist slot state to the HUD every frame (CD overlay + label).
         PushSwitchHud();
+        PushItemHud();
 
         if (_mission == null) return;
         // QA cheat (40-QA §1): F9 in a debug build force-completes the goal — lets a tester
@@ -620,6 +651,18 @@ public partial class GameManager : Node2D
         _hud.SetSwitchCooldown(_switchCd, SwitchCooldown);
     }
 
+    private void PushItemHud()
+    {
+        if (_protagonist == null || string.IsNullOrWhiteSpace(_protagonist.HeldItemDefId))
+        {
+            _hud.SetHeldItem(null, 0f, 0f);
+            return;
+        }
+        float max = ItemCatalog.TryGet(_protagonist.HeldItemDefId, out ItemDef definition)
+            ? definition.SecondCooldownSeconds : 0f;
+        _hud.SetHeldItem(_protagonist.HeldItemDefId, _protagonist.HeldItemSecondCooldownRemaining, max);
+    }
+
     // ── Goal resolution ───────────────────────────────────────────────────────────────────
 
     private void OnMissionResolved()
@@ -647,8 +690,9 @@ public partial class GameManager : Node2D
 
             if (_mission.Status == MissionStatus.Failed && _mission.FatalTimeout)
             {
-                // Boss timer expiry = immediate death (NODES §4.5/§2.2) — bypass the normal
-                // survivable-failure bounce entirely.
+                // A fatal boss timer is a real boss kill. TwistedReality may consume itself to
+                // return the run to its last completed day; every other timer loss is terminal.
+                if (RunState.Instance.TryRecoverFromBossFailure()) return;
                 RunState.Instance.EndRun(RunEndKind.BossTimer);
                 return;
             }
@@ -761,8 +805,10 @@ public partial class GameManager : Node2D
     {
         if (_hasRun)
         {
-            // Permadeath — no lives, no respawn in a run (NODES §2.2).
             WriteBackHp();   // CurrentHP is already 0 here, so this writes back ~0
+            if (RunState.Instance.CurrentAdventure?.Kind == NodeKind.Boss
+                && RunState.Instance.TryRecoverFromBossFailure()) return;
+            // Permadeath — no lives, no respawn in a run (NODES §2.2).
             RunState.Instance.EndRun(RunEndKind.Death);
             return;
         }

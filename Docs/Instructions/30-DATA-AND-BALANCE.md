@@ -117,12 +117,17 @@ five variable-width river corridors, equal level-1/level-2 total city counts wit
 realm-local road/loop budgets, altitude contour thresholds, and TwistedReality's one-stamina /
 5-day cross-realm map skill. Each use creates a reality bridge and locks its endpoints while the
 bridge remains. The old bridge budget, pair cap, and bridge-function rolls are retired.
-v0.9.1: reserve an inner VOID buffer and an `XX-S` one-way Shelter between each LV4 and LV5;
+v0.9.1: reserve an inner VOID buffer;
 per realm roll 3–5 Transportation Hubs and 4–6 Event nodes; reject road/hub spokes that would
 cross or overlap a path; city-control field boundaries; and VOID days 10/20 (furthest half/all
 LV1), 30/40 (furthest half/all LV2), 43 (all LV3), 45 (all remaining outer cities). Functional
-nodes require a strict majority of connected cities to be devoured, and reality bridges break /
-release the surviving endpoint when the VOID consumes either endpoint.
+  nodes require a strict majority of connected cities to be devoured, and reality bridges break /
+  release the surviving endpoint when the VOID consumes either endpoint.
+v0.10.0: TwistedReality now has a 4-day, zero-stamina Bridge of Eidolon skill. It builds only
+from a completed VOID-river peripheral city, uses an Eidolon Shelter as its mandatory crossing,
+and sends LV4 origins to the nearest available Zone-6 LV5. The old generated `XX-S` passages
+are removed. FanChen's Heart, Yukai's Rope, and The Forgotten Kashaya are persistent combat-item
+prototypes with second cooldowns; TwistedReality's possession rewinds one completed day on a BOSS loss.
 Characters: each kit's skill-summary table verbatim.
 Arena events: tsunami warning/recovery/cooldown, storm tint, gust schedule, wind pulse,
 and subsequent event definitions. Canvas colours stay hex data; Godot colours are made only

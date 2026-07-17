@@ -3,7 +3,7 @@ namespace Fableland.MapCreation.Data;
 /// <summary>
 /// GDD §2.5 extension — the on-disk schema an AI/artist-authored `&lt;name&gt;.tile.json`
 /// manifest follows, sidecar to a same-named `&lt;name&gt;.png` under
-/// `Sprites/MapCreation/&lt;set&gt;/Generated/`. `TileManifestLoader` maps this into a
+/// `Assets/Sprites/Tiles/&lt;world&gt;/&lt;tile-class&gt;/`. `TileManifestLoader` maps this into a
 /// `TileDef`. Deliberately a separate DTO from `TileDef` itself (not a direct dump of it):
 /// the manifest is meant to be simple enough for whoever drives the art-generation prompt
 /// to fill in by hand (plain strings/nested objects, no C# enum/init-record knowledge

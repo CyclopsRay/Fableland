@@ -26,22 +26,22 @@ public static class TileRegistry
             {
                 Id = "ground.grass", DisplayName = "Grass", Category = TileCategory.Ground,
                 EditorColor = "#76B947", AutotileGroup = "terrain.coastal_grass",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/ground_grass_seamless.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/ground_grass_seamless.png",
                 SpriteFillFootprint = true,
                 Props = new Dictionary<string, string>
                 {
-                    ["artSource"] = "res://Sprites/MapCreation/Beach/Generated/terrain_beach_atlas.png",
+                    ["artSource"] = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/terrain_beach_atlas.png",
                 },
             },
             new()
             {
                 Id = "ground.sand", DisplayName = "Beach Sand", Category = TileCategory.Ground,
                 EditorColor = "#E8C878", AutotileGroup = "terrain.sand_hill",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/ground_sand_seamless.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/ground_sand_seamless.png",
                 SpriteFillFootprint = true,
                 Props = new Dictionary<string, string>
                 {
-                    ["artSource"] = "res://Sprites/MapCreation/Beach/Generated/terrain_sand_hill_atlas.png",
+                    ["artSource"] = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/terrain_sand_hill_atlas.png",
                     ["autotileKind"] = "layered_hill",
                 },
             },
@@ -65,19 +65,19 @@ public static class TileRegistry
             {
                 Id = "platform.bench", DisplayName = "Beach Bench", Category = TileCategory.Platform,
                 FootprintW = 2, FootprintH = 1, EditorColor = "#B88755",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_bench.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Platform/platform_bench.png",
             },
             new()
             {
                 Id = "platform.sun_lounger", DisplayName = "Sun Lounger", Category = TileCategory.Platform,
                 FootprintW = 3, FootprintH = 1, EditorColor = "#C8A675",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_sun_lounger.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Platform/platform_sun_lounger.png",
             },
             new()
             {
                 Id = "platform.lifeguard_tower", DisplayName = "Lifeguard Tower", Category = TileCategory.Platform,
                 FootprintW = 4, FootprintH = 8, EditorColor = "#4F9B9B",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/platform_lifeguard_tower.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Platform/platform_lifeguard_tower.png",
             },
 
             new()
@@ -89,28 +89,28 @@ public static class TileRegistry
             {
                 Id = "softvolume.cloud1x1", DisplayName = "Cloud (1x1)", Category = TileCategory.SoftVolume,
                 EditorColor = "#B0E0E6",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_cloud_small.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/SoftVolume/softvolume_cloud_small.png",
                 SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.3f },
             },
             new()
             {
                 Id = "softvolume.cloud2x1", DisplayName = "Cloud (2x1)", Category = TileCategory.SoftVolume,
                 FootprintW = 2, FootprintH = 1, EditorColor = "#ADD8E6",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_cloud_medium.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/SoftVolume/softvolume_cloud_medium.png",
                 SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.3f },
             },
             new()
             {
                 Id = "softvolume.cloud3x2", DisplayName = "Cloud (3x2)", Category = TileCategory.SoftVolume,
                 FootprintW = 3, FootprintH = 2, EditorColor = "#A9D7E3",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_cloud_large.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/SoftVolume/softvolume_cloud_large.png",
                 SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.3f },
             },
             new()
             {
                 Id = "softvolume.palm_tree", DisplayName = "Palm Tree", Category = TileCategory.SoftVolume,
                 FootprintW = 3, FootprintH = 4, EditorColor = "#4E9A51",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/softvolume_palm_tree_v2.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/SoftVolume/softvolume_palm_tree_v2.png",
                 SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.1f },
             },
 
@@ -118,7 +118,7 @@ public static class TileRegistry
             {
                 Id = "hazard.bonfire", DisplayName = "Bonfire", Category = TileCategory.Hazard,
                 FootprintW = 2, FootprintH = 1, EditorColor = "#FF4500",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/hazard_bonfire_flat.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Hazard/hazard_bonfire_flat.png",
                 // Deliberately catches only the hot center, not the full 2 m art width.
                 EffectArea = ShapeDef.Circle(MapGrid.PixelsPerCell, MapGrid.PixelsPerCell * 0.65f,
                     MapGrid.PixelsPerCell * 0.35f),
@@ -178,21 +178,21 @@ public static class TileRegistry
                 Id = "deco.caution_sign", DisplayName = "Caution Sign", Category = TileCategory.Decoration,
                 FootprintW = 1, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#E66B42",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/deco_caution_monkey.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Decoration/deco_caution_monkey.png",
             },
             new()
             {
                 Id = "deco.sand_castle", DisplayName = "Sand Castle", Category = TileCategory.Decoration,
                 FootprintW = 2, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#DDBB68",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Legacy/deco_sand_castle.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Decoration/deco_sand_castle.png",
             },
             new()
             {
                 Id = "deco.sun", DisplayName = "Sun", Category = TileCategory.Decoration,
                 FootprintW = 2, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#FFD24A",
-                SpriteSlot = "res://Sprites/MapCreation/Beach/Generated/deco_sun_chibi.png",
+                SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Decoration/deco_sun_chibi.png",
             },
             // A tall foreground occluder for the closeview "hide-behind" band (GDD §1 rework):
             // a Roman-style column. No art yet — renders as its editorColor quad until one lands.

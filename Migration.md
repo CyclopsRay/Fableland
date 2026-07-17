@@ -9,6 +9,18 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.10.0** — **Wonder-item prototype and Eidolon access.** Held items now persist unique
+  instances and independent day/second cooldowns. FanChen's Heart, Yukai's Rope, and The
+  Forgotten Kashaya, Pome's Bravery, and Pome's Seed have live combat passives and **F**-activated
+  skills where applicable, delivered through Protect, Destroy, outer-BOSS, and Abandoned Cart
+  rewards. Team Build now displays a stable-order 64 px icon backpack with hover labels. Pome's
+  Bravery grants 60 OnFire stacks then converts in place to Seed; planting is deferred with the
+  plantation system. TwistedReality is a possession: a BOSS death or
+  fatal BOSS timer consumes it to restore the start of the current day. Its 4-day, no-stamina
+  Bridge of Eidolon skill builds two violet legs and a midpoint Eidolon Shelter; Rest or Sharpen
+  spends that Shelter's Blessing to cross. Generated LV4→LV5/`XX-S` passages are removed, so an
+  LV4-origin Eidolon bridge is the only Zone-6 route. (Verification: `dotnet build`, 0 errors/
+  warnings; static map/save/scene checks.)
 - **0.9.0** — **Run slots, safe checkpoints, and pause.** Play now opens three persistent
   save slots: empty starts a run, occupied continues it. Versioned atomic snapshots retain the
   seed, map deltas (VOID/devour + reality bridges), node state, party/build/base stats, backpack,
@@ -269,7 +281,7 @@ Scenes/Arena.tscn               Ground + 3 platforms + walls, spawn markers, HUD
                                 3 test hazards (bonfire/frozen pit/tsunami button) on the left
 Scenes/Pomegraknight.tscn       Player (CharacterBody2D + Camera2D + FirePoint + empty AnimationPlayer)
 Scenes/{Enemy,WonderPage,PomeSeed,Hud}.tscn
-Sprites/*.svg                   Placeholder art (player, enemy, page, seed, platform)
+Assets/Sprites/*                Placeholder and production art, grouped like Scripts/
 ```
 **Animation is stubbed, not skipped:** `Pomegraknight.tscn` has an empty `AnimationPlayer`,
 `CharacterController.UpdateAnimator()` is the drive point, and BA/seed damage is applied inline
@@ -404,7 +416,7 @@ res://
 │   └── FastClawCollectible.cs
 ├── Maps/
 │   └── MainArena.tscn
-├── Sprites/          (copied from Unity Assets/Sprites/)
+├── Assets/Sprites/   (copied from Unity Assets/Sprites/)
 ├── Audio/            (copied from Unity Assets/Audio/)
 └── project.godot
 ```
@@ -494,7 +506,7 @@ aim_vertical   → Mouse motion Y, Gamepad Right Stick Y
 ### Step 2.4: Copy Assets
 ```bash
 # From Unity project to Godot project
-cp -r ~/GloryOfFableland/Assets/Sprites ~/GloryOfFableland-Godot/Sprites
+cp -r ~/GloryOfFableland/Assets/Sprites ~/GloryOfFableland-Godot/Assets/Sprites
 cp -r ~/GloryOfFableland/Assets/Audio ~/GloryOfFableland-Godot/Audio
 ```
 

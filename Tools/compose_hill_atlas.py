@@ -61,15 +61,15 @@ def build_grid(material: str) -> dict:
 
 
 def default_source(material: str) -> Path:
-    return Path("Sprites/MapCreation/Beach/Generated") / f"{material.capitalize()}HillSource"
+    return Path("Assets/Sprites/Tiles/VanillaKingdom/Ground") / f"{material.capitalize()}HillSource"
 
 
 def default_out(material: str) -> Path:
-    return Path("Sprites/MapCreation/Beach/Generated") / f"terrain_{material}_hill_atlas.png"
+    return Path("Assets/Sprites/Tiles/VanillaKingdom/Ground") / f"terrain_{material}_hill_atlas.png"
 
 
 def default_preview(material: str) -> Path:
-    return Path("Sprites/MapCreation/Beach/Generated") / f"terrain_{material}_hill_seam_preview.png"
+    return Path("Assets/Sprites/Tiles/VanillaKingdom/Ground") / f"terrain_{material}_hill_seam_preview.png"
 
 
 LABEL_H = 14

@@ -47,8 +47,10 @@ Two buttons live in the top-right corner during Adventure mode:
   includes direct hits, hazards, and already-running damage-over-time effects; the
   arena is a resolved presentation state until the player leaves it.
 
-**Service node (Transportation Hub or the zone-6 Shelter):**
-- Both buttons are always available.
+**Service node (Transportation Hub, Eidolon Shelter, or the zone-6 Shelter):**
+- Transportation Hubs and the zone-6 Shelter expose Map and Finish-the-Day normally.
+- An Eidolon Shelter exposes only Rest, both Sharpen actions, and Team Build. Its Map/Back and
+  Finish-the-Day exits are disabled; spending its Blessing immediately crosses the bridge.
 - The player may open the map and **move to other nodes** as long as stamina remains
   (entering a shelter does not automatically end the day).
 - Clicking `Finish the Day` ends the day immediately and returns to Exploration mode.
@@ -77,6 +79,10 @@ without stopping. The rules:
 | Unconquered (failed) combat node | The fight re-triggers — a full combat entry, all stamina drained (§2.3). |
 | Transportation Hub or special Shelter | The restricted service menu always opens (§5). |
 | Resolved `?` node | Nothing — inert. If the event converted the node into a shelter (Sanctuary), it behaves as a shelter thereafter. |
+
+- **Current service-node revisit:** clicking the current Transportation Hub or Shelter reopens
+  its service menu without movement or stamina cost. Clicking any other current node remains
+  inert; it never retriggers a combat encounter for free.
 
 - NPC 5-day windows (§5.3, §5.4) start on the player's **first entry as destination**,
   never on pass-through (which is impossible for unvisited nodes anyway).
@@ -220,10 +226,10 @@ and is fixed for that node for the entire run.
 | # | Type | Frequency | Goal | Reward |
 |---|------|-----------|------|--------|
 | 1 | **Collection** | 60 | Collect wonder cores that appear on the map. When one is collected, another spawns. Cores may disappear if not collected in time. | The wonder cores collected (+ a 10 s grace window on completion, below) |
-| 2 | **Protect** | 15 | Resist enemy waves for a fixed duration and protect the **Condensed Wonder Core** (or another objective) from being destroyed. | The Condensed Wonder Core + **1 random wonder item** (victory-loot design TODO) |
-| 3 | **Destroy** | 10 | Destroy several objectives placed on the map within the time limit. | **1 random wonder item** (victory-loot design TODO) |
+| 2 | **Protect** | 15 | Resist enemy waves for a fixed duration and protect the **Condensed Wonder Core** (or another objective) from being destroyed. | The Condensed Wonder Core + **FanChen's Heart** |
+| 3 | **Destroy** | 10 | Destroy several objectives placed on the map within the time limit. | **The Forgotten Kashaya** |
 | 4 | **Slaughter** | 10 | Survive and clear a set number of enemy waves within the time limit. | Player's choice: **+10 ATK** or **+10 DEF** (same as a Sharpen Blessing, §5.5) |
-| 5 | **BOSS** | LV4/LV6 only | Kill the BOSS within the time limit. | A new protagonist (LV4) / run victory (LV6) |
+| 5 | **BOSS** | LV4/LV6 only | Kill the BOSS within the time limit. | **Yukai's Rope** (outer BOSS); the first starting-realm LV4 also grants **TwistedReality** / run victory (LV6) |
 
 Mission type is rolled **at map generation** for LV1/2/3/5 nodes at ratio
 **60 : 15 : 10 : 10** (Collection : Protect : Destroy : Slaughter). **LV4 and LV6 nodes
@@ -359,12 +365,12 @@ slot if the current protagonist has an empty slot, otherwise to the backpack. Pr
 
 ## 5. Service nodes — Transportation Hubs and the singularity Shelter
 
-The current generated map uses **Transportation Hubs** in every outer realm and one special
-`XX-S` **Shelter** between each LV4 capital and LV5. The Shelter label is reserved for that
-zone-6 crossing; it is not an ordinary hub. Both node types deliberately expose the same narrow
-service set: **Rest**, **Sharpen Weapon**, **Sharpen Armor**, **Team Build**, and leave/finish
-the day. Plantations, traders, jousting, wishes, and other optional services are not generated
-or available at either type.
+The current generated map uses **Transportation Hubs** in every outer realm. A
+`TwistedReality` bridge may additionally create an **Eidolon Shelter** at its midpoint; it is
+not seeded content and exists only while that bridge exists. Transportation Hubs expose **Rest**,
+**Sharpen Weapon**, **Sharpen Armor**, **Team Build**, and leave/finish-the-day. Eidolon Shelters
+expose only the first four: their Blessing is the crossing action. Plantations, traders, jousting,
+wishes, and other optional services are not generated or available at either type.
 
 Legacy optional-service designs below are retained as future reference only and are explicitly
 overridden by this current-map contract. See `MapGDD.md` §§6–8 for placement, one-way traversal,
@@ -416,8 +422,11 @@ concept is likewise not a source of optional services in the current map:
 - **Other functions** — teleport to another shelter, a tunnel to a secret map,
   or something unspeakable (TBD; rare).
 
-> **Zone-6 Shelters (`XX-S`)** are the one-way singularity threshold. They only expose the
-> current service contract above, never legacy optional services.
+> **Eidolon Shelters** are the bridge threshold. Team Build is a free preparation action. Using
+> their one Blessing (Rest or either Sharpen) consumes it and immediately transfers the player to
+> the opposite bridge endpoint; it does **not** run the ordinary day-end pipeline. Crossing into
+> zone 6 then applies the singularity's normal one-way devour. They never expose legacy optional
+> services.
 
 ### 5.3 VOID traders
 
@@ -551,9 +560,9 @@ The player must click `Finish the Day` (or use a day-ending shelter action) to e
 
 ### 7.2 Special cases
 
-- **Service-node free actions** (§5.1) do not end the day. The player can enter a hub or special
-  Shelter, modify their team build, then leave for another node while stamina remains. The
-  special Shelter cannot route back to zones 1–5 after it has been entered.
+- **Service-node free actions** (§5.1) do not end the day. The player can enter a hub or
+  Eidolon Shelter and modify their team build. An Eidolon Shelter's ordinary exit is disabled:
+  its Blessing transfers the player across the bridge instead.
 - **Service-node day-ending actions** (§5.5) end the day.
 - **Combat nodes** lock the player in until the goal is achieved (or they die).
   Once the goal is achieved, `Finish the Day` becomes available.
@@ -720,8 +729,9 @@ designed in a future content pass.
   cores** — the single run currency, not an XP track. Protagonist growth = Blessings +
   items. Permanent HP/ATK/DEF pools are additive (max HP in percentage points: two
   full-HP Rests → ×1.10 then ×1.20, not compounding).
-- **(v0.3.7) XX-S shelters are basics-only.** Blessed with build mod + item assignment
-  + one day-ending action; never plantation/trader/wanderer.
+- **(v0.10.0) Eidolon Shelters are bridge-only.** Created at a TwistedReality bridge midpoint,
+  with Rest/Sharpen/Team Build only. Its Blessing transfers the player to the bridge's opposite
+  endpoint rather than ending the day; no prebuilt `XX-S` shelter remains.
 - **(v0.5.0) Reward delivery = instant.** Combat rewards apply the moment the goal is
   achieved (with a HUD toast); §1.2's "delivery TBD" resolved as the prototype default.
   Collection credits each core ON PICKUP (so they're kept on a timer failure, per §2.3)

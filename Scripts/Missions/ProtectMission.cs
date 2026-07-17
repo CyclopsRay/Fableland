@@ -9,7 +9,7 @@ namespace Fableland.Missions;
 /// ambient foe spawner keeps attacking; a foe in contact range of the core chips its HP
 /// (handled inside <see cref="ProtectCore"/>, Q10). Survive the duration ⇒ Succeeded; core HP
 /// hits 0 ⇒ Failed immediately (survivable, NODES §2.3). Not healable (S8). Reward = the core:
-/// +10 wonder cores + 1 placeholder wonder item (NODES §4.1).
+/// +10 wonder cores + FanChen's Heart (NODES §4.1).
 /// </summary>
 public sealed class ProtectMission : Mission
 {
@@ -42,7 +42,7 @@ public sealed class ProtectMission : Mission
     }
 
     public override RewardBundle Reward() =>
-        new() { WonderCores = 10, ItemDefIds = { "placeholder" } };
+        new() { WonderCores = 10, ItemDefIds = { "fanchens_heart" } };
 
     public override string ProgressText => "Defend the Condensed Wonder Core";
     public override bool HasTimer => true;

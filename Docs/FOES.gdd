@@ -397,5 +397,5 @@ weighted choice. The selected marker is the foe's nest/spawn origin; map-defined
   3 + node level, final wave at foe level +1 capped at 8.
 - **(v0.5.0) Placeholder boss = scaled-up Crab** (HP ×8, ~×2 footprint, beefier
   contact; one add-wave of 2 foes at foe level −1 when the boss hits 50% HP) until the
-  §8 boss kits are designed. LV4 boss win grants a placeholder wonder item — no
-  recruitable boss protagonists yet.
+  §8 boss kits are designed. Outer BOSS wins grant Yukai's Rope; the starting-realm LV4
+  also grants TwistedReality. Recruitable boss protagonists remain TBD.

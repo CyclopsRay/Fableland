@@ -9,9 +9,8 @@ namespace Fableland.Missions;
 /// level's boss timer. The ambient spawner is OFF — the boss owns the field; a single small add
 /// wave spawns once it drops below 50% HP (kept simple, not GDD-specified — the brief left the
 /// exact threshold/composition to this pass). LV6 is the final boss
-/// (<see cref="IsFinalBoss"/> ⇒ GameManager ends the run in victory on success); LV4 grants a
-/// placeholder wonder item (report Q2 — no boss-as-protagonist kits exist yet, so the "recruit"
-/// reward is stubbed). Timer expiry is FATAL (<see cref="FatalTimeout"/> ⇒ GameManager turns this
+/// (<see cref="IsFinalBoss"/> ⇒ GameManager ends the run in victory on success); outer bosses grant
+/// Yukai's Rope, while the first capital's RunState reward also grants TwistedReality. Timer expiry is FATAL (<see cref="FatalTimeout"/> ⇒ GameManager turns this
 /// into permadeath when a run exists, NODES §4.5/§2.2; a normal lose banner in debug mode).
 /// </summary>
 public sealed class BossMission : Mission
@@ -71,10 +70,9 @@ public sealed class BossMission : Mission
         }
     }
 
-    // LV4: placeholder item (recruit-as-protagonist is TBD, Q2). LV6: irrelevant — victory ends
-    // the run before any reward would matter.
+    // LV6 is irrelevant — victory ends the run before any reward would matter.
     public override RewardBundle Reward() =>
-        _nodeLevel >= 6 ? new RewardBundle() : new RewardBundle { ItemDefIds = { "placeholder" } };
+        _nodeLevel >= 6 ? new RewardBundle() : new RewardBundle { ItemDefIds = { "yukais_rope" } };
 
     public override string ProgressText => "Defeat the BOSS";
     public override bool HasTimer => true;

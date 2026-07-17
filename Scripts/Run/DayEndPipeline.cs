@@ -110,6 +110,7 @@ public sealed class VoidDevourStep : IDayStep
         }
 
         int brokenBridges = rs.Graph.BreakRealityBridgesAtDevouredEndpoints();
+        if (brokenBridges > 0) rs.RebuildNodeIndex();
 
         // Describe what happened for the day-end summary toast (T30 §5 residual) — this step only
         // appends a note; RunState.EndDay owns rendering it.

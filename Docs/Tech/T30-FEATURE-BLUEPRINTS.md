@@ -99,7 +99,7 @@ public abstract class Mission {                     // created from MissionRegis
 - Build **Collection first** and make it fun before writing the other four (it's 60%
   of all combat nodes).
 
-## 4. Items (v0.6.0) — instances over defs
+## 4. Items (v0.10.0) — instances over defs
 
 ```csharp
 public class ItemInstance {
@@ -110,6 +110,12 @@ public class ItemInstance {
     public Dictionary<string,float> RolledStats;  // harvest inheritance (60–140% rolls)
 }
 ```
+
+`ItemCatalog` owns immutable definitions; `RunState` owns instance location and persistence;
+`ItemRuntime` binds the currently fielded held instance to the arena body. Exploration behaviours
+remain in `RunState`/map contracts. TwistedReality persists a bounded start-of-day checkpoint,
+creates two `RealityBridge` legs around an Eidolon Shelter, and only the Shelter's Blessing
+crosses between endpoints.
 
 - **Location model:** an item is in exactly one place — `Held(protagonist)` or
   `Backpack` or `Planted(shelterId, slot)`. Moves are transactions in one Inventory

@@ -139,7 +139,7 @@ public static class MapGenerator
         BuildCityControlFields(graph);
 
         // The central layout deliberately keeps its five boss gates and its existing day rules.
-        BuildZone6(graph, byWorld);
+        BuildZone6(graph);
         graph.StartNode = new DetRandom(seed + ":start").Pick(byWorld[0]["1-A"]);
         RollMissions(graph, seed);
         graph.BuildAdjacency();
@@ -759,8 +759,39 @@ public static class MapGenerator
                     if (polygon.Count < 3) break;
                 }
                 city.ControlledField = polygon.ToArray();
+                // The field, rather than the city's icon position, decides whether a city meets
+                // the VOID river. Capitals are guaranteed anchors so the Zone-6 choice is never
+                // hidden behind an unlucky Voronoi split.
+                city.IsVoidRiverPeripheral = city.Level == 4 || FieldTouchesVoidRiver(graph, city.ControlledField);
             }
         }
+    }
+
+    private static bool FieldTouchesVoidRiver(MapGraph graph, Vector2[] field)
+    {
+        if (field == null || field.Length == 0) return false;
+        foreach (MapRiver river in graph.RealmRivers)
+        {
+            if (PolylineNearField(river.LeftBank, field) || PolylineNearField(river.RightBank, field)) return true;
+        }
+        return false;
+    }
+
+    private static bool PolylineNearField(Vector2[] line, Vector2[] field)
+    {
+        for (int i = 0; i + 1 < line.Length; i++)
+            foreach (Vector2 point in field)
+                if (DistanceSquaredToSegment(point, line[i], line[i + 1]) <= 2.25f) return true;
+        return false;
+    }
+
+    private static float DistanceSquaredToSegment(Vector2 point, Vector2 a, Vector2 b)
+    {
+        Vector2 ab = b - a;
+        float lengthSquared = ab.LengthSquared();
+        if (lengthSquared <= 0.0001f) return point.DistanceSquaredTo(a);
+        float t = Mathf.Clamp((point - a).Dot(ab) / lengthSquared, 0f, 1f);
+        return point.DistanceSquaredTo(a + ab * t);
     }
 
     private static void ClipToHalfPlane(ref List<Vector2> polygon, Vector2 normal, float boundary)
@@ -786,7 +817,7 @@ public static class MapGenerator
 
     // ---- zone 6 topology -------------------------------------------------------
 
-    private static void BuildZone6(MapGraph graph, List<Dictionary<string, List<MapNode>>> byWorld)
+    private static void BuildZone6(MapGraph graph)
     {
         var lv5 = new List<MapNode>();
         for (int world = 0; world < MapGenTable.RealmCount; world++)
@@ -800,19 +831,6 @@ public static class MapGenerator
             };
             graph.Nodes.Add(node);
             lv5.Add(node);
-
-            MapNode boss = byWorld[world]["4"][0];
-            // Cities stand further from the pentagonal VOID than before, leaving this distinct
-            // one-way Shelter as the final rest point between each LV4 capital and its LV5 gate.
-            var shelter = new MapNode
-            {
-                Id = $"XX-S-{world + 1}", Kind = NodeKind.Shelter, WorldIndex = -1, Zone = "XX",
-                LevelTag = "S", Level = 5, Pos = (boss.Pos + pos) * 0.5f,
-                Color = new Color(0.95f, 0.78f, 0.36f),
-            };
-            graph.Nodes.Add(shelter);
-            graph.AddEdge(new MapEdge(boss, shelter, 5, visible: false, kind: MapEdgeKind.VoidPassage));
-            graph.AddEdge(new MapEdge(shelter, node, 5, visible: false, kind: MapEdgeKind.VoidPassage));
         }
 
         var river = new MapNode

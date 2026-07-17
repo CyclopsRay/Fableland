@@ -21,13 +21,19 @@ public sealed class ProtagonistState
     public int MaxHpPercentPoints;  // additive percentage points: two full-HP Rests → +10, +20 (NOT compounding)
 
     /// <summary>The single held wonder-item slot (defId, null = empty). ONE held slot per
-    /// protagonist (ITEMS.gdd §1.1 / T30 §4). TwistedReality currently uses this slot's daily
-    /// cooldown; the remaining item passive/skill contracts are future work.</summary>
+    /// protagonist (ITEMS.gdd §1.1 / T30 §4). These fields are the held location of the same
+    /// concrete instance that otherwise lives in RunState.Items; RunState inventory transactions
+    /// move all four fields together.</summary>
     public string HeldItemDefId;
+    public string HeldItemInstanceId;
 
     /// <summary>Remaining daily cooldown of the held item. This lives with the held slot so
     /// backpack items cannot progress their cooldown outside the party.</summary>
     public int HeldItemDayCooldownRemaining;
+
+    /// <summary>Remaining real-time combat cooldown for the held item's skill. It ticks only
+    /// while this protagonist is the live arena body; backpack items are inert.</summary>
+    public float HeldItemSecondCooldownRemaining;
 
     /// <summary>True when <see cref="HeldItemDefId"/> was drawn from the real backpack (so it must
     /// return there on unhold / bump-out). False for a debug Team-Build "conjured" catalog item

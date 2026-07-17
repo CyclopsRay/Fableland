@@ -109,6 +109,32 @@ terrain collision detonates, lands, bounces, or otherwise resolves it. Cleopasta
 Gliding stars pass their Shift aim point and continue until a Ground/Platform collision,
 an effect collision, or lifetime expiry.
 
+### A.2.3 Local Time Rate
+
+Some combat effects may advance a selected character and its owned projectiles at a
+different rate from the surrounding fight. Every affected simulator has a default
+**relative Local Time Rate** of 1.0. Its simulation delta is:
+
+```text
+actDelta = worldDelta × relativeLocalTimeRate
+```
+
+The rate applies consistently to that entity's motion integration, acceleration,
+gravity, local cooldowns, reloads, statuses, lifetime timers, and authored animation
+speed. Input is always read in real time and UI is never time-scaled.
+
+`worldDelta` is the arena-wide simulation delta. A future bullet-time system changes
+that world rate for all combat entities, then grants selected entities a relative rate;
+for example, world rate 0.1 × protagonist relative rate 5.0 = an effective rate 0.5.
+That protagonist is five times faster than the slowed world while acting at half its
+ordinary real-time rate. Do **not** use `Engine.TimeScale`: it also affects input/UI and
+cannot represent a character being faster than its world.
+
+Local time is an explicit simulation contract. It is not an excuse to add ad hoc
+per-character cooldown multipliers. New time-sensitive gameplay classes accept their
+owner's act-delta or an equivalent time-domain provider. Pixolotl is the first consumer:
+her 1.5× E rate affects herself and every live bubble she owns.
+
 ### A.3 Switch Protagonist (Tab, 12 s CD)
 
 The player controls **one protagonist at a time**. The three active party members form
@@ -242,18 +268,30 @@ For now, the shelter is a **selectable menu** (future: immersive in-world intera
 
 ### B.1 Build Team
 
-Opens a new menu with three protagonist cards on the left. Each card shows:
-- Protagonist poster
-- Small circle icon for their held item
-- "Change" button below
+Team Build opens as a pop-out window. Its only persistent copy is in the `?` hover
+tooltip beside the window title; this is the standard for future windows. The overview
+shows the initial three team slots in a horizontal strip (a later party-cap modifier may
+raise the capacity to five, in which case the strip scrolls horizontally).
 
-**Interactions:**
-- **Select a team slot, then an owned protagonist** → set or reorder the next battle's
-  Tab sequence (up to three members; at least one must remain).
-- **Click card** → view detailed stats on the right (HP, ATK, DEF, SPD, Vamp, lore)
-- **Click held-item circle** → open backpack to swap/remove the held item
-- **Click "Change"** → show protagonist list (benched ones selectable; current spot greyed)
-- **Click backpack icon** → open full wonder-item inventory (6×5 grid with pages, detail panel showing passive/skills/plantability/lore)
+Each slot is a 2:3 protagonist poster with a circular held-item bubble below it. Both
+surfaces are interactive:
+
+- **Click a poster** → the other slots fade away and the selected slot moves into the
+  left selection column. The right side displays the owned protagonist roster as a
+  five-column grid of square mugshot cells.
+- **Click an item bubble** → the same transition, with the right side displaying
+  backpack items and currently equipped items as a five-column grid of square icon cells.
+
+The current team/equipped choices are grey and slightly tilted but remain selectable.
+Picking a choice already used by another team slot or holder **swaps** the two positions;
+picking the original choice cancels. Picking a new available protagonist replaces/fills
+the selected team slot; picking a backpack item equips it and returns any displaced held
+item to the backpack. Once a choice resolves, the selected card returns to its overview
+position and the other cards fade back in.
+
+The result is the editable sequence for the **next** battle (up to the party cap; at
+least one protagonist remains). Combat receives a frozen snapshot on entry, so menu
+changes never mutate an arena already in progress.
 
 ### B.2 Blessing
 
@@ -343,6 +381,13 @@ multipliers) lives in **`FOES.gdd` §2** — this doc does not duplicate it.
 - **Events tint one map-visual root and sway visual children only.** This affects every tile
   consistently without darkening actors/HUD or moving a collision shape; future lava changes
   runtime tile instances, never authored map data.
+- **Team Build is a two-surface selector, not a multi-panel form.** Posters and item bubbles
+  directly enter their matching picker; current choices stay selectable and swap rather than
+  duplicating state. This keeps the overview focused on the actual battle order while the
+  picker is reusable at a future five-slot party cap.
+- **Local time uses composed simulation rates, never engine-wide time scaling.** This lets a
+  future bullet-time effect slow the world while a selected character remains relatively fast,
+  without slowing UI/input or scattering special cooldown math through character kits.
 
 ---
 

@@ -188,7 +188,7 @@ reads a `<name>.tile.json` sidecar next to a same-named `<name>.png` (schema:
 `TileManifest`) and maps it straight into a `TileDef` — id, role, footprint, fill-vs-prop
 anchoring, `autotileGroup`, the new `edges` tags, and the exact generation prompt used
 (kept in `props["prompt"]` for reproducibility). See
-`Sprites/MapCreation/Beach/Generated/ground_sand_seamless.tile.json` and
+`Assets/Sprites/Tiles/VanillaKingdom/Ground/ground_sand_seamless.tile.json` and
 `ground_grass_seamless.tile.json` for worked examples, and `BeachTileSet.md`'s
 "Generation prompt lock" section for the shared invariant prompt block they extend.
 `TileManifestLoader.SelfTestFixtures` is the structural guard (mirrors

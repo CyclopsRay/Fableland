@@ -22,7 +22,7 @@ public partial class TsunamiHazard : Area2D
     private bool _finished;
 
     private const string SpriteSheetPath =
-        "res://Sprites/MapCreation/Beach/Generated/hazard_tsunami_sheet_2x2.png";
+        "res://Assets/Sprites/Tiles/VanillaKingdom/Hazard/hazard_tsunami_sheet_2x2.png";
     private const string TravelAnimation = "travel";
     private const int SheetColumns = 2;
     private const int SheetRows = 2;

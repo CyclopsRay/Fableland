@@ -125,25 +125,33 @@ Higher level ⇒ stronger enemies and harder survival tasks, but better rewards.
   the other remains an ordinary route. An edge stores the highest numeric level at either end;
   final-approach edges are level 4.
 
-**Between realms — `TwistedReality`, not bridges:**
+**Between realms and into zone 6 — `TwistedReality`, not prebuilt bridges:**
 - There are **no cross-realm road edges, bridges, causeways, or bridge function nodes**. The
-  river barrier stays meaningful in both topology and art.
+  river barrier stays meaningful in both topology and art until `TwistedReality` is used.
 - Defeating the LV4 boss of the starting realm grants the unique wonder item
   **`TwistedReality`** as that boss's first-success reward. The player cannot visit another
   realm before earning it.
-- While holding `TwistedReality` and standing on a **completed `1-A` combat node** (the
-  realm's periphery), the player may spend its map skill to transport to the closest available
-  node in another realm. "Closest" is geometric distance; ties break by deterministic realm
-  order and node id. Devoured nodes are ineligible. The move costs **one stamina**, enters the
-  destination normally, and immediately forms a permanent **reality bridge** between those two
-  nodes. That bridge is an ordinary traversable map edge thereafter: it needs no item use and
-  costs normal movement stamina. Both endpoints are locked after the bridge forms and can never
-  create or receive another reality bridge.
-- `TwistedReality` starts ready when earned and has a **5-day day-based cooldown**. If no valid
-  destination exists, it cannot be activated and no cooldown is spent. Its full item contract is
-  in `ITEMS.gdd` §7.12.
-- If the VOID devours either endpoint, that reality bridge breaks. Its surviving endpoint is
-  released and may form a new reality bridge later; the spent cooldown is not refunded.
+- A **Void-River peripheral city** is an outer combat city whose controlled field shares a bank
+  with a realm-divider river; the map generator marks these bridge anchors deterministically.
+  The completed LV4 capital is also always a bridge anchor. A bridge can originate only at one
+  of these anchors while TwistedReality is held.
+- From an ordinary peripheral city, **Bridge of Eidolon** finds the geographically closest realm
+  with an eligible city, then its nearest eligible city. From an **LV4 capital**, it instead finds
+  the geometrically closest available LV5 city in zone 6. Origin and destination must not be
+  devoured or already used by another reality bridge. Ties resolve by deterministic realm order
+  and node id.
+- Building the bridge creates two violet `RealityBridge` legs with a generated **Eidolon Shelter**
+  at their midpoint. The player remains at the origin when it is made. The Shelter's Blessing is
+  the only crossing action: after Rest or either Sharpen, it automatically transfers the player
+  to the other endpoint. Team Build is free preparation and does not cross. A zone-6 transfer
+  crosses the singularity and devours the outer ring as normal. The skill costs no stamina and has
+  a **4-day** held-item cooldown; failure to find a destination spends neither cooldown nor state.
+- There are **no generated LV4 → LV5 / `XX-S` passages**. An LV4-origin Eidolon bridge is the
+  only route into zone 6. If TwistedReality vanishes on a later LV4 BOSS loss before such a bridge
+  exists, zone 6 is unreachable for that run. This is an intentional routing choice: build the
+  zone-6 bridge promptly, or save the item for a future bridge and accept that risk.
+- If the VOID devours either bridge endpoint, both legs and their Eidolon Shelter disappear. Any
+  surviving endpoint is released for a future bridge; the spent cooldown is not refunded.
 
 **Visuals:** zone 1–5 edges are grey lines; zone 6 edges are invisible.
 
@@ -162,7 +170,8 @@ Function nodes occupy little map space and never create a sixth land region.
   event nodes**, distributed deterministically within its own road network.
 
 Runtime ids remain realm-prefixed (`ABBR-H-n` for hubs and `ABBR-E-n` for events) so map/run
-state is unambiguous. No bridge-function ids exist because reality bridges are direct edges.
+state is unambiguous. Runtime Eidolon Shelters use a bridge-derived id (`TR-<origin>-<target>`)
+and are persisted as part of the corresponding reality bridge, not as seeded map content.
 
 **Hub service contract:** Transportation Hubs are deliberately narrow: **Rest**, **Sharpen
 Weapon**, **Sharpen Armor**, **Team Build**, and leaving/finishing the day. They do not roll or
@@ -184,11 +193,9 @@ Zone 6 is drawn as a **dark disc**, and **level 5 sits inside that disc** (the l
 within the VOID, not out on the rim next to the boss rooms). From the disc edge inward:
 lv5 ring → lake → river ring → lv6 core.
 - **Level 5:** 5 nodes around the circular **lake of the VOID** (`XX-5-1..5`), inside the
-  zone-6 disc. Each links to one world's displaced `4-1` through an `XX-S` **Shelter**. This is
-  the only use of the Shelter label: it is distinct from a Transportation Hub, occupies the
-  reserved gap between LV4 and LV5, and stepping on it crosses the singularity immediately.
-  It cannot route back to zones 1–5 and offers only **Rest**, **Sharpen Weapon**, **Sharpen
-  Armor**, and **Team Build** — no plantation, trader, joust, or optional service.
+  zone-6 disc. They have **no prebuilt outer-realm links**. An LV4-origin Bridge of Eidolon
+  chooses one and inserts its generated Eidolon Shelter between the capital and that LV5 city.
+  Crossing that shelter triggers the singularity's one-way outer-ring devour.
 - **Foe levels inside:** the five `XX-5` fights are level 7, the `XX-6-1` core is
   level 8 (`FOES.gdd` §2). The hidden day counter keeps advancing in-void (item CDs,
   perish timers, stamina all normal) — only the display is `???` (`NODES.gdd` §7.4).
@@ -263,7 +270,7 @@ lv5 ring → lake → river ring → lv6 core.
   day ends via `Finish the Day` confirmation; the debug harness may auto-advance for now).
   Devoured nodes and the zone-6 one-way rule are respected; under mist, unexplored frontiers
   show as dim markers.
-- **Icons:** combat = filled circle, boss = diamond, Transportation Hub = triangle, special
+- **Icons:** combat = filled circle, boss = diamond, Transportation Hub = triangle, Eidolon
   Shelter = square, Event = circled `?`. Devoured city fields remain visibly dark even while the
   Fields overlay is off.
 
@@ -278,6 +285,9 @@ These were resolved to keep the map functional; flag any you want changed:
   cities to be devoured.
 - **Movement** is shortest-path to any reachable node within stamina (not adjacent-only).
 - **River** modeled as a single hub node (drawn as the ring) linking all lv5 + lv6.
+- **(v0.10.0) Zone-6 access is item-built, not generated.** The five old `XX-S` passages are
+  removed. TwistedReality alone creates an LV4 → LV5 Eidolon bridge, so spending or losing it
+  before making that crossing is a meaningful run-ending routing risk.
 - **Dark leader / dark-zone proper name:** still **TBD** (deferred).
 - **Home world** always at ring index 0 (Pomo → VanillaKindom); 45-day clock is
   intentional (see Pacing intent above).
@@ -295,11 +305,12 @@ These were resolved to keep the map functional; flag any you want changed:
 - **(v0.9.1) Realm-local roads and functions:** roads remain inside their realm and cannot cross
   or cover another path. Every realm has 3–5 Transportation Hubs (including the mandatory
   LV3→LV4 hub) and 4–6 degree-two Event nodes. Hubs offer only Rest, both Sharpen actions, and
-  Team Build; the gap between LV4 and LV5 instead holds a one-way special Shelter.
-- **(v0.9.0) TwistedReality travel:** the first realm's LV4 victory grants the unique, held,
-  5-day map key. From a completed `1-A` node it moves the player one stamina to the closest
-  available node of another realm, then creates a permanent bridge between the two locked
-  endpoints. Later traversal uses that edge normally and never consumes the item.
+  Team Build.
+- **(v0.10.0) TwistedReality travel:** the first realm's LV4 victory grants the unique possession.
+  Its held **Bridge of Eidolon** skill has a 4-day cooldown, costs no stamina, and builds from a
+  completed VOID-river peripheral city to the closest eligible foreign realm (or nearest LV5 from
+  an LV4). A midpoint Eidolon Shelter spends its Blessing to transfer across; no LV4→LV5 route is
+  generated.
 - **(v0.9.1) Reality-bridge collapse:** devouring either endpoint removes its bridge and releases
   the surviving endpoint for a future TwistedReality bridge.
 - **(v0.9.0) Terrain is live map-selection data:** outer nodes sample one island height field and
@@ -328,6 +339,6 @@ single-road stops. The **Fields** control outlines each city-control boundary; d
 stay dark even when the overlay is hidden. `TwistedReality` is drawn as the violet reality bridge
 it creates; it is the only allowed cross-realm route, breaks if the VOID devours either endpoint,
 and otherwise locks those endpoints. The central VOID retains its pentagon, LV5 territories,
-lake, river, and one-way `XX-S` Shelters. Wheel zoom is unchanged. A short left click selects a
+lake, and river; Eidolon Shelters appear only on built bridges. Wheel zoom is unchanged. A short left click selects a
 node, left drag pans the map with the cursor, and right drag rotates it around the current player
 token after centering that token as the pivot.

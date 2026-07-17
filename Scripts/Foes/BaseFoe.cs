@@ -390,9 +390,9 @@ public partial class BaseFoe : CharacterBody2D
 
     /// <summary>Apply an authored hit. <paramref name="sourcePos"/> feeds directional
     /// passives (crab Soft Shell). No i-frame gate (parity with the old Enemy).</summary>
-    public void TakeHit(HitInfo hit, Vector2 sourcePos)
+    public float TakeHit(HitInfo hit, Vector2 sourcePos)
     {
-        if (_dead || Invincible) return;
+        if (_dead || Invincible) return 0f;
 
         float dealt = hit.Damage * DefenseMultiplier * IncomingDamageMult(sourcePos);
         DebugManager.Instance?.LogPlayerDmgDealt(dealt, GetType().Name);
@@ -415,6 +415,7 @@ public partial class BaseFoe : CharacterBody2D
         player?.GainUltCharge(dealt * player.UltChargeDealtRate);
 
         if (_hp <= 0f) Die();
+        return dealt;
     }
 
     /// <summary>Directional damage-taken multiplier (default none). Crab overrides for

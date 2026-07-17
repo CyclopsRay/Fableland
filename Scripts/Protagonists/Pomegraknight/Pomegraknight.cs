@@ -200,7 +200,8 @@ public partial class Pomegraknight : CharacterController
             Vector2 to = e.GlobalPosition - origin;
             if (Mathf.Abs(to.X) > TornadoHalfW || Mathf.Abs(to.Y) > TornadoHalfH) continue;
             Vector2 push = (to.LengthSquared() > 0.01f ? to.Normalized() : Vector2.Up) * TornadoPush;
-            e.TakeHit(new HitInfo(TornadoDamage * DamageDealtMultiplier, push), origin);
+            float dealt = e.TakeHit(new HitInfo(TornadoDamage * DamageDealtMultiplier, push), origin);
+            ReportDamageDealt(dealt);
             e.SetBurning(2f);
         }
     }
@@ -251,7 +252,7 @@ public partial class Pomegraknight : CharacterController
             var seed = PomeSeedScene.Instantiate<PomeSeed>();
             container.AddChild(seed);
             seed.GlobalPosition = origin;
-            seed.Init(vel, waveHits, burning, DamageDealtMultiplier);
+            seed.Init(vel, waveHits, burning, DamageDealtMultiplier, this);
         }
     }
 

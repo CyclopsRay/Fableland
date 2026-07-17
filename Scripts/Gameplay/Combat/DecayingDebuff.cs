@@ -17,14 +17,28 @@ public class DecayingDebuff
     public bool Active => Stack > 0f;
 
     private float _timer;
+    // A status application may be extended by a held wonder item. This delays the next decay
+    // sequence without changing the stack magnitude, so "+0.2 s" never becomes extra damage.
+    private float _durationExtensionRemaining;
 
-    public void AddStack(float amount) => Stack = Mathf.Min(MaxStack, Mathf.Round(Stack + amount));
+    public void AddStack(float amount, float durationExtension = 0f)
+    {
+        Stack = Mathf.Min(MaxStack, Mathf.Round(Stack + amount));
+        if (amount > 0f && durationExtension > 0f)
+            _durationExtensionRemaining += durationExtension;
+    }
 
     /// <summary>Advance the tick clock; returns the damage dealt this call (0 if none).
     /// Loops in case <paramref name="dt"/> spans more than one tick.</summary>
     public float Tick(float dt)
     {
-        if (Stack <= 0f) { _timer = 0f; return 0f; }
+        if (Stack <= 0f) { _timer = 0f; _durationExtensionRemaining = 0f; return 0f; }
+
+        if (_durationExtensionRemaining > 0f)
+        {
+            _durationExtensionRemaining = Mathf.Max(0f, _durationExtensionRemaining - dt);
+            return 0f;
+        }
 
         _timer += dt;
         float damage = 0f;
@@ -42,5 +56,6 @@ public class DecayingDebuff
     {
         Stack = 0f;
         _timer = 0f;
+        _durationExtensionRemaining = 0f;
     }
 }

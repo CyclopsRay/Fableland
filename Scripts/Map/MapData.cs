@@ -66,6 +66,12 @@ public sealed class MapNode
     public MissionType Mission;
     public string Terrain = CombatMapTerrain.SeaLevel;
     public float Altitude = 0.5f;
+    /// <summary>True when this completed outer city can anchor Bridge of Eidolon. LV4 capitals
+    /// are always marked; other cities are derived from their field touching a VOID-river bank.</summary>
+    public bool IsVoidRiverPeripheral;
+    /// <summary>Non-empty only for the transient Eidolon Shelter created at a reality bridge's
+    /// midpoint. The id also joins the two bridge legs.</summary>
+    public string RealityBridgeId;
     /// <summary>Voronoi-like city field clipped to this realm. The field changes to VOID ground
     /// when its controlling combat city is devoured.</summary>
     public Vector2[] ControlledField = Array.Empty<Vector2>();
@@ -141,6 +147,8 @@ public sealed class MapEdge
     public int Level;
     public bool Visible;
     public MapEdgeKind Kind;
+    /// <summary>Shared by the two legs of an Eidolon bridge; empty for ordinary roads.</summary>
+    public string RealityBridgeId;
     /// <summary>Precomputed legal road route. Reality bridges use a straight two-point route.</summary>
     public Vector2[] Route;
 
@@ -221,36 +229,85 @@ public sealed class MapGraph
         return false;
     }
 
-    /// <summary>Create the one persistent bridge permitted for both endpoints.</summary>
-    public bool AddRealityBridge(MapNode a, MapNode b)
+    /// <summary>Create Bridge of Eidolon: two violet legs with a mandatory midpoint shelter.
+    /// Either endpoint may be Zone 6, but ordinary outer bridges must join different realms.</summary>
+    public bool AddRealityBridge(MapNode a, MapNode b, out MapNode shelter)
     {
+        shelter = null;
         if (a == null || b == null || a == b || a.Devoured || b.Devoured ||
-            a.WorldIndex < 0 || b.WorldIndex < 0 || a.WorldIndex == b.WorldIndex ||
+            a.WorldIndex < 0 || (b.WorldIndex >= 0 && a.WorldIndex == b.WorldIndex) ||
             HasRealityBridge(a) || HasRealityBridge(b) || HasEdge(a, b))
             return false;
-        AddEdge(new MapEdge(a, b, Mathf.Max(a.Level, b.Level), visible: true,
-            kind: MapEdgeKind.RealityBridge, route: new[] { a.Pos, b.Pos }));
+
+        string bridgeId = $"TR-{a.Id}-{b.Id}";
+        shelter = new MapNode
+        {
+            Id = $"{bridgeId}-S", Kind = NodeKind.Shelter, WorldIndex = a.WorldIndex,
+            Zone = a.Zone, LevelTag = "E", Level = Mathf.Max(a.Level, b.Level),
+            Pos = (a.Pos + b.Pos) * 0.5f, Color = new Color(0.88f, 0.66f, 1f),
+            RealityBridgeId = bridgeId,
+        };
+        Nodes.Add(shelter);
+        if (_adj != null) _adj[shelter] = new List<MapEdge>();
+        AddRealityLeg(a, shelter, bridgeId);
+        AddRealityLeg(shelter, b, bridgeId);
         return true;
+    }
+
+    private void AddRealityLeg(MapNode a, MapNode b, string bridgeId)
+    {
+        var edge = new MapEdge(a, b, Mathf.Max(a.Level, b.Level), visible: true,
+            kind: MapEdgeKind.RealityBridge, route: new[] { a.Pos, b.Pos }) { RealityBridgeId = bridgeId };
+        AddEdge(edge);
+    }
+
+    /// <summary>Returns the two endpoint cities of a dynamic Eidolon Shelter.</summary>
+    public bool TryGetRealityBridgeEndpoints(MapNode shelter, out MapNode a, out MapNode b)
+    {
+        a = null;
+        b = null;
+        if (shelter == null || string.IsNullOrWhiteSpace(shelter.RealityBridgeId)) return false;
+        foreach (MapEdge edge in EdgesOf(shelter))
+        {
+            if (edge.Kind != MapEdgeKind.RealityBridge || edge.RealityBridgeId != shelter.RealityBridgeId) continue;
+            MapNode endpoint = edge.Other(shelter);
+            if (a == null) a = endpoint;
+            else if (b == null) b = endpoint;
+        }
+        return a != null && b != null;
+    }
+
+    public IEnumerable<MapNode> RealityBridgeShelters()
+    {
+        foreach (MapNode node in Nodes)
+            if (!string.IsNullOrWhiteSpace(node.RealityBridgeId)) yield return node;
     }
 
     /// <summary>Remove reality bridges whose endpoint has been consumed by the VOID. Removing
     /// the edge releases the surviving endpoint so it may be used by a later bridge.</summary>
     public int BreakRealityBridgesAtDevouredEndpoints()
     {
-        var broken = new List<MapEdge>();
-        foreach (MapEdge edge in Edges)
-            if (edge.Kind == MapEdgeKind.RealityBridge && (edge.A.Devoured || edge.B.Devoured))
-                broken.Add(edge);
-        foreach (MapEdge edge in broken)
+        var collapsing = new List<MapNode>();
+        foreach (MapNode shelter in RealityBridgeShelters())
+            if (TryGetRealityBridgeEndpoints(shelter, out MapNode a, out MapNode b) && (a.Devoured || b.Devoured))
+                collapsing.Add(shelter);
+
+        foreach (MapNode shelter in collapsing)
         {
-            Edges.Remove(edge);
-            if (_adj != null)
+            var legs = new List<MapEdge>(EdgesOf(shelter));
+            foreach (MapEdge leg in legs)
             {
-                if (_adj.TryGetValue(edge.A, out List<MapEdge> a)) a.Remove(edge);
-                if (_adj.TryGetValue(edge.B, out List<MapEdge> b)) b.Remove(edge);
+                Edges.Remove(leg);
+                if (_adj != null)
+                {
+                    if (_adj.TryGetValue(leg.A, out List<MapEdge> from)) from.Remove(leg);
+                    if (_adj.TryGetValue(leg.B, out List<MapEdge> to)) to.Remove(leg);
+                }
             }
+            Nodes.Remove(shelter);
+            _adj?.Remove(shelter);
         }
-        return broken.Count;
+        return collapsing.Count;
     }
 
     public Dictionary<MapNode, int> StepsFrom(MapNode from)

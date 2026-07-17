@@ -5,6 +5,7 @@ using Fableland.Data;
 using Fableland.Map;
 using Fableland.MapCreation.Runtime;
 using Fableland.Debug;
+using Fableland.Items;
 
 namespace Fableland.Run;
 
@@ -80,8 +81,12 @@ public partial class RunState : Node
     // Save ownership: a loaded DTO is retained only to preserve its unknown forward-compatible
     // JSON fields when this build writes it again. Gameplay continues to read/write this class.
     private RunSaveData _saveTemplate;
+    // The start-of-current-day checkpoint used only by TwistedReality's boss-loss possession.
+    // It is persisted as a bounded nested DTO; see SaveGameService.CloneRunSave.
+    private RunSaveData _lastDayCheckpoint;
     public int ActiveSaveSlot { get; private set; } = -1;
     private string _pendingBattleResumeNodeId;
+    private int _nextItemInstanceOrdinal = 1;
 
     public override void _EnterTree()
     {
@@ -187,8 +192,7 @@ public partial class RunState : Node
         Seed = seed;
         Rng = new DetRandom(seed);
         Graph = MapGenerator.Generate(seed);
-        _nodeById = new Dictionary<string, MapNode>();
-        foreach (var n in Graph.Nodes) _nodeById[n.Id] = n;
+        RebuildNodeIndex();
 
         Day = 1;
         Stamina = MaxStamina;
@@ -197,6 +201,7 @@ public partial class RunState : Node
         LastEndKind = RunEndKind.Death;
         CurrentAdventure = null;
         _saveTemplate = null;
+        _lastDayCheckpoint = null;
         _pendingBattleResumeNodeId = null;
         if (ActiveSaveSlot < 0) ActiveSaveSlot = 0;
 
@@ -210,15 +215,16 @@ public partial class RunState : Node
         Owned.Add(new ProtagonistState("Pomegraknight"));
         Owned.Add(new ProtagonistState("PumpKing"));
         // The vertical slice exposes every implemented protagonist through the real
-        // bench so Team Build can exercise the complete switch flow. Cleopastar starts
-        // benched; the default active pair remains Pomegraknight + PumpKing.
+        // bench so Team Build opens on its designed three-poster overview.
         Owned.Add(new ProtagonistState("Cleopastar"));
         ActiveBuild.Clear();
         ActiveBuild.Add("Pomegraknight");
         ActiveBuild.Add("PumpKing");
+        ActiveBuild.Add("Cleopastar");
         ActiveProtagonistIndex = 0;
         WonderCores = 0;
         Items.Clear();
+        _nextItemInstanceOrdinal = 1;
 
         NodesTraversed = 0;
         GoalsSucceeded = 0;
@@ -229,10 +235,20 @@ public partial class RunState : Node
         CurrentNodeId = start.Id;
         PreviousNodeId = start.Id;
         MarkVisited(start); // start node visited (NodesTraversed = 1, world revealed)
+        CaptureLastDayCheckpoint();
     }
 
     public MapNode FindNode(string id) =>
         id != null && _nodeById != null && _nodeById.TryGetValue(id, out var n) ? n : null;
+
+    /// <summary>Dynamic Eidolon Shelters are added and removed at runtime, so their lookup index
+    /// must be refreshed whenever the graph mutates.</summary>
+    public void RebuildNodeIndex()
+    {
+        _nodeById = new Dictionary<string, MapNode>();
+        if (Graph == null) return;
+        foreach (MapNode node in Graph.Nodes) _nodeById[node.Id] = node;
+    }
 
     // ============================================================= handshake
 
@@ -356,6 +372,7 @@ public partial class RunState : Node
             var parts = new List<string> { $"Day {dayLabel} begins." };
             parts.AddRange(DayEndNotes);
             LastDayEndSummary = string.Join(" ", parts);
+            CaptureLastDayCheckpoint();
             if (!SaveActiveRun(out string saveError))
                 GD.PushError($"[RunState] Day-end save failed: {saveError}");
             ReturnToMap();
@@ -387,6 +404,23 @@ public partial class RunState : Node
         GetTree().ChangeSceneToFile("res://Scenes/RunOver.tscn");
     }
 
+    /// <summary>Consume TwistedReality when a boss would kill the player and restore the last
+    /// completed day's checkpoint. This is intentionally called only by the arena's boss death
+    /// paths; ordinary deaths remain terminal.</summary>
+    public bool TryRecoverFromBossFailure()
+    {
+        if (!HasTwistedReality() || _lastDayCheckpoint == null) return false;
+        RunSaveData checkpoint = SaveGameService.CloneRunSave(_lastDayCheckpoint);
+        if (checkpoint == null) return false;
+        HydrateSave(checkpoint);
+        RemoveTwistedReality();
+        CaptureLastDayCheckpoint();
+        if (!SaveActiveRun(out string saveError))
+            GD.PushError($"[RunState] TwistedReality rewind save failed: {saveError}");
+        ReturnToMap();
+        return true;
+    }
+
     /// <summary>
     /// Cross the zone-6 singularity (MapGDD §7): latch InVoid and devour the whole outer ring at
     /// once. The player is on a zone-6 node (safe); the day display becomes "???".
@@ -398,6 +432,7 @@ public partial class RunState : Node
         foreach (var n in Graph.Nodes)
             if (n.WorldIndex != -1) n.Devoured = true; // everything outside zone 6
         Graph.BreakRealityBridgesAtDevouredEndpoints();
+        RebuildNodeIndex();
     }
 
     // ============================================================= mutators (single owner of truth)
@@ -463,9 +498,26 @@ public partial class RunState : Node
 
     public void AddItem(string defId)
     {
-        Items.Add(new ItemInstance(defId));
+        if (!ItemCatalog.Contains(defId))
+        {
+            GD.PushWarning($"[RunState] skipped unknown item '{defId}'.");
+            return;
+        }
+        Items.Add(CreateItemInstance(defId));
         ItemsCollected++;
         DebugManager.Instance?.LogItem(defId, ItemsCollected);
+    }
+
+    private ItemInstance CreateItemInstance(string defId)
+        => new(defId, $"item-{_nextItemInstanceOrdinal++}");
+
+    private void NoteLoadedInstanceId(string instanceId)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId)) return;
+        const string prefix = "item-";
+        if (!instanceId.StartsWith(prefix, StringComparison.Ordinal)) return;
+        if (int.TryParse(instanceId[prefix.Length..], out int value))
+            _nextItemInstanceOrdinal = Math.Max(_nextItemInstanceOrdinal, value + 1);
     }
 
     /// <summary>Whether the unique cross-realm key is owned, either in a held slot or backpack.</summary>
@@ -478,6 +530,20 @@ public partial class RunState : Node
         return false;
     }
 
+    private void RemoveTwistedReality()
+    {
+        Items.RemoveAll(item => item.DefId == TwistedRealityItemId);
+        foreach (ProtagonistState protagonist in Owned)
+        {
+            if (protagonist.HeldItemDefId != TwistedRealityItemId) continue;
+            protagonist.HeldItemDefId = null;
+            protagonist.HeldItemInstanceId = null;
+            protagonist.HeldItemFromBackpack = false;
+            protagonist.HeldItemDayCooldownRemaining = 0;
+            protagonist.HeldItemSecondCooldownRemaining = 0f;
+        }
+    }
+
     /// <summary>Gets the held copy of TwistedReality. Its skill only works while equipped.</summary>
     private ProtagonistState HeldTwistedReality()
     {
@@ -486,7 +552,7 @@ public partial class RunState : Node
         return null;
     }
 
-    /// <summary>Checks whether TwistedReality can create its next permanent bridge.</summary>
+    /// <summary>Checks whether TwistedReality can create its next Bridge of Eidolon.</summary>
     public bool CanCreateRealityBridge(string originId, out string reason)
     {
         reason = null;
@@ -499,11 +565,10 @@ public partial class RunState : Node
             reason = $"TwistedReality re-forms in {holder.HeldItemDayCooldownRemaining} day(s).";
             return false;
         }
-        if (Stamina < MapGenTable.TwistedRealityStaminaCost) { reason = "Not enough stamina."; return false; }
-        if (origin.WorldIndex < 0 || origin.Kind != NodeKind.Combat || origin.LevelTag != "1-A"
+        if (origin.WorldIndex < 0 || !origin.IsCombat || !origin.IsVoidRiverPeripheral
             || !CompletedNodeIds.Contains(origin.Id))
         {
-            reason = "TwistedReality needs a completed 1-A city at a realm's edge.";
+            reason = "Bridge of Eidolon needs a completed city on the VOID river.";
             return false;
         }
         if (Graph.HasRealityBridge(origin))
@@ -511,42 +576,74 @@ public partial class RunState : Node
             reason = "This city is already anchored to another reality.";
             return false;
         }
-        if (FindClosestRealityDestination(origin) == null)
+        if (FindEidolonDestination(origin) == null)
         {
-            reason = "No eligible city remains in another realm.";
+            reason = origin.Level == 4 ? "No available Zone 6 gate remains." : "No eligible city remains in another realm.";
             return false;
         }
         return true;
     }
 
     /// <summary>
-    /// Spend one stamina and create a permanent cross-realm edge. The caller can then travel
-    /// through it using normal map movement, without a second item use.
+    /// Build Bridge of Eidolon. The player remains at the origin; reaching the midpoint shelter
+    /// and spending its Blessing is the only way to cross to the opposite city.
     /// </summary>
-    public bool TryCreateRealityBridge(string originId, out MapNode destination, out string reason)
+    public bool TryCreateRealityBridge(string originId, out MapNode shelter, out string reason)
     {
-        destination = null;
+        shelter = null;
         if (!CanCreateRealityBridge(originId, out reason)) return false;
         var origin = FindNode(originId);
-        destination = FindClosestRealityDestination(origin);
-        if (destination == null || !Graph.AddRealityBridge(origin, destination))
+        MapNode destination = FindEidolonDestination(origin);
+        if (destination == null || !Graph.AddRealityBridge(origin, destination, out shelter))
         {
-            destination = null;
+            shelter = null;
             reason = "Reality could not find a stable destination.";
             return false;
         }
-        Stamina -= MapGenTable.TwistedRealityStaminaCost;
-        HeldTwistedReality().HeldItemDayCooldownRemaining = MapGenTable.TwistedRealityCooldownDays;
+        RebuildNodeIndex();
+        HeldTwistedReality().HeldItemDayCooldownRemaining = ItemCatalog.TryGet(TwistedRealityItemId, out ItemDef item)
+            ? item.DayCooldownDays : 4;
         reason = null;
         return true;
     }
 
-    private MapNode FindClosestRealityDestination(MapNode origin)
+    private MapNode FindEidolonDestination(MapNode origin)
     {
+        // A completed LV4 capital does not choose another outer realm: it is the exclusive
+        // player-created entrance to the nearest surviving Zone-6 LV5 gate.
+        if (origin.Level == 4)
+        {
+            MapNode zone6 = null;
+            foreach (MapNode candidate in Graph.Nodes)
+            {
+                if (candidate.WorldIndex != -1 || candidate.Level != 5 || !candidate.IsCombat
+                    || candidate.Devoured || Graph.HasRealityBridge(candidate)) continue;
+                if (zone6 == null || candidate.Pos.DistanceSquaredTo(origin.Pos) < zone6.Pos.DistanceSquaredTo(origin.Pos)
+                    || (Mathf.IsEqualApprox(candidate.Pos.DistanceSquaredTo(origin.Pos), zone6.Pos.DistanceSquaredTo(origin.Pos))
+                        && string.CompareOrdinal(candidate.Id, zone6.Id) < 0)) zone6 = candidate;
+            }
+            return zone6;
+        }
+
+        int closestRealm = -1;
+        float closestRealmDistance = float.MaxValue;
+        foreach (MapNode candidate in Graph.Nodes)
+        {
+            if (!candidate.IsCombat || candidate.WorldIndex < 0 || candidate.WorldIndex == origin.WorldIndex
+                || candidate.Devoured || Graph.HasRealityBridge(candidate)) continue;
+            float dist = candidate.Pos.DistanceSquaredTo(origin.Pos);
+            if (dist < closestRealmDistance || (Mathf.IsEqualApprox(dist, closestRealmDistance)
+                && candidate.WorldIndex < closestRealm))
+            {
+                closestRealmDistance = dist;
+                closestRealm = candidate.WorldIndex;
+            }
+        }
+
         MapNode best = null;
         foreach (var candidate in Graph.Nodes)
         {
-            if (candidate.WorldIndex < 0 || candidate.WorldIndex == origin.WorldIndex || candidate.Devoured
+            if (!candidate.IsCombat || candidate.WorldIndex != closestRealm || candidate.Devoured
                 || Graph.HasRealityBridge(candidate)) continue;
             if (best == null
                 || candidate.Pos.DistanceSquaredTo(origin.Pos) < best.Pos.DistanceSquaredTo(origin.Pos)
@@ -556,6 +653,31 @@ public partial class RunState : Node
                 best = candidate;
         }
         return best;
+    }
+
+    /// <summary>Spend the Eidolon Shelter's one Blessing, then transfer to the other bridge
+    /// endpoint without ending the day. Team Build remains a free shelter action.</summary>
+    public bool TryCrossEidolonShelter(string shelterId, out string reason)
+    {
+        reason = null;
+        MapNode shelter = FindNode(shelterId);
+        if (Graph == null || shelter == null || !Graph.TryGetRealityBridgeEndpoints(shelter, out MapNode a, out MapNode b))
+        {
+            reason = "This shelter no longer connects two realities.";
+            return false;
+        }
+        if (!IsShelterBlessed(shelterId)) { reason = "This shelter's Blessing is already spent."; return false; }
+        MapNode target = PreviousNodeId == a.Id ? b : a;
+        if (target.Devoured) { reason = "The far shore has been devoured."; return false; }
+        ConsumeBlessing(shelterId);
+        PreviousNodeId = shelter.Id;
+        CurrentNodeId = target.Id;
+        MarkVisited(target);
+        CurrentAdventure = null;
+        if (!InVoid && target.WorldIndex == -1) EnterVoid();
+        if (target.IsCombat && !CompletedNodeIds.Contains(target.Id)) BeginAdventure(target.Id);
+        else ReturnToMap();
+        return true;
     }
 
     /// <summary>
@@ -574,25 +696,33 @@ public partial class RunState : Node
         // Bump whatever was previously held back to the backpack — but ONLY if it came from the
         // backpack. A previously-held debug catalog item vanishes (it was never in the economy).
         if (!string.IsNullOrEmpty(p.HeldItemDefId) && p.HeldItemFromBackpack)
-            Items.Add(new ItemInstance(p.HeldItemDefId)
+            Items.Add(new ItemInstance(p.HeldItemDefId, p.HeldItemInstanceId)
             {
                 DayCooldownRemaining = p.HeldItemDayCooldownRemaining,
+                SecondCooldownRemaining = p.HeldItemSecondCooldownRemaining,
             });
         // Consume the incoming item from the backpack only when it's a real backpack item. A debug
         // catalog item isn't in Items, so nothing is removed and — crucially — nothing is granted.
         int incomingCooldown = 0;
+        float incomingSecondCooldown = 0f;
+        string incomingInstanceId = $"debug:{defId}";
         if (fromBackpack)
         {
             int idx = Items.FindIndex(it => it.DefId == defId);
             if (idx >= 0)
             {
                 incomingCooldown = Items[idx].DayCooldownRemaining;
+                incomingSecondCooldown = Items[idx].SecondCooldownRemaining;
+                incomingInstanceId = Items[idx].InstanceId;
                 Items.RemoveAt(idx);
             }
+            else return; // never conjure a claimed item from an absent backpack instance
         }
         p.HeldItemDefId = defId;
+        p.HeldItemInstanceId = incomingInstanceId;
         p.HeldItemFromBackpack = fromBackpack;
         p.HeldItemDayCooldownRemaining = incomingCooldown;
+        p.HeldItemSecondCooldownRemaining = incomingSecondCooldown;
         // NOTE(T30 §4): benching a protagonist should auto-return its held item to the backpack;
         // deferred until party-benching UI lands. No perish/cooldown/passive hooks in this stub.
     }
@@ -605,13 +735,49 @@ public partial class RunState : Node
     {
         if (p == null || string.IsNullOrEmpty(p.HeldItemDefId)) return;
         if (p.HeldItemFromBackpack)
-            Items.Add(new ItemInstance(p.HeldItemDefId)
+            Items.Add(new ItemInstance(p.HeldItemDefId, p.HeldItemInstanceId)
             {
                 DayCooldownRemaining = p.HeldItemDayCooldownRemaining,
+                SecondCooldownRemaining = p.HeldItemSecondCooldownRemaining,
             });
         p.HeldItemDefId = null;
+        p.HeldItemInstanceId = null;
         p.HeldItemFromBackpack = false;
         p.HeldItemDayCooldownRemaining = 0;
+        p.HeldItemSecondCooldownRemaining = 0f;
+    }
+
+    /// <summary>
+    /// Swap two equipped item instances without routing either through the backpack. Team Build
+    /// uses this when the player selects another active member's greyed item cell; copying every
+    /// held-slot field together preserves concrete instance identity and both cooldown axes.
+    /// </summary>
+    public bool TrySwapHeldItems(ProtagonistState first, ProtagonistState second, out string error)
+    {
+        if (first == null || second == null)
+        {
+            error = "Both item holders must exist.";
+            return false;
+        }
+        if (ReferenceEquals(first, second))
+        {
+            error = "That item is already equipped here.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(second.HeldItemDefId))
+        {
+            error = "The selected holder has no item to swap.";
+            return false;
+        }
+
+        (first.HeldItemDefId, second.HeldItemDefId) = (second.HeldItemDefId, first.HeldItemDefId);
+        (first.HeldItemInstanceId, second.HeldItemInstanceId) = (second.HeldItemInstanceId, first.HeldItemInstanceId);
+        (first.HeldItemDayCooldownRemaining, second.HeldItemDayCooldownRemaining) = (second.HeldItemDayCooldownRemaining, first.HeldItemDayCooldownRemaining);
+        (first.HeldItemSecondCooldownRemaining, second.HeldItemSecondCooldownRemaining) = (second.HeldItemSecondCooldownRemaining, first.HeldItemSecondCooldownRemaining);
+        (first.HeldItemFromBackpack, second.HeldItemFromBackpack) = (second.HeldItemFromBackpack, first.HeldItemFromBackpack);
+
+        error = null;
+        return true;
     }
 
     /// <summary>Party size is a query so later item/meta modifiers can raise it without
@@ -657,9 +823,10 @@ public partial class RunState : Node
         return true;
     }
 
-    /// <summary>Place an owned protagonist at a shelter team slot. Selecting a current
-    /// member reorders it; selecting a benched member replaces the selected occupied
-    /// slot or fills the next empty one.</summary>
+    /// <summary>Place an owned protagonist at a shelter team slot. Selecting a current member
+    /// swaps it with the selected slot; selecting a benched member replaces an occupied slot or
+    /// fills the next empty one. The ordered list stays compact because empty slots have no battle
+    /// identity; Team Build renders the unused capacity after its final member.</summary>
     public bool TrySetActiveBuildSlot(int slot, string id, out string error)
     {
         if (slot < 0 || slot >= PartyCap())
@@ -677,8 +844,17 @@ public partial class RunState : Node
         int existing = next.IndexOf(id);
         if (existing >= 0)
         {
-            next.RemoveAt(existing);
-            next.Insert(Math.Min(slot, next.Count), id);
+            if (slot < next.Count)
+            {
+                (next[slot], next[existing]) = (next[existing], next[slot]);
+            }
+            else
+            {
+                // An existing member can be placed in the first visual empty slot. There is no
+                // durable empty entry in ActiveBuild, so this is an intentional reorder to tail.
+                next.RemoveAt(existing);
+                next.Add(id);
+            }
         }
         else if (slot < next.Count)
         {
@@ -752,6 +928,14 @@ public partial class RunState : Node
 
     // ============================================================= persistence
 
+    /// <summary>Capture the post-day-end state (or fresh day-one state) without recursively
+    /// nesting prior snapshots. The checkpoint is never used for normal save/load flow.</summary>
+    private void CaptureLastDayCheckpoint()
+    {
+        if (Graph == null) return;
+        _lastDayCheckpoint = SaveGameService.CloneRunSave(BuildSaveData());
+    }
+
     /// <summary>Copy the owned run state into the versioned file DTO. Static map geometry is
     /// regenerated from Seed; this records only the durable mutations that differ per run.</summary>
     private RunSaveData BuildSaveData()
@@ -790,13 +974,13 @@ public partial class RunState : Node
         var bridges = new List<RealityBridgeSaveData>();
         if (Graph != null)
         {
-            foreach (MapEdge edge in Graph.Edges)
+            foreach (MapNode shelter in Graph.RealityBridgeShelters())
             {
-                if (edge.Kind != MapEdgeKind.RealityBridge) continue;
-                RealityBridgeSaveData dto = FindBridgeDto(priorBridges, edge.A.Id, edge.B.Id)
+                if (!Graph.TryGetRealityBridgeEndpoints(shelter, out MapNode a, out MapNode b)) continue;
+                RealityBridgeSaveData dto = FindBridgeDto(priorBridges, a.Id, b.Id)
                     ?? new RealityBridgeSaveData();
-                dto.NodeAId = edge.A.Id;
-                dto.NodeBId = edge.B.Id;
+                dto.NodeAId = a.Id;
+                dto.NodeBId = b.Id;
                 bridges.Add(dto);
             }
         }
@@ -822,13 +1006,15 @@ public partial class RunState : Node
         for (int i = 0; i < Items.Count; i++)
         {
             ItemInstance item = Items[i];
-            ItemSaveData dto = i < priorItems.Count && priorItems[i]?.DefId == item.DefId
-                ? priorItems[i] : new ItemSaveData();
+            ItemSaveData dto = FindItemDto(priorItems, item.InstanceId) ?? new ItemSaveData();
+            dto.InstanceId = item.InstanceId ?? "";
             dto.DefId = item.DefId ?? "";
             dto.DayCooldownRemaining = item.DayCooldownRemaining;
+            dto.SecondCooldownRemaining = item.SecondCooldownRemaining;
             items.Add(dto);
         }
         save.Items = items;
+        save.LastDayCheckpoint = SaveGameService.CloneRunSave(_lastDayCheckpoint);
         return save;
     }
 
@@ -842,8 +1028,7 @@ public partial class RunState : Node
         Seed = save.Seed.Trim().ToUpperInvariant();
         Rng = new DetRandom(Seed);
         Graph = MapGenerator.Generate(Seed);
-        _nodeById = new Dictionary<string, MapNode>();
-        foreach (MapNode node in Graph.Nodes) _nodeById[node.Id] = node;
+        RebuildNodeIndex();
 
         var devoured = new HashSet<string>(save.Map?.DevouredNodeIds ?? new List<string>(), StringComparer.Ordinal);
         foreach (MapNode node in Graph.Nodes) node.Devoured = devoured.Contains(node.Id);
@@ -853,9 +1038,10 @@ public partial class RunState : Node
             {
                 MapNode a = FindNode(bridge?.NodeAId);
                 MapNode b = FindNode(bridge?.NodeBId);
-                if (!Graph.AddRealityBridge(a, b))
+                if (!Graph.AddRealityBridge(a, b, out _))
                     GD.PushWarning($"[RunState] skipped invalid saved reality bridge '{bridge?.NodeAId}' ↔ '{bridge?.NodeBId}'.");
             }
+            RebuildNodeIndex();
         }
 
         Day = Math.Max(1, save.Day);
@@ -893,7 +1079,12 @@ public partial class RunState : Node
                     GD.PushWarning($"[RunState] skipped unknown saved protagonist '{protagonist.Id}'.");
                     continue;
                 }
-                Owned.Add(CopyFromSave(protagonist));
+                ProtagonistState restored = CopyFromSave(protagonist);
+                if (!string.IsNullOrWhiteSpace(restored.HeldItemDefId)
+                    && string.IsNullOrWhiteSpace(restored.HeldItemInstanceId))
+                    restored.HeldItemInstanceId = $"legacy-{_nextItemInstanceOrdinal++}";
+                NoteLoadedInstanceId(restored.HeldItemInstanceId);
+                Owned.Add(restored);
             }
         }
         if (Owned.Count == 0)
@@ -913,6 +1104,7 @@ public partial class RunState : Node
 
         WonderCores = Math.Max(0, save.WonderCores);
         Items.Clear();
+        _nextItemInstanceOrdinal = 1;
         if (save.Items != null)
             foreach (ItemSaveData item in save.Items)
             {
@@ -921,7 +1113,14 @@ public partial class RunState : Node
                     GD.PushWarning("[RunState] skipped saved item with no id.");
                     continue;
                 }
-                Items.Add(new ItemInstance(item.DefId) { DayCooldownRemaining = Math.Max(0, item.DayCooldownRemaining) });
+                string instanceId = string.IsNullOrWhiteSpace(item.InstanceId)
+                    ? $"legacy-{_nextItemInstanceOrdinal++}" : item.InstanceId;
+                NoteLoadedInstanceId(instanceId);
+                Items.Add(new ItemInstance(item.DefId, instanceId)
+                {
+                    DayCooldownRemaining = Math.Max(0, item.DayCooldownRemaining),
+                    SecondCooldownRemaining = Math.Max(0f, item.SecondCooldownRemaining),
+                });
             }
 
         NodesTraversed = Math.Max(VisitedNodeIds.Count, Math.Max(0, save.NodesTraversed));
@@ -939,6 +1138,10 @@ public partial class RunState : Node
                 if (node?.WorldIndex >= 0) _worldsSet.Add(node.Zone);
                 else if (node?.WorldIndex == -1) _worldsSet.Add("XX");
             }
+
+        _lastDayCheckpoint = save.LastDayCheckpoint != null
+            ? SaveGameService.CloneRunSave(save.LastDayCheckpoint)
+            : SaveGameService.CloneRunSave(save);
     }
 
     private void RestoreNodeIdSet(HashSet<string> target, List<string> ids, string label)
@@ -972,6 +1175,14 @@ public partial class RunState : Node
         return null;
     }
 
+    private static ItemSaveData FindItemDto(List<ItemSaveData> items, string instanceId)
+    {
+        if (string.IsNullOrWhiteSpace(instanceId)) return null;
+        foreach (ItemSaveData item in items)
+            if (item?.InstanceId == instanceId) return item;
+        return null;
+    }
+
     private static void CopyToSave(ProtagonistState source, ProtagonistSaveData destination)
     {
         destination.Id = source.Id ?? "";
@@ -980,7 +1191,9 @@ public partial class RunState : Node
         destination.BonusDef = source.BonusDef;
         destination.MaxHpPercentPoints = source.MaxHpPercentPoints;
         destination.HeldItemDefId = source.HeldItemDefId;
+        destination.HeldItemInstanceId = source.HeldItemInstanceId;
         destination.HeldItemDayCooldownRemaining = source.HeldItemDayCooldownRemaining;
+        destination.HeldItemSecondCooldownRemaining = source.HeldItemSecondCooldownRemaining;
         destination.HeldItemFromBackpack = source.HeldItemFromBackpack;
         destination.ShiftCdRemaining = source.ShiftCdRemaining;
         destination.ESkillCdRemaining = source.ESkillCdRemaining;
@@ -1000,7 +1213,9 @@ public partial class RunState : Node
             BonusDef = source.BonusDef,
             MaxHpPercentPoints = Math.Max(0, source.MaxHpPercentPoints),
             HeldItemDefId = source.HeldItemDefId,
+            HeldItemInstanceId = source.HeldItemInstanceId,
             HeldItemDayCooldownRemaining = Math.Max(0, source.HeldItemDayCooldownRemaining),
+            HeldItemSecondCooldownRemaining = Math.Max(0f, source.HeldItemSecondCooldownRemaining),
             HeldItemFromBackpack = source.HeldItemFromBackpack,
             ShiftCdRemaining = Math.Max(0f, source.ShiftCdRemaining),
             ESkillCdRemaining = Math.Max(0f, source.ESkillCdRemaining),

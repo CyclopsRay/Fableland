@@ -5,15 +5,9 @@ using Fableland.Items;
 using Fableland.Debug;
 
 /// <summary>
-/// Placeholder shelter Adventure scene (v0.5.0). A menu of the shelter's actions; Phase 4 will
-/// flesh out plantations, traders, jousting, build/item management. For now it covers the
-/// day-ending Blessing actions (Rest / Sharpen Weapon / Sharpen Armor, NODES §5.5), leaving via
-/// Finish the Day, free "Back to Map" (no day end) while stamina remains, and a free "Team
-/// Build" menu (v0.6.0 M1 stub — assign wonder items to a protagonist's single held slot; see
-/// <see cref="OpenTeamBuild"/>). Only id + display-name items exist yet — no passive/skill/
-/// cooldown behavior, T30 §4 future work.
-///
-/// Null-tolerant: launchable via F5 (no run) — falls back to a debug node id, Blessed.
+/// Shelter Adventure scene. Blessings remain day-ending actions while Team Build is a free
+/// management action. Team Build keeps the editable next-battle order inside RunState; an arena
+/// receives only its frozen battle snapshot.
 /// </summary>
 public partial class ShelterController : CanvasLayer
 {
@@ -26,20 +20,26 @@ public partial class ShelterController : CanvasLayer
 
     private string _nodeId;
     private bool _isVoidShelter;
+    private bool _isEidolonShelter;
 
-    // ---- Team Build overlay (v0.6.0 M1) ----
+    // ---- Team Build window ----
+    private enum TeamBuildMode { Overview, ProtagonistPicker, ItemPicker }
+
     private Panel _teamBuildPanel;
-    private HBoxContainer _teamSlots;
-    private VBoxContainer _rosterList;
-    private VBoxContainer _backpackList;
+    private Control _teamBuildContent;
     private Label _teamBuildStatus;
-    private string _selectedProtagId;
+    private Button _teamBuildBack;
+    private TeamBuildMode _teamBuildMode;
     private int _selectedTeamSlot = -1;
     private string _teamBuildMessage;
-    /// <summary>Ephemeral, debug-only ProtagonistStates for roster entries not in RunState.Owned
-    /// (e.g. PumpKing before it's granted for real). NEVER added to Owned/ActiveBuild — pure
-    /// display/assignment scratch state, cached so selections persist across refreshes.</summary>
+
+    /// <summary>Ephemeral, debug-only states for implemented bodies not yet granted in the run.
+    /// They are never written into Owned or ActiveBuild.</summary>
     private readonly Dictionary<string, ProtagonistState> _debugStates = new();
+    private static readonly string[] KnownProtagonistIds =
+    {
+        "Pomegraknight", "PumpKing", "Cleopastar", "Pixolotl", "Sifu Pangda",
+    };
 
     public override void _Ready()
     {
@@ -55,6 +55,7 @@ public partial class ShelterController : CanvasLayer
         var rs = RunState.Instance;
         _nodeId = rs?.CurrentAdventure?.NodeId ?? "(debug)";
         _isVoidShelter = rs?.FindNode(_nodeId)?.Kind == Fableland.Map.NodeKind.Shelter;
+        _isEidolonShelter = !string.IsNullOrWhiteSpace(rs?.FindNode(_nodeId)?.RealityBridgeId);
 
         _rest.Pressed += () => Blessing("Rest — restore 30% max HP (excess → permanent max HP).",
             () => rs?.RestBlessing());
@@ -62,14 +63,11 @@ public partial class ShelterController : CanvasLayer
             () => rs?.AddAtk(10));
         _sharpenArmor.Pressed += () => Blessing("Sharpen Armor — permanently +10 DEF.",
             () => rs?.AddDef(10));
-        // Team Build is a free management action — no stamina/Blessing cost, no day end, no
-        // scene change (NODES §5.1 build/item swap is available at Blessed AND Mundane shelters).
         _teamBuild.Pressed += OpenTeamBuild;
         _finishDay.Pressed += () => Confirm("Finish the Day?", null);
         _back.Pressed += OnBack;
 
         BuildTeamBuildPanel();
-
         Refresh();
     }
 
@@ -79,23 +77,40 @@ public partial class ShelterController : CanvasLayer
         bool blessed = rs?.IsShelterBlessed(_nodeId) ?? true;
         int stamina = rs?.Stamina ?? RunState.MaxStamina;
 
-        _title.Text = _isVoidShelter ? $"Last Shelter {_nodeId}" : $"Transportation Hub {_nodeId}";
-        _status.Text = _isVoidShelter
-            ? "The singularity has closed behind you. Rest, sharpen, or rebuild before the VOID."
-            : (blessed ? "Blessed — one day-ending action available." : "Mundane — the Blessing is spent.");
+        _title.Text = _isEidolonShelter ? "Eidolon Shelter" : _isVoidShelter ? $"Last Shelter {_nodeId}" : $"Transportation Hub {_nodeId}";
+        _status.Text = _isEidolonShelter
+            ? (blessed ? "Spend this shelter's Blessing on Rest or Sharpen, then cross to the far shore." : "The bridge has been crossed; only Team Build remains.")
+            : _isVoidShelter
+                ? "The singularity has closed behind you. Rest, sharpen, or rebuild before the VOID."
+                : (blessed ? "Blessed — one day-ending action available." : "Mundane — the Blessing is spent.");
 
-        // Blessed shelter's day-ending actions grey out once Mundane (NODES §5).
         _rest.Disabled = !blessed;
         _sharpenWeapon.Disabled = !blessed;
         _sharpenArmor.Disabled = !blessed;
-        // Leaving is free but needs stamina to actually move on the map (NODES §5).
-        _back.Disabled = stamina <= 0;
+        _finishDay.Disabled = _isEidolonShelter;
+        _back.Disabled = _isEidolonShelter || stamina <= 0;
         _back.Text = _isVoidShelter ? "Continue into the VOID" : "Back to Map";
     }
 
-    /// <summary>A day-ending Blessing action: GDD confirm text → apply effect, consume Blessing, end day.</summary>
     private void Blessing(string effectLine, System.Action apply)
     {
+        if (_isEidolonShelter)
+        {
+            ConfirmWithoutEnding($"{effectLine}\n\nSpend this shelter's Blessing and cross the Bridge of Eidolon?", () =>
+            {
+                var rs = RunState.Instance;
+                string reason = null;
+                bool crossed = rs != null && rs.TryCrossEidolonShelter(_nodeId, out reason);
+                if (!crossed)
+                {
+                    _status.Text = reason ?? "The bridge cannot be crossed.";
+                    return;
+                }
+                apply?.Invoke();
+            });
+            return;
+        }
+
         Confirm($"{effectLine}\n\n{BlessingConfirm}", () =>
         {
             apply?.Invoke();
@@ -103,10 +118,6 @@ public partial class ShelterController : CanvasLayer
         });
     }
 
-    /// <summary>
-    /// Shows a Yes/Cancel popup. On Yes: run <paramref name="onYes"/> (if any), then end the day
-    /// via RunState (which swaps back to the map, or to RunOver on VOID death).
-    /// </summary>
     private void Confirm(string text, System.Action onYes)
     {
         var dlg = new ConfirmationDialog { DialogText = text, Title = "Shelter" };
@@ -121,344 +132,476 @@ public partial class ShelterController : CanvasLayer
         dlg.PopupCentered();
     }
 
+    private void ConfirmWithoutEnding(string text, System.Action onYes)
+    {
+        var dlg = new ConfirmationDialog { DialogText = text, Title = "Eidolon Shelter" };
+        AddChild(dlg);
+        dlg.Confirmed += () => { dlg.QueueFree(); onYes?.Invoke(); };
+        dlg.Canceled += dlg.QueueFree;
+        dlg.PopupCentered();
+    }
+
     private void OnBack()
     {
         var rs = RunState.Instance;
-        if (rs == null || rs.Stamina <= 0) return; // can't move with no stamina
-        rs.ReturnToMap(); // free — leaving a shelter does not end the day (NODES §5)
+        if (rs == null || rs.Stamina <= 0) return;
+        rs.ReturnToMap();
     }
 
-    // ============================================================= Team Build overlay (v0.6.0 M1)
+    // ============================================================= Team Build
 
-    /// <summary>
-    /// Build the Team Build overlay: a panel filling ~70% of the viewport with a title/close row,
-    /// a scrollable roster list, a scrollable backpack list, and a status label. Mirrors
-    /// <c>DebugManager.BuildLogPanel()</c>/<c>BuildProtagonistPanel()</c>'s construction style
-    /// (hand-built Panel + StyleBoxFlat + VBoxContainer) for visual consistency. Built once;
-    /// content is rebuilt by <see cref="RefreshTeamBuild"/> on every open + after every action.
-    /// </summary>
     private void BuildTeamBuildPanel()
     {
         _teamBuildPanel = new Panel { Visible = false };
-        var style = new StyleBoxFlat
-        {
-            BgColor = new Color(0.05f, 0.05f, 0.08f, 0.92f),
-            BorderWidthLeft = 2,
-            BorderWidthRight = 2,
-            BorderWidthTop = 2,
-            BorderWidthBottom = 2,
-            BorderColor = new Color(0.3f, 0.3f, 0.5f),
-            CornerRadiusTopLeft = 8,
-            CornerRadiusTopRight = 8,
-            CornerRadiusBottomLeft = 8,
-            CornerRadiusBottomRight = 8,
-        };
-        _teamBuildPanel.AddThemeStyleboxOverride("panel", style);
+        _teamBuildPanel.AddThemeStyleboxOverride("panel", MakePanelStyle(new Color(0.055f, 0.06f, 0.11f, 0.98f), new Color(0.78f, 0.68f, 0.39f), 12, 2));
 
-        var vbox = new VBoxContainer();
-        vbox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _teamBuildPanel.AddChild(vbox);
+        var margin = new MarginContainer();
+        margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        margin.AddThemeConstantOverride("margin_left", 22);
+        margin.AddThemeConstantOverride("margin_right", 22);
+        margin.AddThemeConstantOverride("margin_top", 18);
+        margin.AddThemeConstantOverride("margin_bottom", 18);
+        _teamBuildPanel.AddChild(margin);
 
-        // Title bar row
+        var layout = new VBoxContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        layout.AddThemeConstantOverride("separation", 12);
+        margin.AddChild(layout);
+
         var titleRow = new HBoxContainer();
-        var titleLabel = new Label { Text = "Team Build", HorizontalAlignment = HorizontalAlignment.Left };
-        titleLabel.AddThemeFontSizeOverride("font_size", 16);
-        titleRow.AddChild(titleLabel);
+        var title = new Label { Text = "TEAM BUILD", VerticalAlignment = VerticalAlignment.Center };
+        title.AddThemeFontSizeOverride("font_size", 24);
+        titleRow.AddChild(title);
 
-        var closeBtn = new Button { Text = "X", CustomMinimumSize = new Vector2(32, 28) };
-        closeBtn.Pressed += () => _teamBuildPanel.Visible = false; // close = hide, not free
-        titleRow.AddChild(closeBtn);
-        vbox.AddChild(titleRow);
-
-        var helpLabel = new Label { Text = "Select a team slot, then choose an owned roster member. Select a protagonist to assign items." };
-        vbox.AddChild(helpLabel);
-
-        vbox.AddChild(new Label { Text = "Active team — Tab order for the next battle" });
-        _teamSlots = new HBoxContainer();
-        vbox.AddChild(_teamSlots);
-
-        vbox.AddChild(new Label { Text = "Roster" });
-        var rosterScroll = new ScrollContainer
+        var help = new Button
         {
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            Text = "?",
+            TooltipText = "Team Build\n\nClick a poster to choose an owned protagonist for that slot. Click an item bubble to equip from the backpack. A grey tilted choice is already equipped or fielded; selecting it swaps places. Pick the current choice to cancel.\n\nThe team order is used for the next battle only.",
+            CustomMinimumSize = new Vector2(30, 30),
         };
-        _rosterList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        rosterScroll.AddChild(_rosterList);
-        vbox.AddChild(rosterScroll);
+        help.AddThemeStyleboxOverride("normal", MakePanelStyle(new Color(0.18f, 0.18f, 0.26f), new Color(0.75f, 0.69f, 0.42f), 15, 1));
+        titleRow.AddChild(help);
 
-        vbox.AddChild(new Label { Text = "Backpack (click an item to assign it to the selected protagonist)" });
-        var backpackScroll = new ScrollContainer
+        var spacer = new Control { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        titleRow.AddChild(spacer);
+        _teamBuildBack = new Button
         {
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            Text = "←",
+            TooltipText = "Back to Team Build overview",
+            CustomMinimumSize = new Vector2(36, 30),
+            Visible = false,
         };
-        _backpackList = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        backpackScroll.AddChild(_backpackList);
-        vbox.AddChild(backpackScroll);
+        _teamBuildBack.Pressed += BackToTeamOverview;
+        titleRow.AddChild(_teamBuildBack);
+        var close = new Button { Text = "×", TooltipText = "Close Team Build", CustomMinimumSize = new Vector2(36, 30) };
+        close.Pressed += CloseTeamBuild;
+        titleRow.AddChild(close);
+        layout.AddChild(titleRow);
 
-        _teamBuildStatus = new Label { Text = "" };
-        vbox.AddChild(_teamBuildStatus);
-
+        _teamBuildContent = new Control { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        layout.AddChild(_teamBuildContent);
+        _teamBuildStatus = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _teamBuildStatus.AddThemeColorOverride("font_color", new Color(0.74f, 0.77f, 0.88f));
+        layout.AddChild(_teamBuildStatus);
         AddChild(_teamBuildPanel);
     }
 
-    /// <summary>Open the Team Build menu — a free management action (no day end, no scene change,
-    /// available regardless of Blessed state or stamina; see the wiring comment in _Ready).</summary>
     private void OpenTeamBuild()
     {
+        _teamBuildMode = TeamBuildMode.Overview;
+        _selectedTeamSlot = -1;
         _teamBuildMessage = null;
         RepositionTeamBuildPanel();
-        RefreshTeamBuild();
+        RebuildTeamBuildView();
         _teamBuildPanel.Visible = true;
+    }
+
+    private void CloseTeamBuild()
+    {
+        _teamBuildPanel.Visible = false;
+        _teamBuildMode = TeamBuildMode.Overview;
+        _selectedTeamSlot = -1;
     }
 
     private void RepositionTeamBuildPanel()
     {
-        var vp = GetViewport().GetVisibleRect().Size;
-        float w = vp.X * 0.70f;
-        float h = vp.Y * 0.70f;
-        float x = (vp.X - w) / 2f;
-        float y = (vp.Y - h) / 2f;
-        _teamBuildPanel.Position = new Vector2(x, y);
-        _teamBuildPanel.Size = new Vector2(w, h);
+        Vector2 viewport = GetViewport().GetVisibleRect().Size;
+        float width = Mathf.Min(viewport.X * 0.80f, 1040f);
+        float height = Mathf.Min(viewport.Y * 0.80f, 720f);
+        _teamBuildPanel.Position = new Vector2((viewport.X - width) / 2f, (viewport.Y - height) / 2f);
+        _teamBuildPanel.Size = new Vector2(width, height);
     }
 
-    /// <summary>
-    /// Rebuild the roster + backpack rows from current state. Roster = RunState.Owned (real)
-    /// unioned with ProtagonistRoster entries not already Owned (debug-only, ephemeral state) when
-    /// debug mode is on — NEVER written into Owned/ActiveBuild. Backpack = RunState.Items (real)
-    /// plus, in debug mode, any catalog entry not already in Items or held by the roster union (a
-    /// display-only bypass, never bulk-written into Items). Null-tolerant throughout (T30 §4 stub
-    /// — no passive/skill/cooldown behavior attaches to any of this).
-    /// </summary>
-    private void RefreshTeamBuild()
+    private void RebuildTeamBuildView()
+    {
+        foreach (Node child in _teamBuildContent.GetChildren())
+        {
+            if (child is CanvasItem canvasItem) canvasItem.Visible = false;
+            child.QueueFree();
+        }
+        if (_teamBuildMode == TeamBuildMode.Overview) BuildTeamOverview();
+        else BuildSelectionView();
+        _teamBuildBack.Visible = _teamBuildMode != TeamBuildMode.Overview;
+
+        _teamBuildContent.Modulate = new Color(1f, 1f, 1f, 0f);
+        CreateTween().TweenProperty(_teamBuildContent, "modulate:a", 1f, 0.16f);
+    }
+
+    private void BuildTeamOverview()
+    {
+        var layout = new VBoxContainer();
+        layout.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        layout.AddThemeConstantOverride("separation", 10);
+        _teamBuildContent.AddChild(layout);
+
+        var scroll = new ScrollContainer
+        {
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Auto,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Disabled,
+        };
+        var slots = new HBoxContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        slots.AddThemeConstantOverride("separation", 20);
+        scroll.AddChild(slots);
+        layout.AddChild(scroll);
+
+        var rs = RunState.Instance;
+        string[] teamIds = rs?.CaptureBattleTeam()?.MemberIds ?? System.Array.Empty<string>();
+        int partyCap = rs?.PartyCap() ?? 3;
+        for (int slot = 0; slot < partyCap; slot++)
+        {
+            string id = slot < teamIds.Length ? teamIds[slot] : null;
+            int capturedSlot = slot;
+            slots.AddChild(CreateTeamCard(id, capturedSlot, true));
+        }
+
+        _teamBuildStatus.Text = _teamBuildMessage ?? "";
+    }
+
+    private void BuildSelectionView()
+    {
+        var root = new HBoxContainer();
+        root.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        root.AddThemeConstantOverride("separation", 24);
+        _teamBuildContent.AddChild(root);
+
+        string selectedId = SelectedTeamMemberId();
+        var selectedColumn = new VBoxContainer { CustomMinimumSize = new Vector2(168, 0) };
+        selectedColumn.AddChild(new Label { Text = _teamBuildMode == TeamBuildMode.ProtagonistPicker ? "Selected slot" : "Selected holder" });
+        selectedColumn.AddChild(CreateTeamCard(selectedId, _selectedTeamSlot, false));
+        root.AddChild(selectedColumn);
+
+        var listColumn = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, SizeFlagsVertical = Control.SizeFlags.ExpandFill };
+        listColumn.AddChild(new Label { Text = _teamBuildMode == TeamBuildMode.ProtagonistPicker ? "PROTAGONISTS" : "ITEMS" });
+        var scroll = new ScrollContainer { SizeFlagsVertical = Control.SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        var grid = new GridContainer { Columns = 5, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        grid.AddThemeConstantOverride("h_separation", 12);
+        grid.AddThemeConstantOverride("v_separation", 12);
+        scroll.AddChild(grid);
+        listColumn.AddChild(scroll);
+        root.AddChild(listColumn);
+
+        if (_teamBuildMode == TeamBuildMode.ProtagonistPicker) AddProtagonistChoices(grid);
+        else AddItemChoices(grid);
+
+        _teamBuildStatus.Text = _teamBuildMessage ?? "";
+    }
+
+    /// <summary>Build one overview/selected card. Its poster has a 2:3 footprint; its item is a
+    /// separate bubble so either surface can enter its dedicated picker.</summary>
+    private Control CreateTeamCard(string protagonistId, int slot, bool interactive)
+    {
+        var card = new VBoxContainer { CustomMinimumSize = new Vector2(156, 0) };
+        card.AddThemeConstantOverride("separation", 7);
+        var slotLabel = new Label { Text = $"SLOT {slot + 1}", HorizontalAlignment = HorizontalAlignment.Center };
+        slotLabel.AddThemeColorOverride("font_color", new Color(0.73f, 0.69f, 0.49f));
+        card.AddChild(slotLabel);
+
+        var poster = new Button
+        {
+            CustomMinimumSize = new Vector2(150, 225),
+            TooltipText = protagonistId == null ? "Empty slot — choose a protagonist." : ProtagonistTooltip(protagonistId),
+            Disabled = !interactive && protagonistId == null,
+        };
+        poster.AddThemeStyleboxOverride("normal", MakePanelStyle(new Color(0.12f, 0.13f, 0.20f), new Color(0.56f, 0.51f, 0.34f), 8, 2));
+        if (protagonistId == null)
+        {
+            var empty = new Label { Text = "+\nChoose", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
+            empty.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            empty.AddThemeFontSizeOverride("font_size", 18);
+            poster.AddChild(empty);
+        }
+        else
+        {
+            AddTexture(poster, LoadTexture(PosterPath(protagonistId)));
+        }
+        if (interactive) poster.Pressed += () => OpenSelection(slot, TeamBuildMode.ProtagonistPicker);
+        card.AddChild(poster);
+
+        var itemButton = new Button
+        {
+            CustomMinimumSize = new Vector2(58, 58),
+            SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+            Disabled = protagonistId == null || !interactive,
+            TooltipText = ItemTooltipFor(protagonistId),
+        };
+        itemButton.AddThemeStyleboxOverride("normal", MakePanelStyle(new Color(0.20f, 0.18f, 0.29f), new Color(0.82f, 0.71f, 0.42f), 29, 2));
+        var held = FindState(protagonistId);
+        if (held != null && ItemCatalog.TryGet(held.HeldItemDefId, out ItemDef item)) AddTexture(itemButton, LoadTexture(item.IconPath));
+        else AddCenteredText(itemButton, "+", 24);
+        if (interactive && protagonistId != null) itemButton.Pressed += () => OpenSelection(slot, TeamBuildMode.ItemPicker);
+        card.AddChild(itemButton);
+        return card;
+    }
+
+    private void OpenSelection(int slot, TeamBuildMode mode)
+    {
+        _selectedTeamSlot = slot;
+        _teamBuildMode = mode;
+        _teamBuildMessage = null;
+        RebuildTeamBuildView();
+    }
+
+    private void ReturnToOverview(string message = null)
+    {
+        _teamBuildMessage = message;
+        _teamBuildMode = TeamBuildMode.Overview;
+        _selectedTeamSlot = -1;
+        RebuildTeamBuildView();
+    }
+
+    private void BackToTeamOverview()
+    {
+        if (_teamBuildMode != TeamBuildMode.Overview) ReturnToOverview();
+    }
+
+    private void AddProtagonistChoices(GridContainer grid)
     {
         var rs = RunState.Instance;
-        bool debugOn = DebugManager.Instance?.Enabled == true;
+        var roster = BuildRoster();
+        string[] teamIds = rs?.CaptureBattleTeam()?.MemberIds ?? System.Array.Empty<string>();
+        foreach (var pair in roster)
+        {
+            string id = pair.Key;
+            bool inTeam = System.Array.IndexOf(teamIds, id) >= 0;
+            var choice = CreateSquareChoice(LoadTexture(MugshotPath(id)), ProtagonistTooltip(id), inTeam);
+            bool owned = rs?.FindProtagonist(id) != null;
+            choice.Disabled = !owned;
+            if (!owned) choice.TooltipText += "\nUnavailable outside debug preview.";
+            else choice.Pressed += () => ChooseProtagonist(id);
+            grid.AddChild(choice);
+        }
+    }
 
-        // ---- roster union ----
-        var roster = new List<(string Id, ProtagonistState State)>();
+    private void ChooseProtagonist(string id)
+    {
+        string original = SelectedTeamMemberId();
+        if (id == original) { ReturnToOverview("No change made."); return; }
+
+        var rs = RunState.Instance;
+        string error = null;
+        bool changed = rs != null && rs.TrySetActiveBuildSlot(_selectedTeamSlot, id, out error);
+        if (!changed)
+        {
+            _teamBuildMessage = error ?? "Unable to change the team.";
+            RebuildTeamBuildView();
+            return;
+        }
+        ReturnToOverview($"{id} is ready for the next battle.");
+    }
+
+    private void AddItemChoices(GridContainer grid)
+    {
+        var rs = RunState.Instance;
+        if (rs == null) return;
+
+        var backpack = new List<ItemInstance>(rs.Items);
+        backpack.Sort(CompareItems);
+        foreach (ItemInstance instance in backpack)
+            if (ItemCatalog.TryGet(instance.DefId, out ItemDef item))
+                AddItemChoice(grid, item, null, false);
+
+        var holders = new List<ProtagonistState>();
+        foreach (ProtagonistState state in rs.Owned)
+            if (!string.IsNullOrWhiteSpace(state.HeldItemDefId)) holders.Add(state);
+        holders.Sort((left, right) => string.CompareOrdinal(left.HeldItemDefId, right.HeldItemDefId));
+        foreach (ProtagonistState holder in holders)
+            if (ItemCatalog.TryGet(holder.HeldItemDefId, out ItemDef item))
+                AddItemChoice(grid, item, holder, false);
+
+        if (DebugManager.Instance?.Enabled == true)
+        {
+            foreach (ItemDef item in ItemCatalog.Entries)
+            {
+                bool represented = false;
+                foreach (ItemInstance instance in backpack) if (instance.DefId == item.Id) { represented = true; break; }
+                foreach (ProtagonistState holder in holders) if (holder.HeldItemDefId == item.Id) { represented = true; break; }
+                if (!represented) AddItemChoice(grid, item, null, true);
+            }
+        }
+    }
+
+    private static int CompareItems(ItemInstance left, ItemInstance right)
+    {
+        ItemCatalog.TryGet(left?.DefId, out ItemDef leftDef);
+        ItemCatalog.TryGet(right?.DefId, out ItemDef rightDef);
+        return ItemCatalog.CompareForDisplay(leftDef, rightDef);
+    }
+
+    private void AddItemChoice(GridContainer grid, ItemDef item, ProtagonistState holder, bool debugOnly)
+    {
+        bool equipped = holder != null;
+        string suffix = equipped ? $"\nEquipped by {holder.Id}. Click to swap." : debugOnly ? "\n[Debug preview]" : "\nIn backpack.";
+        var choice = CreateSquareChoice(LoadTexture(item.IconPath), ItemCatalog.Tooltip(item) + suffix, equipped);
+        choice.Pressed += () => ChooseItem(item.Id, holder, debugOnly);
+        grid.AddChild(choice);
+    }
+
+    private void ChooseItem(string defId, ProtagonistState sourceHolder, bool debugOnly)
+    {
+        var target = FindState(SelectedTeamMemberId());
+        if (target == null) { ReturnToOverview(); return; }
+        if (ReferenceEquals(target, sourceHolder)) { ReturnToOverview("No change made."); return; }
+
+        var rs = RunState.Instance;
+        if (rs == null) { ReturnToOverview(); return; }
+        if (sourceHolder != null)
+        {
+            if (!rs.TrySwapHeldItems(target, sourceHolder, out string error))
+            {
+                _teamBuildMessage = error ?? "Unable to swap those items.";
+                RebuildTeamBuildView();
+                return;
+            }
+            ReturnToOverview("Items swapped.");
+            return;
+        }
+
+        rs.HoldItem(target, defId, fromBackpack: !debugOnly);
+        ReturnToOverview($"Equipped {ItemCatalog.DisplayName(defId)}.");
+    }
+
+    private List<KeyValuePair<string, ProtagonistState>> BuildRoster()
+    {
+        var roster = new List<KeyValuePair<string, ProtagonistState>>();
+        var rs = RunState.Instance;
         if (rs != null)
-            foreach (var p in rs.Owned) roster.Add((p.Id, p));
+            foreach (ProtagonistState state in rs.Owned)
+                roster.Add(new KeyValuePair<string, ProtagonistState>(state.Id, state));
 
-        if (debugOn)
+        if (DebugManager.Instance?.Enabled == true)
         {
             foreach (var entry in ProtagonistRoster.Entries)
             {
-                bool alreadyOwned = false;
-                foreach (var r in roster) if (r.Id == entry.Id) { alreadyOwned = true; break; }
-                if (alreadyOwned) continue;
-
-                if (!_debugStates.TryGetValue(entry.Id, out var state))
+                bool exists = false;
+                foreach (var pair in roster) if (pair.Key == entry.Id) { exists = true; break; }
+                if (exists) continue;
+                if (!_debugStates.TryGetValue(entry.Id, out ProtagonistState state))
                 {
                     state = new ProtagonistState(entry.Id);
                     _debugStates[entry.Id] = state;
                 }
-                roster.Add((entry.Id, state));
+                roster.Add(new KeyValuePair<string, ProtagonistState>(entry.Id, state));
             }
         }
 
-        if (_selectedProtagId != null)
+        // Portraits for future protagonists remain visible but unavailable until their playable
+        // scene and real unlock contract exist. This lets the Team Build gallery grow without
+        // ever placing an unspawnable protagonist into ActiveBuild.
+        foreach (string id in KnownProtagonistIds)
         {
-            bool stillPresent = false;
-            foreach (var r in roster) if (r.Id == _selectedProtagId) { stillPresent = true; break; }
-            if (!stillPresent) _selectedProtagId = null; // e.g. debug toggled off mid-panel
+            bool exists = false;
+            foreach (var pair in roster) if (pair.Key == id) { exists = true; break; }
+            if (!exists) roster.Add(new KeyValuePair<string, ProtagonistState>(id, null));
         }
-
-        // ---- editable next-battle team slots ----
-        foreach (Node c in _teamSlots.GetChildren()) c.QueueFree();
-        BattleTeamSnapshot teamSnapshot = rs?.CaptureBattleTeam();
-        string[] teamIds = teamSnapshot?.MemberIds ?? System.Array.Empty<string>();
-        int partyCap = rs?.PartyCap() ?? 3;
-        for (int slot = 0; slot < partyCap; slot++)
-        {
-            int targetSlot = slot; // do not capture the mutable for-loop variable
-            bool occupied = targetSlot < teamIds.Length;
-            string id = occupied ? teamIds[targetSlot] : "Empty";
-            var column = new VBoxContainer();
-            var slotButton = new Button
-            {
-                Text = (targetSlot == _selectedTeamSlot ? "> " : "") +
-                       $"{targetSlot + 1}: {id}" + (targetSlot == _selectedTeamSlot ? " <" : ""),
-                CustomMinimumSize = new Vector2(125, 32),
-                Disabled = rs == null,
-            };
-            slotButton.Pressed += () =>
-            {
-                _selectedTeamSlot = targetSlot;
-                _teamBuildMessage = $"Team slot {targetSlot + 1} selected.";
-                RefreshTeamBuild();
-            };
-            column.AddChild(slotButton);
-
-            var removeButton = new Button
-            {
-                Text = "Remove",
-                Disabled = rs == null || !occupied || teamIds.Length <= 1,
-            };
-            removeButton.Pressed += () => RemoveTeamSlot(targetSlot);
-            column.AddChild(removeButton);
-            _teamSlots.AddChild(column);
-        }
-
-        // ---- roster rows ----
-        foreach (Node c in _rosterList.GetChildren()) c.QueueFree();
-        foreach (var (id, state) in roster)
-        {
-            var row = new HBoxContainer();
-
-            string marker = id == _selectedProtagId ? $"> {id} <" : id;
-            var selectBtn = new Button { Text = marker, CustomMinimumSize = new Vector2(160, 32) };
-            selectBtn.Pressed += () => { _selectedProtagId = id; RefreshTeamBuild(); };
-            row.AddChild(selectBtn);
-
-            bool isOwned = rs?.FindProtagonist(id) != null;
-            var teamButton = new Button
-            {
-                Text = isOwned ? "Set team" : "[DBG only]",
-                Disabled = !isOwned || _selectedTeamSlot < 0,
-            };
-            teamButton.Pressed += () => SetTeamSlot(id);
-            row.AddChild(teamButton);
-
-            string heldText = string.IsNullOrEmpty(state.HeldItemDefId) ? "(empty)" : ItemCatalog.DisplayName(state.HeldItemDefId);
-            row.AddChild(new Label { Text = heldText, CustomMinimumSize = new Vector2(200, 0) });
-
-            var returnBtn = new Button
-            {
-                Text = "Return to backpack",
-                Disabled = string.IsNullOrEmpty(state.HeldItemDefId),
-            };
-            returnBtn.Pressed += () =>
-            {
-                RunState.Instance?.UnholdItem(state);
-                RefreshTeamBuild();
-            };
-            row.AddChild(returnBtn);
-
-            _rosterList.AddChild(row);
-        }
-
-        // ---- backpack rows ----
-        foreach (Node c in _backpackList.GetChildren()) c.QueueFree();
-
-        if (rs != null)
-        {
-            foreach (var it in rs.Items)
-            {
-                string defId = it.DefId;
-                var btn = new Button { Text = ItemCatalog.DisplayName(defId), CustomMinimumSize = new Vector2(0, 32) };
-                btn.Pressed += () => AssignItem(defId, fromBackpack: true); // real backpack item
-                _backpackList.AddChild(btn);
-            }
-        }
-
-        if (debugOn)
-        {
-            var heldIds = new HashSet<string>();
-            foreach (var (_, state) in roster)
-                if (!string.IsNullOrEmpty(state.HeldItemDefId)) heldIds.Add(state.HeldItemDefId);
-            var backpackIds = new HashSet<string>();
-            if (rs != null) foreach (var it in rs.Items) backpackIds.Add(it.DefId);
-
-            foreach (var entry in ItemCatalog.Entries)
-            {
-                if (backpackIds.Contains(entry.Id) || heldIds.Contains(entry.Id)) continue;
-                string defId = entry.Id;
-                var btn = new Button { Text = "[DBG] " + entry.DisplayName, CustomMinimumSize = new Vector2(0, 32) };
-                btn.Pressed += () => AssignItem(defId, fromBackpack: false); // debug display bypass — never in Items
-                _backpackList.AddChild(btn);
-            }
-        }
-
-        string selectionHint = _selectedProtagId == null
-            ? "Select a protagonist, then click an item to assign it."
-            : $"Item target: {_selectedProtagId}";
-        string teamHint = _selectedTeamSlot < 0
-            ? "Select a team slot to change the next battle's Tab order."
-            : $"Team target: slot {_selectedTeamSlot + 1}.";
-        _teamBuildStatus.Text = string.IsNullOrEmpty(_teamBuildMessage)
-            ? teamHint + " " + selectionHint
-            : _teamBuildMessage + " " + selectionHint;
+        return roster;
     }
 
-    private void SetTeamSlot(string id)
+    private string SelectedTeamMemberId()
     {
-        if (_selectedTeamSlot < 0)
-        {
-            _teamBuildMessage = "Select a team slot first.";
-            RefreshTeamBuild();
-            return;
-        }
-
-        var rs = RunState.Instance;
-        if (rs == null)
-        {
-            _teamBuildMessage = "No active run is available.";
-            RefreshTeamBuild();
-            return;
-        }
-        if (!rs.TrySetActiveBuildSlot(_selectedTeamSlot, id, out string error))
-        {
-            _teamBuildMessage = error ?? "Unable to change the team.";
-            RefreshTeamBuild();
-            return;
-        }
-
-        _teamBuildMessage = $"Placed {id} in the next battle's team.";
-        RefreshTeamBuild();
+        string[] members = RunState.Instance?.CaptureBattleTeam()?.MemberIds ?? System.Array.Empty<string>();
+        return _selectedTeamSlot >= 0 && _selectedTeamSlot < members.Length ? members[_selectedTeamSlot] : null;
     }
 
-    private void RemoveTeamSlot(int slot)
+    private ProtagonistState FindState(string id)
     {
-        var rs = RunState.Instance;
-        if (rs == null)
-        {
-            _teamBuildMessage = "No active run is available.";
-            RefreshTeamBuild();
-            return;
-        }
-        if (!rs.TryRemoveActiveBuildSlot(slot, out string error))
-        {
-            _teamBuildMessage = error ?? "Unable to remove that team member.";
-            RefreshTeamBuild();
-            return;
-        }
-
-        if (_selectedTeamSlot >= rs.ActiveBuild.Count)
-            _selectedTeamSlot = rs.ActiveBuild.Count - 1;
-        _teamBuildMessage = "Removed from the next battle's team.";
-        RefreshTeamBuild();
+        if (string.IsNullOrEmpty(id)) return null;
+        ProtagonistState state = RunState.Instance?.FindProtagonist(id);
+        return state ?? (_debugStates.TryGetValue(id, out state) ? state : null);
     }
 
-    /// <summary>Assign a wonder item (by DefId) to the currently-selected roster protagonist.
-    /// <paramref name="fromBackpack"/> true = a real RunState.Items backpack item (consumed and
-    /// restored on unhold); false = a debug-catalog display-bypass item that must never enter the
-    /// real economy (see RunState.HoldItem).</summary>
-    private void AssignItem(string defId, bool fromBackpack)
+    private static Button CreateSquareChoice(Texture2D texture, string tooltip, bool selected)
     {
-        if (_selectedProtagId == null)
+        var choice = new Button { CustomMinimumSize = new Vector2(86, 86), TooltipText = tooltip };
+        choice.AddThemeStyleboxOverride("normal", MakePanelStyle(new Color(0.15f, 0.16f, 0.24f), new Color(0.48f, 0.50f, 0.62f), 7, 1));
+        if (selected)
         {
-            _teamBuildStatus.Text = "Select a protagonist first.";
-            return;
+            choice.Modulate = new Color(0.57f, 0.57f, 0.60f, 1f);
+            choice.Rotation = -0.09f;
         }
-        var state = FindProtagState(_selectedProtagId);
-        if (state == null) return;
-
-        RunState.Instance?.HoldItem(state, defId, fromBackpack);
-        RefreshTeamBuild();
+        AddTexture(choice, texture);
+        return choice;
     }
 
-    /// <summary>Find the ProtagonistState behind a roster id — a real RunState.Owned entry, or
-    /// (debug-only) the cached ephemeral state. Never null-derefs when RunState.Instance is null.</summary>
-    private ProtagonistState FindProtagState(string id)
+    private static void AddTexture(Control parent, Texture2D texture)
     {
-        if (id == null) return null;
-        var rs = RunState.Instance;
-        if (rs != null)
-            foreach (var p in rs.Owned)
-                if (p.Id == id) return p;
-        return _debugStates.TryGetValue(id, out var s) ? s : null;
+        if (texture == null) return;
+        var image = new TextureRect
+        {
+            Texture = texture,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+        };
+        image.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        parent.AddChild(image);
+    }
+
+    private static void AddCenteredText(Control parent, string text, int fontSize)
+    {
+        var label = new Label { Text = text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
+        label.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        label.AddThemeFontSizeOverride("font_size", fontSize);
+        parent.AddChild(label);
+    }
+
+    private static StyleBoxFlat MakePanelStyle(Color background, Color border, int radius, int borderWidth)
+    {
+        return new StyleBoxFlat
+        {
+            BgColor = background,
+            BorderColor = border,
+            BorderWidthLeft = borderWidth,
+            BorderWidthRight = borderWidth,
+            BorderWidthTop = borderWidth,
+            BorderWidthBottom = borderWidth,
+            CornerRadiusTopLeft = radius,
+            CornerRadiusTopRight = radius,
+            CornerRadiusBottomLeft = radius,
+            CornerRadiusBottomRight = radius,
+        };
+    }
+
+    private static Texture2D LoadTexture(string path) => string.IsNullOrWhiteSpace(path) ? null : GD.Load<Texture2D>(path);
+
+    private static string PosterPath(string id) => $"res://Assets/Sprites/Protagonists/{id}/UI/Poster.png";
+    private static string MugshotPath(string id) => $"res://Assets/Sprites/Protagonists/{id}/UI/Mugshot.png";
+
+    private static string ProtagonistTooltip(string id) => id switch
+    {
+        "Pomegraknight" => "Pomegraknight\nA fiery pomegranate knight who turns heat into momentum.",
+        "PumpKing" => "PumpKing\nA crowned pumpkin monarch with a stubborn soul.",
+        "Cleopastar" => "Cleopastar\nA poised starfruit who commands orbiting stars.",
+        "Pixolotl" => "Pixolotl\nAn axolotl explorer with a bright, curious heart.",
+        "Sifu Pangda" => "Sifu Pangda\nA seasoned hulu-bottle master of calm Chi.",
+        _ => id ?? "Empty team slot",
+    };
+
+    private static string ItemTooltipFor(string protagonistId)
+    {
+        if (string.IsNullOrEmpty(protagonistId)) return "Choose a protagonist first.";
+        ProtagonistState state = RunState.Instance?.FindProtagonist(protagonistId);
+        return state != null && ItemCatalog.TryGet(state.HeldItemDefId, out ItemDef item)
+            ? ItemCatalog.Tooltip(item)
+            : "Empty held-item slot — choose an item.";
     }
 }

@@ -30,7 +30,4 @@ public static class MapGenTable
     public const int HubClusterCities = 3;
     public const float RealmCapitalVoidBuffer = 82f;
 
-    // MapGDD §5 / ITEMS §7.12.
-    public const int TwistedRealityCooldownDays = 5;
-    public const int TwistedRealityStaminaCost = 1;
 }

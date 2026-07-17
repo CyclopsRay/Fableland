@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://Scripts/Foes/SeagullFoe.cs" id="1"]
-[ext_resource type="Texture2D" path="res://Sprites/seagull_placeholder.svg" id="2"]
+[ext_resource type="Texture2D" path="res://Assets/Sprites/Foes/Seagull/seagull_placeholder.svg" id="2"]
 [ext_resource type="PackedScene" path="res://Scenes/Foes/Poop.tscn" id="3"]
 
 [sub_resource type="RectangleShape2D" id="1"]

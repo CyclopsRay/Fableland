@@ -57,12 +57,24 @@ public partial class CharacterController : CharacterBody2D
 	public event Action<float, float, float, float> HpChanged;   // (curHP, maxHP, shield, tempHP)
 	public event Action<float, float> UltChargeChanged; // (current, max)
 	public event Action Died;
+	/// <summary>Post-mitigation direct enemy damage that reached normal HP after shields/temp HP.
+	/// Item reactions subscribe while held; hazards and DoT deliberately do not raise it.</summary>
+	public event Action<float> DirectDamageTaken;
+	/// <summary>Post-mitigation damage dealt by a melee-cone hit. The foe parameter identifies the
+	/// target so a held reaction can bounce damage without re-triggering the melee event.</summary>
+	public event Action<BaseFoe, float> MeleeDamageDealt;
+	/// <summary>Post-mitigation damage caused by this player. Projectiles and area skills report
+	/// through <see cref="ReportDamageDealt"/> so omni-vamp-style held items are not melee-only.</summary>
+	public event Action<float> DamageDealt;
 
 	// Single-player prototype: lets Enemy credit ult charge for damage dealt
 	// without needing a reference back to the player (mirrors ShakeCamera2D.Instance).
 	public static CharacterController LocalPlayer { get; private set; }
 
 	public float CurrentHP { get; private set; }
+	public bool HasFrozenStatus => _frozenDebuff.Active;
+	public bool HasOnFireStatus => _fire.Active;
+	public Vector2 FacingDirection => new(Facing, 0f);
 
 	/// <summary>Subclass hook: expose a shield pool for the HUD. Base returns 0;
 	/// characters with a shield (e.g. PumpKing) override this.</summary>
@@ -147,6 +159,8 @@ public partial class CharacterController : CharacterBody2D
 	private readonly Dictionary<string, float> _dealtDmgBonuses = new();
 	// Aggregatable defense bonuses by source name (e.g. "Frozen" → +30).
 	private readonly Dictionary<string, float> _defenseBonuses = new();
+	private readonly Dictionary<string, float> _fireDurationExtensions = new();
+	private readonly Dictionary<string, float> _frozenDurationExtensions = new();
 	// Continuous environmental movement contributions (e.g. Cleopastar Blackholes).
 	// Unlike _externalVel impulses, these are source-keyed target velocities and do not
 	// decay. The owning field refreshes/clears its own key every physics tick.
@@ -650,11 +664,23 @@ public partial class CharacterController : CharacterBody2D
 			}
 
 			Vector2 knock = new Vector2(Facing, -0.35f).Normalized() * knockbackSpeed;
-			e.TakeHit(new HitInfo(scaledDamage, knock, stun), origin);   // origin feeds crab Soft Shell
+			float dealt = e.TakeHit(new HitInfo(scaledDamage, knock, stun), origin);   // origin feeds crab Soft Shell
 			if (applyBurn) e.SetBurning(burnDuration);
+			if (dealt > 0f)
+			{
+				MeleeDamageDealt?.Invoke(e, dealt);
+				ReportDamageDealt(dealt);
+			}
 			hits++;
 		}
 		return hits;
+	}
+
+	/// <summary>Report a non-melee hit dealt by this protagonist. Projectile and persistent-skill
+	/// owners call this with the actual post-mitigation result returned by <see cref="BaseFoe.TakeHit"/>.</summary>
+	public void ReportDamageDealt(float dealt)
+	{
+		if (dealt > 0f) DamageDealt?.Invoke(dealt);
 	}
 
 	protected void ApplyMovePenalty(float mult, float duration)
@@ -684,6 +710,7 @@ public partial class CharacterController : CharacterBody2D
 
 		float dealt = hit.Damage * DefenseMultiplier;
 		dealt = AbsorbDamage(dealt);
+		if (dealt > 0f) DirectDamageTaken?.Invoke(dealt);
 		DebugManager.Instance?.LogPlayerDmgReceived(hit.Damage, dealt, "foe");
 		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
 		NotifyHpChanged();
@@ -732,7 +759,7 @@ public partial class CharacterController : CharacterBody2D
 	public void AddFireStack(float amount)
 	{
 		if (Invincible) return;
-		_fire.AddStack(amount);
+		_fire.AddStack(amount, StatusDurationExtension(_fireDurationExtensions));
 		DebugManager.Instance?.LogStatus("OnFire", amount);
 	}
 
@@ -740,15 +767,43 @@ public partial class CharacterController : CharacterBody2D
 	public void AddFrozenStack(float amount)
 	{
 		if (Invincible) return;
-		_frozenDebuff.AddStack(amount);
+		_frozenDebuff.AddStack(amount, StatusDurationExtension(_frozenDurationExtensions));
 		DebugManager.Instance?.LogStatus("Frozen", amount);
 	}
 
 	/// <summary>Set/clear a named, aggregatable defense contribution (e.g. a skill's
 	/// temporary damage mitigation). Defense is the only damage-taken lever — there's
 	/// no separate flat "damage reduction" multiplier alongside it.</summary>
-	protected void SetDefenseSource(string source, float defense) => _defenseBonuses[source] = defense;
-	protected void ClearDefenseSource(string source) => _defenseBonuses.Remove(source);
+	public void SetDefenseSource(string source, float defense) => _defenseBonuses[source] = defense;
+	public void ClearDefenseSource(string source) => _defenseBonuses.Remove(source);
+
+	/// <summary>Set or clear a held item's extension for future OnFire applications. Extensions
+	/// are source-keyed and additive, following the modifier-stack rule.</summary>
+	public void SetFireDurationExtension(string source, float seconds)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (seconds > 0f) _fireDurationExtensions[source] = seconds;
+		else _fireDurationExtensions.Remove(source);
+	}
+
+	public void ClearFireDurationExtension(string source) => _fireDurationExtensions.Remove(source);
+
+	/// <summary>Set or clear a held item's extension for future Frozen applications.</summary>
+	public void SetFrozenDurationExtension(string source, float seconds)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (seconds > 0f) _frozenDurationExtensions[source] = seconds;
+		else _frozenDurationExtensions.Remove(source);
+	}
+
+	public void ClearFrozenDurationExtension(string source) => _frozenDurationExtensions.Remove(source);
+
+	private static float StatusDurationExtension(Dictionary<string, float> sources)
+	{
+		float total = 0f;
+		foreach (float seconds in sources.Values) total += seconds;
+		return total;
+	}
 
 	/// <summary>Add a delta-v impulse to the external-velocity channel (knockback/wind/…).</summary>
 	public void AddImpulse(Vector2 impulse) => _externalVel += impulse;
@@ -805,6 +860,8 @@ public partial class CharacterController : CharacterBody2D
 		_frozenDebuff.Clear();
 		_dealtDmgBonuses.Clear();
 		_defenseBonuses.Clear();
+		_fireDurationExtensions.Clear();
+		_frozenDurationExtensions.Clear();
 		_continuousExternalVelocity.Clear();
 		TempHP = 0f;
 		Died?.Invoke();
@@ -833,6 +890,8 @@ public partial class CharacterController : CharacterBody2D
 		_frozenDebuff.Clear();
 		_dealtDmgBonuses.Clear();
 		_defenseBonuses.Clear();
+		_fireDurationExtensions.Clear();
+		_frozenDurationExtensions.Clear();
 		_continuousExternalVelocity.Clear();
 		Ammo?.ResetForRespawn();
 		TempHP = 0f;

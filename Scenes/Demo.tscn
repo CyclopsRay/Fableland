@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3]
 
 [ext_resource type="PackedScene" path="res://Scenes/Player.tscn" id="1"]
-[ext_resource type="Texture2D" path="res://Sprites/platform_placeholder.svg" id="2"]
+[ext_resource type="Texture2D" path="res://Assets/Sprites/Gameplay/World/platform_placeholder.svg" id="2"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(800, 32)

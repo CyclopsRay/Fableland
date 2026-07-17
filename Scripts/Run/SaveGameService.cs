@@ -16,7 +16,7 @@ namespace Fableland.Run;
 public static class SaveGameService
 {
     public const int SlotCount = 3;
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 3;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -102,6 +102,16 @@ public static class SaveGameService
         }
     }
 
+    /// <summary>Deep-copy a DTO at a persistence boundary. Rewind checkpoints deliberately do
+    /// not nest another checkpoint, keeping save size bounded to two run states.</summary>
+    public static RunSaveData CloneRunSave(RunSaveData source, bool includeLastDayCheckpoint = false)
+    {
+        if (source == null) return null;
+        RunSaveData clone = JsonSerializer.Deserialize<RunSaveData>(JsonSerializer.Serialize(source, JsonOptions), JsonOptions);
+        if (clone != null && !includeLastDayCheckpoint) clone.LastDayCheckpoint = null;
+        return clone;
+    }
+
     /// <summary>In-memory regression hook for DTO shape/version/forward-field preservation.
     /// It never touches <c>user://</c>, so tests and debug tooling can call it safely.</summary>
     public static bool RoundTripSelfTest(out string error)
@@ -154,8 +164,17 @@ public static class SaveGameService
         {
             case CurrentVersion:
                 return true;
+            case 2:
+                MigrateV2ToV3(save);
+                return true;
+            case 1:
+                MigrateV1ToV2(save);
+                MigrateV2ToV3(save);
+                return true;
             case 0:
                 MigrateV0ToV1(save);
+                MigrateV1ToV2(save);
+                MigrateV2ToV3(save);
                 return true;
             default:
                 error = $"Save version {save.Version} is newer than this game supports.";
@@ -173,6 +192,27 @@ public static class SaveGameService
         save.Owned ??= new List<ProtagonistSaveData>();
         save.ActiveBuild ??= new List<string>();
         save.Items ??= new List<ItemSaveData>();
+    }
+
+    /// <summary>v0.10.0 adds concrete item identity plus the combat cooldown axis. Missing
+    /// values intentionally remain empty/zero here; RunState assigns stable legacy ids while
+    /// hydrating because it owns every inventory location.</summary>
+    private static void MigrateV1ToV2(RunSaveData save)
+    {
+        save.Version = 2;
+        save.Items ??= new List<ItemSaveData>();
+        save.Owned ??= new List<ProtagonistSaveData>();
+        foreach (ProtagonistSaveData protagonist in save.Owned)
+            if (protagonist != null)
+                protagonist.HeldItemSecondCooldownRemaining = Math.Max(0f, protagonist.HeldItemSecondCooldownRemaining);
+    }
+
+    /// <summary>v0.10.0 stores the most recently completed day as a bounded rewind checkpoint
+    /// for TwistedReality's boss-loss possession.</summary>
+    private static void MigrateV2ToV3(RunSaveData save)
+    {
+        save.Version = 3;
+        save.LastDayCheckpoint = null;
     }
 
     private static bool IsValidSlot(int slot) => slot >= 0 && slot < SlotCount;
@@ -211,6 +251,8 @@ public sealed class RunSaveData
     public int ProtagonistsCollected { get; set; }
     public int ItemsCollected { get; set; }
     public List<string> WorldsVisited { get; set; } = new();
+    /// <summary>Start-of-current-day state, stored without recursively embedding itself.</summary>
+    public RunSaveData LastDayCheckpoint { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement> ExtensionData { get; set; }
@@ -244,7 +286,9 @@ public sealed class ProtagonistSaveData
     public int BonusDef { get; set; }
     public int MaxHpPercentPoints { get; set; }
     public string HeldItemDefId { get; set; }
+    public string HeldItemInstanceId { get; set; }
     public int HeldItemDayCooldownRemaining { get; set; }
+    public float HeldItemSecondCooldownRemaining { get; set; }
     public bool HeldItemFromBackpack { get; set; }
     public float ShiftCdRemaining { get; set; }
     public float ESkillCdRemaining { get; set; }
@@ -260,8 +304,10 @@ public sealed class ProtagonistSaveData
 
 public sealed class ItemSaveData
 {
+    public string InstanceId { get; set; } = "";
     public string DefId { get; set; } = "";
     public int DayCooldownRemaining { get; set; }
+    public float SecondCooldownRemaining { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement> ExtensionData { get; set; }

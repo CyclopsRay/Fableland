@@ -140,11 +140,9 @@ public static class MapRenderModel
 
         foreach (MapEdge edge in graph.Edges)
         {
-            bool isletLeg = (edge.A.WorldIndex == -1 && edge.A.Kind == NodeKind.Shelter)
-                            || (edge.B.WorldIndex == -1 && edge.B.Kind == NodeKind.Shelter);
-            // The pre-existing LV5 / river / core links are represented by the VOID art. Only
-            // small outer legs to XX-S remain visible, while realm roads and reality bridges show.
-            if (edge.A.WorldIndex == -1 && edge.B.WorldIndex == -1 && !isletLeg) continue;
+            // Zone-6 internal links are represented by VOID art. Eidolon bridge legs have a
+            // midpoint shelter in the origin realm, so they remain visible even when one end is LV5.
+            if (edge.A.WorldIndex == -1 && edge.B.WorldIndex == -1) continue;
             rendered.Roads.Add(new Road { A = edge.A, B = edge.B, Route = edge.Route, Kind = edge.Kind });
         }
 

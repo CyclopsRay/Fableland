@@ -7,7 +7,7 @@ gameplay.** Placeholders ship; the pipeline below upgrades them without touching
 
 ## 1. Placeholder-first policy (current practice — keep it)
 
-- Every entity gets a flat `.svg` placeholder in `Sprites/` sized to its **collision
+- Every entity gets a flat `.svg` placeholder in `Assets/Sprites/` sized to its **collision
   proportions** (caveat v0.2.1: sprite native size and CollisionShape2D are independent
   — when proportions change, update *both*, always).
 - Player-class characters: 48×64 (3:4), 2 m tall at 32 px/m. Foes/props sized per GDD
@@ -56,7 +56,7 @@ The contract, already in place for Pomegraknight:
   and the semantic distinction of map icons. Palette per world is fixed in `MapGDD.md` §2.
 - Map iconography is currently semantic shapes (circle/diamond/triangle/?) — an easy,
   high-value art pass later, but **keep silhouettes distinct at min zoom**.
-- UI assets live in `Sprites/UI/` (mugshots by HP band, cooldown rings, ult fill).
+- UI assets live in `Assets/Sprites/UI/` (mugshots by HP band, cooldown rings, ult fill).
   New HUD elements follow the same set-of-SVG-states pattern. Reserved future HUD:
   boss HP bar (FOES §8), day/stamina during Adventure, item slots + CD pips.
 - **Interactive Controls keep `mouse_filter = STOP`; decorative ones get IGNORE** —

@@ -605,7 +605,7 @@ compiler surfaces below.
 Read this before porting the next character (Cleopastar / Pixolotl / Pangda). Each point
 is a mistake already paid for once.
 - **Sprites are already migrated.** The v0.5.2 bulk copy put every character's images in
-  `Assets/Sprites/Characters/{Name}/` (images only, sanitized filenames; `.anim`/`.controller`/
+  `Assets/Sprites/Protagonists/{Name}/` (images only, sanitized filenames; `.anim`/`.controller`/
   `.DS_Store` excluded). Do NOT re-copy from the old project. They are Unity **multi-sprite
   sheets**, not one-frame files — slice them into `AtlasTexture` regions. Get the grid from the
   old `.meta` (`TextureImporter` sprite rects) / `.anim` files, and **flip Y** (Unity's rect
@@ -977,3 +977,28 @@ is a mistake already paid for once.
   `MapEditor.DefaultLayerIndex` already did). Never index `Layers[0]` for "the battlefield."
 - **Why:** list order is draw order (back-to-front); the battlefield sits in the *middle* of a
   real stack, so its index depends on how many farview sublayers precede it.
+
+### Short-circuited `out` arguments are not definitely assigned (v0.10.0)
+- **Symptom:** `if (runtime == null || !runtime.TryUse(out string reason))` would not compile
+  when the failure branch displayed `reason`: the first operand can short-circuit, so C# cannot
+  prove that the `out` call ran.
+- **Rule:** declare the `out` variable before the boolean expression, then assign the result in a
+  separate expression (`string reason = null; bool used = runtime != null && runtime.TryUse(out reason);`).
+- **Why:** `&&`/`||` preserve runtime short-circuiting, while C# definite-assignment analysis
+  correctly refuses to treat a skipped call as an assignment.
+
+### Expiring a status must also clear its queued duration extension (v0.10.0)
+- **Symptom:** a decaying status that reached zero could retain a pending wonder-item duration
+  extension, so a later fresh application waited on time that belonged to the old stack.
+- **Rule:** when a `DecayingDebuff` is inactive, reset both its tick timer and its queued duration
+  extension; only an active application may own an extension.
+- **Why:** duration is state attached to one status application, not a rechargeable resource that
+  survives a complete expiry.
+
+### A generic Node does not expose Control visibility (v0.10.0, Team Build compile fix)
+- **Symptom:** clearing a dynamically rebuilt Team Build view failed to compile after setting
+  `Visible` on children returned as `Node`.
+- **Rule:** when iterating `GetChildren()`, either keep the collection typed as the visual base
+  class or pattern-match the `Node` to `CanvasItem`/`Control` before using visual properties.
+- **Why:** Godot's scene tree collection intentionally returns the broad `Node` type; C# does not
+  infer that a specific runtime parent only contains controls.

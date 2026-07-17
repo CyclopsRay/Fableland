@@ -1,13 +1,20 @@
 namespace Fableland.Run;
 
 /// <summary>
-/// A concrete wonder item carried during a run. The minimal instance state includes its
-/// day cooldown so a held wonder can retain its progress when the player changes equipment.
+/// A concrete wonder item carried during a run. Identity and mutable cooldown state belong to the
+/// instance, never to its catalog definition. An instance is either in the backpack or represented
+/// by the matching held-item fields on one protagonist (RunState owns every move between them).
 /// </summary>
 public sealed class ItemInstance
 {
-    public string DefId;   // → future ItemRegistry
+    public string InstanceId;
+    public string DefId;
     public int DayCooldownRemaining;
+    public float SecondCooldownRemaining;
 
-    public ItemInstance(string defId) { DefId = defId; }
+    public ItemInstance(string defId, string instanceId = null)
+    {
+        DefId = defId;
+        InstanceId = instanceId ?? "";
+    }
 }
