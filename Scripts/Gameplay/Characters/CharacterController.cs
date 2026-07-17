@@ -96,6 +96,10 @@ public partial class CharacterController : CharacterBody2D
 	/// nothing to report; characters with a Shift/E override these.</summary>
 	public virtual (float Remaining, float Max) ShiftCooldown => (0f, 0f);
 	public virtual (float Remaining, float Max) ESkillCooldown => (0f, 0f);
+	/// <summary>External arena actions honour this while a character is committed to a skill state.</summary>
+	public virtual bool CanSwitchProtagonist => !ControlsLocked;
+	/// <summary>Whether the arena may activate this body's held item this frame.</summary>
+	public virtual bool CanUseHeldItem => !ControlsLocked;
 	/// <summary>Relative simulation rate for this body. The default keeps existing protagonists unchanged.</summary>
 	public virtual float LocalTimeRate => LocalTime.DefaultRate;
 	/// <summary>Convert a world delta into this character's simulation delta.</summary>

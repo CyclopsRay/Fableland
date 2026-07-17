@@ -113,7 +113,7 @@ public partial class GameManager : Node2D
         _hasRun = adv != null;
 
         // A real battle starts from the immutable team snapshot in its adventure
-        // handoff, not the Pomegraknight scene baked into Arena.tscn and not the
+        // handoff, not the authoring placeholder baked into Arena.tscn and not the
         // mutable shelter list. This is the sole team-build → battle boundary.
         if (_hasRun) ConfigureBattleParty(rs, adv);
 
@@ -391,6 +391,7 @@ public partial class GameManager : Node2D
         if (!_hasRun) return;
         if (_switchCd > 0f) return;
         if (_player == null || !IsInstanceValid(_player)) return;
+        if (!_player.CanSwitchProtagonist) return;
         if (_player.HpRatio <= 0f) return; // dead — permadeath, switching won't save you
         if (_ended || _goalResolved) return;
 
@@ -598,9 +599,10 @@ public partial class GameManager : Node2D
         {
             string reason = null;
             string activatedName = _itemRuntime?.Definition?.DisplayName;
-            bool used = _itemRuntime != null && _itemRuntime.TryUse(out reason);
+            bool used = _player != null && _player.CanUseHeldItem
+                && _itemRuntime != null && _itemRuntime.TryUse(out reason);
             if (!used)
-                _hud.ShowToast(reason ?? "No held combat item.");
+                _hud.ShowToast(reason ?? "That action is unavailable right now.");
             else
             {
                 bool converted = _itemRuntime.RebindRequested;

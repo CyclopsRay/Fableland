@@ -215,15 +215,16 @@ public partial class RunState : Node
         _worldsSet.Clear();
 
         Owned.Clear();
+        Owned.Add(new ProtagonistState("Pixolotl"));
         Owned.Add(new ProtagonistState("Pomegraknight"));
         Owned.Add(new ProtagonistState("PumpKing"));
         // The vertical slice exposes every implemented protagonist through the real
-        // bench so Team Build opens on its designed three-poster overview.
+        // bench, while the active team remains capped at its designed three members.
         Owned.Add(new ProtagonistState("Cleopastar"));
         ActiveBuild.Clear();
+        ActiveBuild.Add("Pixolotl");
         ActiveBuild.Add("Pomegraknight");
         ActiveBuild.Add("PumpKing");
-        ActiveBuild.Add("Cleopastar");
         ActiveProtagonistIndex = 0;
         WonderCores = 0;
         Items.Clear();
@@ -1092,8 +1093,8 @@ public partial class RunState : Node
         }
         if (Owned.Count == 0)
         {
-            GD.PushWarning("[RunState] save had no valid protagonists; restored Pomegraknight.");
-            Owned.Add(new ProtagonistState("Pomegraknight"));
+            GD.PushWarning("[RunState] save had no valid protagonists; restored Pixolotl.");
+            Owned.Add(new ProtagonistState("Pixolotl"));
         }
 
         ActiveBuild.Clear();

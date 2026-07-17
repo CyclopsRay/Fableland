@@ -93,6 +93,16 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### External arena actions must ask the active character's skill-state policy (v0.10.2, Pixolotl input-lock fix)
+- **Symptom:** Pixolotl's local Shift state blocked controller abilities, but Arena-level Tab
+  switching and held-item activation still bypassed that state; E likewise needed its explicit
+  movement-and-BA-only exception.
+- **Rule:** route arena-owned actions through character capability hooks such as
+  `CanSwitchProtagonist` and `CanUseHeldItem`. A character with an active skill must own the
+  policy, while the arena remains the only caller that performs the action.
+- **Why:** input locks are not only controller movement. Any global input path can otherwise
+  escape a committed skill state and violate its combat contract.
+
 ### Gameplay node properties must not shadow Godot's inherited ownership API (v0.10.1, Pixolotl build fix)
 - **Symptom:** `PixolotlBubble.Owner` compiled with a warning because `Node` already exposes
   an `Owner` property used by Godot scene ownership; the temporal projectile's character owner

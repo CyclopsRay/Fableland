@@ -59,13 +59,13 @@ The file is recreated on every launch.
 
 Input action `debug_protagonist_page`. **Only responds while debug mode is ON**
 (deliberately unlike key 5). Toggles a centered overlay listing every implemented
-protagonist from `Scripts/Debug/ProtagonistRoster.cs` — currently **Pomegraknight**
-and **PumpKing** (future characters — Pixolotl, Cleopastar, Sifu Pangda — are one
-roster line each). Esc or X closes it; turning debug OFF force-closes it.
+protagonist from `Scripts/Debug/ProtagonistRoster.cs` — currently **Pixolotl**,
+**Pomegraknight**, **PumpKing**, and **Cleopastar**. Esc or X closes it; turning debug
+OFF force-closes it.
 
 Selecting a protagonist makes it the currently-controlled player character,
-**independent of** `RunState.Owned`/`ActiveBuild` (real progression still only
-grants Pomegraknight; the debug body choice never leaks into the run economy):
+**independent of** `RunState.Owned`/`ActiveBuild` (the debug body choice never leaks
+into the run economy):
 
 - **In the Arena** (the only scene with a live `CharacterController`): the current
   body is swapped in place, immediately — same position, signals (`HpChanged`/
@@ -125,15 +125,16 @@ The shelter (`Scenes/Shelter.tscn`) has a **Team Build** button (a free, always-
 management action — no stamina/Blessing cost, no day end) that opens an overlay for
 assigning a single held wonder item to a protagonist. This is a **real, permanent** shelter
 feature and works with debug mode OFF — it then shows only what a real run actually has:
-`RunState.Owned` protagonists (Pomegraknight in a fresh run) and the real `RunState.Items`
-backpack (empty until something grants an item).
+`RunState.Owned` protagonists (Pixolotl, Pomegraknight, PumpKing, and Cleopastar in a
+fresh run) and the real `RunState.Items` backpack (empty until something grants an item).
 
 With **debug mode ON**, the menu additionally shows content the real economy hasn't granted,
 purely for testing — the same non-invasive spirit as the key-4 protagonist page:
 - **All implemented protagonists** — every `Scripts/Debug/ProtagonistRoster.cs` entry not
-  already in `Owned` (i.e. PumpKing) is added to the roster as a selectable, item-assignable
-  entry. These use ephemeral `ProtagonistState`s owned by the shelter for the scene visit;
-  `RunState.Owned`/`ActiveBuild` are **never** mutated.
+  already in `Owned` is added to the roster as a selectable, item-assignable entry. A fresh
+  run already owns the current full roster, but this display bypass remains ready for future
+  unlocked characters. Ephemeral `ProtagonistState`s are owned by the shelter for the scene
+  visit; `RunState.Owned`/`ActiveBuild` are **never** mutated.
 - **All 13 wonder items** — every `Scripts/Items/ItemCatalog.cs` entry not already in the
   backpack (and not currently held) is listed as an assignable row, tagged **`[DBG]`** to
   distinguish it from a really-owned item. This is a **display bypass**: assigning a `[DBG]`
@@ -142,8 +143,8 @@ purely for testing — the same non-invasive spirit as the key-4 protagonist pag
   so the debug catalog can never permanently grant items outside a real run's economy (see
   the v0.6.0 KNOWLEDGE.md caveat on display-bypass round-trips).
 
-Turning debug OFF drops PumpKing and the `[DBG]` catalog rows from the menu on its next
-refresh; any real held/backpack items stay. Note: wonder items are **id + display name only**
+Turning debug OFF drops any display-only protagonists and the `[DBG]` catalog rows from the menu
+on its next refresh; any real held/backpack items stay. Note: wonder items are **id + display name only**
 in v0.6.0 — no passive/skill/cooldown behaviour attaches yet (full system is future work,
 `Docs/Tech/T30-FEATURE-BLUEPRINTS.md` §4 / `Docs/ITEMS.gdd`).
 

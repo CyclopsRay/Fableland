@@ -9,6 +9,11 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.10.2** — **Pixolotl default-character integration.** New runs begin with Pixolotl
+  leading the three-member active team (Pixolotl, Pomegraknight, PumpKing), while
+  Cleopastar remains available on the bench. The direct Arena scene now also authors
+  Pixolotl as its no-run body. Tab switching and held-item activation respect her skill
+  commitment: E allows only movement and Branquias; Shift and its recovery allow neither.
 - **0.10.1** — **Pixolotl temporal-control migration.** Pixolotl is playable through the
   debug protagonist roster with her 150 HP, 10 m/s route-building kit: pooled six-angle
   bubbles travel for 1.5 local-time seconds, rise, persist through foes once each, and

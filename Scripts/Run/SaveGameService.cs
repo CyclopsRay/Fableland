@@ -126,11 +126,11 @@ public static class SaveGameService
                 Day = 7,
                 Stamina = 3,
                 CurrentNodeId = "VK-1-A",
-                ActiveBuild = new List<string> { "Pomegraknight" },
+                ActiveBuild = new List<string> { "Pixolotl" },
                 Map = new MapSaveData { DevouredNodeIds = new List<string> { "SL-1-A" } },
                 Owned = new List<ProtagonistSaveData>
                 {
-                    new() { Id = "Pomegraknight", HpRatio = 0.75f, BonusAtk = 10 },
+                    new() { Id = "Pixolotl", HpRatio = 0.75f, BonusAtk = 10 },
                 },
                 ExtensionData = new Dictionary<string, JsonElement>
                 {

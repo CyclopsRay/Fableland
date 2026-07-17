@@ -213,9 +213,9 @@ the Unity source:
 - **No dead/stun body clip** exists in the delivered art — death freezes the frame with
   the base gray tint; stun uses the base `Anim.SpeedScale` freeze.
 - **Follow-ups:** shield has no HUD binding yet; head 6-stage art is a single sheet sliced
-  per stage + code scale (not distinct per-stage art); PumpKing is not yet a selectable
-  protagonist (Pomegraknight remains the Arena/RunState default); animation frame timings
-  want an in-editor polish pass on a real Godot build.
+  per stage + code scale (not distinct per-stage art); PumpKing is selectable and Pixolotl is
+  the Arena/RunState default; animation frame timings want an in-editor polish pass on a real
+  Godot build.
 
 ### Bug pass (v0.6.1)
 Five issues found and fixed post-port; see the `KNOWLEDGE.md` "PumpKing head" caveat for

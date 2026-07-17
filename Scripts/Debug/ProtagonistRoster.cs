@@ -11,7 +11,7 @@ namespace Fableland.Debug;
 /// what a real run has unlocked. When the real economy grows to cover every character, this
 /// registry may graduate into it or simply stay as the debug-only source of truth.
 ///
-/// Future characters (Pixolotl, Sifu Pangda) append one line to <see cref="Entries"/>.
+/// Future characters (such as Sifu Pangda) append one line to <see cref="Entries"/>.
 /// </summary>
 public static class ProtagonistRoster
 {

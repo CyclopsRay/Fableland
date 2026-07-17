@@ -43,6 +43,10 @@ public partial class Pixolotl : CharacterController
 
     public override (float Remaining, float Max) ShiftCooldown => (_shiftCd, CharacterTable.Pixolotl.ShiftCooldown);
     public override (float Remaining, float Max) ESkillCooldown => (_eCd, CharacterTable.Pixolotl.ESkillCooldown);
+    // E expressly permits movement and Branquias, but no other arena action. Shift and
+    // its recovery lock controls as well, so all three non-Normal states reject these.
+    public override bool CanSwitchProtagonist => _state == TemporalState.Normal;
+    public override bool CanUseHeldItem => _state == TemporalState.Normal;
 
     protected override void InitCharacter()
     {
