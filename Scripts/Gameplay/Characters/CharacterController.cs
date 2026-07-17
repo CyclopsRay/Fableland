@@ -86,6 +86,8 @@ public partial class CharacterController : CharacterBody2D
 	public float UltCharge { get; private set; }
 	public int LivesRemaining { get; private set; }
 	public bool ControlsLocked { get; set; }
+	/// <summary>Root status: blocks self-directed movement/jumps and new knockback, but not skills.</summary>
+	public bool Trapped => _trappedTimer > 0f;
 	/// <summary>Combat-side damage gate used for terminal mission resolution. Unlike
 	/// the short post-hit i-frame timer, this also suppresses hazards and DoT.</summary>
 	public bool Invincible { get; set; }
@@ -94,6 +96,10 @@ public partial class CharacterController : CharacterBody2D
 	/// nothing to report; characters with a Shift/E override these.</summary>
 	public virtual (float Remaining, float Max) ShiftCooldown => (0f, 0f);
 	public virtual (float Remaining, float Max) ESkillCooldown => (0f, 0f);
+	/// <summary>Relative simulation rate for this body. The default keeps existing protagonists unchanged.</summary>
+	public virtual float LocalTimeRate => LocalTime.DefaultRate;
+	/// <summary>Convert a world delta into this character's simulation delta.</summary>
+	public float GetActDelta(float worldDelta) => LocalTime.ActDelta(worldDelta, LocalTimeRate);
 
 	// Frozen = no self-directed action (control lock, death, or a gain-no window).
 	private bool Frozen => ControlsLocked || _dead || _stunTimer > 0f;
@@ -174,6 +180,9 @@ public partial class CharacterController : CharacterBody2D
 			return total;
 		}
 	}
+	/// <summary>Velocity expressed in this body's local simulation seconds. Temporal
+	/// projectiles inherit this value, then apply their own Local Time Rate exactly once.</summary>
+	protected Vector2 LocalMotionVelocity => _intentVel + _externalVel + ContinuousExternalVelocity;
 
 	/// <summary>Shared basic-attack magazine. Characters configure it in InitCharacter;
 	/// the base owns ticking, persistence, reset, and item-facing speed modifiers.</summary>
@@ -196,6 +205,7 @@ public partial class CharacterController : CharacterBody2D
 	private float _dropReleaseTimer;
 	private float _jumpCdTimer;
 	private float _stunTimer;          // gain-no window: no control, animation frozen
+	private float _trappedTimer;
 	private SoftVolume _softVolume;   // non-null while inside a go-inside volume
 	private Vector2 _intentVel;        // self-directed velocity (input/gravity/jump/field)
 	private Vector2 _externalVel;      // impulses (knockback/wind/…); decays over time
@@ -225,6 +235,14 @@ public partial class CharacterController : CharacterBody2D
 
 	/// <summary>Override for per-character stats, immunities, ammo config.</summary>
 	protected virtual void InitCharacter() { }
+
+	/// <summary>Set an authored base HP during <see cref="InitCharacter"/> without leaving
+	/// the pre-initialized current HP above the new maximum. Run hydration may replace this later.</summary>
+	protected void SetBaseMaxHP(float maxHp)
+	{
+		MaxHP = Mathf.Max(1f, maxHp);
+		CurrentHP = Mathf.Min(CurrentHP, MaxHP);
+	}
 
 	/// <summary>Configure this character's one shared BA magazine from pure balance data.</summary>
 	protected void ConfigureAmmo(string characterId)
@@ -335,12 +353,24 @@ public partial class CharacterController : CharacterBody2D
 		if (other == null) return;
 		_intentVel = other._intentVel;
 		_externalVel = other._externalVel;
-		Velocity = _intentVel + _externalVel;
+		Velocity = (_intentVel + _externalVel) * LocalTime.ClampRate(LocalTimeRate);
+	}
+
+	/// <summary>Capture both velocity channels for a temporal rewind. A total Velocity alone
+	/// loses the distinction between controllable intent and decaying external impulses.</summary>
+	protected (Vector2 Intent, Vector2 External) CaptureMovementVelocityState() => (_intentVel, _externalVel);
+
+	/// <summary>Restore a velocity snapshot captured by <see cref="CaptureMovementVelocityState"/>.</summary>
+	protected void RestoreMovementVelocityState(Vector2 intent, Vector2 external)
+	{
+		_intentVel = intent;
+		_externalVel = external;
+		Velocity = (_intentVel + _externalVel) * LocalTime.ClampRate(LocalTimeRate);
 	}
 
 	public override void _Process(double delta)
 	{
-		float dt = (float)delta;
+		float dt = GetActDelta((float)delta);
 		if (_dead) { if (ShowDebugRanges) QueueRedraw(); return; }
 
 		UpdateTimers(dt);
@@ -352,7 +382,7 @@ public partial class CharacterController : CharacterBody2D
 		// a stun window (knockback/gravity still move the body). Idempotent, so
 		// it also auto-restores the instant the stun timer clears — and Die()
 		// zeroes _stunTimer, so the death animation is never left frozen.
-		if (Anim != null) Anim.SpeedScale = _stunTimer > 0f ? 0f : 1f;
+		if (Anim != null) Anim.SpeedScale = _stunTimer > 0f ? 0f : LocalTime.ClampRate(LocalTimeRate);
 		if (_stunTimer <= 0f) UpdateAnimator(dt);   // animation frozen during gain-no
 
 		if (ShowDebugRanges) QueueRedraw();
@@ -372,6 +402,7 @@ public partial class CharacterController : CharacterBody2D
 			if (_invulnTimer <= 0f) Sprite.Visible = true;
 		}
 		if (_stunTimer > 0f) _stunTimer -= dt;
+		if (_trappedTimer > 0f) _trappedTimer -= dt;
 	}
 
 	private void UpdateStatus(float dt)
@@ -406,7 +437,8 @@ public partial class CharacterController : CharacterBody2D
 
 	public override void _PhysicsProcess(double delta)
 	{
-		float dt = (float)delta;
+		float dt = GetActDelta((float)delta);
+		float motionRate = LocalTime.ClampRate(LocalTimeRate);
 		if (_jumpCdTimer > 0f) _jumpCdTimer -= dt;
 
 		// Vertical intent: gravity accumulates (momentum); jump sets it.
@@ -439,7 +471,7 @@ public partial class CharacterController : CharacterBody2D
 		if (_softVolume != null && !_dead) RefreshJumps();
 
 		float inputDir = 0f;
-		if (!Frozen)
+		if (!Frozen && !Trapped)
 		{
 			if (Input.IsActionPressed("move_left")) inputDir -= 1f;
 			if (Input.IsActionPressed("move_right")) inputDir += 1f;
@@ -476,7 +508,9 @@ public partial class CharacterController : CharacterBody2D
 		float damping = ExternalDamping * (_softVolume != null ? _softVolume.ExternalDampingMult : 1f);
 		_externalVel = _externalVel.MoveToward(Vector2.Zero, damping * dt);
 
-		Velocity = _intentVel + _externalVel + ContinuousExternalVelocity;
+		// Intent/external velocity is stored in local-time units. Godot integrates its
+		// Velocity over the world physics tick, so output must be rate-scaled as well.
+		Velocity = LocalMotionVelocity * motionRate;
 		MoveAndSlide();
 		ReconcileCollisions();
 
@@ -805,8 +839,21 @@ public partial class CharacterController : CharacterBody2D
 		return total;
 	}
 
+	/// <summary>Apply the canonical Trapped root. Unlike stun, this still permits skills.
+	/// New external impulses are rejected while trapped; gravity remains active.</summary>
+	public void ApplyTrapped(float duration)
+	{
+		if (_dead || Invincible || duration <= 0f) return;
+		_trappedTimer = Mathf.Max(_trappedTimer, duration);
+		_externalVel.X = 0f;
+	}
+
 	/// <summary>Add a delta-v impulse to the external-velocity channel (knockback/wind/…).</summary>
-	public void AddImpulse(Vector2 impulse) => _externalVel += impulse;
+	public void AddImpulse(Vector2 impulse)
+	{
+		if (Trapped) return;
+		_externalVel += impulse;
+	}
 
 	private void ApplyDotDamage(float amount)
 	{
@@ -855,6 +902,7 @@ public partial class CharacterController : CharacterBody2D
 		Sprite.Modulate = new Color(0.4f, 0.4f, 0.4f);
 		Velocity = _intentVel = _externalVel = Vector2.Zero;
 		_stunTimer = 0f;
+		_trappedTimer = 0f;
 		IsBurning = false;
 		_fire.Clear();
 		_frozenDebuff.Clear();
@@ -885,6 +933,7 @@ public partial class CharacterController : CharacterBody2D
 		GlobalPosition = _spawnPoint;
 		Velocity = _intentVel = _externalVel = Vector2.Zero;
 		_stunTimer = 0f;
+		_trappedTimer = 0f;
 		_invulnTimer = 2f;
 		_fire.Clear();
 		_frozenDebuff.Clear();

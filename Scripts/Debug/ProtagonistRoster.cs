@@ -20,6 +20,7 @@ public static class ProtagonistRoster
         ("Pomegraknight", "res://Scenes/Pomegraknight.tscn"),
         ("PumpKing", "res://Scenes/PumpKing.tscn"),
         ("Cleopastar", "res://Scenes/Cleopastar.tscn"),
+        ("Pixolotl", "res://Scenes/Pixolotl.tscn"),
     };
 
     private static readonly Dictionary<string, PackedScene> _cache = new();

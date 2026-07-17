@@ -93,6 +93,16 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Gameplay node properties must not shadow Godot's inherited ownership API (v0.10.1, Pixolotl build fix)
+- **Symptom:** `PixolotlBubble.Owner` compiled with a warning because `Node` already exposes
+  an `Owner` property used by Godot scene ownership; the temporal projectile's character owner
+  was a different concept.
+- **Rule:** never name gameplay references after inherited Godot properties. Use a domain name
+  such as `TemporalOwner` and check new node subclasses for compiler hiding warnings before
+  shipping.
+- **Why:** an apparently harmless convenience property obscures a scene-tree API and invites
+  incorrect ownership reads or future warning-as-error build failures.
+
 ### An unreadable save slot is not an empty save slot (v0.9.0, save-slot review)
 - **Symptom:** the title slot picker represented a corrupt or newer-version file as
   unoccupied; selecting it then followed the "new game" path and could overwrite the only

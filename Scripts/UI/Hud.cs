@@ -67,6 +67,7 @@ public partial class Hud : CanvasLayer
     {
         {"Pomegraknight", "res://Assets/Sprites/UI/mugshot_next_pomegraknight.svg"},
         {"PumpKing", "res://Assets/Sprites/UI/mugshot_next_pumpking.svg"},
+        {"Pixolotl", "res://Assets/Sprites/Protagonists/Pixolotl/UI/Mugshot.png"},
     };
 
     public override void _Ready()

@@ -127,6 +127,7 @@ public partial class BaseFoe : CharacterBody2D
     private float _hp;
     private float _contactTimer;
     private float _stunTimer;
+    private float _trappedTimer;
     private float _burnTimer;
     private float _burnAccum;
     private float _burnPopTimer;
@@ -146,6 +147,7 @@ public partial class BaseFoe : CharacterBody2D
     private bool _evolved;
 
     protected bool Stunned => _stunTimer > 0f;
+    public bool Trapped => _trappedTimer > 0f;
     protected bool IsAggro => State == FoeState.Aggro;
     protected bool CanAct => !Stunned && !_dead;
     protected bool Skill1Ready => FoeStats.HasSkill1(CurrentLevel) && _skill1Cd <= 0f;
@@ -223,13 +225,13 @@ public partial class BaseFoe : CharacterBody2D
         // 2. sight timer / FSM
         UpdateSight(dt, player);
         // 3. state behaviour (movement intent) + passive contact damage
-        if (!Stunned)
+        if (!Stunned && !Trapped)
         {
             if (State == FoeState.Aggro && player != null) UpdateAggro(dt, player);
             else UpdatePatrol(dt);
             if (HasContactDamage && player != null) TryContactDamage(player);
         }
-        else IntentVel.X = 0f;                    // gain-no: no self-directed horizontal move
+        else IntentVel.X = 0f;                    // gain-no/root: no self-directed horizontal move
         // 4. skill gates (ongoing telegraph/dash must progress even while stunned)
         UpdateSkills(dt, player);
         // 5. movement integration
@@ -244,6 +246,7 @@ public partial class BaseFoe : CharacterBody2D
     {
         if (_contactTimer > 0f) _contactTimer -= dt;
         if (_stunTimer > 0f) _stunTimer -= dt;
+        if (_trappedTimer > 0f) _trappedTimer -= dt;
         if (_skill1Cd > 0f) _skill1Cd -= dt;
         if (_skill2Cd > 0f) _skill2Cd -= dt;
     }
@@ -433,7 +436,20 @@ public partial class BaseFoe : CharacterBody2D
 
     public void AddFireStack(float amount) => _fire.AddStack(amount);
     public void AddFrozenStack(float amount) => _frozenDebuff.AddStack(amount);
-    public void AddImpulse(Vector2 impulse) => ExternalVel += impulse;
+    /// <summary>Canonical Trapped root: movement is locked and new knockback is ignored,
+    /// while the foe's skill logic may still run and gravity remains active.</summary>
+    public void ApplyTrapped(float duration)
+    {
+        if (_dead || Invincible || duration <= 0f) return;
+        _trappedTimer = Mathf.Max(_trappedTimer, duration);
+        ExternalVel.X = 0f;
+    }
+
+    public void AddImpulse(Vector2 impulse)
+    {
+        if (Trapped) return;
+        ExternalVel += impulse;
+    }
 
     /// <summary>Remove this foe without awarding another damage event. Used only by
     /// authored execute effects after their normal damage has resolved.</summary>

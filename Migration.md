@@ -9,6 +9,16 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.10.1** — **Pixolotl temporal-control migration.** Pixolotl is playable through the
+  debug protagonist roster with her 150 HP, 10 m/s route-building kit: pooled six-angle
+  bubbles travel for 1.5 local-time seconds, rise, persist through foes once each, and
+  live for 10 local-time seconds. Her E hold runs herself and all bubbles at 1.5× local
+  time until release, ten generated frames, or 2.5 real seconds; her held Shift rewinds
+  through the eight-frame path, restores historical velocity, reverses bubbles, and
+  finishes with a 3×3 m Trapped control field plus vulnerable recovery. Added the generic
+  local-time simulation contract (including debug self-tests) and canonical Trapped root
+  support for players and foes, ready for future bullet-time content. (Verification:
+  `dotnet build`, 0 errors/warnings; static scene/resource checks.)
 - **0.10.0** — **Wonder-item prototype and Eidolon access.** Held items now persist unique
   instances and independent day/second cooldowns. FanChen's Heart, Yukai's Rope, and The
   Forgotten Kashaya, Pome's Bravery, and Pome's Seed have live combat passives and **F**-activated

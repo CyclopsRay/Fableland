@@ -1,0 +1,36 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Protagonists/Pixolotl/Pixolotl.cs" id="1"]
+[ext_resource type="PackedScene" path="res://Scenes/PixolotlBubble.tscn" id="2"]
+[ext_resource type="Script" path="res://Scripts/UI/ShakeCamera2D.cs" id="3"]
+[ext_resource type="Texture2D" path="res://Assets/Sprites/Protagonists/Pixolotl/Pixolotl_InGame.png" id="4"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(48, 64)
+
+[node name="Pixolotl" type="CharacterBody2D"]
+collision_layer = 1
+collision_mask = 12
+script = ExtResource("1")
+MaxHP = 150.0
+BubbleScene = ExtResource("2")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("4")
+scale = Vector2(0.105, 0.105)
+
+[node name="FirePoint" type="Marker2D" parent="."]
+position = Vector2(22, -20)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+script = ExtResource("3")
+current = true
+position_smoothing_enabled = true
+position_smoothing_speed = 6.0
+limit_left = 0
+limit_top = -200
+limit_right = 2000
+limit_bottom = 720

@@ -93,6 +93,9 @@ public partial class RunState : Node
         Instance = this;
         if (OS.IsDebugBuild() && !SaveGameService.RoundTripSelfTest(out string error))
             GD.PushError($"[RunState] Save DTO self-test failed: {error}");
+        if (OS.IsDebugBuild())
+            foreach (string failure in LocalTime.SelfTest())
+                GD.PushError($"[RunState] Local-time self-test failed: {failure}");
     }
     public override void _ExitTree() { if (Instance == this) Instance = null; }
 

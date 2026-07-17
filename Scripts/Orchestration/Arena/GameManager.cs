@@ -591,7 +591,9 @@ public partial class GameManager : Node2D
         if (Input.IsActionJustPressed("switch_protagonist"))
             TrySwitchProtagonist();
 
-        _itemRuntime?.Tick(dt);
+        // Held-item second cooldowns and active effects belong to the active body,
+        // so Pixolotl's local-time boost advances them with her other timers.
+        _itemRuntime?.Tick(_player != null ? _player.GetActDelta(dt) : dt);
         if (Input.IsActionJustPressed("use_item"))
         {
             string reason = null;
