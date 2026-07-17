@@ -9,6 +9,12 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.10.3** — **Pixolotl motion and debug-swap fixes.** Shift now freezes all physical
+  movement—including gravity, knockback, and carried momentum—between its authored rewind
+  frame jumps and through recovery, while preserving the chosen frame velocity for release.
+  E now uses robust held-key detection and adds a cyan active-time treatment. Debug body swaps
+  retain only HP ratio and reset transient combat state, so a newly selected character can BA
+  immediately rather than inheriting another body's reload or attack interval.
 - **0.10.2** — **Pixolotl default-character integration.** New runs begin with Pixolotl
   leading the three-member active team (Pixolotl, Pomegraknight, PumpKing), while
   Cleopastar remains available on the bench. The direct Arena scene now also authors

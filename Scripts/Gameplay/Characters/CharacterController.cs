@@ -100,6 +100,10 @@ public partial class CharacterController : CharacterBody2D
 	public virtual bool CanSwitchProtagonist => !ControlsLocked;
 	/// <summary>Whether the arena may activate this body's held item this frame.</summary>
 	public virtual bool CanUseHeldItem => !ControlsLocked;
+	/// <summary>Freeze the body's world position without discarding a subclass-owned
+	/// velocity snapshot. Temporal rewinds use this while their own state machine moves
+	/// between historical positions.</summary>
+	public virtual bool LocksPhysicalMotion => false;
 	/// <summary>Relative simulation rate for this body. The default keeps existing protagonists unchanged.</summary>
 	public virtual float LocalTimeRate => LocalTime.DefaultRate;
 	/// <summary>Convert a world delta into this character's simulation delta.</summary>
@@ -321,7 +325,7 @@ public partial class CharacterController : CharacterBody2D
 	{
 		if (p == null) return;
 		p.HpRatio = HpRatio;
-		Ammo?.Save(p);
+		if (_boundAmmoState != null) Ammo?.Save(p);
 	}
 
 	/// <summary>Restore persisted BA ammo after InitCharacter has configured it.</summary>
@@ -347,6 +351,17 @@ public partial class CharacterController : CharacterBody2D
 	public virtual void LoadCooldownsFromState(ProtagonistState p)
 	{
 		// No-op in the base — no skill cooldowns to restore.
+	}
+
+	/// <summary>Prepare a manually debug-swapped body for immediate test input without
+	/// writing that convenience state back into the real run.</summary>
+	public virtual void ResetDebugCombatState()
+	{
+		Ammo?.ResetForRespawn();
+		// A debug-selected body may share the active party record for HP hydration, but
+		// its own test attacks must not overwrite that record with another character's
+		// magazine definition or reload timer.
+		_boundAmmoState = null;
 	}
 
 	/// <summary>Copy the internal velocity channels from another character so the incoming
@@ -441,6 +456,15 @@ public partial class CharacterController : CharacterBody2D
 
 	public override void _PhysicsProcess(double delta)
 	{
+		if (LocksPhysicalMotion)
+		{
+			// Do not integrate gravity, momentum, knockback, or continuous fields while a
+			// kit has explicitly frozen this body. The stored channels are preserved so
+			// the kit can restore its selected historical velocity when the lock ends.
+			Velocity = Vector2.Zero;
+			return;
+		}
+
 		float dt = GetActDelta((float)delta);
 		float motionRate = LocalTime.ClampRate(LocalTimeRate);
 		if (_jumpCdTimer > 0f) _jumpCdTimer -= dt;

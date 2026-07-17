@@ -366,7 +366,10 @@ public partial class GameManager : Node2D
         var scene = ProtagonistRoster.GetScene(id);
         if (scene == null) return false;
 
-        WriteBackHp();   // in-run: carry HP ratio into the new body via Owned[0]
+        // Debug selection preserves the visible HP ratio but must not copy the outgoing
+        // body's magazine/reload state into a different character's BA controller.
+        float carriedRatio = _player.HpRatio;
+        if (_hasRun && _protagonist != null) _protagonist.HpRatio = carriedRatio;
 
         _player.HpChanged -= OnPlayerHpChanged;
         _player.Died -= OnPlayerDied;
@@ -374,6 +377,7 @@ public partial class GameManager : Node2D
         _player = ReplacePlayerNode(_player, scene);
 
         SetupPlayer(RunState.Instance);   // re-subscribes signals, re-wires HUD, hydrates/lives
+        _player.ResetDebugCombatState();  // debug body starts immediately testable; state stays non-persistent
 
         DebugManager.Instance.LogSystem($"Protagonist swap → {id}");
         return true;

@@ -93,6 +93,25 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A control lock does not freeze physics by itself (v0.10.3, Pixolotl Shift fix)
+- **Symptom:** Shift rejected player input, yet gravity and stored momentum still advanced in
+  `CharacterController._PhysicsProcess`, so Pixolotl drifted while a rewind was meant to hold
+  her exactly at a frame.
+- **Rule:** a skill that requires a fixed world position must explicitly opt into the shared
+  `LocksPhysicalMotion` hook. Freeze the physics output while preserving any kit-owned velocity
+  snapshot needed when the lock resolves.
+- **Why:** input permission and physics integration are separate systems; stopping one cannot
+  guarantee the other has stopped moving the body.
+
+### A debug body swap must not inherit a different character's magazine (v0.10.3, BA readiness fix)
+- **Symptom:** manual debug selection could leave the newly spawned protagonist unable to attack
+  until the outgoing body’s BA interval or reload expired.
+- **Rule:** carry only the intentional debug state (currently HP ratio) through a debug swap;
+  reset the replacement body's transient combat state without saving that test convenience into
+  the run record.
+- **Why:** ammo definitions and timers are character-local. Copying them across body identities
+  turns a debug convenience into a misleading combat lockout.
+
 ### External arena actions must ask the active character's skill-state policy (v0.10.2, Pixolotl input-lock fix)
 - **Symptom:** Pixolotl's local Shift state blocked controller abilities, but Arena-level Tab
   switching and held-item activation still bypassed that state; E likewise needed its explicit

@@ -47,6 +47,9 @@ public partial class Pixolotl : CharacterController
     // its recovery lock controls as well, so all three non-Normal states reject these.
     public override bool CanSwitchProtagonist => _state == TemporalState.Normal;
     public override bool CanUseHeldItem => _state == TemporalState.Normal;
+    // Shift must hold the body absolutely still between its authored frame jumps. Preserve
+    // restored frame velocity through recovery so it resumes only when recovery finishes.
+    public override bool LocksPhysicalMotion => _state is TemporalState.ShiftRewind or TemporalState.ShiftRecovery;
 
     protected override void InitCharacter()
     {
@@ -91,7 +94,7 @@ public partial class Pixolotl : CharacterController
             case TemporalState.EHeld:
                 _eRealTimer += realDt;
                 AdvanceFrames(actDt);
-                if (Input.IsActionJustReleased("skill2") || _eFramesGenerated >= CharacterTable.Pixolotl.EFrameLimit
+                if (!Input.IsActionPressed("skill2") || _eFramesGenerated >= CharacterTable.Pixolotl.EFrameLimit
                     || _eRealTimer >= CharacterTable.Pixolotl.EMaxRealSeconds)
                     EndE();
                 break;
@@ -142,6 +145,7 @@ public partial class Pixolotl : CharacterController
         _shiftStepTimer = CharacterTable.Pixolotl.ShiftFirstIntervals;
         _shiftJumps = 0;
         _arrivalFrame = null;
+        Velocity = Vector2.Zero;
     }
 
     protected override void HandleSkill2()
@@ -156,6 +160,27 @@ public partial class Pixolotl : CharacterController
     protected override void HandleSkillUlt()
     {
         // Deliberately deferred by Pixolotl.gdd v1.1.
+    }
+
+    protected override void UpdateAnimator(float dt)
+    {
+        // This temporary cyan treatment is the explicit E-active feedback promised by
+        // the GDD. Base status tinting runs first, so it remains visible while boosted.
+        if (_state == TemporalState.EHeld)
+            Sprite.SelfModulate = new Color(0.48f, 0.94f, 1f, 1f);
+    }
+
+    public override void ResetDebugCombatState()
+    {
+        base.ResetDebugCombatState();
+        _state = TemporalState.Normal;
+        _shiftCd = 0f;
+        _eCd = 0f;
+        _recoveryTimer = 0f;
+        _eRealTimer = 0f;
+        _eFramesGenerated = 0;
+        ControlsLocked = false;
+        Invincible = false;
     }
 
     private void AdvanceFrames(float actDt)
