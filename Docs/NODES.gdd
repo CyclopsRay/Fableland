@@ -217,6 +217,14 @@ CD prevent degenerate cycling.
 
 ## 4. Combat nodes
 
+### Universal combat opening
+
+Every Arena encounter begins with a **3-second universal countdown**. During the countdown,
+the mission timer is frozen and no foe may spawn: this includes ambient spawns, mission-owned
+waves, and direct boss spawns. The Arena `GameManager` owns this gate so individual missions
+cannot accidentally bypass it; mission setup may request a wave, but it is released only when
+the countdown completes.
+
 A combat node is the primary Adventure-mode content. When the player enters one, the
 arena loads with a **mission** (goal). The mission is **picked at map-generation time**
 and is fixed for that node for the entire run.

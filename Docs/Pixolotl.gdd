@@ -21,9 +21,12 @@ The papel picado ghosts are marigold-orange path markers, not ominous spectres.
 
 ## Visual Design
 
-**TODO — art pass.** Core visual requirements are external-gill bubble firing,
-marigold-orange papel picado afterimages, a visible time-reversal treatment for
-bubbles, and a distinct active-time treatment while E is held.
+The runtime currently has the existing Pixolotl character sheets only; the old-project
+standalone ghost and bubble sprites are absent from this checkout. Until they are supplied,
+the ghost uses the pooled marigold fallback and the bubble uses a rendered **2 m diameter**
+fallback matching its collision shape. Core requirements remain external-gill bubble firing,
+marigold-orange papel picado afterimages, time-reversal treatment for bubbles, and cyan
+active-time feedback during E.
 
 ---
 
@@ -84,6 +87,7 @@ position forms the final 3 m of the visible route.
 | BA interval | 0.3 local-time s |
 | Reload | 0.9 local-time s, refill to 3 volleys |
 | Damage | 20 per bubble |
+| Bubble diameter | 2 m |
 | Launch speed | 6 m/s, added to Pixolotl's current world velocity |
 | Directional phase | 1.5 local-time s |
 | Horizontal brake after phase | 0.15 local-time s to zero X velocity |
@@ -169,23 +173,24 @@ resolve to the nearest valid position before applying the arrival effect.
 
 ---
 
-## E — SOBRECARGA (Held Local-Time Boost)
+## E — SOBRECARGA (Click Local-Time Boost)
 
 | Parameter | Value |
 |---|---:|
 | Cooldown | 10 local-time s |
-| Local Time Rate while held | 1.5× |
+| Local Time Rate while active | 1.5× |
 | End condition | 10 frames generated during this activation |
-| Maximum hold duration | 2.5 real-time s |
+| Maximum duration | 3 real-time s |
 | BA and movement | Allowed |
 | Shift while active | Banned |
 
-E is a long press. On press, Pixolotl's Local Time Rate becomes 1.5. The boost ends
-on release, when it has generated 10 passive frames during this activation, or at the
-2.5-second real-time safety limit — whichever happens first. The 10-frame condition
-normally ends it after 2.0 real-time seconds because the passive runs at 1.5×.
+E is a click. On press, Pixolotl's Local Time Rate becomes 1.5 and the burst continues
+without holding the key. It ends when it has generated 10 passive frames during this
+activation or at the 3-second real-time safety limit — whichever happens first. The
+10-frame condition normally ends it after 2.0 real-time seconds because the passive
+runs at 1.5×.
 
-While E is held, Pixolotl may move and use Branquias, but she cannot enter Shift.
+While E is active, Pixolotl may move and use Branquias, but she cannot enter Shift.
 Every one of Pixolotl's cooldowns — including the active E cooldown — plus reloads,
 frame generation, movement simulation, buffs/debuffs, bubble movement, and bubble
 lifetimes advances at the 1.5× local rate.
@@ -198,12 +203,12 @@ lifetimes advances at the 1.5× local rate.
 
 ## Skill-State Exclusivity
 
-Pixolotl has three input states: Normal, E Held, and Shift Rewind.
+Pixolotl has three input states: Normal, E Active, and Shift Rewind.
 
 | State | Move | BA | E | Shift |
 |---|---|---|---|---|
 | Normal | Yes | Yes | Start | Start if a frame exists |
-| E Held | Yes | Yes | Continue/release | Banned |
+| E Active | Yes | Yes | Already active | Banned |
 | Shift Rewind | No | No | Banned | Continue/release |
 | Shift recovery | No | No | No | No |
 
@@ -219,7 +224,7 @@ Shift, or Shift recovery, so a body swap cannot escape their commitments.
 | Passive | Tiempo de Papel Picado | 0.3 local-time s / frame, max 8 | Stores position, HP, and velocity as a visible rewind route. |
 | BA | Branquias | 0.3 local-time s / 0.9 reload | Six non-aimed bubbles spread for 1.5 s, then rise; 20 damage and persistent on foe contact. |
 | Shift | RANIBOBER | 15 local-time s / up to 8 frame jumps | Invulnerable held rewind; release roots a 3 m × 3 m area and retraces bubbles. |
-| E | SOBRECARGA | 10 local-time s / ≤2.5 real-time s | 1.5× local time until release or 10 generated frames. |
+| E | SOBRECARGA | 10 local-time s / ≤3 real-time s | Click for 1.5× local time until 10 generated frames or the safety limit. |
 | Ult | TBD | TBD | No implementation in this milestone. |
 
 ---
@@ -294,10 +299,10 @@ the eight ghosts and their forced fades.
 
 ### Input and Switching
 
-Long presses require `JustPressed` to enter a state, `IsPressed` to maintain it, and
-`JustReleased` to resolve it. The arena switch controller must respect Pixolotl's
-skill-state lock. Her bubbles are player-owned projectiles and survive ordinary Tab
-switches; a returning Pixolotl rebinds them by group/owner id.
+Shift uses `JustPressed` to enter a state and `JustReleased` to resolve it. E uses one
+`JustPressed` click to begin its self-contained burst. The arena switch controller must
+respect Pixolotl's skill-state lock. Her bubbles are player-owned projectiles and survive
+ordinary Tab switches; a returning Pixolotl rebinds them by group/owner id.
 
 ---
 
@@ -320,9 +325,18 @@ switches; a returning Pixolotl rebinds them by group/owner id.
   Trapped arrival control, and vulnerable recovery. The route is powerful but visibly
   counterable rather than an untelegraphed teleport.
 - Made E a held 1.5× Local Time Rate boost, capped by ten generated frames or 2.5 real
-  seconds. Local time is an extensible combat contract that later supports bullet time.
+  seconds. This was superseded by the click-activated 3-second rule in v1.2. Local time is an
+  extensible combat contract that later supports bullet time.
 - Bubble enemy contact does not despawn the projectile; each bubble instead has a
   lifetime per-target hit cap. This preserves field coverage while avoiding repeated
   overlap damage.
 
-*Last Updated: July 2026 | Version: 1.1*
+### v1.2 — Click boost and universal opening gate (July 2026)
+
+- Changed SOBRECARGA from a held input to a click-activated burst. It remains at 1.5×
+  local time but now finishes after 10 generated frames or 3 real seconds.
+- Defined the bubble's collision and rendered fallback diameter as 2 m.
+- Defined the opening countdown as Arena-owned and universal: ambient spawns, mission
+  waves, and boss spawns all wait for its three seconds to complete.
+
+*Last Updated: July 2026 | Version: 1.2*

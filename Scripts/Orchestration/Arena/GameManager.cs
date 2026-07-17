@@ -53,6 +53,9 @@ public partial class GameManager : Node2D
     [Export] public string DebugCombatMapPath = "";
 
     [Export] public float RespawnDelay = 1.2f;
+    /// <summary>Universal arena opening countdown. All mission and ambient foe sources stay
+    /// gated until it completes; individual missions never own this policy.</summary>
+    [Export] public float PreCombatCountdownSeconds = 3f;
 
     /// <summary>The "Entities" child every spawned foe/pickup/objective is parented under.</summary>
     public Node2D Entities { get; private set; }
@@ -94,13 +97,14 @@ public partial class GameManager : Node2D
     private MissionType _missionType;
     private bool _goalResolved;
 
-    private float _graceTimer = 3f;      // 3s pre-combat grace: no foes, timer frozen, countdown shown
+    private float _graceTimer;           // universal pre-combat grace: no foes, timer frozen, countdown shown
     private bool _ended;   // debug-only local end-of-match latch (banner + restart)
 
     public override void _Ready()
     {
         // Keep running while the tree is paused so the debug restart flow works after win/lose.
         ProcessMode = ProcessModeEnum.Always;
+        _graceTimer = Mathf.Max(0f, PreCombatCountdownSeconds);
 
         Entities = GetNode<Node2D>(EntitiesPath);
         _world = GetNode<Node2D>(WorldPath);
@@ -155,7 +159,7 @@ public partial class GameManager : Node2D
             _surfacePoints = ArenaBuilder.Build(_world, _hazards, _rng, platformTex, FireHazardScene, FreezeHazardScene);
         }
 
-        Spawner = new FoeSpawner(this, _rng.Sub("spawn")) { Enabled = false }; // armed after grace
+        Spawner = new FoeSpawner(this, _rng.Sub("spawn")); // gate opens after the universal countdown
         ApplySelectedMapFoeComposition(combatMapPath);
 
         _mission = CreateMission(_missionType);
@@ -568,24 +572,21 @@ public partial class GameManager : Node2D
         // pause menu must freeze every combat timer, spawn, and mission tick instead.
         if (GetTree().Paused) return;
 
-        // 3-second pre-combat grace period: no foe spawns, mission timer frozen, countdown
-        // shown so the player can orient before the fight begins. Must run BEFORE
-        // Spawner.Tick so the spawner is already disabled on the very first frame.
+        // Universal pre-combat grace: no foe source, including mission-owned waves and bosses,
+        // may begin until the Arena opens the shared spawner gate. Keep the countdown HUD
+        // separate from mission HUD so its text cannot be overwritten this frame.
         if (_graceTimer > 0f)
         {
-            _graceTimer -= dt;
+            _graceTimer = Mathf.Max(0f, _graceTimer - dt);
             _hud.SetProgress(_graceTimer > 0.01f
                 ? $"Get ready... {Mathf.CeilToInt(_graceTimer)}"
                 : "Go!");
-            // Keep the spawner suppressed during grace; the mission timer is also paused
-            // (we skip _mission.Tick below).
-            Spawner.Enabled = false;
         }
-        else if (_graceTimer != -1f)
+        else if (_graceTimer == 0f)
         {
-            // Grace just ended — arm the spawner and let the mission resume.
+            // Grace just ended — release all deferred waves, then let the mission resume.
             _graceTimer = -1f;
-            if (Spawner != null) Spawner.Enabled = true;
+            Spawner?.OpenSpawnGate();
         }
 
         Spawner?.Tick(dt);
@@ -639,7 +640,7 @@ public partial class GameManager : Node2D
         // Don't tick the mission during the grace period — its timer is frozen while the
         // player gets their bearings (grace = -1f once the 3s countdown finishes).
         if (_mission.Status == MissionStatus.Running && _graceTimer < 0f) _mission.Tick(dt);
-        PushMissionHud();
+        if (_graceTimer < 0f) PushMissionHud();
 
         if (_mission.Status != MissionStatus.Running && !_goalResolved) OnMissionResolved();
     }

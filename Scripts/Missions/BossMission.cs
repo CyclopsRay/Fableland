@@ -18,6 +18,7 @@ public sealed class BossMission : Mission
     private GameManager _arena;
     private int _nodeLevel;
     private BossCrab _boss;
+    private DetRandom _rng;
     private bool _bossWasAlive;
     private bool _addWaveSpawned;
     private float _timer;
@@ -31,22 +32,35 @@ public sealed class BossMission : Mission
 
         arena.Spawner.Enabled = false;   // boss owns the field (ambient trickle off)
 
-        if (arena.BossCrabScene != null)
+        _rng = rng;
+    }
+
+    private void SpawnBoss()
+    {
+        if (_arena.BossCrabScene != null)
         {
-            _boss = arena.BossCrabScene.Instantiate<BossCrab>();
+            _boss = _arena.BossCrabScene.Instantiate<BossCrab>();
             // C2: BossMission bypasses FoeSpawner (it owns its own single spawn), so seed the
             // boss's Rng from the mission's deterministic stream BEFORE AddChild — _Ready()
             // reads Rng synchronously (BaseFoe._Ready → Dir = Rng.Randf() < 0.5f ...).
-            _boss.Rng = new RandomNumberGenerator { Seed = rng.NextULong() };
-            arena.Entities.AddChild(_boss);                 // _Ready runs here
+            _boss.Rng = new RandomNumberGenerator { Seed = _rng.NextULong() };
+            _arena.Entities.AddChild(_boss);                 // _Ready runs here
             _boss.GlobalPosition = new Vector2(
                 (ArenaBuilder.PlayLeft + ArenaBuilder.PlayRight) * 0.5f, ArenaBuilder.GroundTopY - 60f);
-            _boss.Init(arena.FoeLevel);                      // Init AFTER AddChild (caveat)
+            _boss.Init(_arena.FoeLevel);                      // Init AFTER AddChild (caveat)
         }
     }
 
     public override void Tick(float dt)
     {
+        // GameManager never ticks missions until the universal pre-combat gate opens.
+        // Deferring this direct spawn keeps boss nodes under that same countdown rule.
+        if (_boss == null)
+        {
+            SpawnBoss();
+            return;
+        }
+
         bool alive = _boss != null && GodotObject.IsInstanceValid(_boss);
         if (alive) _bossWasAlive = true;
 

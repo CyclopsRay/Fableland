@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://Scripts/Protagonists/Pixolotl/PixolotlBubble.cs" id="1"]
 
 [sub_resource type="CircleShape2D" id="1"]
-radius = 8.0
+radius = 32.0
 
 [node name="PixolotlBubble" type="Area2D"]
 collision_layer = 16

@@ -410,6 +410,13 @@ public partial class DebugManager : CanvasLayer
         {
             _protagonistStatus.Text = $"Selected {id} — applies on next Arena entry (while debug is on).";
         }
+        // Return focus to the Arena even if the selected body was already active. Otherwise
+        // the roster overlay can keep swallowing the mouse click expected to be that body's BA.
+        if (GetTree().CurrentScene is GameManager && _protagonistPageVisible)
+        {
+            foreach (Button button in _protagonistButtons) button.ReleaseFocus();
+            ToggleProtagonistPage();
+        }
         LogSystem($"Protagonist selection: {id}");
     }
 

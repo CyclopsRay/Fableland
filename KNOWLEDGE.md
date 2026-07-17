@@ -93,6 +93,25 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A universal combat countdown needs a gate, not an ambient-spawner flag (v0.10.4, opening countdown fix)
+- **Symptom:** the Arena's three-second grace disabled only ambient spawns and its countdown
+  text was overwritten by the normal mission HUD push; Slaughter waves and direct boss setup
+  could therefore appear immediately or obscure the countdown.
+- **Rule:** put the opening policy in `GameManager` and expose one explicit spawn gate in
+  `FoeSpawner`. Queue mission waves behind it, defer direct boss construction to the first
+  mission tick, and keep mission HUD from writing over the countdown.
+- **Why:** a shared lifecycle rule must govern every spawn path. Reusing a mission-specific
+  ambient flag creates bypasses and silently changes Slaughter/Boss ownership semantics.
+
+### Debug roster selection must relinquish GUI focus even for the already-active body (v0.10.4, BA input fix)
+- **Symptom:** choosing Pixolotl from the debug roster could leave its overlay/focused button
+  active when Pixolotl was already the current body, so the next mouse press was consumed by UI
+  instead of acting as a basic attack.
+- **Rule:** selecting any roster entry while in an Arena closes the roster and releases button
+  focus, regardless of whether a body replacement was required.
+- **Why:** a selection can be meaningful without causing a swap. Input ownership must still
+  return to the combat scene in both outcomes.
+
 ### A control lock does not freeze physics by itself (v0.10.3, Pixolotl Shift fix)
 - **Symptom:** Shift rejected player input, yet gravity and stored momentum still advanced in
   `CharacterController._PhysicsProcess`, so Pixolotl drifted while a rewind was meant to hold

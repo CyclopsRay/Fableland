@@ -9,6 +9,14 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.10.4** — **Pixolotl click boost and universal combat opening.** SOBRECARGA is now a
+  click-activated 1.5× local-time burst lasting ten generated frames or three real seconds.
+  Bubble collision and the fallback visual now match the authored 2 m diameter. The Arena owns
+  a visible three-second opening countdown that freezes mission timers and gates ambient spawns,
+  mission waves, and bosses alike. Debug character selection now closes its roster overlay so it
+  cannot retain mouse focus over the newly selected body's BA. Old-project standalone Pixolotl
+  bubble/ghost art is absent from this checkout; current fallback visuals remain in use pending
+  those source assets.
 - **0.10.3** — **Pixolotl motion and debug-swap fixes.** Shift now freezes all physical
   movement—including gravity, knockback, and carried momentum—between its authored rewind
   frame jumps and through recovery, while preserving the chosen frame velocity for release.

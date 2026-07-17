@@ -17,12 +17,16 @@ public sealed class FoeSpawner
 
     /// <summary>Periodic spawner on/off. Slaughter/Boss disable it and drive waves themselves.</summary>
     public bool Enabled = true;
+    /// <summary>Combat-wide start gate owned by the Arena. It applies to every foe source,
+    /// including mission waves, so a universal countdown cannot be bypassed.</summary>
+    public bool SpawnGateOpen { get; private set; }
     public int Cap = 6;                 // gates ONLY the periodic spawner (FOES §11)
     /// <summary>Current authored prototype cadence: one ambient foe every four seconds.</summary>
     public float Interval = 4f;
     private int _crabWeight = 60;
     private int _seagullWeight = 40;
     private float _timer;
+    private readonly System.Collections.Generic.List<(int Count, int Level)> _deferredWaves = new();
 
     public FoeSpawner(GameManager arena, DetRandom rng)
     {
@@ -46,7 +50,7 @@ public sealed class FoeSpawner
     /// <summary>Periodic trickle spawn (the ambient arena population).</summary>
     public void Tick(float dt)
     {
-        if (!Enabled) return;
+        if (!Enabled || !SpawnGateOpen) return;
         _timer -= dt;
         if (_timer <= 0f)
         {
@@ -63,6 +67,26 @@ public sealed class FoeSpawner
     /// <summary>Spawn a whole wave at once (Slaughter/Boss adds), using the selected map mix.</summary>
     public void SpawnWave(int count, int level)
     {
+        if (count <= 0) return;
+        if (!SpawnGateOpen)
+        {
+            _deferredWaves.Add((count, level));
+            return;
+        }
+        SpawnWaveNow(count, level);
+    }
+
+    /// <summary>Open the universal pre-combat gate and flush mission waves requested during setup.</summary>
+    public void OpenSpawnGate()
+    {
+        if (SpawnGateOpen) return;
+        SpawnGateOpen = true;
+        foreach ((int count, int level) in _deferredWaves) SpawnWaveNow(count, level);
+        _deferredWaves.Clear();
+    }
+
+    private void SpawnWaveNow(int count, int level)
+    {
         for (int i = 0; i < count; i++) SpawnOne(level);
     }
 
@@ -73,6 +97,7 @@ public sealed class FoeSpawner
     /// </summary>
     public BaseFoe SpawnOne(int level)
     {
+        if (!SpawnGateOpen) return null;
         bool crabAllowed = _arena.HasFoeSpawnFor(aerial: false);
         bool seagullAllowed = _arena.HasFoeSpawnFor(aerial: true);
         if (!crabAllowed && !seagullAllowed) return null;
@@ -86,6 +111,7 @@ public sealed class FoeSpawner
 
     public CrabFoe SpawnCrab(int level)
     {
+        if (!SpawnGateOpen) return null;
         if (_arena.CrabScene == null) return null;
         var foe = _arena.CrabScene.Instantiate<CrabFoe>();
         SeedRng(foe);
@@ -98,6 +124,7 @@ public sealed class FoeSpawner
 
     public SeagullFoe SpawnSeagull(int level)
     {
+        if (!SpawnGateOpen) return null;
         if (_arena.SeagullScene == null) return null;
         var foe = _arena.SeagullScene.Instantiate<SeagullFoe>();
         SeedRng(foe);

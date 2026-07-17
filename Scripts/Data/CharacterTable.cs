@@ -122,7 +122,7 @@ public static class CharacterTable
         ESkillCooldown = 10f,
         ELocalTimeRate = 1.5f,
         EFrameLimit = 10,
-        EMaxRealSeconds = 2.5f,
+        EMaxRealSeconds = 3f,
         BubbleAnglesDeg = new[] { 0f, 25f, 65f, 115f, 155f, 180f },
     };
 

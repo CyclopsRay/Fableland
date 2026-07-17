@@ -10,7 +10,7 @@ using Fableland.Run;
 /// </summary>
 public partial class Pixolotl : CharacterController
 {
-    private enum TemporalState { Normal, EHeld, ShiftRewind, ShiftRecovery }
+    private enum TemporalState { Normal, EActive, ShiftRewind, ShiftRecovery }
 
     private sealed class PapelPicadoFrame
     {
@@ -37,7 +37,7 @@ public partial class Pixolotl : CharacterController
     private float _eRealTimer;
     private int _eFramesGenerated;
 
-    public override float LocalTimeRate => _state == TemporalState.EHeld
+    public override float LocalTimeRate => _state == TemporalState.EActive
         ? CharacterTable.Pixolotl.ELocalTimeRate
         : LocalTime.DefaultRate;
 
@@ -91,10 +91,10 @@ public partial class Pixolotl : CharacterController
             case TemporalState.Normal:
                 AdvanceFrames(actDt);
                 break;
-            case TemporalState.EHeld:
+            case TemporalState.EActive:
                 _eRealTimer += realDt;
                 AdvanceFrames(actDt);
-                if (!Input.IsActionPressed("skill2") || _eFramesGenerated >= CharacterTable.Pixolotl.EFrameLimit
+                if (_eFramesGenerated >= CharacterTable.Pixolotl.EFrameLimit
                     || _eRealTimer >= CharacterTable.Pixolotl.EMaxRealSeconds)
                     EndE();
                 break;
@@ -151,7 +151,7 @@ public partial class Pixolotl : CharacterController
     protected override void HandleSkill2()
     {
         if (_state != TemporalState.Normal || _eCd > 0f) return;
-        _state = TemporalState.EHeld;
+        _state = TemporalState.EActive;
         _eCd = CharacterTable.Pixolotl.ESkillCooldown;
         _eRealTimer = 0f;
         _eFramesGenerated = 0;
@@ -166,7 +166,7 @@ public partial class Pixolotl : CharacterController
     {
         // This temporary cyan treatment is the explicit E-active feedback promised by
         // the GDD. Base status tinting runs first, so it remains visible while boosted.
-        if (_state == TemporalState.EHeld)
+        if (_state == TemporalState.EActive)
             Sprite.SelfModulate = new Color(0.48f, 0.94f, 1f, 1f);
     }
 
@@ -190,7 +190,7 @@ public partial class Pixolotl : CharacterController
         {
             _frameTimer -= CharacterTable.Pixolotl.FrameInterval;
             StoreFrame();
-            if (_state == TemporalState.EHeld)
+            if (_state == TemporalState.EActive)
             {
                 _eFramesGenerated++;
                 if (_eFramesGenerated >= CharacterTable.Pixolotl.EFrameLimit) break;
@@ -286,7 +286,7 @@ public partial class Pixolotl : CharacterController
 
     private void EndE()
     {
-        if (_state == TemporalState.EHeld) _state = TemporalState.Normal;
+        if (_state == TemporalState.EActive) _state = TemporalState.Normal;
     }
 
     private void RewindOwnedBubbles(float localSeconds)

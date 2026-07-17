@@ -125,7 +125,10 @@ public partial class PixolotlBubble : Area2D
     public override void _Draw()
     {
         if (!_active) return;
-        DrawCircle(Vector2.Zero, Units.Px(0.24f), new Color(0.26f, 0.78f, 1f, 0.75f));
-        DrawArc(Vector2.Zero, Units.Px(0.24f), 0f, Mathf.Tau, 16, new Color(0.92f, 0.98f, 1f, 0.95f), 1.5f);
+        // Legacy bubble art is not present in this checkout. Keep the fallback's rendered
+        // footprint honest: the GDD specifies a 2 m diameter, matching the scene collider.
+        float radius = Units.Px(1f);
+        DrawCircle(Vector2.Zero, radius, new Color(0.26f, 0.78f, 1f, 0.34f));
+        DrawArc(Vector2.Zero, radius, 0f, Mathf.Tau, 32, new Color(0.92f, 0.98f, 1f, 0.9f), 2f);
     }
 }
