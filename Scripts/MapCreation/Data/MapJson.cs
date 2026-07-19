@@ -128,8 +128,8 @@ public static class MapJson
         // newly-saved document uses the clearer terrain labels shared with the overworld.
         if (doc.Terrain == "high") doc.Terrain = CombatMapTerrain.High;
         if (doc.Terrain == "lowground") doc.Terrain = CombatMapTerrain.Lowground;
-        if (doc.Terrain != CombatMapTerrain.SeaLevel && doc.Terrain != CombatMapTerrain.High &&
-            doc.Terrain != CombatMapTerrain.Lowground)
+        if (doc.Terrain != "*" && doc.Terrain != CombatMapTerrain.SeaLevel &&
+            doc.Terrain != CombatMapTerrain.High && doc.Terrain != CombatMapTerrain.Lowground)
         {
             warnings.Add($"unknown combat-map terrain '{doc.Terrain}'; using {CombatMapTerrain.SeaLevel}");
             doc.Terrain = CombatMapTerrain.SeaLevel;

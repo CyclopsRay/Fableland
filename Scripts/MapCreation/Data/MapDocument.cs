@@ -47,7 +47,9 @@ public sealed class MapDocument
 
     /// <summary>
     /// Terrain label used by combat-map selection. Sea-level is the default; high-ground and
-    /// low-ground are assigned by the overworld's seeded altitude field when applicable.
+    /// low-ground are assigned by the overworld's seeded altitude field when applicable. A
+    /// literal "*" matches every terrain band, for maps authored to a realm/level rather than
+    /// a specific altitude.
     /// </summary>
     public string Terrain { get; set; } = CombatMapTerrain.SeaLevel;
 

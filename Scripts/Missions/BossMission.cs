@@ -45,8 +45,9 @@ public sealed class BossMission : Mission
             // reads Rng synchronously (BaseFoe._Ready → Dir = Rng.Randf() < 0.5f ...).
             _boss.Rng = new RandomNumberGenerator { Seed = _rng.NextULong() };
             _arena.Entities.AddChild(_boss);                 // _Ready runs here
-            _boss.GlobalPosition = new Vector2(
-                (ArenaBuilder.PlayLeft + ArenaBuilder.PlayRight) * 0.5f, ArenaBuilder.GroundTopY - 60f);
+            // Authored LV4 maps use their central level-goal marker as the boss stage. The
+            // legacy Arena has no authored markers, so GameManager preserves its old fallback.
+            _boss.GlobalPosition = _arena.RandomLevelGoalPoint(_rng);
             _boss.Init(_arena.FoeLevel);                      // Init AFTER AddChild (caveat)
         }
     }

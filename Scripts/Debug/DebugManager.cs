@@ -141,6 +141,7 @@ public partial class DebugManager : CanvasLayer
         {
             Text = "Debug Log  (5 to toggle, Esc to close)",
             HorizontalAlignment = HorizontalAlignment.Left,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
         };
         _logTitle.AddThemeFontSizeOverride("font_size", 16);
         titleRow.AddChild(_logTitle);
@@ -154,27 +155,22 @@ public partial class DebugManager : CanvasLayer
         titleRow.AddChild(closeBtn);
         vbox.AddChild(titleRow);
 
-        // Scrollable content
-        var scroll = new ScrollContainer
-        {
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-        };
+        // RichTextLabel owns its own scrolling. Nesting it inside ScrollContainer
+        // gives the label no reliable viewport/minimum size, which can leave every
+        // populated line laid out outside the visible region.
         _logContent = new RichTextLabel
         {
-            BbcodeEnabled = true,
-            FitContent = true,
+            // Entries contain literal [time] and [category] fields. BBCode would
+            // interpret those brackets as tags and strip the log contents.
+            BbcodeEnabled = false,
+            FitContent = false,
             ScrollFollowing = true,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
         };
-        // Ensure text is visible on the dark panel background
-        _logContent.AddThemeColorOverride("default_color", new Color(0.9f, 0.9f, 0.9f));
         _logContent.AddThemeFontSizeOverride("normal_font_size", 14);
-        scroll.AddChild(_logContent);
-        vbox.AddChild(scroll);
-
-        // Bottom: line count
-        var footer = new Label();
-        vbox.AddChild(footer);
+        vbox.AddChild(_logContent);
 
         AddChild(_logPanel);
     }
@@ -430,41 +426,47 @@ public partial class DebugManager : CanvasLayer
 
     private void RefreshLogContent()
     {
-        // Rebuild the full BBcode text each frame the viewer is open. For a few hundred
-        // lines this is cheap; at 2000 lines it's still fine for a debug tool.
+        // AddText writes literal text, so the bracketed timestamps/categories cannot
+        // be mistaken for BBCode tags. Colors are applied through the RichText API.
+        _logContent.Clear();
         if (_entries.Count == 0)
         {
             // Log() no-ops while debug mode is off, so an empty buffer is ambiguous —
             // say which case it is instead of leaving the pane blank.
-            _logContent.Text = Enabled
-                ? "[color=#aaaaaa]Debug mode is ON — no events logged yet.[/color]"
-                : "[color=#aaaaaa]Debug mode is OFF, so nothing has been recorded. Click the DBG button (top-right) to start logging, then reopen this panel.[/color]";
+            AppendLogText(new Color(0.67f, 0.67f, 0.67f), Enabled
+                ? "Debug mode is ON — no events logged yet."
+                : "Debug mode is OFF, so nothing has been recorded. Click the DBG button (top-right) to start logging, then reopen this panel.");
             _logTitle.Text = "Debug Log  (0 lines, 5/Esc to close)";
             return;
         }
 
-        var sb = new System.Text.StringBuilder();
         foreach (var e in _entries)
         {
-            string color = e.Category switch
+            Color color = e.Category switch
             {
-                "DMG_DEALT" => "#ff8888",
-                "DMG_RCVD" => "#ff4444",
-                "HAZARD" => "#ff8844",
-                "DOT" => "#cc6644",
-                "HEAL" => "#44ff44",
-                "BUFF" => "#44aaff",
-                "CORES" => "#ffcc44",
-                "ITEM" => "#cc88ff",
-                "STATUS" => "#88ccff",
-                "MISSION" => "#ffffff",
-                "SYSTEM" => "#aaaaaa",
-                _ => "#cccccc",
+                "DMG_DEALT" => new Color(1f, 0.53f, 0.53f),
+                "DMG_RCVD" => new Color(1f, 0.27f, 0.27f),
+                "HAZARD" => new Color(1f, 0.53f, 0.27f),
+                "DOT" => new Color(0.8f, 0.4f, 0.27f),
+                "HEAL" => new Color(0.27f, 1f, 0.27f),
+                "BUFF" => new Color(0.27f, 0.67f, 1f),
+                "CORES" => new Color(1f, 0.8f, 0.27f),
+                "ITEM" => new Color(0.8f, 0.53f, 1f),
+                "STATUS" => new Color(0.53f, 0.8f, 1f),
+                "MISSION" => Colors.White,
+                "SYSTEM" => new Color(0.67f, 0.67f, 0.67f),
+                _ => new Color(0.8f, 0.8f, 0.8f),
             };
-            sb.Append($"[color={color}][{e.Time}] [{e.Category}] {e.Message}[/color]\n");
+            AppendLogText(color, $"[{e.Time}] [{e.Category}] {e.Message}\n");
         }
-        _logContent.Text = sb.ToString();
         _logTitle.Text = $"Debug Log  ({_entries.Count} lines, 5/Esc to close)";
+    }
+
+    private void AppendLogText(Color color, string text)
+    {
+        _logContent.PushColor(color);
+        _logContent.AddText(text);
+        _logContent.Pop();
     }
 
     private void RepositionButtons()

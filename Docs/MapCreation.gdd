@@ -446,7 +446,8 @@ The unsaved-changes dot derives from stack position vs. last-saved marker.
   legacy Arena, preserving direct-F5 debugging.
 - `MapDocument` v2 owns combat-map selection data. `worlds` (empty = all),
   `hardshipLevels` (empty = all), `goals` (new-map default `claim`), and `terrain`
-  (default `sea-level`) are conjunctive filters. Values within `worlds`/`goals` are ORed.
+  (default `sea-level`) are conjunctive filters. A literal terrain `*` matches all three
+  altitude bands for a realm/level-authored map. Values within `worlds`/`goals` are ORed.
   `claim` is the map-data name for the runtime `Collection` mission. Canonical terrain values are
   `sea-level`, `high-ground`, and `low-ground`; each outer-world node receives one from its
   seeded altitude field. Legacy `high` and `lowground` values migrate on load. v1's singular
@@ -556,4 +557,5 @@ the closeview blur shader is dropped (closeview is real scenery now, §1, not a 
   arena receives only a chosen map path. This keeps combat independent of the overworld.
 - **`goal.level` is mission-relative.** One authoring tile stays extensible: it is a claim-core
   spawn, protect-core placement, or destroy-target placement based on the node goal; Slaughter
-  deliberately has no use for it.
+  deliberately has no use for it. A LV4 Boss map also uses its authored goal marker as the
+  boss's opening stage, avoiding any fixed legacy-Arena coordinates.

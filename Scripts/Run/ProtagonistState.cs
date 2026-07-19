@@ -49,6 +49,10 @@ public sealed class ProtagonistState
     // time is persisted here.
     public float ShiftCdRemaining;
     public float ESkillCdRemaining;
+    /// <summary>Optional second stance/variant cooldowns. Characters without an
+    /// independent alternate set leave these at zero.</summary>
+    public float ShiftAltCdRemaining;
+    public float ESkillAltCdRemaining;
 
     // Universal basic-attack magazine state. It is persisted while this protagonist is
     // benched so a Tab switch cannot create a free reload (Gameplay.gdd §A.2.1/A.3).

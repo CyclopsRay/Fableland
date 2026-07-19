@@ -1,0 +1,43 @@
+{
+  "Version": 2,
+  "Id": "vk_seashore_1_gullwing_gardens",
+  "Name": "Seashore I — Gullwing Gardens",
+  "World": "VanillaKindom",
+  "Worlds": ["VK"],
+  "HardshipLevels": [1],
+  "Goals": ["claim", "protect", "destroy", "slaughter"],
+  "Terrain": "*",
+  "FoeCompositions": [{ "Level": 0, "CrabWeight": 65, "SeagullWeight": 35 }],
+  "FoeSpawnRules": { "CrabMaxCellY": 8, "SeagullMinCellY": 15 },
+  "CreatedUtc": "2026-07-18T00:00:00.0000000Z",
+  "ModifiedUtc": "2026-07-18T00:00:00.0000000Z",
+  "Canvas": { "Type": "solidColor", "Color": "#8BD4E8", "ModeId": null },
+  "Layers": [
+    {
+      "Role": "farview", "Name": "Garden Sky", "ParallaxX": 0.4, "ParallaxY": 0.4,
+      "Loop": false, "Collision": false, "Tint": null, "Opacity": 1.0, "SwayAmplitudePx": 0.0, "SwayPeriodSec": 4.0, "AutoScrollX": 0.0, "AutoScrollY": 0.0, "GridW": 30, "GridH": 30,
+      "Tiles": [{ "DefId": "deco.sun", "X": 23, "Y": 2 }, { "DefId": "softvolume.cloud2x1", "X": 5, "Y": 3 }, { "DefId": "softvolume.cloud3x2", "X": 14, "Y": 6 }]
+    },
+    {
+      "Role": "battlefield", "Name": "Garden Climb", "ParallaxX": 1.0, "ParallaxY": 1.0,
+      "Loop": false, "Collision": true, "Tint": null, "Opacity": 1.0, "SwayAmplitudePx": 0.0, "SwayPeriodSec": 4.0, "AutoScrollX": 0.0, "AutoScrollY": 0.0, "GridW": 30, "GridH": 30,
+      "Tiles": [
+        { "DefId": "ground.sand", "X": 0, "Y": 28 }, { "DefId": "ground.sand", "X": 1, "Y": 28 }, { "DefId": "ground.sand", "X": 2, "Y": 28 }, { "DefId": "ground.sand", "X": 3, "Y": 28 }, { "DefId": "ground.sand", "X": 4, "Y": 28 }, { "DefId": "ground.sand", "X": 5, "Y": 28 }, { "DefId": "ground.sand", "X": 6, "Y": 28 }, { "DefId": "ground.sand", "X": 7, "Y": 28 }, { "DefId": "ground.sand", "X": 8, "Y": 28 }, { "DefId": "ground.sand", "X": 9, "Y": 28 },
+        { "DefId": "ground.sand", "X": 10, "Y": 28 }, { "DefId": "ground.sand", "X": 11, "Y": 28 }, { "DefId": "ground.sand", "X": 12, "Y": 28 }, { "DefId": "ground.sand", "X": 13, "Y": 28 }, { "DefId": "ground.sand", "X": 14, "Y": 28 }, { "DefId": "ground.sand", "X": 15, "Y": 28 }, { "DefId": "ground.sand", "X": 16, "Y": 28 }, { "DefId": "ground.sand", "X": 17, "Y": 28 }, { "DefId": "ground.sand", "X": 18, "Y": 28 }, { "DefId": "ground.sand", "X": 19, "Y": 28 },
+        { "DefId": "ground.sand", "X": 20, "Y": 28 }, { "DefId": "ground.sand", "X": 21, "Y": 28 }, { "DefId": "ground.sand", "X": 22, "Y": 28 }, { "DefId": "ground.sand", "X": 23, "Y": 28 }, { "DefId": "ground.sand", "X": 24, "Y": 28 }, { "DefId": "ground.sand", "X": 25, "Y": 28 }, { "DefId": "ground.sand", "X": 26, "Y": 28 }, { "DefId": "ground.sand", "X": 27, "Y": 28 }, { "DefId": "ground.sand", "X": 28, "Y": 28 }, { "DefId": "ground.sand", "X": 29, "Y": 28 },
+        { "DefId": "ground.stone", "X": 0, "Y": 16 }, { "DefId": "ground.stone", "X": 0, "Y": 17 }, { "DefId": "ground.stone", "X": 0, "Y": 18 }, { "DefId": "ground.stone", "X": 0, "Y": 19 }, { "DefId": "ground.stone", "X": 0, "Y": 20 }, { "DefId": "ground.stone", "X": 0, "Y": 21 }, { "DefId": "ground.stone", "X": 0, "Y": 22 }, { "DefId": "ground.stone", "X": 0, "Y": 23 }, { "DefId": "ground.stone", "X": 0, "Y": 24 }, { "DefId": "ground.stone", "X": 0, "Y": 25 }, { "DefId": "ground.stone", "X": 0, "Y": 26 }, { "DefId": "ground.stone", "X": 0, "Y": 27 },
+        { "DefId": "ground.stone", "X": 29, "Y": 16 }, { "DefId": "ground.stone", "X": 29, "Y": 17 }, { "DefId": "ground.stone", "X": 29, "Y": 18 }, { "DefId": "ground.stone", "X": 29, "Y": 19 }, { "DefId": "ground.stone", "X": 29, "Y": 20 }, { "DefId": "ground.stone", "X": 29, "Y": 21 }, { "DefId": "ground.stone", "X": 29, "Y": 22 }, { "DefId": "ground.stone", "X": 29, "Y": 23 }, { "DefId": "ground.stone", "X": 29, "Y": 24 }, { "DefId": "ground.stone", "X": 29, "Y": 25 }, { "DefId": "ground.stone", "X": 29, "Y": 26 }, { "DefId": "ground.stone", "X": 29, "Y": 27 },
+        { "DefId": "platform.wood", "X": 6, "Y": 24 }, { "DefId": "platform.bench", "X": 9, "Y": 20 }, { "DefId": "platform.wood", "X": 15, "Y": 16 }, { "DefId": "platform.sun_lounger", "X": 20, "Y": 18 }, { "DefId": "platform.wood", "X": 24, "Y": 13 },
+        { "DefId": "softvolume.palm_tree", "X": 2, "Y": 23 }, { "DefId": "softvolume.palm_tree", "X": 24, "Y": 23 },
+        { "DefId": "spawn.character", "X": 3, "Y": 27 }, { "DefId": "spawn.respawn", "X": 3, "Y": 27 }, { "DefId": "spawn.respawn", "X": 15, "Y": 27 }, { "DefId": "spawn.respawn", "X": 26, "Y": 27 },
+        { "DefId": "spawn.enemy", "X": 7, "Y": 7 }, { "DefId": "spawn.enemy", "X": 21, "Y": 8 }, { "DefId": "spawn.enemy", "X": 11, "Y": 17 }, { "DefId": "spawn.enemy", "X": 24, "Y": 16 },
+        { "DefId": "goal.level", "X": 6, "Y": 27 }, { "DefId": "goal.level", "X": 13, "Y": 27 }, { "DefId": "goal.level", "X": 20, "Y": 27 }, { "DefId": "goal.level", "X": 26, "Y": 27 }
+      ]
+    },
+    {
+      "Role": "closeview", "Name": "Garden Foreground", "ParallaxX": 1.0, "ParallaxY": 1.0,
+      "Loop": false, "Collision": false, "Tint": null, "Opacity": 1.0, "SwayAmplitudePx": 0.0, "SwayPeriodSec": 4.0, "AutoScrollX": 0.0, "AutoScrollY": 0.0, "GridW": 30, "GridH": 30,
+      "Tiles": [{ "DefId": "deco.sand_castle", "X": 17, "Y": 26 }, { "DefId": "deco.flower", "X": 8, "Y": 27 }]
+    }
+  ]
+}

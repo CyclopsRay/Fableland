@@ -11,7 +11,7 @@ namespace Fableland.Debug;
 /// what a real run has unlocked. When the real economy grows to cover every character, this
 /// registry may graduate into it or simply stay as the debug-only source of truth.
 ///
-/// Future characters (such as Sifu Pangda) append one line to <see cref="Entries"/>.
+/// Future characters append one line to <see cref="Entries"/>.
 /// </summary>
 public static class ProtagonistRoster
 {
@@ -21,6 +21,7 @@ public static class ProtagonistRoster
         ("PumpKing", "res://Scenes/PumpKing.tscn"),
         ("Cleopastar", "res://Scenes/Cleopastar.tscn"),
         ("Pixolotl", "res://Scenes/Pixolotl.tscn"),
+        ("Sifu Pangda", "res://Scenes/SifuPangda.tscn"),
     };
 
     private static readonly Dictionary<string, PackedScene> _cache = new();

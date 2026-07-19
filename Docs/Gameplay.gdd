@@ -92,11 +92,15 @@ Initial character definitions:
 | Pomegraknight | 3 | 3 / 0.75 s | Each successful slash; request restarts timer | No |
 | PumpKing | 1 | 1 / 1.5 s | Resolved head explosion | No |
 | Cleopastar | 5 | 1 / 1.5 s | Each successful Star Shot; request restarts timer | Yes |
+| Sifu Pangda | 2 | 2 / 1 s | Each successful Fuhu Palm; request restarts timer | No |
 
 Pomegraknight's interval begins when a slash is consumed. Cleopastar's begins **0.5 s**
 after her flight ends (including a buffered early release at 8 m); PumpKing's head state
 is its BA gate. Ammo/reload progress for a benched protagonist is persisted and advances
 at the normal background-cooldown rate.
+
+Sifu Pangda's Fuhu Palm begins its interval when consumed; his Heli Falling Crane is an
+air-only contextual BA and intentionally does not consume the shared magazine.
 
 All values are balance data in `CharacterTable`; scene exports are wiring only. The
 current vertical slice covers Pomegraknight, PumpKing, and Cleopastar.

@@ -93,6 +93,24 @@ compiler surfaces below.
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Boss placement must come from the selected authored arena (v0.10.4, Seashore V fix)
+- **Symptom:** the LV4 boss used the fixed legacy-Arena centre, placing it in the wrong part of a
+  larger authored battlefield such as the 60×40 Crownwave Colosseum.
+- **Rule:** a mission entity whose stage matters must request an authored marker through
+  `GameManager`; only the no-map path may use legacy Arena placement fallback.
+- **Why:** combat-map dimensions and origin are content data. Hard-coded scene coordinates silently
+  couple a mission to one arena and make every other valid arena layout unreliable.
+
+### Literal log brackets must not pass through the BBCode parser (v0.10.4, debug-log viewer fix)
+- **Symptom:** key 5 opened a viewer with the correct line count but no readable entries, because each entry contained bracketed timestamps and categories such as `[12:34:56] [SYSTEM]`.
+- **Rule:** render diagnostic text with `RichTextLabel.AddText` plus API-applied colors, or escape every literal bracket; do not feed structured log lines directly into BBCode.
+- **Why:** bracketed identifiers are ordinary log data, but BBCode interprets them as formatting tags and can consume the visible text.
+
+### Prototype roster upgrades must reset the corresponding active-team order (v0.10.4, five-protagonist debug fix)
+- **Symptom:** adding a newly implemented protagonist to fresh-run defaults left existing save slots on their previous three-body build, so Team Build did not show the requested starting party.
+- **Rule:** when a save gains missing prototype roster entries, apply the declared prototype default team in the same load transaction and reset its active index; later loads preserve the player's saved Team Build choices.
+- **Why:** roster membership and team order are separate durable facts. Updating only ownership makes a migration look successful while the battle snapshot still begins with the old party.
+
 ### A universal combat countdown needs a gate, not an ambient-spawner flag (v0.10.4, opening countdown fix)
 - **Symptom:** the Arena's three-second grace disabled only ambient spawns and its countdown
   text was overwritten by the normal mission HUD push; Slaughter waves and direct boss setup

@@ -60,7 +60,7 @@ The file is recreated on every launch.
 Input action `debug_protagonist_page`. **Only responds while debug mode is ON**
 (deliberately unlike key 5). Toggles a centered overlay listing every implemented
 protagonist from `Scripts/Debug/ProtagonistRoster.cs` — currently **Pixolotl**,
-**Pomegraknight**, **PumpKing**, and **Cleopastar**. Esc or X closes it; turning debug
+**Pomegraknight**, **PumpKing**, **Cleopastar**, and **Sifu Pangda**. Esc or X closes it; turning debug
 OFF force-closes it.
 
 Selecting a protagonist makes it the currently-controlled player character,
@@ -126,7 +126,11 @@ management action — no stamina/Blessing cost, no day end) that opens an overla
 assigning a single held wonder item to a protagonist. This is a **real, permanent** shelter
 feature and works with debug mode OFF — it then shows only what a real run actually has:
 `RunState.Owned` protagonists (Pixolotl, Pomegraknight, PumpKing, and Cleopastar in a
-fresh run) and the real `RunState.Items` backpack (empty until something grants an item).
+fresh prototype run, plus Sifu Pangda) and the real `RunState.Items` backpack (empty until
+something grants an item). A fresh prototype team starts as **Sifu Pangda, Pixolotl, and
+Cleopastar**; Pomegraknight and PumpKing begin on the bench and remain selectable.
+Older prototype saves are upgraded on their next load: missing implemented protagonists are
+added and this same default team is selected once.
 
 With **debug mode ON**, the menu additionally shows content the real economy hasn't granted,
 purely for testing — the same non-invasive spirit as the key-4 protagonist page:

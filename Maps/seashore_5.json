@@ -1,0 +1,46 @@
+{
+  "Version": 2,
+  "Id": "vk_seashore_5_crownwave_colosseum",
+  "Name": "Seashore V — Crownwave Colosseum",
+  "World": "VanillaKindom",
+  "Worlds": ["VK"],
+  "HardshipLevels": [4],
+  "Goals": ["claim", "protect", "destroy", "slaughter"],
+  "Terrain": "*",
+  "FoeCompositions": [{ "Level": 0, "CrabWeight": 70, "SeagullWeight": 30 }],
+  "FoeSpawnRules": { "CrabMaxCellY": 12, "SeagullMinCellY": 20 },
+  "CreatedUtc": "2026-07-18T00:00:00.0000000Z",
+  "ModifiedUtc": "2026-07-18T00:00:00.0000000Z",
+  "Canvas": { "Type": "solidColor", "Color": "#273B70", "ModeId": null },
+  "Layers": [
+    {
+      "Role": "farview", "Name": "Crownwave Night", "ParallaxX": 0.25, "ParallaxY": 0.25,
+      "Loop": false, "Collision": false, "Tint": "#B9C6FF", "Opacity": 0.78, "SwayAmplitudePx": 0.0, "SwayPeriodSec": 4.0, "AutoScrollX": 0.0, "AutoScrollY": 0.0, "GridW": 60, "GridH": 40,
+      "Tiles": [{ "DefId": "softvolume.cloud3x2", "X": 4, "Y": 4 }, { "DefId": "softvolume.cloud3x2", "X": 28, "Y": 2 }, { "DefId": "softvolume.cloud2x1", "X": 49, "Y": 7 }]
+    },
+    {
+      "Role": "battlefield", "Name": "The Crownwave Arena", "ParallaxX": 1.0, "ParallaxY": 1.0,
+      "Loop": false, "Collision": true, "Tint": null, "Opacity": 1.0, "SwayAmplitudePx": 0.0, "SwayPeriodSec": 4.0, "AutoScrollX": 0.0, "AutoScrollY": 0.0, "GridW": 60, "GridH": 40,
+      "Tiles": [
+        { "DefId": "ground.sand", "X": 0, "Y": 38 }, { "DefId": "ground.sand", "X": 1, "Y": 38 }, { "DefId": "ground.sand", "X": 2, "Y": 38 }, { "DefId": "ground.sand", "X": 3, "Y": 38 }, { "DefId": "ground.sand", "X": 4, "Y": 38 }, { "DefId": "ground.sand", "X": 5, "Y": 38 }, { "DefId": "ground.sand", "X": 6, "Y": 38 }, { "DefId": "ground.sand", "X": 7, "Y": 38 }, { "DefId": "ground.sand", "X": 8, "Y": 38 }, { "DefId": "ground.sand", "X": 9, "Y": 38 },
+        { "DefId": "ground.sand", "X": 10, "Y": 38 }, { "DefId": "ground.sand", "X": 11, "Y": 38 }, { "DefId": "ground.sand", "X": 12, "Y": 38 }, { "DefId": "ground.sand", "X": 13, "Y": 38 }, { "DefId": "ground.sand", "X": 14, "Y": 38 }, { "DefId": "ground.sand", "X": 15, "Y": 38 }, { "DefId": "ground.sand", "X": 16, "Y": 38 }, { "DefId": "ground.sand", "X": 17, "Y": 38 }, { "DefId": "ground.sand", "X": 18, "Y": 38 }, { "DefId": "ground.sand", "X": 19, "Y": 38 },
+        { "DefId": "ground.sand", "X": 20, "Y": 38 }, { "DefId": "ground.sand", "X": 21, "Y": 38 }, { "DefId": "ground.sand", "X": 22, "Y": 38 }, { "DefId": "ground.sand", "X": 23, "Y": 38 }, { "DefId": "ground.sand", "X": 24, "Y": 38 }, { "DefId": "ground.sand", "X": 25, "Y": 38 }, { "DefId": "ground.sand", "X": 26, "Y": 38 }, { "DefId": "ground.sand", "X": 27, "Y": 38 }, { "DefId": "ground.sand", "X": 28, "Y": 38 }, { "DefId": "ground.sand", "X": 29, "Y": 38 },
+        { "DefId": "ground.sand", "X": 30, "Y": 38 }, { "DefId": "ground.sand", "X": 31, "Y": 38 }, { "DefId": "ground.sand", "X": 32, "Y": 38 }, { "DefId": "ground.sand", "X": 33, "Y": 38 }, { "DefId": "ground.sand", "X": 34, "Y": 38 }, { "DefId": "ground.sand", "X": 35, "Y": 38 }, { "DefId": "ground.sand", "X": 36, "Y": 38 }, { "DefId": "ground.sand", "X": 37, "Y": 38 }, { "DefId": "ground.sand", "X": 38, "Y": 38 }, { "DefId": "ground.sand", "X": 39, "Y": 38 },
+        { "DefId": "ground.sand", "X": 40, "Y": 38 }, { "DefId": "ground.sand", "X": 41, "Y": 38 }, { "DefId": "ground.sand", "X": 42, "Y": 38 }, { "DefId": "ground.sand", "X": 43, "Y": 38 }, { "DefId": "ground.sand", "X": 44, "Y": 38 }, { "DefId": "ground.sand", "X": 45, "Y": 38 }, { "DefId": "ground.sand", "X": 46, "Y": 38 }, { "DefId": "ground.sand", "X": 47, "Y": 38 }, { "DefId": "ground.sand", "X": 48, "Y": 38 }, { "DefId": "ground.sand", "X": 49, "Y": 38 },
+        { "DefId": "ground.sand", "X": 50, "Y": 38 }, { "DefId": "ground.sand", "X": 51, "Y": 38 }, { "DefId": "ground.sand", "X": 52, "Y": 38 }, { "DefId": "ground.sand", "X": 53, "Y": 38 }, { "DefId": "ground.sand", "X": 54, "Y": 38 }, { "DefId": "ground.sand", "X": 55, "Y": 38 }, { "DefId": "ground.sand", "X": 56, "Y": 38 }, { "DefId": "ground.sand", "X": 57, "Y": 38 }, { "DefId": "ground.sand", "X": 58, "Y": 38 }, { "DefId": "ground.sand", "X": 59, "Y": 38 },
+        { "DefId": "ground.stone", "X": 0, "Y": 26 }, { "DefId": "ground.stone", "X": 0, "Y": 27 }, { "DefId": "ground.stone", "X": 0, "Y": 28 }, { "DefId": "ground.stone", "X": 0, "Y": 29 }, { "DefId": "ground.stone", "X": 0, "Y": 30 }, { "DefId": "ground.stone", "X": 0, "Y": 31 }, { "DefId": "ground.stone", "X": 0, "Y": 32 }, { "DefId": "ground.stone", "X": 0, "Y": 33 }, { "DefId": "ground.stone", "X": 0, "Y": 34 }, { "DefId": "ground.stone", "X": 0, "Y": 35 }, { "DefId": "ground.stone", "X": 0, "Y": 36 }, { "DefId": "ground.stone", "X": 0, "Y": 37 },
+        { "DefId": "ground.stone", "X": 59, "Y": 26 }, { "DefId": "ground.stone", "X": 59, "Y": 27 }, { "DefId": "ground.stone", "X": 59, "Y": 28 }, { "DefId": "ground.stone", "X": 59, "Y": 29 }, { "DefId": "ground.stone", "X": 59, "Y": 30 }, { "DefId": "ground.stone", "X": 59, "Y": 31 }, { "DefId": "ground.stone", "X": 59, "Y": 32 }, { "DefId": "ground.stone", "X": 59, "Y": 33 }, { "DefId": "ground.stone", "X": 59, "Y": 34 }, { "DefId": "ground.stone", "X": 59, "Y": 35 }, { "DefId": "ground.stone", "X": 59, "Y": 36 }, { "DefId": "ground.stone", "X": 59, "Y": 37 },
+        { "DefId": "platform.lifeguard_tower", "X": 5, "Y": 29 }, { "DefId": "platform.wood", "X": 14, "Y": 34 }, { "DefId": "platform.bench", "X": 21, "Y": 31 }, { "DefId": "platform.wood", "X": 28, "Y": 28 }, { "DefId": "platform.sun_lounger", "X": 35, "Y": 31 }, { "DefId": "platform.wood", "X": 45, "Y": 34 }, { "DefId": "platform.lifeguard_tower", "X": 51, "Y": 29 },
+        { "DefId": "softvolume.palm_tree", "X": 2, "Y": 33 }, { "DefId": "softvolume.palm_tree", "X": 55, "Y": 33 }, { "DefId": "hazard.bonfire", "X": 17, "Y": 37 }, { "DefId": "hazard.freezepit", "X": 42, "Y": 37 },
+        { "DefId": "spawn.character", "X": 6, "Y": 37 }, { "DefId": "spawn.respawn", "X": 6, "Y": 37 }, { "DefId": "spawn.respawn", "X": 30, "Y": 37 }, { "DefId": "spawn.respawn", "X": 53, "Y": 37 },
+        { "DefId": "spawn.enemy", "X": 12, "Y": 12 }, { "DefId": "spawn.enemy", "X": 47, "Y": 12 }, { "DefId": "spawn.enemy", "X": 20, "Y": 23 }, { "DefId": "spawn.enemy", "X": 39, "Y": 24 },
+        { "DefId": "goal.level", "X": 30, "Y": 37 }
+      ]
+    },
+    {
+      "Role": "closeview", "Name": "Royal Surf Foreground", "ParallaxX": 1.0, "ParallaxY": 1.0,
+      "Loop": false, "Collision": false, "Tint": "#7A8DD8", "Opacity": 0.6, "SwayAmplitudePx": 0.0, "SwayPeriodSec": 4.0, "AutoScrollX": 0.0, "AutoScrollY": 0.0, "GridW": 60, "GridH": 40,
+      "Tiles": [{ "DefId": "deco.column", "X": 27, "Y": 35 }, { "DefId": "deco.column", "X": 32, "Y": 35 }, { "DefId": "deco.caution_sign", "X": 57, "Y": 36 }]
+    }
+  ]
+}

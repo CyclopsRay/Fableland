@@ -474,6 +474,8 @@ public partial class GameManager : Node2D
             if (p == null) continue;
             if (p.ShiftCdRemaining > 0f) p.ShiftCdRemaining = Mathf.Max(0f, p.ShiftCdRemaining - bgDt);
             if (p.ESkillCdRemaining > 0f) p.ESkillCdRemaining = Mathf.Max(0f, p.ESkillCdRemaining - bgDt);
+            if (p.ShiftAltCdRemaining > 0f) p.ShiftAltCdRemaining = Mathf.Max(0f, p.ShiftAltCdRemaining - bgDt);
+            if (p.ESkillAltCdRemaining > 0f) p.ESkillAltCdRemaining = Mathf.Max(0f, p.ESkillAltCdRemaining - bgDt);
             AmmoController.TickPersisted(p, bgDt);
         }
     }

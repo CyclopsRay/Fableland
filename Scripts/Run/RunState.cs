@@ -27,6 +27,10 @@ public partial class RunState : Node
     public static RunState Instance;
     public const int MaxStamina = 5;
     public const string TwistedRealityItemId = "twisted_reality";
+    private static readonly string[] PrototypeDefaultTeam =
+    {
+        "Sifu Pangda", "Pixolotl", "Cleopastar",
+    };
 
     // ---- identity / clock ----
     public string Seed;
@@ -215,17 +219,10 @@ public partial class RunState : Node
         _worldsSet.Clear();
 
         Owned.Clear();
-        Owned.Add(new ProtagonistState("Pixolotl"));
-        Owned.Add(new ProtagonistState("Pomegraknight"));
-        Owned.Add(new ProtagonistState("PumpKing"));
-        // The vertical slice exposes every implemented protagonist through the real
-        // bench, while the active team remains capped at its designed three members.
-        Owned.Add(new ProtagonistState("Cleopastar"));
-        ActiveBuild.Clear();
-        ActiveBuild.Add("Pixolotl");
-        ActiveBuild.Add("Pomegraknight");
-        ActiveBuild.Add("PumpKing");
-        ActiveProtagonistIndex = 0;
+        // Prototype-debug roster: every implemented protagonist is granted on a
+        // fresh run so Team Build can exercise every valid party combination.
+        EnsurePrototypeRoster();
+        ApplyPrototypeDefaultTeam();
         WonderCores = 0;
         Items.Clear();
         _nextItemInstanceOrdinal = 1;
@@ -930,6 +927,29 @@ public partial class RunState : Node
         ProtagonistsCollected++;
     }
 
+    /// <summary>Grant every currently implemented protagonist exactly once. This is a
+    /// prototype debugging policy, so the debug registry remains its single roster source.</summary>
+    private bool EnsurePrototypeRoster()
+    {
+        bool added = false;
+        foreach ((string id, _) in ProtagonistRoster.Entries)
+        {
+            if (FindProtagonist(id) != null) continue;
+            Owned.Add(new ProtagonistState(id));
+            added = true;
+        }
+        return added;
+    }
+
+    private void ApplyPrototypeDefaultTeam()
+    {
+        ActiveBuild.Clear();
+        foreach (string id in PrototypeDefaultTeam)
+            if (FindProtagonist(id) != null) ActiveBuild.Add(id);
+        if (ActiveBuild.Count == 0 && Owned.Count > 0) ActiveBuild.Add(Owned[0].Id);
+        ActiveProtagonistIndex = 0;
+    }
+
     // ============================================================= persistence
 
     /// <summary>Capture the post-day-end state (or fresh day-one state) without recursively
@@ -1097,14 +1117,28 @@ public partial class RunState : Node
             Owned.Add(new ProtagonistState("Pixolotl"));
         }
 
+        // Existing prototype saves predate the completed five-character roster. Upgrade
+        // them once on load, including the requested debug default; the next save stores
+        // the expanded roster and later Team Build choices normally.
+        bool upgradedPrototypeRoster = EnsurePrototypeRoster();
+
         ActiveBuild.Clear();
-        var activeSeen = new HashSet<string>(StringComparer.Ordinal);
-        if (save.ActiveBuild != null)
-            foreach (string id in save.ActiveBuild)
-                if (FindProtagonist(id) != null && activeSeen.Add(id) && ActiveBuild.Count < PartyCap())
-                    ActiveBuild.Add(id);
-        if (ActiveBuild.Count == 0) ActiveBuild.Add(Owned[0].Id);
-        ActiveProtagonistIndex = Math.Clamp(save.ActiveProtagonistIndex, 0, ActiveBuild.Count - 1);
+        if (upgradedPrototypeRoster)
+        {
+            ApplyPrototypeDefaultTeam();
+        }
+        else
+        {
+            var activeSeen = new HashSet<string>(StringComparer.Ordinal);
+            if (save.ActiveBuild != null)
+                foreach (string id in save.ActiveBuild)
+                    if (FindProtagonist(id) != null && activeSeen.Add(id) && ActiveBuild.Count < PartyCap())
+                        ActiveBuild.Add(id);
+            if (ActiveBuild.Count == 0) ActiveBuild.Add(Owned[0].Id);
+        }
+        ActiveProtagonistIndex = upgradedPrototypeRoster
+            ? 0
+            : Math.Clamp(save.ActiveProtagonistIndex, 0, ActiveBuild.Count - 1);
 
         WonderCores = Math.Max(0, save.WonderCores);
         Items.Clear();
@@ -1201,6 +1235,8 @@ public partial class RunState : Node
         destination.HeldItemFromBackpack = source.HeldItemFromBackpack;
         destination.ShiftCdRemaining = source.ShiftCdRemaining;
         destination.ESkillCdRemaining = source.ESkillCdRemaining;
+        destination.ShiftAltCdRemaining = source.ShiftAltCdRemaining;
+        destination.ESkillAltCdRemaining = source.ESkillAltCdRemaining;
         destination.AmmoInitialized = source.AmmoInitialized;
         destination.AmmoCurrent = source.AmmoCurrent;
         destination.AmmoAttackCooldownRemaining = source.AmmoAttackCooldownRemaining;
@@ -1223,6 +1259,8 @@ public partial class RunState : Node
             HeldItemFromBackpack = source.HeldItemFromBackpack,
             ShiftCdRemaining = Math.Max(0f, source.ShiftCdRemaining),
             ESkillCdRemaining = Math.Max(0f, source.ESkillCdRemaining),
+            ShiftAltCdRemaining = Math.Max(0f, source.ShiftAltCdRemaining),
+            ESkillAltCdRemaining = Math.Max(0f, source.ESkillAltCdRemaining),
             AmmoInitialized = source.AmmoInitialized,
             AmmoCurrent = Math.Max(0, source.AmmoCurrent),
             AmmoAttackCooldownRemaining = Math.Max(0f, source.AmmoAttackCooldownRemaining),

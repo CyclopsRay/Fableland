@@ -49,6 +49,59 @@ public sealed class PixolotlDef
     public float[] BubbleAnglesDeg { get; init; }
 }
 
+/// <summary>Sifu Pangda's two-stance balance row (Sifu Pangda.gdd v1.1).
+/// All meters/seconds remain pure data; gameplay converts through Units.</summary>
+public sealed class SifuPangdaDef
+{
+    public float BaseHp { get; init; }
+    public float MoveSpeedMps { get; init; }
+    public int MaxJumps { get; init; }
+    public float ChiDamageConversion { get; init; }
+    public float ChiShieldCap { get; init; }
+    public float CombatInactivityGrace { get; init; }
+    public float ChiDecayPerSecond { get; init; }
+    public int FuhuPalmStacks { get; init; }
+    public float FuhuPalmDamage { get; init; }
+    public float FuhuPalmWidthM { get; init; }
+    public float FuhuPalmHeightM { get; init; }
+    public float FuhuPalmStun { get; init; }
+    public float FuhuPalmWindup { get; init; }
+    public float FuhuPalmRecovery { get; init; }
+    public float FuhuPalmLungeDistanceM { get; init; }
+    public float FuhuPalmLungeSeconds { get; init; }
+    public float HeliDiveSpeedMps { get; init; }
+    public float HeliDiveImpactWidthM { get; init; }
+    public float HeliDiveImpactHeightM { get; init; }
+    public float HeliDiveDamage { get; init; }
+    public float HeliDiveKnockupMps { get; init; }
+    public float HeliDiveStun { get; init; }
+    public float HeliDiveRecovery { get; init; }
+    public float FuhuShiftCooldown { get; init; }
+    public float FuhuShiftWindup { get; init; }
+    public float FuhuKickWidthM { get; init; }
+    public float FuhuKickHeightM { get; init; }
+    public float FuhuKickDamage { get; init; }
+    public float FuhuKickKnockbackMps { get; init; }
+    public float FuhuKickStun { get; init; }
+    public float HeliShiftCooldown { get; init; }
+    public float HeliDashSpeedMps { get; init; }
+    public float HeliDashDistanceM { get; init; }
+    public float HeliDashCheckBoxM { get; init; }
+    public float HeliDashImpactBoxM { get; init; }
+    public float HeliDashDamage { get; init; }
+    public float HeliDashKnockbackMps { get; init; }
+    public float FuhuECooldown { get; init; }
+    public float DrinkDuration { get; init; }
+    public float DrinkShieldAt { get; init; }
+    public float DrinkMoveMultiplier { get; init; }
+    public float HeliECooldown { get; init; }
+    public float BottleSpeedMps { get; init; }
+    public float BottleLifetime { get; init; }
+    public float BottleRadiusM { get; init; }
+    public float BottleDamage { get; init; }
+    public float BottleTrappedSeconds { get; init; }
+}
+
 /// <summary>Read-only protagonist balance registry. Keep this pure C# so its values
 /// remain headless-testable and later move cleanly into designer-editable data.</summary>
 public static class CharacterTable
@@ -95,6 +148,16 @@ public static class CharacterTable
             BaseAttackIntervalSec = 0.3f,
             RespawnMode = AmmoRespawnMode.Full,
         },
+        ["Sifu Pangda"] = new CharacterAmmoDef
+        {
+            CharacterId = "Sifu Pangda",
+            Capacity = 2,
+            ReloadSize = 2,
+            ReloadDelaySec = 1f,
+            RepeatReloadWhileMissing = false,
+            BaseAttackIntervalSec = 0.6f,
+            RespawnMode = AmmoRespawnMode.Full,
+        },
     };
 
     public static readonly PixolotlDef Pixolotl = new()
@@ -124,6 +187,29 @@ public static class CharacterTable
         EFrameLimit = 10,
         EMaxRealSeconds = 3f,
         BubbleAnglesDeg = new[] { 0f, 25f, 65f, 115f, 155f, 180f },
+    };
+
+    public static readonly SifuPangdaDef SifuPangda = new()
+    {
+        BaseHp = 300f, MoveSpeedMps = 6.5f, MaxJumps = 1,
+        ChiDamageConversion = 0.30f, ChiShieldCap = 60f,
+        CombatInactivityGrace = 3f, ChiDecayPerSecond = 10f, FuhuPalmStacks = 2,
+        FuhuPalmDamage = 40f, FuhuPalmWidthM = 4f, FuhuPalmHeightM = 3f,
+        FuhuPalmStun = 0.5f, FuhuPalmWindup = 0.2f, FuhuPalmRecovery = 0.4f,
+        FuhuPalmLungeDistanceM = 1f, FuhuPalmLungeSeconds = 0.2f,
+        HeliDiveSpeedMps = 32f, HeliDiveImpactWidthM = 4f, HeliDiveImpactHeightM = 1f,
+        HeliDiveDamage = 50f, HeliDiveKnockupMps = 10f, HeliDiveStun = 0.5f,
+        HeliDiveRecovery = 0.5f,
+        FuhuShiftCooldown = 8f, FuhuShiftWindup = 1f,
+        FuhuKickWidthM = 6f, FuhuKickHeightM = 4f, FuhuKickDamage = 40f,
+        FuhuKickKnockbackMps = 18f, FuhuKickStun = 1f,
+        HeliShiftCooldown = 8f, HeliDashSpeedMps = 32f, HeliDashDistanceM = 16f,
+        HeliDashCheckBoxM = 2f, HeliDashImpactBoxM = 2f, HeliDashDamage = 40f,
+        HeliDashKnockbackMps = 16f,
+        FuhuECooldown = 14f, DrinkDuration = 1.5f, DrinkShieldAt = 0.8f,
+        DrinkMoveMultiplier = 0.4f,
+        HeliECooldown = 14f, BottleSpeedMps = 20f, BottleLifetime = 2f, BottleRadiusM = 0.25f,
+        BottleDamage = 25f, BottleTrappedSeconds = 1f,
     };
 
     public static bool TryGetAmmo(string characterId, out CharacterAmmoDef def) =>

@@ -95,7 +95,11 @@ public static class CombatMapCatalog
         }
         if (doc.HardshipLevels is { Count: > 0 } && !doc.HardshipLevels.Contains(hardship)) return false;
         if (doc.Goals is { Count: > 0 } && !doc.Goals.Contains(goal)) return false;
-        return Normalize(doc.Terrain) == terrain;
+        // A wildcard terrain lets a deliberately broad combat map serve every altitude band.
+        // This is useful for a themed realm set whose level progression is the authored
+        // distinction, while preserving exact terrain matching for specialized maps.
+        string authoredTerrain = Normalize(doc.Terrain);
+        return authoredTerrain == "*" || authoredTerrain == terrain;
     }
 
     private static bool WorldMatches(string authored, string nodeWorld)

@@ -292,6 +292,8 @@ public sealed class ProtagonistSaveData
     public bool HeldItemFromBackpack { get; set; }
     public float ShiftCdRemaining { get; set; }
     public float ESkillCdRemaining { get; set; }
+    public float ShiftAltCdRemaining { get; set; }
+    public float ESkillAltCdRemaining { get; set; }
     public bool AmmoInitialized { get; set; }
     public int AmmoCurrent { get; set; }
     public float AmmoAttackCooldownRemaining { get; set; }

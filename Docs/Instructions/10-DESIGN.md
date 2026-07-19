@@ -131,7 +131,7 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | 16 | Per-shelter plantation/jousting chances | NODES §5.2/§5.4 |
 | 17 | Surprise shelter functions (VOID TRADER surprise, treasure box, teleport) | MapGDD §6 |
 | 18 | Pixolotl & PumpKing & Pangda visual design + leveling curves | their GDDs |
-| 19 | Sifu Pangda movement params, Ult CD, realm (Gui Lin not yet in world pool) | Sifu Pangda.gdd |
+| 19 | Sifu Pangda Ult model/CD and realm (Gui Lin not yet in world pool) | Sifu Pangda.gdd |
 | 20 | PumpKing realm "Kingdom of Horror" not in world pool | PumpKing.gdd, MapGDD §2 |
 | 21 | Ult resource/charge model + per-character Ult CDs (Pangda Ult CD TBD; foe Ult-charge loot orb) | Sifu Pangda.gdd, FOES §7 |
 | 22 | Protagonist Landing Effects — the per-character switch-in effect (all 5 GDDs stub it TODO) | character GDDs, NODES §3.3 |

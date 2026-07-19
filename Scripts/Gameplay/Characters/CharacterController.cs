@@ -84,6 +84,10 @@ public partial class CharacterController : CharacterBody2D
 	/// when taking damage. Shown in green on the HP bar.</summary>
 	public float TempHP { get; protected set; }
 	public float UltCharge { get; private set; }
+	/// <summary>World seconds since this protagonist last dealt valid damage or received a
+	/// valid damaging hit. Shared passives and wonder items use this single out-of-combat
+	/// clock instead of maintaining drift-prone duplicate timers.</summary>
+	public float CombatInactivitySeconds { get; private set; }
 	public int LivesRemaining { get; private set; }
 	public bool ControlsLocked { get; set; }
 	/// <summary>Root status: blocks self-directed movement/jumps and new knockback, but not skills.</summary>
@@ -283,6 +287,9 @@ public partial class CharacterController : CharacterBody2D
 		Ammo?.RequestReload();
 		Ammo?.Save(_boundAmmoState);
 	}
+	/// <summary>Set the stored self-directed horizontal velocity for a committed movement
+	/// phase. This stays separate from external knockback and is applied by normal physics.</summary>
+	protected void SetIntentHorizontalVelocity(float velocityPxPerSecond) => _intentVel.X = velocityPxPerSecond;
 	protected void SetAttackIntervalMultiplier(string source, float multiplier) => Ammo?.SetAttackIntervalMultiplier(source, multiplier);
 	protected void ClearAttackIntervalMultiplier(string source) => Ammo?.ClearAttackIntervalMultiplier(source);
 
@@ -391,6 +398,7 @@ public partial class CharacterController : CharacterBody2D
 	{
 		float dt = GetActDelta((float)delta);
 		if (_dead) { if (ShowDebugRanges) QueueRedraw(); return; }
+		CombatInactivitySeconds += (float)delta;
 
 		UpdateTimers(dt);
 		Ammo?.Tick(dt);
@@ -742,8 +750,13 @@ public partial class CharacterController : CharacterBody2D
 	/// owners call this with the actual post-mitigation result returned by <see cref="BaseFoe.TakeHit"/>.</summary>
 	public void ReportDamageDealt(float dealt)
 	{
-		if (dealt > 0f) DamageDealt?.Invoke(dealt);
+		if (dealt <= 0f) return;
+		MarkCombatActivity();
+		DamageDealt?.Invoke(dealt);
 	}
+
+	/// <summary>Reset the common out-of-combat clock after a valid damage exchange.</summary>
+	protected void MarkCombatActivity() => CombatInactivitySeconds = 0f;
 
 	protected void ApplyMovePenalty(float mult, float duration)
 	{
@@ -769,6 +782,7 @@ public partial class CharacterController : CharacterBody2D
 	public void TakeHit(HitInfo hit)
 	{
 		if (_dead || Invincible || _invulnTimer > 0f) return;
+		if (hit.Damage > 0f) MarkCombatActivity();
 
 		float dealt = hit.Damage * DefenseMultiplier;
 		dealt = AbsorbDamage(dealt);
@@ -800,6 +814,7 @@ public partial class CharacterController : CharacterBody2D
 
 		if (damage > 0f)
 		{
+			MarkCombatActivity();
 			float dealt = damage * DefenseMultiplier;
 			dealt = AbsorbDamage(dealt);
 			DebugManager.Instance?.LogHazardDmg(dealt, "player");
@@ -886,6 +901,7 @@ public partial class CharacterController : CharacterBody2D
 	private void ApplyDotDamage(float amount)
 	{
 		if (_dead || Invincible) return;
+		if (amount > 0f) MarkCombatActivity();
 		float dealt = amount * DefenseMultiplier;
 		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogDotDmg(dealt, IsBurning ? "Burn" : _fire.Active ? "OnFire" : "Frozen");
