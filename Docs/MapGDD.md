@@ -92,9 +92,9 @@ the combat layer calls that world's arenas. Art direction and kits:
 | Palace of LOOING | Cloud Court | cloisonné enamel | aerial; cloud soft volumes, scarce footing | air mobility |
 
 Starfield, Wulin and Dungeon are decided. Ghost Town and Cloud Court are proposals awaiting
-sign-off, and each realm has one built-in map so far (terrain label `sea-level`); nodes with
-another terrain label or in a realm with no matching map still fall back to the legacy arena
-(§2.1, `MapCreation.gdd` §9). Open questions — Cleopastar's home world, whether Gui Lin is the
+sign-off, and each realm has one built-in map so far, tagged for every terrain label (`*`,
+v0.10.7) so that all of a realm's combat nodes use it; a node in a realm with no matching map
+still falls back to the legacy arena (§2.1, `MapCreation.gdd` §9). Open questions — Cleopastar's home world, whether Gui Lin is the
 Banboo Maze — are listed in the style bible §10.
 
 ## 3. The seed

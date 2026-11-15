@@ -552,6 +552,9 @@ public partial class MapEditor : Control
 		_mapTerrainSelect.AddItem("Sea-level", 0);
 		_mapTerrainSelect.AddItem("High-ground", 1);
 		_mapTerrainSelect.AddItem("Low-ground", 2);
+		// "*" serves every altitude band (§9). It must be offered here: a map saved with it
+		// would otherwise open as Sea-level and be silently narrowed by the next Apply.
+		_mapTerrainSelect.AddItem("Any terrain", 3);
 		body.AddChild(_mapTerrainSelect);
 
 		body.AddChild(new Label { Text = "Foe composition (map default; weights)" });
@@ -598,7 +601,8 @@ public partial class MapEditor : Control
 		_mapWorldsEdit.Text = string.Join(", ", doc.Worlds ?? new List<string>());
 		_mapHardshipEdit.Text = string.Join(", ", doc.HardshipLevels ?? new List<int>());
 		_mapGoalsEdit.Text = string.Join(", ", doc.Goals ?? new List<string> { CombatMapGoals.Claim });
-		_mapTerrainSelect.Select(doc.Terrain == CombatMapTerrain.High ? 1 : doc.Terrain == CombatMapTerrain.Lowground ? 2 : 0);
+		_mapTerrainSelect.Select(doc.Terrain == "*" ? 3
+			: doc.Terrain == CombatMapTerrain.High ? 1 : doc.Terrain == CombatMapTerrain.Lowground ? 2 : 0);
 
 		FoeComposition composition = FindDefaultComposition(doc);
 		_mapCrabWeight.Value = composition?.CrabWeight ?? 60;
@@ -622,7 +626,8 @@ public partial class MapEditor : Control
 		var afterWorlds = ParseWords(_mapWorldsEdit.Text, false);
 		var afterLevels = ParseLevels(_mapHardshipEdit.Text);
 		var afterGoals = ParseWords(_mapGoalsEdit.Text, true);
-		string afterTerrain = _mapTerrainSelect.Selected == 1 ? CombatMapTerrain.High
+		string afterTerrain = _mapTerrainSelect.Selected == 3 ? "*"
+			: _mapTerrainSelect.Selected == 1 ? CombatMapTerrain.High
 			: _mapTerrainSelect.Selected == 2 ? CombatMapTerrain.Lowground : CombatMapTerrain.SeaLevel;
 		var afterCompositions = new List<FoeComposition>
 		{

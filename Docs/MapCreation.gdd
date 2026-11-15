@@ -478,12 +478,61 @@ The unsaved-changes dot derives from stack position vs. last-saved marker.
 
 ### 7.8 Map browser
 
-- Grid of cards: **name (fixing the blank-name bug), world, WxH, last-saved date**.
-- Actions: Create (name prompt → opens editor), Open, Rename, Duplicate, Delete
-  (confirm dialog). Duplicate gets a fresh id.
+The screen behind the menu's **Map Creation** button: every map that can be played or
+edited, as a wall of cards (rebuilt in v0.10.7).
+
+- **Layout.** Title row — name on the left; the **search box**, Create and Back on the right.
+  Under it the **realm strip**, the realm selector: one chip per realm (All realms, Beach,
+  Starfield, Wulin, Dungeon, Ghost Town, Cloud Court, plus "No realm" while anything is
+  untagged), each in its world's overworld colour, with the number of maps it would show;
+  the running count sits at the right end of the row. Then the filter row: Level, Goal,
+  Terrain, Source (all / built-in / mine), Sort (recently edited / name / realm), **Show
+  unfinished** and **Clean up**. The wall is always **4 cards to a row** and scrolls
+  vertically only. Nothing on a card has a minimum width of its own — a name wraps to two
+  lines, details clip — so the wall cannot be wider than the window (an unclipped long name
+  is what made the old one overflow).
+- **Card.** The background is a picture of the map itself, rendered on the spot by the same
+  builder that draws it in play (`MapThumbnailRenderer` → `MapVisualBuilder`). No thumbnail
+  files exist, so a picture is never stale. Laid over the picture's top: badges (realm,
+  level, Built-in / Edited copy, Unfinished), the **name in bold**, and two small lines —
+  goals · terrain, then size · last-saved date. A side-view arena keeps its sky at the top,
+  so the words cover the least and the floor stays in view. Under the picture, a footer with
+  one primary action (Open, or Edit Copy on a built-in map) and a ⋯ menu (Rename, Duplicate,
+  Delete — with a confirm dialog). Double-clicking the picture is the primary action. A card
+  keeps its picture's shape: a wider window makes cards larger, never cropped.
+- **What the picture shows** (`MapThumbnailFraming` — pure, self-tested). Not the whole
+  grid: a sparse map is mostly sky. Vertically it frames the *band* — the shortest run of
+  rows holding 85% of the battlefield's structure, so a few clouds do not stretch it — scaled
+  to fill the part of the picture the name leaves clear, and standing on the picture's bottom
+  edge. Horizontally it takes the stretch of columns with the most in it, the middle of the
+  map on a tie. It never crosses a map edge and never shows less than 45% of a map's width.
+- **Search and filters.** Search matches every word typed against what a card says: name,
+  id, realm and world, goals, terrain, levels as `lv3`, built-in / mine / edited copy,
+  unfinished. Level, goal and terrain ask "could this map be dealt to such a node?" (§9), so
+  a map that serves every level or every terrain passes any choice. Filter state survives
+  the trip to the editor and back.
+- **Built-in maps** (`res://Maps`) are listed beside the user's (`user://maps`) and are
+  never written to. **Edit Copy** saves `user://maps/<id>.json` with the same id, which
+  replaces the built-in map in play (§9). It never overwrites a file that is already there:
+  a readable copy is opened; an unreadable one is moved to the archive first, and only on a
+  yes.
+- **Unfinished maps.** `MapReadiness` is the one definition of "can be fought on": ground,
+  exactly one character spawn, an enemy spawn, and a level-goal marker unless the map serves
+  Slaughter alone. A map that fails it is hidden behind **Show unfinished**, dimmed, labelled
+  with what it still needs — and never dealt to a run (§9). The map most recently opened
+  from the browser stays on the wall regardless, so a map you just created does not vanish.
+  The wall shows what a run would use: an unfinished copy of a built-in map leaves the
+  built-in card standing and is listed beside it as a draft.
+- **Clean up** moves the user's unfinished maps, and stray `*.json` files that are not maps,
+  into `user://maps/_archive/<timestamp>/` after a confirmation listing every file. Nothing
+  is deleted; built-in maps are never touched.
+- **Create** asks for a name and a **realm**. The realm tags the map for that world, sets
+  its canvas to the colour that realm's art is painted against, and is the tile kit the
+  editor's palette opens on (§2.6). It defaults to the realm the wall is showing. Level,
+  goals and terrain are set in the editor (Map info).
 - **File identity is a GUID**, generated at creation, never derived from the name —
   renames are metadata edits, and two maps named "Untitled" coexist peacefully
-  (fixes the v0.5.x overwrite-collapse bug).
+  (fixes the v0.5.x overwrite-collapse bug). Duplicate gets a fresh id.
 
 ## 8. Persistence
 
@@ -533,16 +582,27 @@ The unsaved-changes dot derives from stack position vs. last-saved marker.
   body wading through a lava pool is ticked once, not once per tile it straddles. A map-authored
   hazard draws its telegraph as an outline only — the tile's sprite is its look.
 - `CombatMapCatalog` + `CombatMapRuntime` are the normal-adventure consumers. At
-  `RunState.BeginAdventure`, the catalog scans built-in `res://Maps/*.json` and authored
-  `user://maps/*.json`, filters by the node snapshot, sorts candidates by immutable map id,
-  and makes one deterministic `DetRandom(seed + ":combat-map:" + nodeId)` choice. Only the
-  selected absolute path enters `AdventureContext`; `GameManager` reloads that exact map and
-  never reads the overworld graph. No match is a logged content error and falls back to the
-  legacy Arena, preserving direct-F5 debugging.
+  `RunState.BeginAdventure`, the catalog scans authored `user://maps/*.json` before built-in
+  `res://Maps/*.json`: a user map with the same immutable id is a local override, while an
+  absent override falls back to the shipped map. **Only a map that passes `MapReadiness`
+  (§7.8) is a candidate.** A new map answers to every world and level until its author narrows
+  it, so nothing but readiness keeps an empty draft out of a run; an unfinished map is skipped
+  without claiming its id, so a half-edited copy falls back to the shipped map as well. The
+  catalogue then filters by the node snapshot, sorts candidates by immutable map id, and makes
+  one deterministic `DetRandom(seed + ":combat-map:" + nodeId)` choice. Only the selected
+  absolute path enters `AdventureContext`; `GameManager` reloads that exact map and never reads
+  the overworld graph. No match is a logged content error and falls back to the legacy Arena,
+  preserving direct-F5 debugging. `MapContentCheck` guards against that error for shipped
+  content: it asks the catalogue, shipped maps only, about every kind of outer-world combat
+  node — LV1–3 with each ordinary mission, the LV4 boss, at each altitude band — and fails a
+  world that leaves one without a map.
 - `MapDocument` v2 owns combat-map selection data. `worlds` (empty = all),
   `hardshipLevels` (empty = all), `goals` (new-map default `claim`), and `terrain`
   (default `sea-level`) are conjunctive filters. A literal terrain `*` matches all three
-  altitude bands for a realm/level-authored map. Values within `worlds`/`goals` are ORed.
+  altitude bands for a realm/level-authored map; a realm that ships a single map must use it,
+  or two nodes in three fall back to the legacy Arena (the beach set and the five realm maps
+  all do). The editor's Map info dialog offers it as **Any terrain**. Values within
+  `worlds`/`goals` are ORed.
   `claim` is the map-data name for the runtime `Collection` mission. Canonical terrain values are
   `sea-level`, `high-ground`, and `low-ground`; each outer-world node receives one from its
   seeded altitude field. Legacy `high` and `lowground` values migrate on load. v1's singular
@@ -552,7 +612,8 @@ The unsaved-changes dot derives from stack position vs. last-saved marker.
   nest; `goal.level` supplies Wonder Core points for claim, the Condensed Core point for protect,
   and destroy-objective points for destroy. Slaughter does not consult `goal.level`. Missing
   markers log a warning and use the legacy placement fallback so a bad custom map cannot crash a
-  permadeath run.
+  permadeath run. (Selection no longer deals such a map — readiness, above — so the fallback now
+  only guards a file that changes on disk between selection and arena entry.)
 - Map data also owns `foeCompositions` (level 0 = map default; crab/seagull weights) and optional
   `foeSpawnRules` keyed to authored marker-row Y. The periodic spawner produces one foe every
   4 s, filters types with no eligible nest *before* its weighted roll, and each spawned foe
@@ -573,9 +634,14 @@ Scripts/MapCreation/
     HillAutotile.cs / AutotileAtlas.cs / AutotileProbe.cs / TileVisualResolver.cs   §2.5
     TileManifest*.cs / TileSetAudit.cs   sidecars, and the registry-vs-art audit (§2.6)
     RuleResolver.cs        §6 zone grouping + seeded placement (pure, testable)
+    MapReadiness.cs        "can this map be fought on?" — one answer for the browser,
+                           the run's map selection and the content check (§7.8, §9)
+    MapThumbnailFraming.cs which part of a map its browser card pictures (§7.8)
     MapJson.cs             versioned (de)serialization, atomic save
   Editor/                  (PRESENTATION)
-    MapBrowser.cs          §7.8
+    MapBrowser.cs          §7.8 — state, listing, search/filters, actions
+    MapBrowserCards.cs     §7.8 — the look: cards, badges, realm chips (same partial class)
+    MapThumbnailRenderer.cs  card pictures, rendered off-screen through MapVisualBuilder
     MapEditor.cs           shell: builds panels, routes input to active tool
     GridView.cs            the world-draw child control (§7.6): grid, tiles, ghosts,
                            layer dimming, sketchlines, rule overlays, effect areas
@@ -593,6 +659,7 @@ Scripts/MapCreation/
     MapHazardFactory.cs       hazard tiles -> runtime hazards, by data; pool merging
   Dev/
     MapContentCheck.cs        headless: self-tests + audit + builds every built-in map
+                              + asks the catalogue whether every node kind has a map
     MapScreenshot.cs          renders built-in maps to PNG through the real runtime
 Scenes/MapCreation/MapBrowser.tscn, MapEditor.tscn   (thin roots, no fabricated uid=)
 Scenes/MapCreation/MapContentCheck.tscn, MapScreenshot.tscn   (dev tools, 40-QA.md)
@@ -665,6 +732,17 @@ the closeview blur shader is dropped (closeview is real scenery now, §1, not a 
 - **Combat-map filters are metadata, not map-graph state.** A node snapshots world,
   hardship, goal, and terrain; map selection is deterministic at the scene boundary, then the
   arena receives only a chosen map path. This keeps combat independent of the overworld.
+- **Built-in maps are edited through same-ID local overrides.** The browser never writes into
+  `res://`; Edit Copy saves the map under `user://maps/<id>.json`, and catalogue priority makes
+  that editable copy replace exactly its built-in source without adding a sixth candidate.
+- **One definition of "finished", three users (v0.10.7).** `MapReadiness` hides a map in the
+  browser, keeps it out of a run, and fails a shipped map in the content check. Hiding drafts
+  in the browser alone would have tidied what the author sees while a run still dealt them.
+- **A card pictures the content, not the grid, and its words go over the sky (v0.10.7).**
+  Rendered live rather than stored, so it cannot go stale; framed on where the structure is,
+  so a sparse map is not a card of empty sky; named along the top, so the floor is not
+  covered. The realm selector is a strip of chips rather than a drop-down: six realms fit on
+  a row, and a chip shows its colour and count without being opened.
 - **`goal.level` is mission-relative.** One authoring tile stays extensible: it is a claim-core
   spawn, protect-core placement, or destroy-target placement based on the node goal; Slaughter
   deliberately has no use for it. A LV4 Boss map also uses its authored goal marker as the

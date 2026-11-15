@@ -6,7 +6,7 @@
   "Worlds": ["TD"],
   "HardshipLevels": [],
   "Goals": ["claim", "protect", "destroy", "slaughter"],
-  "Terrain": "sea-level",
+  "Terrain": "*",
   "FoeCompositions": [{"Level": 0, "CrabWeight": 50, "SeagullWeight": 50}],
   "FoeSpawnRules": {"CrabMaxCellY": null, "SeagullMinCellY": null},
   "CreatedUtc": "2026-11-13T00:00:00.0000000Z",

@@ -9,10 +9,15 @@ using Fableland.MapCreation.Data;
 using Fableland.Run;
 
 /// <summary>
-/// Orchestration-side catalogue for authored combat maps. It reads built-in maps first and then
-/// user-created maps, filters by the immutable adventure context, and makes a deterministic
-/// choice from the remaining entries. Map JSON remains pure data; only this scene-layer bridge
-/// knows about Godot paths and the run's RNG.
+/// Orchestration-side catalogue for authored combat maps. It reads user-created maps before
+/// built-ins, so an editor-made file with the same immutable id is a safe local override. It
+/// then filters by the immutable adventure context and makes a deterministic choice from the
+/// remaining entries. Map JSON remains pure data; only this scene-layer bridge knows about Godot
+/// paths and the run's RNG.
+///
+/// Only maps that can be fought on are candidates (<see cref="MapReadiness"/>, the same test
+/// the browser's "Unfinished" badge uses). A draft in <c>user://maps</c> — a new map is tagged
+/// "every world, every level" until its author narrows it — must never be dealt to a run.
 /// </summary>
 public static class CombatMapCatalog
 {
@@ -22,15 +27,41 @@ public static class CombatMapCatalog
     public static CombatMapSelection Select(string seed, string nodeId, string world, int hardship,
         MissionType mission, string terrain)
     {
-        List<CombatMapSelection> candidates = LoadAll();
-        string goal = GoalFor(mission);
-        string terrainKey = Normalize(terrain);
-        candidates.RemoveAll(c => !Matches(c.Document, world, hardship, goal, terrainKey));
+        List<CombatMapSelection> candidates = Candidates(world, hardship, GoalFor(mission), terrain);
         if (candidates.Count == 0) return null;
 
-        candidates.Sort((a, b) => string.CompareOrdinal(a.Document.Id, b.Document.Id));
         var rng = new DetRandom((seed ?? "debug") + ":combat-map:" + (nodeId ?? "debug"));
         return candidates[rng.Range(0, candidates.Count - 1)];
+    }
+
+    /// <summary>
+    /// Every map a node with these attributes could be dealt, in the stable id order
+    /// <see cref="Select"/> draws from. <paramref name="includeUserMaps"/> = false looks at the
+    /// shipped maps alone, which is what the headless content check audits: its answer must
+    /// not depend on what happens to sit in one developer's <c>user://maps</c>.
+    /// </summary>
+    public static List<CombatMapSelection> Candidates(string world, int hardship, string goal,
+        string terrain, bool includeUserMaps = true)
+    {
+        return CandidatesIn(includeUserMaps ? ProjectSettings.GlobalizePath(UserDirectory) : null,
+            ProjectSettings.GlobalizePath(BuiltInDirectory), world, hardship, goal, terrain);
+    }
+
+    /// <summary>The selection rule over two explicit folders (the user's first, so its copies
+    /// win). <see cref="SelfTest"/> points it at scratch folders.</summary>
+    private static List<CombatMapSelection> CandidatesIn(string userDirectory, string builtInDirectory,
+        string world, int hardship, string goal, string terrain)
+    {
+        var candidates = new List<CombatMapSelection>();
+        var seenIds = new HashSet<string>();
+        LoadDirectory(userDirectory, false, candidates, seenIds);
+        LoadDirectory(builtInDirectory, true, candidates, seenIds);
+
+        string goalKey = Normalize(goal);
+        string terrainKey = Normalize(terrain);
+        candidates.RemoveAll(c => !Matches(c.Document, world, hardship, goalKey, terrainKey));
+        candidates.Sort((a, b) => string.CompareOrdinal(a.Document.Id, b.Document.Id));
+        return candidates;
     }
 
     /// <summary>Load the exact selection stored in AdventureContext. A missing/corrupt map is a
@@ -51,16 +82,8 @@ public static class CombatMapCatalog
         _ => CombatMapGoals.Claim,
     };
 
-    private static List<CombatMapSelection> LoadAll()
-    {
-        var loaded = new List<CombatMapSelection>();
-        var seenIds = new HashSet<string>();
-        LoadDirectory(ProjectSettings.GlobalizePath(BuiltInDirectory), loaded, seenIds);
-        LoadDirectory(ProjectSettings.GlobalizePath(UserDirectory), loaded, seenIds);
-        return loaded;
-    }
-
-    private static void LoadDirectory(string directory, List<CombatMapSelection> loaded, HashSet<string> seenIds)
+    private static void LoadDirectory(string directory, bool builtIn, List<CombatMapSelection> loaded,
+        HashSet<string> seenIds)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
         string[] paths;
@@ -76,7 +99,19 @@ public static class CombatMapCatalog
         {
             MapDocument doc = MapJson.Load(path, out var warnings);
             foreach (string warning in warnings) GD.PushWarning("[CombatMapCatalog] " + warning);
-            if (doc == null || string.IsNullOrWhiteSpace(doc.Id) || !seenIds.Add(doc.Id)) continue;
+            if (doc == null || string.IsNullOrWhiteSpace(doc.Id) || seenIds.Contains(doc.Id)) continue;
+
+            // An unfinished map is skipped WITHOUT claiming its id, so a half-edited copy of a
+            // built-in map falls back to the shipped one instead of hiding it. A user's draft
+            // is ordinary and stays quiet; an unfinished shipped map is a content error.
+            if (!MapReadiness.IsReady(doc))
+            {
+                if (builtIn)
+                    GD.PushWarning($"[CombatMapCatalog] built-in map '{doc.Name}' is not playable ({string.Join(", ", MapReadiness.Problems(doc))}); skipped.");
+                continue;
+            }
+
+            seenIds.Add(doc.Id);
             loaded.Add(new CombatMapSelection { AbsolutePath = path, Document = doc });
         }
     }
@@ -116,6 +151,79 @@ public static class CombatMapCatalog
     }
 
     private static string Normalize(string value) => (value ?? "").Trim().ToLowerInvariant();
+
+    /// <summary>
+    /// Guards what a run may be dealt, against scratch folders: a draft is never a candidate
+    /// (a new map answers to every world and level until its author narrows it, so nothing
+    /// but readiness keeps it out), an unfinished copy of a shipped map falls back to the
+    /// shipped one, a finished copy replaces it, and "*" terrain serves every altitude band.
+    /// </summary>
+    public static List<string> SelfTest()
+    {
+        var failures = new List<string>();
+        void Check(bool ok, string what) { if (!ok) failures.Add("CombatMapCatalog mismatch: " + what); }
+
+        string root = Path.Combine(Path.GetTempPath(), "fableland-catalog-selftest-" + Guid.NewGuid().ToString("N"));
+        string shipped = Path.Combine(root, "shipped");
+        string mine = Path.Combine(root, "mine");
+        try
+        {
+            Directory.CreateDirectory(shipped);
+            Directory.CreateDirectory(mine);
+
+            MapDocument Playable(string id, string name)
+            {
+                MapDocument doc = MapDocument.CreateNew(name);
+                doc.Id = id;
+                MapLayerData field = MapDocumentQueries.Battlefield(doc);
+                field.Tiles.Add(new PlacedTile { DefId = "ground.stone", X = 0, Y = 10 });
+                field.Tiles.Add(new PlacedTile { DefId = "spawn.character", X = 1, Y = 9 });
+                field.Tiles.Add(new PlacedTile { DefId = "spawn.enemy", X = 5, Y = 9 });
+                field.Tiles.Add(new PlacedTile { DefId = "goal.level", X = 3, Y = 9 });
+                return doc;
+            }
+
+            // what a VK LV1 claim node would be dealt at the given altitude, as "id@folder"
+            string Dealt(string terrain)
+            {
+                var names = new List<string>();
+                foreach (CombatMapSelection c in CandidatesIn(mine, shipped, "VK", 1, CombatMapGoals.Claim, terrain))
+                    names.Add(c.Document.Id + "@" + (c.AbsolutePath.StartsWith(mine, StringComparison.Ordinal) ? "mine" : "shipped"));
+                return string.Join(",", names);
+            }
+
+            MapJson.Save(Playable("arena", "Arena"), Path.Combine(shipped, "arena.json"));
+            Check(Dealt(CombatMapTerrain.SeaLevel) == "arena@shipped", "a shipped map is a candidate");
+
+            MapJson.Save(MapDocument.CreateNew("Draft"), Path.Combine(mine, "draft.json"));
+            Check(Dealt(CombatMapTerrain.SeaLevel) == "arena@shipped", "an empty draft is never dealt to a run");
+
+            MapDocument halfEdited = Playable("arena", "Arena (editing)");
+            MapDocumentQueries.Battlefield(halfEdited).Tiles.RemoveAll(tile => tile.DefId == "spawn.character");
+            MapJson.Save(halfEdited, Path.Combine(mine, "arena.json"));
+            Check(Dealt(CombatMapTerrain.SeaLevel) == "arena@shipped", "an unfinished copy falls back to the shipped map");
+
+            MapJson.Save(Playable("arena", "Arena (edited)"), Path.Combine(mine, "arena.json"));
+            Check(Dealt(CombatMapTerrain.SeaLevel) == "arena@mine", "a finished copy replaces the shipped map");
+
+            Check(Dealt(CombatMapTerrain.High) == "", "a sea-level map does not serve high ground");
+            MapDocument everywhere = Playable("arena", "Arena (any terrain)");
+            everywhere.Terrain = "*";
+            MapJson.Save(everywhere, Path.Combine(mine, "arena.json"));
+            Check(Dealt(CombatMapTerrain.High) == "arena@mine" && Dealt(CombatMapTerrain.Lowground) == "arena@mine",
+                "a '*' map serves every altitude band");
+        }
+        catch (Exception e)
+        {
+            failures.Add("CombatMapCatalog self-test threw: " + e.Message);
+        }
+        finally
+        {
+            try { if (Directory.Exists(root)) Directory.Delete(root, true); }
+            catch { /* a leftover scratch folder in the temp directory is harmless */ }
+        }
+        return failures;
+    }
 }
 
 /// <summary>One validated map candidate plus the path used to reload it at arena entry.</summary>

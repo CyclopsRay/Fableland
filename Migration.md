@@ -9,6 +9,30 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.10.7** — **The realm maps actually reach the player, and the map browser is rebuilt.**
+  Three separate reasons the v0.10.6 maps were not seen. (1) A run's map selection treated
+  every file in `user://maps` as playable: an empty or half-built draft — which answers to
+  every world and level until its author narrows it — was dealt to fights, usually ahead of
+  the real map. Selection now only deals maps that pass `MapReadiness` (ground, one character
+  spawn, an enemy spawn, a goal marker), and an unfinished copy of a built-in map falls back
+  to the built-in. (2) The five realm maps were tagged `sea-level`, so two combat nodes in
+  three in those worlds opened the legacy arena; they now serve every terrain band (`*`, the
+  map kit's default), and the editor's Map info dialog can express `*` instead of silently
+  narrowing it. (3) The browser listed only the user's own maps; the built-in maps, where the
+  realm maps live, were never shown. **Map browser:** always four cards to a row and never
+  wider than the window; each card is a live picture of the map with a bold name, small
+  details and realm / level / status badges; a realm strip (the realm selector, one coloured
+  chip per realm with counts), a search box, and filters for level, goal, terrain, source and
+  sort; unfinished maps are hidden behind a toggle and can be archived (never deleted) with
+  Clean up; built-in maps are listed and edited through a same-id copy; Create asks for a
+  realm. Card pictures are framed on what is built, not on the whole grid, so a sparse beach
+  map shows its floor and towers instead of sky. **Checks:** the headless content check now
+  fails a shipped map that is not playable and a world with a kind of combat node no shipped
+  map serves, and self-tests cover selection and picture framing. (Verification: `dotnet
+  build`, 0 errors/warnings; headless content check, 293 checks, coverage 39/39 for all six
+  worlds, plus two mutation runs proving the new checks fail on the old behaviour; the browser
+  screenshotted in-engine at three window shapes; create / edit copy / clean up exercised end
+  to end against a scratch save folder.)
 - **0.10.6** — **Realm tile sets: every world gets its own art and its own kind of arena.**
   Five new combat-map tile sets, each in a different medium, with one built-in map apiece:
   **Starfield** (Starland — flat minimalist poster; vast and empty, colossal stone monuments;

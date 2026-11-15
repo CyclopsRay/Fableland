@@ -28,6 +28,9 @@ public static class TileSets
         public string Id { get; init; }
         /// <summary>Palette label: world name, then the realm's art identity.</summary>
         public string DisplayName { get; init; }
+        /// <summary>The realm's short name as the combat layer calls it ("Wulin", "Dungeon") —
+        /// what a map card's badge says.</summary>
+        public string RealmName { get; init; }
         /// <summary>Overworld world abbreviation (`MapGDD.md` §2), or null for <see cref="Core"/>.</summary>
         public string WorldAbbr { get; init; }
         /// <summary>The paper/sky colour this realm's art is painted against — the suggested
@@ -38,13 +41,13 @@ public static class TileSets
     /// <summary>Palette order. <see cref="Core"/> first: it is always shown.</summary>
     public static readonly IReadOnlyList<Info> All = new List<Info>
     {
-        new() { Id = Core, DisplayName = "Shared", WorldAbbr = null, CanvasColor = "#87CEEB" },
-        new() { Id = VanillaKingdom, DisplayName = "Vanilla Kingdom · Beach", WorldAbbr = "VK", CanvasColor = "#6DB8D8" },
-        new() { Id = Starland, DisplayName = "Starland · Starfield", WorldAbbr = "SL", CanvasColor = "#17133A" },
-        new() { Id = BambooMaze, DisplayName = "Banboo Maze · Wulin", WorldAbbr = "BM", CanvasColor = "#EFE7D4" },
-        new() { Id = HollowCastle, DisplayName = "HollowCastle · Dungeon", WorldAbbr = "HC", CanvasColor = "#0E0D12" },
-        new() { Id = TheDeserted, DisplayName = "The Deserted · Ghost Town", WorldAbbr = "TD", CanvasColor = "#F1E3C4" },
-        new() { Id = PalaceOfLoong, DisplayName = "Palace of Loong · Cloud Court", WorldAbbr = "PL", CanvasColor = "#2A1B4A" },
+        new() { Id = Core, DisplayName = "Shared", RealmName = "Shared", WorldAbbr = null, CanvasColor = "#87CEEB" },
+        new() { Id = VanillaKingdom, DisplayName = "Vanilla Kingdom · Beach", RealmName = "Beach", WorldAbbr = "VK", CanvasColor = "#6DB8D8" },
+        new() { Id = Starland, DisplayName = "Starland · Starfield", RealmName = "Starfield", WorldAbbr = "SL", CanvasColor = "#17133A" },
+        new() { Id = BambooMaze, DisplayName = "Banboo Maze · Wulin", RealmName = "Wulin", WorldAbbr = "BM", CanvasColor = "#EFE7D4" },
+        new() { Id = HollowCastle, DisplayName = "HollowCastle · Dungeon", RealmName = "Dungeon", WorldAbbr = "HC", CanvasColor = "#0E0D12" },
+        new() { Id = TheDeserted, DisplayName = "The Deserted · Ghost Town", RealmName = "Ghost Town", WorldAbbr = "TD", CanvasColor = "#F1E3C4" },
+        new() { Id = PalaceOfLoong, DisplayName = "Palace of Loong · Cloud Court", RealmName = "Cloud Court", WorldAbbr = "PL", CanvasColor = "#2A1B4A" },
     };
 
     public static bool TryGet(string id, out Info info)

@@ -7,6 +7,7 @@ using Godot;
 using Fableland.Map;
 using Fableland.MapCreation.Data;
 using Fableland.MapCreation.Runtime;
+using Fableland.Run;
 
 /// <summary>
 /// Headless content check for the map layer (40-QA.md §2 "real build / Godot --headless").
@@ -14,6 +15,8 @@ using Fableland.MapCreation.Runtime;
 /// tile sprite, then builds every built-in `res://Maps/*.json` through the same
 /// <see cref="CombatMapRuntime"/> path a real run uses and checks it is playable: the
 /// markers each of its goals needs, a usable nest for both foe types, tiles from one realm.
+/// Last, it asks the run's own map selection (<see cref="CombatMapCatalog"/>) whether every
+/// kind of combat node in every world would be dealt a shipped map.
 ///
 ///     Godot --headless --path . res://Scenes/MapCreation/MapContentCheck.tscn
 ///
@@ -32,6 +35,7 @@ public partial class MapContentCheck : Node
             RunDomainSelfTests();
             CheckTileAssets();
             CheckBuiltInMaps();
+            CheckRealmCoverage();
         }
         catch (Exception e)
         {
@@ -68,6 +72,9 @@ public partial class MapContentCheck : Node
         Absorb("HillAutotile", HillAutotile.SelfTest());
         Absorb("TileVisualResolver", TileVisualResolver.SelfTest());
         Absorb("AutotileProbe", AutotileProbe.SelfTest());
+        Absorb("MapReadiness", MapReadiness.SelfTest());
+        Absorb("MapThumbnailFraming", MapThumbnailFraming.SelfTest());
+        Absorb("CombatMapCatalog", CombatMapCatalog.SelfTest());
         Absorb("TileManifestLoader", TileManifestLoader.SelfTest());
         Absorb("TileManifestLoader fixtures", TileManifestLoader.SelfTestFixtures(root));
         Absorb("TileSetAudit", TileSetAudit.Run(root));
@@ -118,6 +125,10 @@ public partial class MapContentCheck : Node
             if (doc == null) continue;
 
             Expect(ids.Add(doc.Id), $"{name}: map id '{doc.Id}' is used by another built-in map");
+            // The one definition of "finished" the browser and the run's selection share: a
+            // shipped map that fails it would be silently skipped by CombatMapCatalog.
+            List<string> unfinished = MapReadiness.Problems(doc);
+            Expect(unfinished.Count == 0, $"{name}: not playable — {string.Join(", ", unfinished)}");
             CheckWorlds(name, doc);
             CheckTileSetPurity(name, doc);
 
@@ -146,6 +157,45 @@ public partial class MapContentCheck : Node
 
             world.Free();
             hazards.Free();
+        }
+    }
+
+    /// <summary>
+    /// Would a run always be dealt a shipped map? Walks every kind of combat node the
+    /// overworld can roll in an outer world — LV1–3 with each ordinary mission, the LV4 boss —
+    /// at each altitude band, and asks <see cref="CombatMapCatalog"/> (shipped maps only, so
+    /// the answer does not depend on this machine's <c>user://maps</c>) for candidates. A kind
+    /// with none sends the player to the legacy arena, which is how a realm whose only map was
+    /// tagged for one altitude band stayed invisible on two nodes in three (v0.10.7).
+    /// The VOID's own nodes (zone "XX", LV5–6) have no authored maps yet and are not walked.
+    /// </summary>
+    private void CheckRealmCoverage()
+    {
+        string[] terrains = { CombatMapTerrain.Lowground, CombatMapTerrain.SeaLevel, CombatMapTerrain.High };
+        MissionType[] ordinary = { MissionType.Collection, MissionType.Protect, MissionType.Destroy, MissionType.Slaughter };
+        MissionType[] boss = { MissionType.Boss };   // LV4 is structural (MapGenerator.RollMissions)
+
+        foreach (WorldDef world in WorldDef.Pool)
+        {
+            var missing = new List<string>();
+            int kinds = 0;
+            for (int level = 1; level <= 4; level++)
+            {
+                foreach (MissionType mission in level == 4 ? boss : ordinary)
+                {
+                    foreach (string terrain in terrains)
+                    {
+                        kinds++;
+                        string goal = CombatMapCatalog.GoalFor(mission);
+                        if (CombatMapCatalog.Candidates(world.Abbr, level, goal, terrain, includeUserMaps: false).Count == 0)
+                            missing.Add($"LV{level} {mission} {terrain}");
+                    }
+                }
+            }
+
+            GD.Print($"  coverage {world.Abbr,-3} {kinds - missing.Count}/{kinds} kinds of combat node are served by a shipped map");
+            Expect(missing.Count == 0,
+                $"{world.Abbr} ({world.Name}): {missing.Count} of {kinds} kinds of combat node have no shipped map and fall back to the legacy arena — e.g. {string.Join("; ", missing.GetRange(0, Math.Min(3, missing.Count)))}");
         }
     }
 

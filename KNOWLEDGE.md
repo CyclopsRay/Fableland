@@ -98,6 +98,97 @@ the Anaconda `python3` first on the PATH has a broken numpy (missing MKL) and di
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A commit in a session worktree is not in the checkout the game is run from (v0.10.7, "the new maps weren't loaded")
+- **Symptom:** v0.10.6 — five realm tile sets and maps — was committed on a session branch in
+  its own worktree under `.claude/worktrees/`. The game is launched from the main checkout,
+  on another branch, which never received that commit: the developer saw only their old maps
+  and no realm selector, and the next session spent its first half-hour finding the work.
+- **Rule:** a hand-off for work done in a worktree states (a) the branch and the worktree
+  folder it is on, (b) that the main checkout does **not** have it, and (c) how to see it:
+  open that worktree's folder as the Godot project, or merge the branch into the branch that
+  is actually run. Before debugging "my change is not in the game", run `git worktree list`
+  and compare `VERSION` in the folder being launched — the version label top-left in game
+  says which build is on screen.
+- **Why:** a worktree is a different folder with its own `res://`; "committed" answers "is it
+  saved", not "is it where the game starts from". `user://` (saved maps, save slots) is the
+  opposite: one folder shared by every checkout, so a test run from any worktree reads and
+  writes the developer's real maps.
+
+### A run must never be dealt a map its author has not finished (v0.10.7, combat-map selection)
+- **Symptom:** fights opened on empty or half-built maps, and in the new realms the realm map
+  was rarely the one chosen. `CombatMapCatalog` treated every readable file in `user://maps`
+  as a candidate, and a new map answers to every world and every level (goal `claim`,
+  terrain `sea-level`) until its author narrows it — so each abandoned draft competed for
+  every sea-level Collection node in every world, usually outnumbering the real map.
+- **Rule:** selection only deals maps that pass `MapReadiness` — the same test behind the
+  browser's "Unfinished" badge and the content check. An unfinished map is skipped *without*
+  claiming its id, so a half-edited copy of a built-in map falls back to the built-in. Any
+  new reader of map files asks `MapReadiness`; nobody invents a second notion of "valid".
+  `CombatMapCatalog.SelfTest` pins this against scratch folders.
+- **Why:** "everything in the folder" is the editor's view of the store, not the game's. The
+  defaults that make a new map easy to try (it answers to everything) are exactly what made
+  it eligible for everything.
+
+### One default narrowed five maps to a third of their nodes; a dialog that cannot show a value destroys it (v0.10.7)
+- **Symptom:** the realm maps were written with the map kit's default terrain, `sea-level` —
+  the editor's own default. Nodes get low / sea-level / high ground from altitude and
+  selection wants an exact match, so two combat nodes in three in those worlds opened the
+  legacy arena: "the map did not load". Separately, the editor's Map info dialog had no entry
+  for `*`: such a map opened showing "Sea-level", and Apply wrote that back.
+- **Rule:** a realm with one map tags it `*` (the map kit's default now); give maps exact
+  bands only when a realm has one per band. `MapContentCheck` walks every kind of combat node
+  per world and fails one that no shipped map serves. A dialog must be able to display every
+  value its field can hold — otherwise opening it and pressing Apply is a silent edit.
+- **Why:** selection filters are conjunctive, so each "sensible default" multiplies down what
+  a map can serve, and the fallback is silent and looks like a loading failure.
+
+### A browser action must not write over a file that is already there (v0.10.7, Edit Copy)
+- **Symptom (caught before it shipped):** once an unfinished copy of a built-in map leaves
+  the built-in card on the wall, that card's Edit Copy meets an existing `user://maps/<id>.json`
+  — and its first version saved the built-in map straight over it.
+- **Rule:** Edit Copy opens a readable copy that already exists, finished or not. An
+  unreadable file is moved to `maps/_archive/` first, and only after asking. Clean up also
+  only ever moves. Same family as "an unreadable save slot is not an empty save slot" (v0.9.0).
+- **Why:** when one id can have two files (shipped and local), "create the local one" and
+  "the local one exists" are different states that the same button reaches.
+
+### A map card: words over the sky, a picture framed on what is built, and a height that cannot chase the scrollbar (v0.10.7, map browser)
+- **Symptom:** the first card design pictured the whole grid with the name block over the
+  bottom. A sparse beach map came out as a card of empty sky with its floor, towers and palms
+  hidden under the text. Then, on a wide window, `KeepAspectCovered` cropped the floor off.
+- **Rule:** `MapThumbnailFraming` chooses the frame from the battlefield's structure (the band
+  of rows holding most of it, standing on the picture's bottom edge); the name block sits
+  over the top, where a side-view map keeps its sky; and `MapBrowser.FitCards` gives a card
+  the height that keeps its picture's shape. That height is derived from the scroll area's
+  width with the scrollbar's width always set aside — never from the grid's own width.
+- **Why:** a side-view arena's content is at the bottom, so "fit the grid" and "caption at the
+  bottom" each hide it. And any height computed from a width inside a `ScrollContainer` feeds
+  back: taller cards summon the scrollbar, which narrows them, which dismisses it.
+
+### A negative `line_spacing` on a wrapping, line-limited Label hides its last line (v0.10.7, map browser)
+- **Symptom:** card names use `AutowrapMode` with `MaxLinesVisible = 2`. With a
+  `line_spacing = -1` theme override to tighten them, every two-line name drew its first line
+  ending in an ellipsis and left the second line blank; the label was still two lines tall.
+- **Rule:** no negative `line_spacing` on an autowrapped Label that limits or trims its lines.
+  To tighten lines, change the font size or the font's own spacing instead.
+- **Why:** the Label decides how many lines fit by adding `line height + line_spacing` per
+  line and comparing against its height; with a negative spacing the last line misses by a
+  pixel, so it believes one line fits — and trims that one.
+
+### Testing anything that writes to `user://`: use a scratch `HOME`, and mind hand-made JSON (v0.10.7, reference)
+- `user://maps` holds the developer's real maps and is shared by every checkout. On macOS
+  Godot derives `user://` from `$HOME` (`XDG_DATA_HOME` and `CFFIXED_USER_HOME` are ignored),
+  so `HOME=/scratch Godot --path . …` or `open … --env HOME=/scratch --args …` runs against an
+  empty save folder; copy the real `maps/` folder in to rehearse on real data
+  (`Docs/Instructions/40-QA.md`). Confirm with `OS.get_user_data_dir()` before pressing
+  Create, Edit Copy, Clean up or Delete in a test.
+- A UI can be driven and screenshotted without adding files to the project: run a GDScript
+  `SceneTree` script that lives outside it (`Godot --path . -s /abs/script.gd -- args`);
+  autoloads and the C# assembly load as usual.
+- GDScript's `JSON.stringify` writes whole numbers as `60.0`, and `System.Text.Json` refuses
+  that for an `int` property — a map file rewritten from GDScript loads as "not a map". Edit
+  test map files with Python (or as text), not by parse-and-stringify in GDScript.
+
 ### A doc can say a renderer is wired when the code is not — and "the editor shows it" is not "the game shows it" (v0.10.6, realm tile sets)
 - **Symptom:** `BeachTileSet.md`, `MapCreation.gdd` and `HillAutotile.cs`'s own header all said
   the layered-hill atlas was "WIRED" into `GridView` through `Props["autotileKind"]`; the

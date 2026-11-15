@@ -189,7 +189,12 @@ class Layer:
 
 
 class Map:
-    def __init__(self, map_id, name, world, w, h, canvas, terrain="sea-level",
+    # `terrain` defaults to "*" (every altitude band), not the editor's "sea-level": the
+    # overworld gives each combat node low-ground / sea-level / high-ground from its altitude,
+    # and a realm that ships ONE map must serve all three or two nodes in three fall back to
+    # the legacy arena (`CombatMapCatalog`). Pass a specific band only once a realm has a map
+    # per band. `MapContentCheck` fails a realm that leaves a band uncovered.
+    def __init__(self, map_id, name, world, w, h, canvas, terrain="*",
                  goals=("claim", "protect", "destroy", "slaughter"), hardship=(), crab=50, seagull=50):
         self.id, self.name, self.world = map_id, name, world
         self.w, self.h = int(w), int(h)

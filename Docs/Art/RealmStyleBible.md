@@ -375,11 +375,14 @@ the grid, known ids). Rules a map must satisfy that no tool can check for you:
 - **A near-zero-parallax layer is a picture frame.** Whatever is on it stays where it is on
   screen for the whole fight; compose it as one.
 
-Each realm currently has **one** built-in map, tagged `sea-level`. A combat node also
-carries `low-ground` / `high-ground` (`MapGDD` §2.1) and map selection needs an exact
-terrain match, so nodes with those labels in the new realms still fall back to the legacy
-arena until variant maps exist. That is the next content step, and the cheapest one: the
-kits and the map kit are done, so a variant is one more function.
+Each realm currently has **one** built-in map, tagged for **every** terrain band (`"*"`,
+the map kit's default since v0.10.7). A combat node carries `low-ground` / `sea-level` /
+`high-ground` (`MapGDD` §2.1) and map selection otherwise needs an exact match — tagged
+`sea-level`, as these maps first shipped, a realm's art was missing from two nodes in three,
+which opened the legacy arena instead. Terrain variants are still the next content step, and
+the cheapest one (the kits and the map kit are done, so a variant is one more function): when
+a realm gains one, give each of its maps the band it is built for. `MapContentCheck` fails a
+realm that leaves any band without a map.
 
 ## 9. Realms not yet built — proposals
 
