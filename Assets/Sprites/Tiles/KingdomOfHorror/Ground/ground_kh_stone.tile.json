@@ -1,0 +1,16 @@
+{
+  "id": "ground.kh_stone",
+  "displayName": "Castle Stone",
+  "role": "Ground",
+  "footprint": {
+    "w": 1,
+    "h": 1
+  },
+  "fillFootprint": true,
+  "autotileGroup": "terrain.kh_stone",
+  "autotileKind": "layered_hill_strip",
+  "artSource": "res://Assets/Sprites/Tiles/KingdomOfHorror/Ground/ground_kh_stone_atlas.png",
+  "prompt": "Scratchboard game sprite on transparent ground: a black board with light scratched out of it in fine, tangled, wandering hatch lines; crowded scratches where moonlight falls, bare black in shadow. Moon-blue scratches for everything, yellow only for things that give light, red only for danger. Entangled, chaotic, uneasy. Orthographic side view, no cast shadow, no text. SUBJECT: Castle masonry: each block's moonlit edges scratched out of black, faces lightly hatched; bright coping on top, a row of corbels beneath.",
+  "autotileVariants": 4,
+  "tileSet": "kh"
+}

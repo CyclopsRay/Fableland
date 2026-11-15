@@ -1,0 +1,12 @@
+{
+  "id": "deco.kh_tree",
+  "displayName": "Dead Tree (great)",
+  "role": "Decoration",
+  "footprint": {
+    "w": 5,
+    "h": 8
+  },
+  "fillFootprint": false,
+  "prompt": "Scratchboard game sprite on transparent ground: a black board with light scratched out of it in fine, tangled, wandering hatch lines; crowded scratches where moonlight falls, bare black in shadow. Moon-blue scratches for everything, yellow only for things that give light, red only for danger. Entangled, chaotic, uneasy. Orthographic side view, no cast shadow, no text. SUBJECT: A great dead tree: twisted black trunk scratched along its moon side, forking clawing limbs, and a hollow lit from inside like a face.",
+  "tileSet": "kh"
+}

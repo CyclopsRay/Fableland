@@ -17,7 +17,6 @@ using Fableland.MapCreation.Data;
 public static class CombatMapRuntime
 {
     private const string LogTag = "CombatMapRuntime";
-    private const string SoftVolumeScenePath = "res://Scenes/SoftVolume.tscn";
 
     public static CombatMapBuild Build(MapDocument document, Node2D world, Node2D hazards)
     {
@@ -75,7 +74,9 @@ public static class CombatMapRuntime
                         CreateStaticCollider(physics, "Platform", origin, MapCollision.BuildSpecs(def, tile.FlipX), Units.LayerPlatform, true);
                         break;
                     case TileCategory.SoftVolume:
-                        CreateSoftVolume(physics, def, origin, MapCollision.BuildSpecs(def, tile.FlipX));
+                        SoftVolume volume = MapCollision.CreateSoftVolume(def, tile.FlipX, origin,
+                            MapCollision.BuildSpecs(def, tile.FlipX), LogTag);
+                        if (volume != null) physics.AddChild(volume);
                         break;
                     // Hazards are planned per layer below so touching pool tiles can merge.
                 }
@@ -86,6 +87,25 @@ public static class CombatMapRuntime
             {
                 Hazard hazard = MapHazardFactory.Create(placement, LogTag);
                 if (hazard != null) hazards.AddChild(hazard);
+            }
+        }
+
+        // A non-looping Farview layer with Collision on contributes its SoftVolumes as
+        // fixed-world colliders at their authored cells (GDD §3): a sea that fills the map
+        // behind the battlefield, a bank of cloud you can enter. The editor Playtest has always
+        // built these; until v0.10.9 the arena did not, so they worked under ▶ Play and
+        // vanished in a real run.
+        foreach (MapLayerData layer in document.Layers)
+        {
+            if (layer?.Tiles == null || layer.Role != MapLayerData.RoleFarview || !layer.Collision || layer.Loop) continue;
+            foreach (PlacedTile tile in layer.Tiles)
+            {
+                if (tile == null || !TileRegistry.TryGet(tile.DefId, out TileDef def) ||
+                    def.Category != TileCategory.SoftVolume) continue;
+                (float farX, float farY) = TilePlacement.Origin(tile, def);
+                SoftVolume volume = MapCollision.CreateSoftVolume(def, tile.FlipX, new Vector2(farX, farY),
+                    MapCollision.BuildSpecs(def, tile.FlipX), LogTag);
+                if (volume != null) physics.AddChild(volume);
             }
         }
 
@@ -103,21 +123,6 @@ public static class CombatMapRuntime
         parent.AddChild(body);
         foreach (MapCollisionSpec spec in specs)
             body.AddChild(new CollisionShape2D { Shape = spec.Shape, Position = spec.Position, OneWayCollision = oneWay });
-    }
-
-    private static void CreateSoftVolume(Node2D parent, TileDef def, Vector2 origin, IReadOnlyList<MapCollisionSpec> specs)
-    {
-        if (specs.Count == 0) return;
-        PackedScene scene = ResourceLoader.Load<PackedScene>(SoftVolumeScenePath);
-        if (scene == null) { GD.PushError("[CombatMapRuntime] SoftVolume scene is unavailable."); return; }
-        var volume = scene.Instantiate<SoftVolume>();
-        if (def.SoftVolumeTuning?.StagnationIndex is float stagnation) volume.StagnationIndex = stagnation;
-        var shapes = new List<Shape2D>(specs.Count);
-        var positions = new List<Vector2>(specs.Count);
-        foreach (MapCollisionSpec spec in specs) { shapes.Add(spec.Shape); positions.Add(spec.Position); }
-        volume.ConfigureRuntimeCollision(shapes, positions);
-        volume.Position = origin;
-        parent.AddChild(volume);
     }
 }
 

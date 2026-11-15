@@ -240,9 +240,13 @@ class Map:
         self._spawn_nudge = (0, 0)
 
     # layers are appended back to front; add farviews, then the battlefield, then closeviews
-    def farview(self, name, parallax, loop=False, grid=None, tint=None, opacity=1.0, autoscroll=(0.0, 0.0)):
+    def farview(self, name, parallax, loop=False, grid=None, tint=None, opacity=1.0, autoscroll=(0.0, 0.0),
+                collision=False):
+        """`collision=True` (non-looping layers only) makes the layer's SoftVolume tiles real,
+        fixed-world volumes - how a sea is laid over a whole map without taking the
+        battlefield's cells (`MapCreation.gdd` section 3)."""
         gw, gh = grid or ((16 if loop else self.w), self.h)
-        layer = Layer(self, "farview", name, gw, gh, parallax, loop, False, tint, opacity, autoscroll)
+        layer = Layer(self, "farview", name, gw, gh, parallax, loop, bool(collision) and not loop, tint, opacity, autoscroll)
         self.layers.append(layer)
         return layer
 

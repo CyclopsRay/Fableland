@@ -44,7 +44,8 @@ by the old zone-6 construction is inside the central VOID, not in the outer isla
 home world is guaranteed to be one of the 5, placed at ring index 0 (top); the other 4
 are random. **Pomegraknight's home is VanillaKindom (pink).** When other starting
 characters unlock, they begin in their own home world. (Pixolotl is currently a
-**non-starter** — recruit-only; her home world is deliberately unresolved. TBD
+**non-starter** — recruit-only. Her home world has a name and a combat realm since
+v0.10.9 — **The Forgotten**, §2.2 — but it is not one of the six pool worlds yet. TBD
 registry #24.)
 
 | World            | Abbr | Palette       |
@@ -75,7 +76,7 @@ The atlas remains flat: low land is tinted darker and high land lighter, with cl
 at the lowland/plain and plain/highland thresholds. These contours are decoration only — they do
 not block roads or alter movement.
 
-### 2.2 Combat identity per world (v0.10.6)
+### 2.2 Combat identity per world (v0.10.6, v0.10.9)
 
 Each world's combat arenas have their own art language, building kit and map shape, so
 crossing a river changes how a fight is fought, not only how it looks. The realm name is what
@@ -86,16 +87,28 @@ the combat layer calls that world's arenas. Art direction and kits:
 |-------|-----------------|--------|-------------|---------|
 | VanillaKindom | Beach | storybook watercolour | small flat cove | all-rounders |
 | Starland | Starfield | flat minimalist poster | vast, level, nearly empty; colossal stone monuments | long range |
-| Banboo Maze | Wulin (武林) | Chinese ink-wash | vertical; every bamboo is a soft volume | assassins |
+| Banboo Maze | Wulin (武林) | freehand ink painting (写意), mostly bare paper | vertical; bamboo and pine are soft volumes; a waterfall that carries whoever enters it down | assassins; whoever holds the height |
 | HollowCastle | Dungeon | lit realism | crowded, low, hazardous; lava | brawlers, fire |
 | TheDeserted | Ghost Town | linocut print | two-storey street, mid-range | skirmishers, duellists |
-| Palace of LOOING | Cloud Court | cloisonné enamel | aerial; cloud soft volumes, scarce footing | air mobility |
+| Palace of LOOING | Loong's Nest (龙宫) | gongbi: fine line and graded mineral colour | **under the sea**: the whole map is water (low gravity, high resistance), with hidden currents and bubble lifts | precise movers |
 
-Starfield, Wulin and Dungeon are decided. Ghost Town and Cloud Court are proposals awaiting
-sign-off, and each realm has one built-in map so far, tagged for every terrain label (`*`,
-v0.10.7) so that all of a realm's combat nodes use it; a node in a realm with no matching map
-still falls back to the legacy arena (§2.1, `MapCreation.gdd` §9). Open questions — Cleopastar's home world, whether Gui Lin is the
-Banboo Maze — are listed in the style bible §10.
+Two more realms exist as combat sets and maps but belong to worlds that are **not in the
+pool** — a run never generates them, and their maps are played from the map editor until
+the worlds are added (TBD registry #20, #24):
+
+| World (not in the pool) | Realm in combat | Medium | Arena shape | Favours |
+|-------|-----------------|--------|-------------|---------|
+| Kingdom of Horror — PumpKing's home | Dark Wood | scratchboard | a dark forest of traps, thickets and fog; a castle in some maps | guards, tanks, the patient |
+| The Forgotten — Pixolotl's home | Forgotten City | pixel art | swamp at sea level, a Teotihuacan-style pyramid city above it — taken for a ruin, secretly high technology | whoever goes over, not through |
+
+Starfield, Wulin, Dungeon, Loong's Nest and the Dark Wood follow the owner's briefs; the
+Forgotten City's design was delegated; Ghost Town is a proposal awaiting sign-off. The
+earlier proposal for the Palace of LOOING, *Cloud Court*, is kept as a set and a map with no
+world (style bible §7C). Each realm has one built-in map so far, tagged for every terrain
+label (`*`, v0.10.7) so that all of a realm's combat nodes use it; a node in a realm with no
+matching map still falls back to the legacy arena (§2.1, `MapCreation.gdd` §9). Open
+questions — Cleopastar's home world, whether Gui Lin is the Banboo Maze, what becomes of
+Cloud Court, when the two new worlds join the pool — are listed in the style bible §10.
 
 ## 3. The seed
 
@@ -318,6 +331,9 @@ These were resolved to keep the map functional; flag any you want changed:
 - **(v0.3.7) Destination-only content triggers;** unvisited and unconquered-combat
   nodes cannot be pathed through (`NODES.gdd` §1.3).
 - **(v0.3.7) Pixolotl is a non-starter** until her home world exists (TBD registry #24).
+- **(v0.10.9) Building a realm is not adding a world.** The Kingdom of Horror and The
+  Forgotten have combat sets and maps but are not in the six-world pool: adding a world
+  changes what every existing seed generates, and it needs a palette, zone rules and a boss.
 - **(v0.9.0) One island, five realms:** a single seeded organic coast contains all outer land.
   A fixed central pentagon occupies roughly 1/30 of its area; five non-crossing, variable-width
   rivers join that VOID to the coast and create exactly five river-isolated realm polygons.

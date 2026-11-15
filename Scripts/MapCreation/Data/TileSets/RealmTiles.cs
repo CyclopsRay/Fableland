@@ -66,6 +66,33 @@ internal static class RealmTiles
         SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = stagnation },
     };
 
+    /// <summary>A body of water (or mud): a buoyant medium that really holds a body.
+    /// `stagnation` is the share of top speed left (the swimming speed), `gravityScale` the
+    /// share of gravity left, `sinkSpeed` the fastest anything sinks on its own (m/s), and
+    /// `drag` how hard the water enforces all of that — see <see cref="SoftVolumeTuning"/>.</summary>
+    public static TileDef Water(string set, string realmDir, string id, string name, int w, int h,
+        string color, string stem, float stagnation, float gravityScale, float sinkSpeed, float drag) => new()
+    {
+        Id = id, DisplayName = name, Category = TileCategory.SoftVolume, TileSet = set,
+        FootprintW = w, FootprintH = h, AllowedRoles = LayerRoleMask.Any, EditorColor = color,
+        SpriteSlot = Sprite(realmDir, "SoftVolume", stem),
+        SoftVolumeTuning = new SoftVolumeTuning
+        {
+            StagnationIndex = stagnation, GravityScale = gravityScale, SinkSpeed = sinkSpeed, Drag = drag,
+        },
+    };
+
+    /// <summary>A pure current: it carries whatever is inside at (flowX, flowY) metres per
+    /// second and does nothing else — no drag, no jump support. Flip H reverses flowX.</summary>
+    public static TileDef Current(string set, string realmDir, string id, string name, int w, int h,
+        string color, string stem, float flowX, float flowY) => new()
+    {
+        Id = id, DisplayName = name, Category = TileCategory.SoftVolume, TileSet = set,
+        FootprintW = w, FootprintH = h, AllowedRoles = LayerRoleMask.Any, EditorColor = color,
+        SpriteSlot = Sprite(realmDir, "SoftVolume", stem),
+        SoftVolumeTuning = new SoftVolumeTuning { Medium = false, FlowX = flowX, FlowY = flowY },
+    };
+
     public static TileDef Hazard(string set, string realmDir, string id, string name, int w, int h,
         string color, string stem, string scene, ShapeDef effectArea) => new()
     {

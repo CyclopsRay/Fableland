@@ -132,16 +132,21 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | 17 | Surprise shelter functions (VOID TRADER surprise, treasure box, teleport) | MapGDD §6 |
 | 18 | Pixolotl & PumpKing & Pangda visual design + leveling curves | their GDDs |
 | 19 | Sifu Pangda Ult model/CD and realm (Gui Lin not yet in world pool) | Sifu Pangda.gdd |
-| 20 | PumpKing realm "Kingdom of Horror" not in world pool | PumpKing.gdd, MapGDD §2 |
+| 20 | PumpKing realm "Kingdom of Horror" not in world pool. *v0.10.9: its combat realm — the Dark Wood, tile set `kh`, one map — is built and plays from the map editor; adding the world to the pool is what is still open* | PumpKing.gdd, MapGDD §2/§2.2, RealmStyleBible §7A |
 | 21 | Ult resource/charge model + per-character Ult CDs (Pangda Ult CD TBD; foe Ult-charge loot orb) | Sifu Pangda.gdd, FOES §7 |
 | 22 | Protagonist Landing Effects — the per-character switch-in effect (all 5 GDDs stub it TODO) | character GDDs, NODES §3.3 |
 | 23 | Per-mission-type victory loot beyond the demo (Protect/Destroy/Slaughter reward tables) | NODES §4 |
-| 24 | Pixolotl home world / realm — her "Not Found" origin is not in the world pool, so she is a non-starter | MapGDD §2, Pixolotl.gdd |
+| 24 | Pixolotl home world / realm — not in the world pool, so she is a non-starter. *v0.10.9: the owner named it **The Forgotten** (a Teotihuacan-style city everyone takes for a ruin, in fact highly developed; swamp at sea level, pyramids above); its combat realm — the Forgotten City, tile set `tf`, one map — is built. Adding the world to the pool is still open, and so is whether "Not Found" stays as her origin story* | MapGDD §2/§2.2, Pixolotl.gdd, RealmStyleBible §7B |
+| 25 | Destroyable trees (and destructible scenery in general) — asked for in the Kingdom of Horror brief, not built; the realm's trees are decoration | RealmStyleBible §7A, MapCreation.gdd §2.2 |
+| 26 | Cloud Court — a finished realm set and map with no world since Loong's Nest became the Palace of LOOING: keep for a sky world, fold into the Palace, or delete | RealmStyleBible §7C, §10 |
+| 27 | Water balance — swim / sink / stroke / current / waterfall numbers are measured but untested in fights; holding Down to swim down was added without being specified | RealmStyleBible §10, Gameplay.gdd A.2, MapCreation.gdd §2.2a |
 
 Note #19/#20/#24: **realm ↔ world-pool consistency** is a design debt — every playable
 character must have a home world in `MapGDD.md` §2 (home world = start zone). Either
-add Gui Lin / Kingdom of Horror / a Pixolotl realm to the world pool or reassign realms
-before those characters become starters.
+add Gui Lin / Kingdom of Horror / The Forgotten to the world pool or reassign realms
+before those characters become starters. Since v0.10.9 the last two have their combat
+realms; what each still lacks is everything the *overworld* needs (palette, zone rules,
+boss), and the decision to change what existing seeds generate.
 
 ## 7. Writing for the other hats
 

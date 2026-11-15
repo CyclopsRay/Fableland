@@ -296,7 +296,7 @@ public partial class MapBrowser : Control
         foreach (TileSets.Info info in TileSets.All)
         {
             if (info.Id == TileSets.Core) continue;
-            AddRealmChip(realms, info.Id, info.RealmName, WorldColor(info.WorldAbbr));
+            AddRealmChip(realms, info.Id, info.RealmName, RealmColor(info));
         }
         AddRealmChip(realms, Untagged, "No realm", NeutralAccent);
 
@@ -410,6 +410,19 @@ public partial class MapBrowser : Control
 
     /// <summary>A realm's colour on the overworld (`WorldDef`), so a chip, a card's border
     /// and its badge all say "this world" the way the map screen does.</summary>
+    private static Color RealmColor(TileSets.Info info)
+    {
+        foreach (WorldDef world in WorldDef.Pool)
+            if (string.Equals(world.Abbr, info.WorldAbbr, StringComparison.OrdinalIgnoreCase)) return world.Color;
+        // a realm whose world has not joined the overworld pool yet brings its own colour
+        if (!string.IsNullOrWhiteSpace(info.AccentColor))
+        {
+            try { return new Color(info.AccentColor); }
+            catch { /* malformed hex in the table: fall through to neutral */ }
+        }
+        return NeutralAccent;
+    }
+
     private static Color WorldColor(string worldAbbr)
     {
         foreach (WorldDef world in WorldDef.Pool)
@@ -706,7 +719,7 @@ public partial class MapBrowser : Control
                 if (set == null || !TileSets.TryGet(set, out TileSets.Info info)) continue;
                 entry.RealmSet = set;
                 entry.RealmName = info.RealmName;
-                entry.Accent = color;
+                entry.Accent = RealmColor(info);
                 worldWords.Add(info.RealmName);
             }
         }

@@ -1,0 +1,12 @@
+{
+  "id": "deco.ln_palace_far",
+  "displayName": "Far Palace",
+  "role": "Decoration",
+  "footprint": {
+    "w": 10,
+    "h": 6
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: The far dragon palace seen through deep water: four tiers of swept roofs in flat blues, lit along each ridge, pearl windows, a pearl on its summit; its mound solid to the bottom.",
+  "tileSet": "ln"
+}

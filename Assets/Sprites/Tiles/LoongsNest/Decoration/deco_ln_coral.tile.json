@@ -1,0 +1,12 @@
+{
+  "id": "deco.ln_coral",
+  "displayName": "Coral Tree",
+  "role": "Decoration",
+  "footprint": {
+    "w": 3,
+    "h": 3
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: A forking coral tree, purple at the root running to pale cyan tips, ink-lined.",
+  "tileSet": "ln"
+}

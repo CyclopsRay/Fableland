@@ -1,0 +1,12 @@
+{
+  "id": "platform.ln_eave",
+  "displayName": "Glazed Eave",
+  "role": "Platform",
+  "footprint": {
+    "w": 5,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: A palace eave in cyan glaze with a black ridge, ink-lined tile courses, swept-up tips and a night pearl hanging from each.",
+  "tileSet": "ln"
+}

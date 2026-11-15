@@ -1,0 +1,12 @@
+{
+  "id": "deco.ln_column",
+  "displayName": "Palace Column",
+  "role": "Decoration",
+  "footprint": {
+    "w": 1,
+    "h": 5
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: A palace column: graded purple shaft banded in cyan, cloud-scroll capital, lotus foot, ink-lined.",
+  "tileSet": "ln"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "deco.kh_forest_far",
+  "displayName": "Far Wood",
+  "role": "Decoration",
+  "footprint": {
+    "w": 16,
+    "h": 6
+  },
+  "fillFootprint": false,
+  "prompt": "Scratchboard game sprite on transparent ground: a black board with light scratched out of it in fine, tangled, wandering hatch lines; crowded scratches where moonlight falls, bare black in shadow. Moon-blue scratches for everything, yellow only for things that give light, red only for danger. Entangled, chaotic, uneasy. Orthographic side view, no cast shadow, no text. SUBJECT: Two ranks of black tree spires on the horizon, the nearer scratched along its crest. Tiles horizontally; solid below.",
+  "tileSet": "kh"
+}

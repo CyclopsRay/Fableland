@@ -22,6 +22,9 @@ public static class TileSets
     public const string HollowCastle = "hc";
     public const string TheDeserted = "td";
     public const string PalaceOfLoong = "pl";
+    public const string LoongsNest = "ln";
+    public const string KingdomOfHorror = "kh";
+    public const string TheForgotten = "tf";
 
     public sealed class Info
     {
@@ -36,6 +39,9 @@ public static class TileSets
         /// <summary>The paper/sky colour this realm's art is painted against — the suggested
         /// `Canvas.Color` for a new map in the set.</summary>
         public string CanvasColor { get; init; }
+        /// <summary>The realm's own colour for chips, badges and card borders, used when its
+        /// world is not in the overworld pool yet (a pool world brings its colour with it).</summary>
+        public string AccentColor { get; init; }
     }
 
     /// <summary>Palette order. <see cref="Core"/> first: it is always shown.</summary>
@@ -44,10 +50,19 @@ public static class TileSets
         new() { Id = Core, DisplayName = "Shared", RealmName = "Shared", WorldAbbr = null, CanvasColor = "#87CEEB" },
         new() { Id = VanillaKingdom, DisplayName = "Vanilla Kingdom · Beach", RealmName = "Beach", WorldAbbr = "VK", CanvasColor = "#6DB8D8" },
         new() { Id = Starland, DisplayName = "Starland · Starfield", RealmName = "Starfield", WorldAbbr = "SL", CanvasColor = "#17133A" },
-        new() { Id = BambooMaze, DisplayName = "Banboo Maze · Wulin", RealmName = "Wulin", WorldAbbr = "BM", CanvasColor = "#EFE7D4" },
+        new() { Id = BambooMaze, DisplayName = "Banboo Maze · Wulin", RealmName = "Wulin", WorldAbbr = "BM", CanvasColor = "#E4E9E8" },
         new() { Id = HollowCastle, DisplayName = "HollowCastle · Dungeon", RealmName = "Dungeon", WorldAbbr = "HC", CanvasColor = "#0E0D12" },
         new() { Id = TheDeserted, DisplayName = "The Deserted · Ghost Town", RealmName = "Ghost Town", WorldAbbr = "TD", CanvasColor = "#F1E3C4" },
-        new() { Id = PalaceOfLoong, DisplayName = "Palace of Loong · Cloud Court", RealmName = "Cloud Court", WorldAbbr = "PL", CanvasColor = "#2A1B4A" },
+        // The Palace of LOOING is under the sea (v0.10.9, the design owner's direction). Cloud
+        // Court — the earlier, aerial proposal for it — keeps its kit and map in the editor
+        // under a world tag of its own ("CC", not in the overworld pool) until it is given a
+        // world or retired.
+        new() { Id = LoongsNest, DisplayName = "Palace of Loong · Loong's Nest", RealmName = "Loong's Nest", WorldAbbr = "PL", CanvasColor = "#0C1230" },
+        new() { Id = PalaceOfLoong, DisplayName = "Cloud Court (unassigned)", RealmName = "Cloud Court", WorldAbbr = "CC", CanvasColor = "#2A1B4A", AccentColor = "#D9A441" },
+        // Worlds that are designed but not in the overworld pool yet (10-DESIGN TBD #20, #24):
+        // their kits and maps exist and play from the editor; a run cannot reach them.
+        new() { Id = KingdomOfHorror, DisplayName = "Kingdom of Horror · Dark Wood", RealmName = "Dark Wood", WorldAbbr = "KH", CanvasColor = "#111B3D", AccentColor = "#FFC83D" },
+        new() { Id = TheForgotten, DisplayName = "The Forgotten · Forgotten City", RealmName = "Forgotten City", WorldAbbr = "TF", CanvasColor = "#0C0C22", AccentColor = "#FF6FCF" },
     };
 
     public static bool TryGet(string id, out Info info)

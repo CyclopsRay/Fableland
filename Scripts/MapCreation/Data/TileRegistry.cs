@@ -253,7 +253,10 @@ public static class TileRegistry
         _order.AddRange(WulinTileSet.Defs());
         _order.AddRange(DungeonTileSet.Defs());
         _order.AddRange(DesertedTileSet.Defs());
+        _order.AddRange(LoongsNestTileSet.Defs());
         _order.AddRange(LoongTileSet.Defs());
+        _order.AddRange(HorrorTileSet.Defs());
+        _order.AddRange(ForgottenTileSet.Defs());
 
         // A duplicate id must not take the whole registry down with a type-initializer
         // exception (T00 rule 4): first registration wins, Validate() reports the rest.
@@ -326,6 +329,24 @@ public static class TileRegistry
                     (def.SoftVolumeTuning.StagnationIndex.Value < 0f ||
                      def.SoftVolumeTuning.StagnationIndex.Value > 1f))
                     problems.Add($"{def.Id}: SoftVolumeTuning.StagnationIndex must be within 0..1");
+                if (def.SoftVolumeTuning.GravityScale is float gravityScale && (gravityScale < 0f || gravityScale > 1f))
+                    problems.Add($"{def.Id}: SoftVolumeTuning.GravityScale must be within 0..1");
+                if (!def.SoftVolumeTuning.Medium && def.SoftVolumeTuning.FlowX == 0f && def.SoftVolumeTuning.FlowY == 0f)
+                    problems.Add($"{def.Id}: a SoftVolume that is not a medium must carry (FlowX / FlowY), or it does nothing");
+                if (def.SoftVolumeTuning.Drag is float drag && (drag <= 0f || drag > 16f))
+                    problems.Add($"{def.Id}: SoftVolumeTuning.Drag must be above 0 and at most 16");
+                if (def.SoftVolumeTuning.SinkSpeed is float sinkSpeed)
+                {
+                    if (sinkSpeed <= 0f || sinkSpeed > 32f)
+                        problems.Add($"{def.Id}: SoftVolumeTuning.SinkSpeed must be above 0 and at most 32 m/s");
+                    if (!def.SoftVolumeTuning.Medium)
+                        problems.Add($"{def.Id}: only a medium can hold a sink (SinkSpeed on a pure current does nothing)");
+                    // The medium holds the sink only while its resistance, g·(1−s)·drag, is at
+                    // least the gravity it lets through, g·scale. Otherwise bodies outrun the cap.
+                    float hold = (1f - (def.SoftVolumeTuning.StagnationIndex ?? 0.5f)) * (def.SoftVolumeTuning.Drag ?? 1f);
+                    if (hold < (def.SoftVolumeTuning.GravityScale ?? 1f))
+                        problems.Add($"{def.Id}: SinkSpeed cannot hold — (1 − StagnationIndex) × Drag = {hold:0.##} is below GravityScale; raise Drag or lower GravityScale");
+                }
             }
 
             if (def.Category != TileCategory.Rule) continue;

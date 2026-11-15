@@ -1,0 +1,12 @@
+{
+  "id": "softvolume.ln_bubbles",
+  "displayName": "Bubble Column",
+  "role": "SoftVolume",
+  "footprint": {
+    "w": 2,
+    "h": 4
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: A column of rising bubbles, each a fine ring with one highlight. Tiles vertically. It lifts whatever enters it.",
+  "tileSet": "ln"
+}

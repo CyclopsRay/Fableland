@@ -103,7 +103,7 @@ is adding a registry entry, never editing a switch** (T00 rule 1).
 | `id` | string | e.g. `"ground.grass"`, `"softvolume.cloud2x1"`, `"rule.cloudZone"` |
 | `displayName` | string | palette label |
 | `category` | enum | Ground, Platform, SoftVolume, Hazard, EnemySpawn, Respawn, LevelGoal, Character, Decoration, Rule, Misc |
-| `tileSet` | string | realm tile set: `core` (shared markers/placeholders) or a world's lower-case abbreviation — `vk`, `sl`, `bm`, `hc`, `td`, `pl` (`TileSets.cs`, §2.6). The palette filters by it |
+| `tileSet` | string | realm tile set: `core` (shared markers/placeholders) or a world's lower-case abbreviation — `vk`, `sl`, `bm`, `hc`, `td`, `ln`, `kh`, `tf`, `pl` (`TileSets.cs`, §2.6). The palette filters by it |
 | `footprintW`, `footprintH` | int | cells occupied; default 1×1 (§2.3) |
 | `allowedRoles` | flags | which layer roles may hold it. **Default Any (v0.6.17):** grounds/platforms/soft-volumes/spawns can be placed on background/foreground layers, not just the battlefield. Placement ≠ collision — Battlefield collision applies normally; a non-loop Farview's Collision switch applies only to its fixed-world SoftVolumes (§3) |
 | `editorColor` | hex | placeholder quad color until art lands |
@@ -111,12 +111,72 @@ is adding a registry entry, never editing a switch** (T00 rule 1).
 | `autotileGroup` | string? | reserved: connected-look group for future autotiling (§2.5) |
 | `edges` | `EdgeRule?` | reserved: per-side (top/right/bottom/left) neighbor-compatibility tags for future stamp/edge matching (§2.5); not yet consulted by any runtime/editor code |
 | `effectArea` | shape def? | collision/trigger shape in px relative to anchor (§2.4); null = footprint rect |
-| `softVolumeTuning` | `SoftVolumeTuning?` | optional per-kind traversal data for SoftVolumes; currently `stagnationIndex` only (§2.4) |
+| `softVolumeTuning` | `SoftVolumeTuning?` | optional per-kind traversal data for SoftVolumes: `stagnationIndex`, and since v0.10.9 `gravityScale`, `sinkSpeed`, `drag`, `flowX` / `flowY`, `medium` — water, currents and waterfalls (§2.2a) |
 | `props` | dict | per-kind extras, read by key (`TileProps.cs`): `artSource` / `autotileKind` / `autotileVariants` (§2.5), `scene` + `mergeAdjacent` for hazards (§9), `spawnHazard` for triggers, `prompt` (the art brief) |
 
 Beach hazard content includes `hazard.tsunami_trigger`, a 1x1 battlefield marker whose
 runtime scene starts the storm presentation and moving tsunami. The 16x8 tsunami itself
 is not a placed tile; it is spawned by the trigger and sweeps beyond its anchor cell.
+
+### 2.2a Water, currents and waterfalls (v0.10.9)
+
+A SoftVolume was a thing you are *in* that slows you (foliage, cloud). Three additions make
+the same category carry terrain that pushes back or takes sides. All of it is per-kind data
+in `softVolumeTuning`; a placed tile needs nothing beyond its position and Flip H.
+
+| Field | Unit | Default | Meaning |
+|---|---|---|---|
+| `stagnationIndex` | 0..1 | scene: 0.5 | Share of a body's top speed left inside: the speed cap (the swimming speed, in water) |
+| `gravityScale` | 0..1 | 1 | Share of gravity left inside. The rest is buoyancy; the two forces are simply added |
+| `sinkSpeed` | m/s | — | Set it on water: the fastest anything sinks on its own, the same for every body. Without it a medium keeps the plain downward drift foliage has |
+| `drag` | × | 1 | Multiplies the resistance. At 1 a running body out-accelerates it, so a held direction outruns the cap — right for foliage, wrong for water. From about 4 the cap holds |
+| `flowX`, `flowY` | m/s | 0 | A carry velocity given to everything inside, on top of its own motion (+x right, +y down). Flip H mirrors `flowX` |
+| `medium` | bool | true | False = a **pure current**: it carries and does nothing else — no cap, no drag, no jump support, no buoyancy |
+
+Three kinds of volume come out of that, and `RealmTiles` has a helper for each:
+
+- **Foliage / cloud** — `Soft(…, stagnation)`. Unchanged since v0.6.18.
+- **Water** — `Water(…, stagnation, gravityScale, sinkSpeed, drag)`. A buoyant medium that
+  really holds a body. Jumps are refreshed inside it like in any medium, so a jump is a
+  swimming stroke that can be repeated; holding **Down** swims down at the swimming speed
+  instead of sinking at `sinkSpeed` (players only).
+- **Current** — `Current(…, flowX, flowY)`: a current in the sea, a column of bubbles, a
+  waterfall. Because it is not a medium it gives no jump support, so falling water cannot
+  be climbed, and a body in a current alone falls under full gravity.
+
+**Overlaps add up.** A body may be inside several volumes — a current inside a sea, kelp in
+water — and `SoftVolumeSet` (one per player and per foe) combines them: every volume's carry
+is added; among the media the lowest stagnation, the highest drag, the lowest gravity scale
+and the lowest sink speed apply. The strictest of each wins, so kelp growing in the sea is
+never easier to cross than the sea. Leaving an inner volume leaves the outer one in force.
+
+**What the shipped kinds do to a body.** These are measured on the real Pomegraknight (top
+speed 10 m/s, air jump 8.3 m) by the content check, which fails if the tuning stops
+producing what it promises (`MapContentCheckPhysics.cs`, 40-QA.md):
+
+| Kind | Tuning | Measured |
+|---|---|---|
+| `softvolume.ln_water` (sea) | stagnation 0.55 · gravity ×0.35 · sink 3 m/s · drag ×5 | swims 5.5 m/s · sinks 3.0 m/s · dives 5.5 m/s · a jump is a 3.4 m stroke · a crab sinks 3.0 m/s too |
+| `softvolume.ln_current` | carry 4 m/s sideways | carried 4.0 m/s; swimming against it leaves 1.5 m/s; out of it the body is still in the sea |
+| `softvolume.ln_bubbles` | carry 7 m/s up | rises 4.0 m/s, and 1.5 m/s even while diving |
+| `softvolume.bm_waterfall` | carry 14 m/s down | falls 14.0 m/s faster than in the open; a jump under it rises 2.7 m |
+| `softvolume.tf_water` (swamp) | stagnation 0.4 · gravity ×0.6 · sink 2 m/s · drag ×4 | wades 4.0 m/s; a jump from the bottom rises 2.7 m, so it takes a second to get out |
+
+**Rules the registry checks** (`TileRegistry.Validate`): `gravityScale` within 0..1; `drag`
+above 0 and at most 16; `sinkSpeed` above 0, at most 32 m/s, and only on a medium; a kind
+that sets `sinkSpeed` must be able to hold it — `(1 − stagnationIndex) × drag ≥
+gravityScale`, or gravity outruns the resistance and nothing caps the sink; a kind that is
+not a medium must carry, or it does nothing.
+
+**Why water needs `drag` and `sinkSpeed` rather than a lower stagnation index.** The
+resistance is a deceleration, `g × (1 − stagnation) × drag`, applied toward the cap. A
+character accelerates at 1900 px/s² in the air and 3200 on the ground; foliage resists at
+800 to 1800 depending on its index, so a held direction simply outruns it and the "cap" only shortens a coast — and
+a jump in a medium with reduced gravity and that weak a resistance goes *higher* than in
+air. The first water (v0.10.9 during development: stagnation 0.5, gravity ×0.35, nothing
+else) therefore let a swimmer run at 95% speed and out-jump the open air; the numbers above
+are what replaced it. The sink speed is absolute because the cap is relative to each body's
+own top speed: without it a crab (2.8 m/s) would hang in the water for a minute.
 
 ### 2.3 Multi-cell footprints
 
@@ -210,11 +270,13 @@ v1 single-integer value as the anchor-cell mask. The browser/editor load the sto
 the effect-area overlay consumes all footprint-cell masks. TileDef's own `effectArea`, when one
 is supplied, remains an immutable fallback; platforms intentionally supply none by default.
 
-**SoftVolume traversal tuning.** `softVolumeTuning` is immutable TileDef data, applied when
-playtest instantiates the reusable SoftVolume scene. Its current `stagnationIndex` is a 0..1
-index: it caps intent speed to that fraction of max speed and determines the inverse resistance
-rate. All three cloud kinds use `0.3`; the palm tree uses `0.1`; unconfigured volumes retain the
-scene fallback of `0.5`.
+**SoftVolume traversal tuning.** `softVolumeTuning` is immutable TileDef data, applied by
+`MapCollision.CreateSoftVolume` — the one function both the Playtest and the arena use to
+build a volume — when it instantiates the reusable SoftVolume scene. `stagnationIndex` is a
+0..1 index: it caps intent speed to that fraction of max speed and determines the inverse
+resistance rate. All three cloud kinds use `0.3`; the palm tree uses `0.1`; unconfigured
+volumes retain the scene fallback of `0.5`. The other fields — buoyancy, sink speed, drag
+and carry — are §2.2a.
 
 ### 2.5 Sprites & connected looks (art department slots)
 
@@ -286,7 +348,7 @@ anchoring, `autotileGroup`, the new `edges` tags, and the exact generation promp
 `TileManifestLoader.SelfTestFixtures` is the structural guard (mirrors
 `MapJson.RoundTripSelfTest`) — run it after adding or editing a manifest.
 
-### 2.6 Realm tile sets (v0.10.6)
+### 2.6 Realm tile sets (v0.10.6; three more in v0.10.9)
 
 Every world has its own art language and building kit (`Docs/Art/RealmStyleBible.md`); a
 `TileDef` names the set it belongs to in `tileSet`. `TileRegistry` is its own shared/beach list
@@ -299,12 +361,21 @@ one `TileSets.All` entry, one tile-set file, one line in that list.
 | `core` | — | shared | spawn/goal markers, rule zones, art-less placeholders |
 | `vk` | VanillaKindom | Beach | `BeachTileSet.md` |
 | `sl` | Starland | Starfield | 18 tiles |
-| `bm` | Banboo Maze | Wulin | 24 tiles |
+| `bm` | Banboo Maze | Wulin | 35 tiles (repainted and extended in v0.10.9) |
 | `hc` | HollowCastle | Dungeon | 20 tiles |
 | `td` | TheDeserted | Ghost Town | 22 tiles |
-| `pl` | Palace of LOOING | Cloud Court | 16 tiles |
+| `ln` | Palace of LOOING | Loong's Nest | 17 tiles |
+| `kh` | Kingdom of Horror *(not in the world pool)* | Dark Wood | 18 tiles |
+| `tf` | The Forgotten *(not in the world pool)* | Forgotten City | 18 tiles |
+| `pl` | *(none — its map is tagged `CC`)* | Cloud Court | 16 tiles |
 
-The five painted sets follow three contracts the registry cannot express in types, so
+A set's world is the pool world whose abbreviation it carries (`TileSets.Info.WorldAbbr`).
+A set may belong to a world the overworld does not deal (`kh`, `tf`) or to none (`pl`): its
+maps then never match a run's node and are played from the editor; the content check prints
+a note for such a map instead of failing it, and the browser gives its realm chip the set's
+own accent colour (`Info.AccentColor`) in place of a world colour.
+
+The eight painted sets follow three contracts the registry cannot express in types, so
 `TileSetAudit` checks them at editor boot and in the headless content check: every sprite and
 atlas a def names exists; each def agrees with its `.tile.json` sidecar (role, footprint, fill,
 sprite, group, kind, variants, set); and each PNG's canvas is its footprint (the *pinned canvas*
@@ -343,6 +414,15 @@ on it.
 5. A loop repeats after `gridW` cells. New default looping Farviews use a 16-cell strip;
    making a sparse loop 64 cells wide is valid but leaves large intentional gaps between
    repetitions rather than creating continuous sky decoration.
+6. **Both builders honour it (v0.10.9).** The editor Playtest has built these volumes since
+   the policy was written; the combat arena did not until v0.10.9, so a Farview cloud could
+   be entered under ▶ Play and was scenery in a real run. Both now go through
+   `MapCollision.CreateSoftVolume`, and the content check builds one map both ways and
+   compares every volume's position and tuning.
+7. **A sea is a layer (v0.10.9).** The policy's main use today: lay water as large
+   SoftVolume tiles on a non-looping Farview layer with parallax 1.0 and Collision on. It
+   then fills the map as one medium without occupying a battlefield cell, and currents,
+   bubbles and kelp are placed inside it on the battlefield (§2.2a).
 
 ## 4. Sway
 
@@ -539,8 +619,10 @@ edited, as a wall of cards (rebuilt in v0.10.7).
 
 - **Layout.** Title row — name on the left; the **search box**, Create and Back on the right.
   Under it the **realm strip**, the realm selector: one chip per realm (All realms, Beach,
-  Starfield, Wulin, Dungeon, Ghost Town, Cloud Court, plus "No realm" while anything is
-  untagged), each in its world's overworld colour, with the number of maps it would show;
+  Starfield, Wulin, Dungeon, Ghost Town, Loong's Nest, Cloud Court, Dark Wood, Forgotten
+  City, plus "No realm" while anything is untagged), each in its world's overworld colour —
+  or its set's accent colour when no pool world owns it (§2.6) — with the number of maps it
+  would show;
   the running count sits at the right end of the row. Then the filter row: Level, Goal,
   Terrain, Source (all / built-in / mine), Sort (recently edited / name / realm), **Show
   unfinished** and **Clean up**. The wall is always **4 cards to a row** and scrolls
@@ -627,6 +709,10 @@ edited, as a wall of cards (rebuilt in v0.10.7).
   `MapCollision` (effect area → shapes) and `MapHazardFactory` (hazards). Before this the two
   each carried private copies; the arena's had no parallax, so far layers sat rigidly behind the
   battlefield in a real run, and neither drew a ground atlas.
+- **SoftVolumes are built once too (v0.10.9).** `MapCollision.CreateSoftVolume` instantiates
+  the scene, applies the kind's tuning (`ApplyTuning`: units, the flip, a pure current
+  stripped to its carry) and its shapes. Each builder used to carry its own copy of that,
+  which is how the arena came to ignore a Farview layer's Collision switch (§3).
 - **Placement is asked once (v0.10.8).** Where a tile's art, collider, hazard or marker point
   sits is `TilePlacement.Origin` / `.Marker` — anchor cell plus sub-cell nudge (§2.3) — for
   the arena, the Playtest and the map cards alike. No builder multiplies a cell by the cell
@@ -720,16 +806,20 @@ Scripts/MapCreation/
     CombatMapRuntime.cs       normal-adventure tile/collider/marker instantiation
     MapVisualBuilder.cs       every layer's art, shared by Playtest and arena (§9)
     MapParallaxLayer.cs       one layer's parallax / scroll / loop node
-    MapCollision.cs           effect area -> collision shapes (shared)
+    MapCollision.cs           effect area -> collision shapes; builds and tunes SoftVolumes (shared)
     MapHazardFactory.cs       hazard tiles -> runtime hazards, by data; pool merging
   Dev/
     MapContentCheck.cs        headless: self-tests + audit + builds every built-in map
                               + nudge parity (arena vs Playtest, §2.3)
                               + asks the catalogue whether every node kind has a map
+    MapContentCheckPhysics.cs (same class) soft-volume parity, and the physics probe: a real
+                              character run through each shipped water kind (§2.2a)
     MapScreenshot.cs          renders built-in maps to PNG through the real runtime
 Scenes/MapCreation/MapBrowser.tscn, MapEditor.tscn   (thin roots, no fabricated uid=)
 Scenes/MapCreation/MapContentCheck.tscn, MapScreenshot.tscn   (dev tools, 40-QA.md)
-Tools/realm_art/          the realm painters (Docs/Art/RealmStyleBible.md §1)
+Scripts/Gameplay/World/SoftVolume.cs   the volume, the resistance, and SoftVolumeSet (§2.2a)
+Tools/realm_art/          the realm painters (Docs/Art/RealmStyleBible.md §1);
+                          audit_edges.py lists sprites cut by their own canvas (bible §2.7)
 Tools/realm_maps/         the built-in realm maps, written as code
 Tools/render_map_preview.py   offline PNG of any map JSON (mirrors the play view)
 ```
@@ -754,6 +844,11 @@ saved user maps are worth migrating — they're all `{}` on disk anyway).
 8. **Decoration z-expectations**: farview parallax-1.0 decor draws *behind* the
    battlefield; "in front of ground, behind player" needs a closeview or a future
    battlefield-decor draw pass — accepted limitation v1.
+9. **A resistance weaker than a body's own acceleration is not a cap** (§2.2a). Tune a
+   medium by what the probe measures on a character, not by reading its indices.
+10. **Two builders, one map**: anything built per tile (art, colliders, hazards, soft
+    volumes) must come from a shared function, and the content check must build the map
+    both ways — a difference between ▶ Play and a real run is invisible to its author.
 
 ## 12. Out of scope (v1) / future
 
@@ -774,6 +869,19 @@ the closeview blur shader is dropped (closeview is real scenery now, §1, not a 
   on non-looping Farview layers at any parallax and builds only those one-per-tile
   colliders. This preserves deterministic physics while giving authors a visible,
   reversible choice; looping Farviews remain decorative.
+- **(v0.10.9) Water is a SoftVolume, not a new category.** The owner's model — a soft
+  volume with lower gravity and high resistance, buoyancy and gravity simply added — needed
+  three numbers on the existing category, not a fifth tile category with its own builder,
+  palette section and editor rules. Currents and waterfalls are the same category with
+  `medium` off.
+- **(v0.10.9) The sink speed is absolute and the dive is a control.** Every other index is
+  relative to a body's own top speed, which is right for running and wrong for sinking: a
+  slow foe would hang in the water. And a sea deep enough to be a level needs a way down
+  that is not waiting, so Down swims down. Neither was in the brief; both are one constant.
+- **(v0.10.9) Physics is measured in the content check.** Reading a tuning table said the
+  first water was "half speed, floaty"; a character in it ran at 95% and jumped higher than
+  in air. The check now puts the real character in each shipped kind and fails on the
+  difference.
 - **Sparse tile storage, anchor-only for multi-cell.** Maps are mostly air; dense
   `List<List<>>` caused the old trim bugs and serializes bloated.
 - **GUID file identity, no `_index.json`.** Name-derived filenames caused the

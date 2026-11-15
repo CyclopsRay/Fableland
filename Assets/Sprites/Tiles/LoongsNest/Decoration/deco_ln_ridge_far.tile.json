@@ -1,0 +1,12 @@
+{
+  "id": "deco.ln_ridge_far",
+  "displayName": "Seabed Ridges",
+  "role": "Decoration",
+  "footprint": {
+    "w": 16,
+    "h": 5
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: Two ranges of seabed ridges as flat tones of the water's own blue. Tiles horizontally; solid below.",
+  "tileSet": "ln"
+}

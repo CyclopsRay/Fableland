@@ -33,6 +33,114 @@ public readonly struct MapCollisionSpec
 /// </summary>
 public static class MapCollision
 {
+    private const string SoftVolumeScenePath = "res://Scenes/SoftVolume.tscn";
+
+    /// <summary>
+    /// Builds the runtime SoftVolume of one placed tile: the reusable scene, this kind's
+    /// tuning (drag, buoyancy, carry — <see cref="ApplyTuning"/>) and its shapes. The Playtest
+    /// and the arena both call this; each used to carry its own copy, and a new tuning field
+    /// would have reached only one of them. Returns null (after logging) when there is nothing
+    /// to build. The caller parents the result.
+    /// </summary>
+    public static SoftVolume CreateSoftVolume(TileDef def, bool flipX, Vector2 origin,
+        IReadOnlyList<MapCollisionSpec> specs, string logTag)
+    {
+        if (def == null || specs == null || specs.Count == 0) return null;
+        PackedScene scene = ResourceLoader.Load<PackedScene>(SoftVolumeScenePath);
+        if (scene == null)
+        {
+            GD.PushError($"[{logTag}] SoftVolume scene is unavailable.");
+            return null;
+        }
+
+        var volume = scene.Instantiate<SoftVolume>();
+        ApplyTuning(volume, def.SoftVolumeTuning, flipX);
+        var shapes = new List<Shape2D>(specs.Count);
+        var positions = new List<Vector2>(specs.Count);
+        foreach (MapCollisionSpec spec in specs)
+        {
+            shapes.Add(spec.Shape);
+            positions.Add(spec.Position);
+        }
+        volume.ConfigureRuntimeCollision(shapes, positions);
+        volume.Position = origin;
+        return volume;
+    }
+
+    /// <summary>Copies a tile kind's SoftVolume tuning onto the runtime node. Null tuning
+    /// keeps the scene's defaults. A carry velocity is authored in metres per second and
+    /// mirrored by the placed tile's horizontal flip.</summary>
+    public static void ApplyTuning(SoftVolume volume, SoftVolumeTuning tuning, bool flipX)
+    {
+        if (volume == null || tuning == null) return;
+        if (tuning.StagnationIndex is float stagnation) volume.StagnationIndex = stagnation;
+        if (tuning.GravityScale is float gravityScale) volume.GravityScale = gravityScale;
+        if (tuning.SinkSpeed is float sinkSpeed) volume.SinkSpeed = Units.Px(sinkSpeed);
+        if (tuning.Drag is float drag) volume.Drag = drag;
+        volume.IsMedium = tuning.Medium;
+        if (!tuning.Medium)
+        {
+            // a pure current: no cap on the body's own speed, no drift, no buoyancy, no
+            // extra damping — whatever else the kind's tuning says
+            volume.StagnationIndex = 1f;
+            volume.GravityIndex = 0f;
+            volume.GravityScale = 1f;
+            volume.SinkSpeed = 0f;
+            volume.Drag = 1f;
+            volume.ExternalDampingMult = 1f;
+        }
+        volume.Flow = new Vector2(Units.Px(flipX ? -tuning.FlowX : tuning.FlowX), Units.Px(tuning.FlowY));
+    }
+
+    /// <summary>Checks <see cref="ApplyTuning"/> on detached volumes: units, the flip, and
+    /// that a pure current is stripped of everything but its carry.</summary>
+    public static List<string> SelfTest()
+    {
+        var failures = new List<string>();
+        void Check(bool ok, string what) { if (!ok) failures.Add(what); }
+        static bool Near(float a, float b) => Mathf.Abs(a - b) <= 0.001f;
+
+        var plain = new SoftVolume();
+        var water = new SoftVolume();
+        var current = new SoftVolume();
+        var flipped = new SoftVolume();
+        try
+        {
+            float stagnation = plain.StagnationIndex, drift = plain.GravityIndex, damping = plain.ExternalDampingMult;
+
+            ApplyTuning(plain, null, flipX: false);
+            Check(Near(plain.StagnationIndex, stagnation) && Near(plain.GravityScale, 1f) && Near(plain.Drag, 1f) &&
+                  Near(plain.SinkSpeed, 0f) && plain.IsMedium && plain.Flow == Vector2.Zero,
+                "a tile kind without tuning must keep the SoftVolume scene's defaults");
+
+            ApplyTuning(water, new SoftVolumeTuning { StagnationIndex = 0.55f, GravityScale = 0.35f, SinkSpeed = 3f, Drag = 5f }, flipX: true);
+            Check(Near(water.StagnationIndex, 0.55f) && Near(water.GravityScale, 0.35f) && Near(water.Drag, 5f) && water.IsMedium,
+                "water tuning must reach the volume as written");
+            Check(Near(water.SinkSpeed, 3f * Units.PixelsPerMeter), "SinkSpeed is authored in m/s and must reach the volume in px/s");
+            Check(Near(water.GravityIndex, drift) && Near(water.ExternalDampingMult, damping),
+                "tuning must leave the settings it does not name at the scene's defaults");
+            Check(water.Flow == Vector2.Zero, "a flip must not invent a carry");
+
+            var carry = new SoftVolumeTuning { Medium = false, FlowX = 4f, FlowY = -7f, StagnationIndex = 0.2f, GravityScale = 0.3f, SinkSpeed = 2f, Drag = 6f };
+            ApplyTuning(current, carry, flipX: false);
+            ApplyTuning(flipped, carry, flipX: true);
+            Check(current.Flow == new Vector2(4f, -7f) * Units.PixelsPerMeter, "a carry is authored in m/s (+x right, +y down) and must reach the volume in px/s");
+            Check(flipped.Flow == new Vector2(-4f, -7f) * Units.PixelsPerMeter, "Flip H must mirror a carry's x and leave its y alone");
+            Check(!current.IsMedium && Near(current.StagnationIndex, 1f) && Near(current.GravityIndex, 0f) &&
+                  Near(current.GravityScale, 1f) && Near(current.SinkSpeed, 0f) && Near(current.Drag, 1f) &&
+                  Near(current.ExternalDampingMult, 1f),
+                "a pure current must carry and nothing else: no cap, no drift, no buoyancy, no extra damping");
+        }
+        finally
+        {
+            plain.Free();
+            water.Free();
+            current.Free();
+            flipped.Free();
+        }
+        return failures;
+    }
+
     /// <summary>Shapes for one placed tile, honouring the per-kind painted sub-cell override
     /// (`TileEffectStore`) and the tile's horizontal flip across its whole footprint.</summary>
     public static List<MapCollisionSpec> BuildSpecs(TileDef def, bool flipX)

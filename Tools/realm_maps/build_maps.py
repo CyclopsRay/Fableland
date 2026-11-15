@@ -138,48 +138,64 @@ def starfield_long_horizon():
 def wulin_bamboo_sea():
     """Banboo Maze — "Bamboo Sea Pagoda".
 
-    INTENT: a vertical arena where height and concealment beat reach — an assassin's map.
-    Two and a half screens wide, four tall. Everything that reaches upward is bamboo, and
-    all bamboo is soft volume: a fighter can dive into a culm, hang in the leaves, chain
-    jumps straight up it and drop out on a target. The solid ground is only the forest
-    floor, a few ink-rock ledges and islets, and the thin one-way roofs and bracket beams
-    of a five-tier pagoda that zig-zag up the middle. There are no long sight lines:
-    you never see more than a screen, and something tall always stands between you and it.
+    INTENT: a vertical arena where height and concealment beat reach — an assassin's map —
+    and where the landscape itself is a weapon. Two and a half screens wide, four tall.
+    Everything that reaches upward is bamboo or pine, and all of it is soft volume: a
+    fighter dives into a culm, hangs in the leaves, chains jumps straight up it and drops
+    out on a target. Solid footing is only the forest floor, ink-rock ledges and islets, the
+    one-way roofs and bracket beams of a five-tier pagoda that zig-zag up the middle, and a
+    stone bridge thrown from the west islet to the pagoda's crown.
+
+    The east third belongs to a WATERFALL: twenty-four rows of falling water that carries
+    whoever enters it straight down and cannot be climbed. Whoever holds its head — the lip
+    of the east cliff — can knock an enemy into it and be rid of them, and anyone crossing
+    it gives up height. It is also the fastest way down for whoever wants one.
+
+    The scroll behind is mostly bare paper: one towering peak with pines, a slender second,
+    a thread of far water between them, roofs in the mist at their feet, a boat.
     """
-    m = Map("wulin_bamboo_sea_bm", "Wulin · Bamboo Sea Pagoda", "BM", 44, 40, "#EFE7D4")
+    m = Map("wulin_bamboo_sea_bm", "Wulin · Bamboo Sea Pagoda", "BM", 44, 40, "#E4E9E8")
     FLOOR = 37
     m.spawn(14, FLOOR)
-    GROUND_LINE = 7.1                     # start-screen row of the forest floor
 
     # -- far to near ---------------------------------------------------------------
-    # A painting's colophon: the sun, a skein of cranes and the red seal are pinned to the
-    # frame, so they hold their place on screen like marks on the paper itself.
-    frame = m.farview("Sun, Cranes & Seal", (0.03, 0.04), grid=(40, 44))
-    frame.pin("deco.bm_sun", 12.6, 0.5)
-    frame.pin("deco.bm_cranes", 3.2, 1.4)
-    frame.pin("deco.bm_seal", 16.6, 3.6)
+    # The painter's marks — the moon left as bare paper, a skein of cranes, the inscription
+    # and seal — are pinned to the frame: they hold their place like marks on the sheet.
+    frame = m.farview("Moon, Cranes & Colophon", (0.03, 0.04), grid=(40, 44))
+    frame.pin("deco.bm_moon", 11.0, 0.3)       # in the bare paper between the far fall and the pagoda's eaves
+    frame.pin("deco.bm_cranes", 3.0, 1.3)
+    frame.pin("deco.bm_seal", 16.6, 3.4)
 
     # The ranges sink as you climb: by the top of the pagoda you look over their crowns.
     far = m.farview("Far Peaks", (0.08, 0.12), loop=True, grid=(16, 46))
-    far.put("deco.bm_peaks_far", 0, round(far.srow(2.4)))
+    far.put("deco.bm_peaks_far", 0, round(far.srow(2.8)))
 
     mist = m.farview("Mist", (0.10, 0.15), loop=True, grid=(16, 46), opacity=0.9)
-    mist.put("deco.bm_mist_band", 0, round(mist.srow(6.2)))
+    mist.put("deco.bm_mist_band", 0, round(mist.srow(6.6)))
 
-    near = m.farview("Near Peaks", (0.16, 0.22), loop=True, grid=(16, 46))
-    near.put("deco.bm_peaks_mid", 0, round(near.srow(3.4)))
+    # The subject of the scroll. It starts with its crown above the frame and comes down
+    # into view as you climb, so the summit of the pagoda faces the summit of the peak.
+    peak = m.farview("The Peak", (0.14, 0.17), grid=(60, 64))
+    peak.pin("deco.bm_peak", 0.0, -4.4)
+    peak.pin("deco.bm_peak_b", 12.6, -1.6)
+    # Far layers hold one tile per cell like any other, so what stands in front of the
+    # peaks — a thread of far water, roofs in the mist at their feet, a boat — is its own
+    # layer, moving with them.
+    valley = m.farview("Valley", (0.14, 0.17), grid=(60, 64))
+    valley.pin("deco.bm_fall_far", 9.0, -0.4)
+    valley.pin("deco.bm_village", 5.0, 7.8)
+    valley.pin("deco.bm_boat", 12.4, 8.9)
 
-    # The bamboo sea itself: a curtain that tiles upward for the whole climb, twice, the
-    # nearer stand darker. Tiled tall enough that the frame never runs out of bamboo.
-    stand_far = m.farview("Bamboo Sea (far)", (0.40, 0.42), loop=True, grid=(8, 64), opacity=0.55)
-    stand_near = m.farview("Bamboo Sea (near)", (0.62, 0.64), loop=True, grid=(8, 64), tint="#B9B4A8")
-    for layer, order in ((stand_far, ("deco.bm_bamboo_curtain", "deco.bm_bamboo_curtain_b")),
-                         (stand_near, ("deco.bm_bamboo_curtain_b", "deco.bm_bamboo_curtain"))):
-        top = round(layer.srow(-2.0)) - 32
-        for k in range(6):
-            if 0 <= top + 8 * k and top + 8 * k + 8 <= layer.grid_h:
-                layer.put(order[0], 0, top + 8 * k)
-                layer.put(order[1], 4, top + 8 * k)
+    near = m.farview("Near Peaks", (0.20, 0.24), loop=True, grid=(16, 46))
+    near.put("deco.bm_peaks_mid", 0, round(near.srow(4.6)))
+
+    # A grove, not a wall: one clump of far bamboo every ten rows of the climb, and the
+    # rest of the sheet left empty. (留白 — what is not painted is the picture too.)
+    grove = m.farview("Bamboo Grove", (0.42, 0.44), loop=True, grid=(16, 72), opacity=0.85)
+    for k, x in enumerate((2, 10, 5, 12, 0, 8)):
+        row = round(grove.srow(1.2)) - 10 * k
+        if row >= 0 and row + 9 <= grove.grid_h:
+            grove.put("deco.bm_bamboo_far", x, row)
 
     # The pagoda's body — columns and lattice bays — stands just behind the battlefield.
     hall = m.farview("Pagoda Hall", (1.0, 1.0), grid=(44, 40))
@@ -209,46 +225,55 @@ def wulin_bamboo_sea():
 
     # Ink-rock ledges and islets: the only other solid footing.
     f.fill("ground.bm_rock", 2, 18, 4, 19)                              # west ledge
-    f.fill("ground.bm_rock", 9, 13, 13, 14)                             # west islet
-    f.fill("ground.bm_rock", 2, 7, 5, 8)                                # west high ledge
+    f.fill("ground.bm_rock", 9, 13, 12, 14)                             # west islet
+    f.fill("ground.bm_rock", 2, 7, 7, 8)                                # west high ledge
     f.fill("ground.bm_rock", 39, 22, 41, 23)                            # east ledge
-    f.fill("ground.bm_rock", 30, 17, 34, 18)                            # east islet
-    f.fill("ground.bm_rock", 38, 9, 41, 10)                             # east high ledge
+    f.fill("ground.bm_rock", 28, 17, 31, 18)                            # east islet
+    f.fill("ground.bm_rock", 35, 11, 41, 12)                            # the lip of the east cliff: head of the fall
 
-    # Bamboo — every culm a soft volume. The two giants are the fast lanes off the floor.
+    # The bridge: from the west islet to the pagoda's crown — the second way to the top,
+    # and an open one. Its deck is level with the top roof.
+    f.put("platform.bm_bridge", 13, 15)
+
+    # The waterfall drops off the lip and falls twenty-four rows to the forest floor. It
+    # is a current, not a medium: it carries, it does not hold, and it cannot be climbed.
+    for y in (11, 15, 19, 23, 27, 31):
+        f.put("softvolume.bm_waterfall", 33, y)
+
+    # Bamboo and pine — every one a soft volume. The two giants are the fast lanes up.
     f.stand("softvolume.bm_bamboo_young", 3, FLOOR)
     f.stand("softvolume.bm_bamboo_giant", 5, FLOOR)
     f.stand("softvolume.bm_bamboo_tall", 10, FLOOR)
-    f.stand("softvolume.bm_bamboo_tall", 31, FLOOR)
-    f.stand("softvolume.bm_bamboo_young", 34, FLOOR)
+    f.stand("softvolume.bm_bamboo_tall", 30, FLOOR)
     f.stand("softvolume.bm_bamboo_giant", 36, FLOOR)
     f.stand("softvolume.bm_bamboo_young", 40, FLOOR)
     f.stand("softvolume.bm_bamboo_mid", 3, 18)                          # on the west ledge
-    f.stand("softvolume.bm_bamboo_tall", 11, 13)                        # on the west islet, to the summit
-    f.stand("softvolume.bm_bamboo_young", 2, 7)
+    f.stand("softvolume.bm_bamboo_tall", 10, 13)                        # on the west islet, to the summit
+    f.stand("softvolume.bm_pine", 2, 7)                                 # a pine on the west high ledge
     f.stand("softvolume.bm_bamboo_mid", 40, 22)                         # on the east ledge
-    f.stand("softvolume.bm_bamboo_tall", 32, 17)                        # on the east islet
-    f.stand("softvolume.bm_bamboo_young", 40, 9)
+    f.stand("softvolume.bm_bamboo_tall", 29, 17)                        # on the east islet
+    f.stand("softvolume.bm_pine", 38, 11)                               # a pine at the head of the fall
     f.put("softvolume.bm_mist", 13, 24)                                 # a drift of mist bridging grove and pagoda
-    f.put("softvolume.bm_mist", 26, 10)
+    f.put("softvolume.bm_mist", 22, 10)                                 # and one above the crown
 
     f.stand("hazard.bm_stakes", 7, FLOOR)                               # between the giant and the tall culm
     f.stand("hazard.bm_stakes", 27, FLOOR)                              # under the first beam: miss it, land on these
 
     for x, y in ((16, FLOOR - 1), (21, 34), (22, 30), (21, 14)):
         f.put("spawn.respawn", x, y)
-    for x, y in ((9, FLOOR - 1), (29, FLOOR - 1), (2, 17), (39, 21), (13, 12), (30, 16), (24, 14)):
+    for x, y in ((9, FLOOR - 1), (29, FLOOR - 1), (2, 17), (39, 21), (12, 12), (28, 16), (24, 14)):
         f.put("spawn.enemy", x, y)
-    for x, y in ((12, FLOOR - 1), (33, FLOOR - 1), (23, 34), (16, 28), (26, 24), (10, 12), (31, 16),
-                 (4, 6), (38, 8), (20, 14)):
+    for x, y in ((12, FLOOR - 1), (32, FLOOR - 1), (23, 34), (16, 28), (26, 24), (9, 12), (31, 16),
+                 (6, 6), (36, 10), (20, 14)):
         f.put("goal.level", x, y)
 
     # -- foreground --------------------------------------------------------------------
     fg = m.closeview("Foreground")
-    for x, y in ((2, 20), (9, 15), (30, 19), (38, 24), (2, 9), (37, 11)):   # leaves hanging under every ledge
+    for x, y in ((2, 20), (9, 15), (28, 19), (38, 24), (2, 9), (37, 13)):   # leaves hanging under every ledge
         fg.put("deco.bm_leaf_fringe", x, y)
-    for x in (8, 22, 33):                                                   # and in from the top of the scroll
+    for x in (8, 22):                                                       # and in from the top of the scroll
         fg.put("deco.bm_leaf_fringe", x, 0)
+    fg.put("deco.bm_spray", 32, 35)                                         # where the fall lands
     fg.stand("deco.bm_lantern", 18, 35)
     fg.stand("deco.bm_lantern", 25, 35)
     fg.stand("deco.bm_lantern", 4, 7)
@@ -475,7 +500,9 @@ def cloud_court_heavens():
     battle is carried cloud to cloud in three dimensions. Whoever is at home in the air
     rules here, and frost pearls sit on the best perches to stop anyone settling.
     """
-    m = Map("cloud_court_heavens_pl", "Cloud Court · The Heavens", "PL", 56, 30, "#2A1B4A")
+    # World tag "CC": the Palace of LOOING itself is under the sea now (Loong's Nest, below).
+    # Cloud Court keeps its map, playable from the editor, until it is given a world.
+    m = Map("cloud_court_heavens_pl", "Cloud Court · The Heavens", "CC", 56, 30, "#2A1B4A")
     FLOOR = 27
     m.spawn(10, FLOOR)
     GROUND_LINE = 7.1
@@ -550,7 +577,293 @@ def cloud_court_heavens():
     return m.finish()
 
 
-MAPS = [starfield_long_horizon, wulin_bamboo_sea, dungeon_hollow_gaol, ghost_town_main_street, cloud_court_heavens]
+# ============================================================== Loong's Nest
+
+
+def loongs_nest_sunken_court():
+    """Palace of LOOING — "The Sunken Court".
+
+    INTENT: a fight in three dimensions where nothing is an accident. The whole map is
+    water: nobody falls, nobody runs, and a jump is a swim stroke that can be taken again
+    and again — so every position is reached on purpose, and whoever can put themselves
+    exactly where they mean to (a dash of fixed length, a teleport, a hook) owns the map.
+
+    The sea is not still. A current under the west ceiling carries a swimmer toward the
+    hall; another, along the floor east of the hall, drags whoever sinks into it across a
+    bed of urchins. Two columns of bubbles are the lifts. Kelp is the cover. Solid footing
+    is the west court, the great hall and its three glazed eaves, the east reef and a few
+    giant clams. The sea has a surface four rows below the top of the map: above it is air,
+    where gravity is whole again, so whoever leaps out falls back in — the lid needs no rock.
+    """
+    m = Map("loongs_nest_sunken_court_pl", "Loong's Nest · The Sunken Court", "PL", 48, 28, "#0C1230")
+    FLOOR = 25
+    m.spawn(5, 19)
+
+    # -- far to near ---------------------------------------------------------------
+    palace = m.farview("Far Palace", (0.12, 0.14), grid=(40, 40))
+    palace.pin("deco.ln_palace_far", 5.0, 3.2)
+
+    ridges = m.farview("Seabed Ridges", (0.22, 0.26), loop=True, grid=(16, 40))
+    ridges.put("deco.ln_ridge_far", 0, round(ridges.srow(6.4)))
+
+    light = m.farview("Light Shafts", (0.30, 0.20), grid=(60, 44))
+    for col in (3.0, 8.0, 12.6, 17.0):         # (the spawn is near the west wall: a pinned column left of 2.5 would be off the grid)
+        light.pin("deco.ln_rays", col, -1.5)
+
+    # The hall's body and the court's furniture, just behind the battlefield.
+    court = m.farview("Court", (1.0, 1.0), grid=(48, 28))
+    for x in (21, 23, 24, 26):
+        court.put("deco.ln_column", x, 12)                              # the hall: columns on the podium
+    for x in (22, 24):
+        court.put("deco.ln_column", x, 7)                               # and under the crowning eave
+    for x, floor in ((2, 19), (9, 19), (20, 17), (27, 17), (45, 21)):
+        court.stand("deco.ln_lantern", x, floor)                        # night pearls: the only lamps
+    for x, floor in ((17, FLOOR), (31, FLOOR), (36, 21)):
+        court.stand("deco.ln_coral", x, floor)
+    for x in (0, 16, 32):
+        court.put("deco.ln_surface", x, 0)                              # open air, then the sea's skin on row 4 — the first row of water
+
+    # The sea itself: one medium over the whole map, on a layer of its own so it takes no
+    # battlefield cell. Collision makes each tile a real, fixed-world volume (GDD §3).
+    sea = m.farview("Sea", (1.0, 1.0), grid=(48, 28), collision=True)
+    for y in (4, 10, 16, 22):                                           # rows 0-3 are air above the surface
+        for x in (0, 8, 16, 24, 32, 40):
+            sea.put("softvolume.ln_water", x, y)
+
+    # -- battlefield -----------------------------------------------------------------
+    f = m.field()
+    f.fill("ground.ln_reef", 0, FLOOR, 47, 27)
+    f.fill("ground.ln_reef", 0, 0, 1, FLOOR - 1)
+    f.fill("ground.ln_reef", 46, 0, 47, FLOOR - 1)
+    f.fill("ground.ln_reef", 36, 21, 45, 24)                            # the east reef
+    f.fill("ground.ln_palace", 2, 19, 9, 24)                            # the west court
+    f.fill("ground.ln_palace", 20, 17, 27, 24)                          # the great hall's podium
+
+    f.put("platform.ln_eave", 3, 14)                                    # over the west court
+    f.put("platform.ln_eave", 17, 12)                                   # the hall's two wings
+    f.put("platform.ln_eave", 26, 12)
+    f.put("platform.ln_eave", 21, 7)                                    # and its crown
+    for x, y in ((11, 16), (31, 16), (41, 12), (10, 7)):
+        f.put("platform.ln_shell", x, y)
+
+    # Kelp: the cover. A grove on the floor between court and hall, another on the reef.
+    for x in (11, 13):
+        f.stand("softvolume.ln_kelp", x, FLOOR)
+    for x in (40, 42):
+        f.stand("softvolume.ln_kelp", x, 21)
+
+    # Bubbles: the lifts. One from the floor beside the hall, one from the reef.
+    for y in (5, 9, 13, 17, 21):
+        f.put("softvolume.ln_bubbles", 15, y)
+    for y in (5, 9, 13, 17):
+        f.put("softvolume.ln_bubbles", 38, y)
+
+    # Currents — hardly visible. Under the west ceiling: a ride toward the hall. Along the
+    # floor east of the hall: whoever sinks into it is dragged across the urchins.
+    for x in (4, 8):
+        f.put("softvolume.ln_current", x, 8)
+    for x in (28, 32):
+        f.put("softvolume.ln_current", x, 22)
+    for x in (30, 34):
+        f.stand("hazard.ln_urchin", x, FLOOR)
+
+    for x, y in ((7, 18), (23, 16), (37, 20), (22, 6)):
+        f.put("spawn.respawn", x, y)
+    for x, y in ((17, FLOOR - 1), (44, 20), (22, 16), (4, 13), (28, 11), (36, 20), (12, 15), (24, 6)):
+        f.put("spawn.enemy", x, y)
+    for x, y in ((8, 18), (25, 16), (45, 20), (19, 11), (29, 11), (23, 6), (6, 13), (18, FLOOR - 1),
+                 (32, 15), (42, 11)):
+        f.put("goal.level", x, y)
+
+    # -- foreground --------------------------------------------------------------------
+    fg = m.closeview("Foreground")
+    fg.put("deco.ln_fish", 12, 3)
+    fg.put("deco.ln_fish", 33, 5, flip=True)
+    return m.finish()
+
+
+# ========================================================= Kingdom of Horror
+
+
+def horror_hanging_wood():
+    """Kingdom of Horror — "The Hanging Wood".
+
+    INTENT: a map that punishes haste. Three screens wide, a little over two tall. The
+    west third is a wood: two ladders of gnarled limbs with bare canopy above them, and
+    bramble on the floor between — bramble is a soft volume that all but holds whoever
+    lands in it, so a missed jump is paid for. The middle is a clearing nobody should cross
+    on foot: ground fog lies over it, and there is a bear trap in the gap between the two
+    banks; will-o'-the-wisps hang in the air on the jump lines above. The east third is the
+    castle's gatehouse — solid stone, climbed by rotten hoardings on its face, with a turret
+    whose top sees the whole clearing.
+
+    Whoever looks before they move wins here: guards, tanks, and anyone who can make the
+    enemy come to them.
+    """
+    m = Map("horror_hanging_wood_kh", "Dark Wood · The Hanging Wood", "KH", 52, 24, "#111B3D")
+    FLOOR = 21
+    m.spawn(9, FLOOR)
+
+    # -- far to near ---------------------------------------------------------------
+    moon = m.farview("Moon", (0.03, 0.04), grid=(40, 36))
+    moon.pin("deco.kh_moon", 11.2, 0.4)
+
+    castle = m.farview("Far Castle", (0.10, 0.12), grid=(44, 36))
+    castle.pin("deco.kh_castle_far", 8.2, 0.4)                          # its towers cut into the moon
+
+    wood_far = m.farview("Far Wood", (0.20, 0.22), loop=True, grid=(16, 36))
+    wood_far.put("deco.kh_forest_far", 0, round(wood_far.srow(4.8)))
+
+    trees_far = m.farview("Trees", (0.55, 0.60), grid=(70, 40))
+    trees_far.pin("deco.kh_tree", 2.5, 0.2)
+    trees_far.pin("deco.kh_tree_b", 9.6, 1.6)
+    trees_far.pin("deco.kh_tree_b", 15.2, 1.0)
+
+    # The trunks the limbs belong to, the lanterns and railings: just behind the battlefield.
+    wood = m.farview("Wood", (1.0, 1.0), grid=(52, 24))
+    wood.stand("deco.kh_tree_b", 4, FLOOR)
+    wood.stand("deco.kh_tree", 14, FLOOR)
+    wood.stand("deco.kh_tree_b", 24, FLOOR)
+    wood.stand("deco.kh_tree_b", 30, FLOOR)
+    for x in (21, 38):
+        wood.stand("deco.kh_lantern", x, FLOOR)
+    wood.stand("deco.kh_fence", 34, FLOOR)
+
+    # -- battlefield -----------------------------------------------------------------
+    f = m.field()
+    f.fill("ground.kh_earth", 0, FLOOR, 51, 23)
+    f.fill("ground.kh_earth", 0, 0, 1, FLOOR - 1)
+    f.fill("ground.kh_earth", 50, 0, 51, FLOOR - 1)
+    f.fill("ground.kh_stone", 40, 10, 49, 20)                           # the gatehouse
+    f.fill("ground.kh_stone", 46, 5, 49, 9)                             # its turret
+
+    # Two ladders of limbs, three rows apart (a clean jump), and a rung between them.
+    for x, y in ((3, 18), (7, 15), (3, 12), (7, 9), (15, 18), (19, 15), (15, 12), (19, 9), (11, 12)):
+        f.put("platform.kh_branch", x, y)
+    for x, y in ((25, 17), (30, 14), (25, 11), (31, 8)):                # over the clearing
+        f.put("platform.kh_branch", x, y)
+    for x, y in ((37, 18), (37, 15), (37, 12), (42, 7)):                # hoardings: up the gatehouse, on to the turret
+        f.put("platform.kh_plank", x, y)
+
+    for x, y in ((2, 4), (10, 5), (17, 4)):                             # bare canopy over the wood
+        f.put("softvolume.kh_canopy", x, y)
+    for x in (5, 11, 35):                                               # bramble under the ladders: a missed jump costs
+        f.stand("softvolume.kh_bramble", x, FLOOR)
+    for x in (24, 31):                                                  # fog over the clearing...
+        f.stand("softvolume.kh_fog", x, FLOOR)
+    f.stand("hazard.kh_trap", 28, FLOOR)                                # ...and a trap in the gap between the banks
+    f.stand("hazard.kh_trap", 17, FLOOR)
+    for x, y in ((28, 15), (29, 10), (34, 12)):                         # wisps on the jump lines
+        f.put("hazard.kh_wisp", x, y)
+
+    for x, y in ((3, FLOOR - 1), (21, FLOOR - 1), (39, FLOOR - 1), (42, 9)):
+        f.put("spawn.respawn", x, y)
+    for x, y in ((15, FLOOR - 1), (22, FLOOR - 1), (38, FLOOR - 1), (8, 14), (20, 14), (41, 9), (47, 4), (32, 7)):
+        f.put("spawn.enemy", x, y)
+    for x, y in ((2, FLOOR - 1), (20, FLOOR - 1), (23, FLOOR - 1), (30, FLOOR - 1), (4, 11), (8, 8), (16, 11), (26, 10),
+                 (44, 9), (48, 4)):
+        f.put("goal.level", x, y)
+
+    # -- foreground --------------------------------------------------------------------
+    fg = m.closeview("Foreground")
+    for x, y in ((42, 13), (45, 13), (47, 6)):                          # lit windows lie wholly over solid wall
+        fg.put("deco.kh_window", x, y)
+    fg.put("deco.kh_fireflies", 20, 5)
+    fg.put("deco.kh_fireflies", 32, 2)
+    return m.finish()
+
+
+# ============================================================= The Forgotten
+
+
+def forgotten_canals_of_the_sun():
+    """The Forgotten — "Canals of the Sun".
+
+    INTENT: the map climbs out of the swamp into the city, and gets more dangerous and more
+    rewarding as it does. Three screens wide, two and a half tall. The west is low ground:
+    mud banks and two canals of swamp water — a medium you wade through at four tenths of
+    your speed, and that takes a second jump to leave — with cattails on the bank. Anyone caught down there is slow. Over it runs a
+    stair of floating slabs for whoever would rather not get wet.
+
+    The east is the pyramid: three terraces and a temple, two rows to each step by way of
+    slabs on its west face and bridges of light on its east. The city's security still
+    works up there — obsidian set in the terraces, and a beam on either side of the temple,
+    so the summit is taken by going over, never by walking up to it.
+    """
+    m = Map("forgotten_canals_of_the_sun_tf", "Forgotten City · Canals of the Sun", "TF", 56, 26, "#0C0C22")
+    FLOOR = 21
+    m.spawn(22, FLOOR)
+
+    # -- far to near ---------------------------------------------------------------
+    sky = m.farview("Stars", (0.02, 0.02), loop=True, grid=(8, 40))
+    top = round(sky.srow(-1.0))
+    for k in range(3):
+        if top + 4 * k >= 0:
+            sky.put("deco.tf_stars", 0, top + 4 * k)
+
+    city = m.farview("Far City", (0.08, 0.10), loop=True, grid=(16, 40))
+    city.put("deco.tf_city_far", 0, round(city.srow(4.6)))
+
+    great = m.farview("Great Pyramid", (0.14, 0.16), grid=(60, 44))
+    great.pin("deco.tf_pyramid_far", 6.4, 1.0)
+
+    canopy = m.farview("Canopy", (0.30, 0.32), loop=True, grid=(16, 40))
+    canopy.put("deco.tf_jungle", 0, round(canopy.srow(7.0)))
+
+    grove = m.farview("Grove", (1.0, 1.0), grid=(56, 26))
+    grove.stand("deco.tf_tree", 3, FLOOR)
+    grove.stand("deco.tf_tree", 50, FLOOR)
+    for x in (23, 25):
+        grove.stand("deco.tf_stele", x, FLOOR)
+    grove.stand("deco.tf_serpent", 28, 17)                              # serpent heads guard the first terrace
+    grove.stand("deco.tf_serpent", 46, 17, flip=True)
+    grove.put("deco.tf_sign", 37, 2)                                    # a glyph still projected over the temple
+    grove.stand("deco.tf_axolotl", 14, FLOOR)                           # one of Pixolotl's kin, on the bank
+
+    # -- battlefield -----------------------------------------------------------------
+    f = m.field()
+    f.fill("ground.tf_mud", 0, FLOOR, 55, 25)
+    f.carve(6, FLOOR, 13, FLOOR + 1)                                    # two canals cut into the bank
+    f.carve(16, FLOOR, 19, FLOOR + 1)
+    f.fill("ground.tf_stone", 0, 0, 1, FLOOR - 1)
+    f.fill("ground.tf_stone", 54, 0, 55, FLOOR - 1)
+    f.fill("ground.tf_stone", 26, 17, 49, 20)                           # the pyramid: three terraces...
+    f.fill("ground.tf_stone", 30, 13, 45, 16)
+    f.fill("ground.tf_stone", 34, 9, 41, 12)
+    f.fill("ground.tf_stone", 36, 6, 39, 8)                             # ...and the temple
+
+    for x in (6, 10, 16):                                               # swamp water: waded, not swum
+        f.put("softvolume.tf_water", x, FLOOR)
+    for x in (3, 20):
+        f.stand("softvolume.tf_reeds", x, FLOOR)
+    for x in (2, 53):                                                   # vines up both walls: the slow way to the top
+        for y in (5, 9, 13):
+            f.put("softvolume.tf_vines", x, y)
+
+    for x, y in ((9, 18), (14, 15), (19, 12), (24, 10)):                # the dry road over the canals
+        f.put("platform.tf_slab", x, y)
+    for x, y in ((23, 19), (27, 15), (31, 11)):                         # the pyramid's west face, two rows a step
+        f.put("platform.tf_slab", x, y)
+    for x, y in ((50, 19), (46, 15), (42, 11)):                         # its east face: bridges of light
+        f.put("platform.tf_light", x, y)
+
+    for x in (34, 41):                                                  # a beam on either side of the temple
+        f.stand("hazard.tf_laser", x, 9)
+    f.stand("hazard.tf_obsidian", 26, 17)                               # obsidian in the terraces
+    f.stand("hazard.tf_obsidian", 44, 13)
+
+    for x, y in ((5, FLOOR - 1), (24, FLOOR - 1), (47, 16), (36, 5)):
+        f.put("spawn.respawn", x, y)
+    for x, y in ((15, FLOOR - 1), (23, FLOOR - 1), (50, FLOOR - 1), (29, 16), (32, 12), (42, 12), (38, 5), (25, 9)):
+        f.put("spawn.enemy", x, y)
+    for x, y in ((2, FLOOR - 1), (14, FLOOR - 1), (25, FLOOR - 1), (51, FLOOR - 1), (48, 16), (30, 12), (43, 12),
+                 (35, 8), (40, 8), (37, 5), (15, 14), (20, 11)):
+        f.put("goal.level", x, y)
+    return m.finish()
+
+
+MAPS = [starfield_long_horizon, wulin_bamboo_sea, dungeon_hollow_gaol, ghost_town_main_street, cloud_court_heavens,
+        loongs_nest_sunken_court, horror_hanging_wood, forgotten_canals_of_the_sun]
 
 
 def main():

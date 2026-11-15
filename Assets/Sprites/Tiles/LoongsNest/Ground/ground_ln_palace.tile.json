@@ -1,0 +1,16 @@
+{
+  "id": "ground.ln_palace",
+  "displayName": "Palace Wall",
+  "role": "Ground",
+  "footprint": {
+    "w": 1,
+    "h": 1
+  },
+  "fillFootprint": true,
+  "autotileGroup": "terrain.ln_palace",
+  "autotileKind": "layered_hill_strip",
+  "artSource": "res://Assets/Sprites/Tiles/LoongsNest/Ground/ground_ln_palace_atlas.png",
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: Palace masonry faced in glazed fish-scale tile, purple running to blue, each scale ink-lined and domed; a cyan key-fret coping under a pearl-white edge; a scalloped wave valance below.",
+  "autotileVariants": 4,
+  "tileSet": "ln"
+}

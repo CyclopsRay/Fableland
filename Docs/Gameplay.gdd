@@ -66,6 +66,25 @@ the palm tree uses **0.1**, and an unconfigured SoftVolume retains the reusable 
 fallback. Lower values are more viscous: they impose a lower speed cap and a stronger gradual
 resistance. `GravityIndex` (0.1) and `ExternalDampingMult` (3) remain shared scene defaults.
 
+**Water, currents and waterfalls (v0.10.9).** Three more settings on the same volume — the
+full contract and the measured numbers are in `MapCreation.gdd` §2.2a:
+
+- **Water** is a medium with buoyancy: `GravityScale` is the share of gravity left inside
+  (buoyancy and gravity are simply added), `SinkSpeed` the fastest a body sinks on its own,
+  and `Drag` makes the resistance strong enough that the speed cap is really the swimming
+  speed. In the sea a 10 m/s fighter swims at 5.5 m/s, sinks at 3 m/s and a jump is a 3.4 m
+  stroke; jumps refresh inside it as in any SoftVolume, so strokes repeat.
+- **Holding Down in water swims down** at the swimming speed instead of sinking slowly. It
+  is the same `move_down` that drops through a one-way platform, and it does nothing in
+  foliage or in air. *(Added in v0.10.9 without being specified — TBD registry #27.)*
+- **A current** (`IsMedium` off) only carries: its `Flow` velocity is added to whatever is
+  inside, through the same continuous-velocity channel wind uses, and it gives no drag and
+  no jump support. A sideways current, a column of bubbles and a waterfall are all this; a
+  waterfall cannot be climbed, and a jump under one is beaten down.
+- **Overlapping volumes add up** (`SoftVolumeSet`, one per player and per foe): carries are
+  summed, and among the media the strictest cap, drag, buoyancy and sink speed apply.
+  Players and foes obey the same rules; only the dive is a player control.
+
 ### A.2.1 Universal basic-attack ammo and reload
 
 Every playable character's BA resource is owned by one shared **AmmoController** on

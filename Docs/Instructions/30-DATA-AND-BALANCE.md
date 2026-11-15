@@ -128,6 +128,15 @@ from a completed VOID-river peripheral city, uses an Eidolon Shelter as its mand
 and sends LV4 origins to the nearest available Zone-6 LV5. The old generated `XX-S` passages
 are removed. FanChen's Heart, Yukai's Rope, and The Forgotten Kashaya are persistent combat-item
 prototypes with second cooldowns; TwistedReality's possession rewinds one completed day on a BOSS loss.
+v0.10.9: SoftVolume medium numbers, per tile kind (`SoftVolumeTuning` on the `TileDef`, tier-1
+constants named in each realm's tile-set file — `MapCreation.gdd` §2.2a has the table and what
+each produces on a real character). Sea (`LoongsNestTileSet`): stagnation 0.55, gravity ×0.35,
+sink 3 m/s, drag ×5; current 4 m/s; bubble lift 7 m/s; kelp 0.3. Swamp (`ForgottenTileSet`):
+stagnation 0.4, gravity ×0.6, sink 2 m/s, drag ×4. Waterfall (`WulinTileSet`): 14 m/s down.
+Dark Wood: bramble 0.15, fog 0.45, canopy 0.5. These are first values — measured by the
+content check's physics probe, not yet balanced in a fight (TBD #27). Tune them by the
+probe's printed `physics` lines, not by the indices: a resistance weaker than a body's own
+acceleration (1900 px/s² in the air, 3200 on the ground) is not a cap.
 Characters: each kit's skill-summary table verbatim.
 Arena events: tsunami warning/recovery/cooldown, storm tint, gust schedule, wind pulse,
 and subsequent event definitions. Canvas colours stay hex data; Godot colours are made only

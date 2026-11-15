@@ -85,6 +85,31 @@ public sealed class SoftVolumeTuning
     /// of max speed and determines the resistance rate; see SoftVolume and GDD §2.2.
     /// </summary>
     public float? StagnationIndex { get; init; }
+
+    /// <summary>Optional 0..1 share of gravity a body keeps inside; the rest is buoyancy.
+    /// Null keeps full gravity. Water is well under 1.</summary>
+    public float? GravityScale { get; init; }
+
+    /// <summary>Optional: the fastest anything sinks in this medium on its own, in metres
+    /// per second — the same for every body. Set it on water; a player holding Down swims
+    /// down at the medium's speed cap instead. Null keeps the plain GravityIndex drift.</summary>
+    public float? SinkSpeed { get; init; }
+
+    /// <summary>Optional multiplier on the resistance (null = 1). At 1 a running body
+    /// out-accelerates the resistance and a held direction outruns the speed cap, which is
+    /// right for foliage. Water needs about 4 or more: then the cap is the swimming speed.
+    /// Rule of thumb for a fighter: <c>(1 − StagnationIndex) × Drag ≥ 1.6</c>.</summary>
+    public float? Drag { get; init; }
+
+    /// <summary>A steady carry velocity in metres per second (+x right, +y down) given to
+    /// everything inside: a current, rising bubbles, a waterfall. A placed tile's FlipX
+    /// mirrors <see cref="FlowX"/>.</summary>
+    public float FlowX { get; init; }
+    public float FlowY { get; init; }
+
+    /// <summary>False for a pure current — it only carries: no drag, and no jump support,
+    /// so it cannot be climbed. True (the default) for a medium a body is in.</summary>
+    public bool Medium { get; init; } = true;
 }
 
 /// <summary>GDD §2.2 — a registered tile kind.</summary>

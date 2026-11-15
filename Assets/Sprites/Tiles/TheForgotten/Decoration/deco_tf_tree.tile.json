@@ -1,0 +1,12 @@
+{
+  "id": "deco.tf_tree",
+  "displayName": "Ahuehuete",
+  "role": "Decoration",
+  "footprint": {
+    "w": 4,
+    "h": 6
+  },
+  "fillFootprint": false,
+  "prompt": "Pixel-art game sprite on transparent ground: a hard grid of square pixels (32 to the map cell), a small fixed palette, shading by ordered dither only, no blur and no anti-aliasing. Teotihuacan / Aztec stone architecture in old violet stone and swamp greens; the only bright colours are thin neon lights (cyan, magenta, yellow) — hidden technology. Orthographic side view, no cast shadow, no text. SUBJECT: A pixel-art swamp cypress: swollen trunk, dithered crown, moss hanging in strands.",
+  "tileSet": "tf"
+}

@@ -218,7 +218,10 @@ public partial class CharacterController : CharacterBody2D
 	private float _jumpCdTimer;
 	private float _stunTimer;          // gain-no window: no control, animation frozen
 	private float _trappedTimer;
-	private SoftVolume _softVolume;   // non-null while inside a go-inside volume
+	// Every go-inside volume this body overlaps (a current inside a sea, kelp in water),
+	// and what they add up to: resistance, buoyancy, carry.
+	private readonly SoftVolumeSet _softVolumes = new();
+	private const string SoftVolumeFlowSource = "softvolume.flow";
 	private Vector2 _intentVel;        // self-directed velocity (input/gravity/jump/field)
 	private Vector2 _externalVel;      // impulses (knockback/wind/…); decays over time
 	private Vector2 _spawnPoint;
@@ -477,10 +480,17 @@ public partial class CharacterController : CharacterBody2D
 		float motionRate = LocalTime.ClampRate(LocalTimeRate);
 		if (_jumpCdTimer > 0f) _jumpCdTimer -= dt;
 
-		// Vertical intent: gravity accumulates (momentum); jump sets it.
+		// Soft volumes: forget any that were freed, then let their currents carry the body.
+		// Refreshed every tick (not on enter/exit) so a respawn inside a current keeps it.
+		_softVolumes.Prune();
+		if (_softVolumes.Flow != Vector2.Zero && !_dead) SetContinuousExternalVelocity(SoftVolumeFlowSource, _softVolumes.Flow);
+		else ClearContinuousExternalVelocity(SoftVolumeFlowSource);
+
+		// Vertical intent: gravity accumulates (momentum); jump sets it. A buoyant medium
+		// (water) leaves only part of gravity: buoyancy and gravity are simply added.
 		if (!IsOnFloor())
 		{
-			_intentVel.Y += Gravity * dt;
+			_intentVel.Y += Gravity * _softVolumes.GravityScale * dt;
 
 			// Coyote time: leaving a surface doesn't cost a jump for CoyoteTime
 			// seconds (so you can still edge-jump), but if that window elapses
@@ -504,9 +514,10 @@ public partial class CharacterController : CharacterBody2D
 		// A SoftVolume is not a physical floor, but its fable traversal contract grants
 		// jump support while the body is inside (cloud/tree jump chains). Refresh before
 		// reading jump input so a spent charge can be used on this same physics tick.
-		if (_softVolume != null && !_dead) RefreshJumps();
+		if (_softVolumes.InMedium && !_dead) RefreshJumps();
 
 		float inputDir = 0f;
+		bool diving = false;
 		if (!Frozen && !Trapped)
 		{
 			if (Input.IsActionPressed("move_left")) inputDir -= 1f;
@@ -526,7 +537,10 @@ public partial class CharacterController : CharacterBody2D
 				}
 			}
 
-			UpdateDropThrough(Input.IsActionPressed("move_down"), dt);
+			bool downHeld = Input.IsActionPressed("move_down");
+			UpdateDropThrough(downHeld, dt);
+			// Water holds a body's sink to a slow drift; holding Down swims down instead.
+			diving = downHeld && _softVolumes.Buoyant;
 		}
 
 		// Horizontal intent with momentum: accelerate toward the target, friction to stop.
@@ -536,12 +550,12 @@ public partial class CharacterController : CharacterBody2D
 												 : (IsOnFloor() ? GroundFriction : AirFriction);
 		_intentVel.X = Mathf.MoveToward(_intentVel.X, target, rate * dt);
 
-		if (_softVolume != null && !_dead)
-			_intentVel = _softVolume.ApplyVelocityResistance(_intentVel, MoveSpeed * MoveMultiplier, dt);
+		if (!_dead)
+			_intentVel = _softVolumes.Resist(_intentVel, MoveSpeed * MoveMultiplier, dt, diving);
 
 		// External velocity (knockback/wind/…) decays independently. SoftVolumes only
 		// add drag; they never replace the player's own jump/gravity velocity.
-		float damping = ExternalDamping * (_softVolume != null ? _softVolume.ExternalDampingMult : 1f);
+		float damping = ExternalDamping * _softVolumes.ExternalDampingMult;
 		_externalVel = _externalVel.MoveToward(Vector2.Zero, damping * dt);
 
 		// Intent/external velocity is stored in local-time units. Godot integrates its
@@ -614,14 +628,14 @@ public partial class CharacterController : CharacterBody2D
 	// ── SoftVolume resistance ─────────────────────────────────────────────
 	public void EnterSoftVolume(SoftVolume v)
 	{
-		_softVolume = v;
+		_softVolumes.Enter(v);
 		// Cancel any in-progress platform drop so we don't leave the mask off.
 		if (_dropping) { _dropping = false; SetCollisionMaskValue(Units.LayerPlatform, true); }
 	}
 
 	public void ExitSoftVolume(SoftVolume v)
 	{
-		if (_softVolume == v) _softVolume = null;
+		_softVolumes.Exit(v);
 	}
 
 	// ── Ability hooks ─────────────────────────────────────────────────────

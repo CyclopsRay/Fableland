@@ -9,6 +9,48 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.10.9** — **Three new realms, Wulin repainted as ink painting, and water.**
+  *Wulin (Banboo Maze)* is repainted as freehand ink (写意): calligraphic strokes that swell
+  and taper, splashed wet ink, and most of the sheet left bare (留白), in black, white, cyan
+  and ink green with no warm colour. The background is now a painting with a subject — one
+  towering peak with pines, a slender second, a thread of far waterfall, a village in mist, a
+  boat — instead of a wall of bamboo; the moon is unpainted paper and the inscription 山水 is
+  brush-written. New pieces: a stone bridge, a climbable pine, and a **waterfall** that
+  carries whoever enters it down at 14 m/s and cannot be climbed, so the head of the fall is
+  worth holding. *Loong's Nest (龙宫)* is the Palace of LOOING's realm: a palace under the
+  sea in gongbi (fine line, graded purple / cyan / blue), set `ln`, 17 tiles, map "The Sunken
+  Court". The whole map is water, with hidden currents that drag a swimmer toward urchin
+  beds and bubble columns that lift. *The Dark Wood* is the Kingdom of Horror (PumpKing's
+  home) in scratchboard — blue, red, yellow; set `kh`, 18 tiles, map "The Hanging Wood":
+  bramble, fog, bear traps, wisps, and a castle. *The Forgotten City* is The Forgotten
+  (Pixolotl's home) in pixel art — a Teotihuacan city everyone takes for a ruin, lit by thin
+  neon; swamp at the bottom, pyramid above; set `tf`, 18 tiles, map "Canals of the Sun".
+  **Water** is a SoftVolume with three new numbers: `GravityScale` (the share of gravity
+  left — buoyancy and gravity are simply added), `SinkSpeed` and `Drag`; a **current** is a
+  SoftVolume that only carries (`Flow`, `IsMedium` off). Measured on the real character: in
+  the sea a 10 m/s fighter swims 5.5 m/s, sinks 3 m/s, a jump is a 3.4 m stroke that can be
+  repeated (an air jump is 8.3 m), a current carries 4 m/s, bubbles lift 4 m/s; swamp water
+  is waded at 4 m/s. Holding **Down** in water swims down. Engine: `SoftVolumeSet` — a body
+  can be in several volumes at once and they add up (it used to remember one, and leaving an
+  inner volume forgot the outer); `MapCollision.CreateSoftVolume` shared by both map
+  builders; **the arena now builds a Farview layer's SoftVolumes** (only ▶ Play did), which
+  is how a sea is laid without using battlefield cells; `SoftVolumeTuning` + registry
+  validation; realm chips for realms without a pool world. Tools: three painters,
+  `audit_edges.py` (sprites cut by their own canvas), `mapkit` `collision=`. The content
+  check gains soft-volume parity (arena vs Playtest) and a **physics probe** that runs the
+  real character through every shipped water kind and through the shipped Loong's Nest map
+  built as a run builds it. Not done, by decision or for lack of one: the Kingdom of Horror
+  and The Forgotten are **not in the overworld pool** — their maps play from the map editor
+  (adding a world changes what every seed generates); Cloud Court, v0.10.6's proposal for
+  the Palace, is kept with no world (retagged `CC`); destroyable trees are not built; the
+  water numbers are measured, not balanced; no real fight was played on the new maps.
+  (Verification: `dotnet build`, 0 errors/warnings; headless content check, 482 checks,
+  twice; ten mutation runs — each breaking one water mechanism: buoyancy, dive, carry,
+  drag, sink cap, set membership, foe resistance, flip, and each builder's Farview volumes —
+  each failing the check by name; all eight painters and all realm maps regenerated
+  byte-identical; the four new or repainted maps and the map browser screenshotted through
+  the real renderer and reviewed, which is where a dozen clipped sprites and a sea surface
+  drawn a row above its water were found and fixed; headless boot of the main scene clean.)
 - **0.10.8** — **Map editor: props are no longer stuck on the 2 m grid.** A placed tile can
   carry a sub-cell **nudge** — `SubX` / `SubY`, whole quarter cells (16 px = 0.5 m), −3..3.
   Select tiles and press **Alt + arrow** to slide them; a fourth step carries into the next

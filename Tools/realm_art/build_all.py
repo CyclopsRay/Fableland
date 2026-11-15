@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-REALMS = ["starland", "wulin", "dungeon", "deserted", "loong"]
+REALMS = ["starland", "wulin", "dungeon", "deserted", "loong", "loongnest", "horror", "forgotten"]
 
 
 def main():

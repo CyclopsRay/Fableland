@@ -1,0 +1,12 @@
+{
+  "id": "deco.bm_village",
+  "displayName": "Distant Village",
+  "role": "Decoration",
+  "footprint": {
+    "w": 6,
+    "h": 3
+  },
+  "fillFootprint": false,
+  "prompt": "Freehand Chinese ink painting (xieyi) game sprite on transparent ground: calligraphic brush strokes that swell and taper, dry flying-white streaks, splashed wet ink that bleeds at its edges, and large areas left as bare paper. Black ink in five dilutions; the only colours are indigo-cyan (water, distance) and ink green (plants). No warm colour, no outline-and-fill, no airbrush. Orthographic side view, no cast shadow. SUBJECT: A far village: each house a roof of two pressed strokes over a wall of bare paper, half sunk in mist.",
+  "tileSet": "bm"
+}

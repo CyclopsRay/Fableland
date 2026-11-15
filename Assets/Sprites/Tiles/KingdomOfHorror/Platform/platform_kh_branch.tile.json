@@ -1,0 +1,12 @@
+{
+  "id": "platform.kh_branch",
+  "displayName": "Gnarled Limb",
+  "role": "Platform",
+  "footprint": {
+    "w": 4,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Scratchboard game sprite on transparent ground: a black board with light scratched out of it in fine, tangled, wandering hatch lines; crowded scratches where moonlight falls, bare black in shadow. Moon-blue scratches for everything, yellow only for things that give light, red only for danger. Entangled, chaotic, uneasy. Orthographic side view, no cast shadow, no text. SUBJECT: A gnarled tree limb to stand on, its back lit by the moon in scratched lines, twigs clawing downward.",
+  "tileSet": "kh"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "platform.ln_shell",
+  "displayName": "Giant Clam",
+  "role": "Platform",
+  "footprint": {
+    "w": 3,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: The upper valve of a giant clam as a ledge: ribs fanning to the hinge, purple at the lip running to pearl.",
+  "tileSet": "ln"
+}

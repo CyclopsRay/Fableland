@@ -20,7 +20,6 @@ public partial class MapPlaytestController : Node2D
 {
     private const string LogTag = "MapPlaytest";
     private const string PomegraknightScenePath = "res://Scenes/Pomegraknight.tscn";
-    private const string SoftVolumeScenePath = "res://Scenes/SoftVolume.tscn";
 
     private MapDocument _document;
     private Node2D _worldVisual;
@@ -182,7 +181,8 @@ public partial class MapPlaytestController : Node2D
                         CreateStaticCollider("Platform", origin, shapes, Units.LayerPlatform, oneWay: true);
                         break;
                     case TileCategory.SoftVolume when canBuildSoftVolume:
-                        CreateSoftVolume(def, origin, shapes);
+                        SoftVolume volume = MapCollision.CreateSoftVolume(def, tile.FlipX, origin, shapes, LogTag);
+                        if (volume != null) _physics.AddChild(volume);
                         break;
                 }
             }
@@ -213,32 +213,6 @@ public partial class MapPlaytestController : Node2D
             var shape = new CollisionShape2D { Shape = spec.Shape, Position = spec.Position, OneWayCollision = oneWay };
             body.AddChild(shape);
         }
-    }
-
-    private void CreateSoftVolume(TileDef def, Vector2 origin, IReadOnlyList<MapCollisionSpec> specs)
-    {
-        PackedScene scene = ResourceLoader.Load<PackedScene>(SoftVolumeScenePath);
-        if (scene == null)
-        {
-            GD.PushError("MapPlaytest: SoftVolume scene is unavailable.");
-            return;
-        }
-
-        var volume = scene.Instantiate<SoftVolume>();
-        SoftVolumeTuning tuning = def.SoftVolumeTuning;
-        if (tuning != null && tuning.StagnationIndex.HasValue)
-            volume.StagnationIndex = tuning.StagnationIndex.Value;
-
-        var shapes = new List<Shape2D>(specs.Count);
-        var positions = new List<Vector2>(specs.Count);
-        foreach (MapCollisionSpec spec in specs)
-        {
-            shapes.Add(spec.Shape);
-            positions.Add(spec.Position);
-        }
-        volume.ConfigureRuntimeCollision(shapes, positions);
-        volume.Position = origin;
-        _physics.AddChild(volume);
     }
 
     /// <summary>An event-trigger tile (its def names the hazard it spawns in

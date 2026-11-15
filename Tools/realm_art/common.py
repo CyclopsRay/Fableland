@@ -808,6 +808,58 @@ def build_hill_atlas(render_cell, variants=4):
     return atlas
 
 
+def strip_atlas(base, cap=None, side=None, underside=None, variants=4):
+    """A layered-hill strip atlas from one continuous material strip (`variants` cells wide,
+    one tall) plus up to three treatments, each `f(cell, group[, left])` editing a cell in
+    place: `cap` for the walkable top (L1), `side` for an exposed flank, `underside` for the
+    bottom layer (L4). The body rows are the bare strip, so any stacking is seamless."""
+    def render(g, layer, open_left, open_right):
+        cell = cut(base, g)
+        if layer == 3 and underside is not None:
+            underside(cell, g)
+        if open_left and side is not None:
+            side(cell, g, True)
+        if open_right and side is not None:
+            side(cell, g, False)
+        if layer == 0 and cap is not None:
+            cap(cell, g)
+        return cell
+    return build_hill_atlas(render, variants)
+
+
+def carve_top(cell, g, seed, variants=4, base=12.0, wobble=10.0):
+    """Cut a cell's walkable top along a line that runs unbroken across the whole strip.
+    Returns the depth below that line (px; negative is the air that was cut away)."""
+    gx, gy = grid(CELL, CELL, g * CELL, 0)
+    lip = fbm(gx / 32.0, gy * 0 + 3.3, seed, octaves=3, period=(variants * CELL // 32, 0))
+    top = base + (lip - 0.5) * wobble
+    cell[..., 3] *= smoothstep(top - 1.2, top + 1.2, gy)
+    return gy - top
+
+
+def carve_side(cell, left, seed, inset=8.0, wobble=8.0):
+    """Cut an exposed flank. The wobble dies away at the cell's top and bottom, so stacked
+    flanks line up. Returns the distance inward from the new edge (px)."""
+    h, w = cell.shape[:2]
+    gx, gy = grid(h, w)
+    wob = (fbm(gy / 36.0, gx * 0 + (5.1 if left else 9.4), seed, octaves=3) - 0.5) * wobble
+    edge = inset + wob * np.clip(np.minimum(gy, h - gy) / 22.0, 0.0, 1.0)
+    dist = gx if left else (w - gx)
+    cell[..., 3] *= smoothstep(edge - 1.2, edge + 1.2, dist)
+    return dist - edge
+
+
+def carve_under(cell, g, seed, variants=4, depth=50.0, inset=10.0):
+    """Cut a ragged underside that runs unbroken across the strip. Returns the height above
+    the cut (px; negative is what was cut away)."""
+    gx, gy = grid(CELL, CELL, g * CELL, 0)
+    lobes = fbm(gx / 64.0, gy * 0 + 1.0, seed, octaves=3, period=(variants * CELL // 64, 0))
+    fine = fbm(gx / 8.0, gy * 0 + 2.0, seed + 1, octaves=2, period=(variants * CELL // 8, 0))
+    cutoff = CELL - inset - lobes * depth - (fine - 0.5) * 10.0
+    cell[..., 3] *= smoothstep(cutoff + 3.0, cutoff - 3.0, gy)
+    return cutoff - gy
+
+
 def strip(variants, rows=1):
     """Coordinate fields for a `variants` x `rows` cell material strip (px)."""
     return grid(rows * CELL, variants * CELL)

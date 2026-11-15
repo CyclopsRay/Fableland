@@ -31,6 +31,12 @@ Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
    map clouds use 0.3 and palms 0.1) plus a small
    GravityIndex drift (0.1·maxSpeed), rather than being overwritten. Active membership refreshes
    player jump charges even though it is not a physical floor. Applies to players AND foes.
+   Since v0.10.9 the same volume is also **water** (`GravityScale` = share of gravity left,
+   `SinkSpeed` = absolute sink cap, `Drag` = resistance multiplier; Down swims down) and a
+   **current** (`IsMedium` off + `Flow`: carries only — a current, bubbles, a waterfall). A
+   body can be in several at once: both body types keep a `SoftVolumeSet` and resolve
+   resistance, buoyancy and carry through it, never through a single remembered volume.
+   Tuning table, rules and measured numbers: `Docs/MapCreation.gdd` §2.2a.
 
 **Movement / combat model** (`CharacterController`, `Enemy`, `HitInfo`):
 - Velocity = **`intentVel`** (self-directed: input, gravity, jump, then any SoftVolume resistance) +
@@ -97,6 +103,139 @@ the Anaconda `python3` first on the PATH has a broken numpy (missing MKL) and di
 ---
 
 ## Caveats / gotchas (grow this on every bug fix)
+
+### A resistance weaker than a body's own acceleration is not a speed cap — the first water let a swimmer run at 95% and out-jump the air (v0.10.9, water)
+- **Symptom (caught by doing the arithmetic, then measured; never shipped):** water was first
+  tuned as "a SoftVolume with stagnation 0.5 and 35% gravity" and described as *half speed,
+  floaty*. On a real character it was neither. A SoftVolume's resistance is a deceleration,
+  `g × (1 − stagnation)` ≈ 1000 px/s², applied toward the cap; a character accelerates at
+  1900 px/s² in the air and 3200 on the ground. So a held direction simply outran it — the
+  swimmer settled at **9.5 of 10 m/s** — and with gravity cut to 35% and that weak a
+  resistance a jump rose **9.4 m, against 8.3 m in the open**. Left alone the body sank at
+  6 m/s. The same has always been true of foliage: its cap shortens a *coast*, not a run.
+- **Rule:** an index is not a behaviour. A medium that must really hold a body needs `Drag`
+  (the resistance multiplier: the cap holds once `g × (1 − s) × drag` exceeds the body's
+  acceleration — about 4 and up for a fighter) and, if it is buoyant, `SinkSpeed` (an
+  **absolute** sink cap: every other index is relative to a body's own top speed, so without
+  it a 2.8 m/s crab hangs in the water for a minute). `TileRegistry.Validate` refuses a
+  `SinkSpeed` the medium cannot hold. And **tune by what the content check's probe prints**
+  (`physics  sea  sinks 3.0 m/s · swims 5.5 m/s · …`) — it puts the real Pomegraknight in
+  each shipped kind — never by reading the tuning table.
+- **Why:** the resistance and the input are two accelerations racing toward different
+  targets; whichever is larger wins, and the loser only shows when the input stops. Nothing
+  in a table of 0..1 indices says which one that is.
+
+### A body must not remember "the" soft volume it is in — leaving an inner one forgot the outer (v0.10.9, water)
+- **Symptom (caught before it shipped):** players and foes each kept a single `_softVolume`
+  reference: entering one set it, leaving that same one cleared it. Fine while volumes never
+  overlapped. A sea with a current in it broke it at once: enter the sea, enter the current
+  (now "the" volume is the current), drift out of the current → the reference is cleared and
+  the body is in *nothing* — full gravity and no swimming, in the middle of the sea, until it
+  happens to cross into the next water tile.
+- **Rule:** membership is a set. `SoftVolumeSet` (`Scripts/Gameplay/World/SoftVolume.cs`), one
+  per `CharacterController` and per `BaseFoe`, holds every volume the body overlaps and adds
+  them up: carries are summed; among the media the **strictest** of each wins — lowest cap,
+  highest drag and damping, most buoyancy, slowest sink — so kelp in the sea is never easier
+  to cross than the sea. Both body types call `Resist`, `GravityScale`, `Flow`, `InMedium` on
+  the set and nothing on an individual volume. It prunes volumes freed without an exit event
+  (a map torn down under a body).
+- **Why:** enter/exit events are per volume, but what a body feels is a property of where it
+  is. Any "current X" field fed by enter/exit events is wrong the first time two X overlap —
+  the same bug class as a status flag toggled by two sources.
+
+### The arena ignored a Farview layer's Collision switch; ▶ Play honoured it (v0.10.9, soft volumes)
+- **Symptom (found while laying a sea on a Farview layer):** MapCreation.gdd §3 lets a
+  non-looping Farview layer with Collision on build real SoftVolumes at its tiles' cells. The
+  editor Playtest had done so since the policy was written. `CombatMapRuntime` — what a run
+  uses — read only the battlefield, so a cloud or a sea authored that way could be entered
+  under ▶ Play and was pure scenery in a real fight. Nobody had shipped a map that used it.
+- **Rule:** each builder also carried its own copy of "instantiate the SoftVolume scene and
+  apply the tile's tuning"; both now call `MapCollision.CreateSoftVolume`, so a new tuning
+  field cannot reach one builder and miss the other, and the arena builds Farview volumes the
+  way the Playtest does. `MapContentCheck.CheckSoftVolumeParity` builds one map both ways
+  (a sea on a Farview layer, a flipped current, bubbles, a looping layer and a non-colliding
+  layer that must *not* build) and compares every volume's position and tuning.
+- **Why:** third instance of the v0.10.6 caveat below ("two builders for one map drift"). A
+  difference between ▶ Play and a real run is invisible to the author of the map, who only
+  ever presses ▶ Play. Anything built per tile needs one function and a both-ways check.
+
+### A sprite's canvas is not a window — and a contact sheet cannot show a sprite cut by its own edge (v0.10.9, realm art)
+- **Symptom:** the first in-engine screenshots of the repainted Wulin showed bamboo leaves
+  ending along a ruled vertical line, a peak with a flat-topped crown, pines sliced at the
+  side, far bamboo whose feet hung in mid-air, and a pale rectangle under the far palace. The
+  same in three other sets (two dead trees, the far castle's hill, a pixel tree's crown) —
+  more than a dozen sprites. All had been reviewed on contact sheets, where each sprite sits
+  alone in its own box and a cut at the box's edge looks like the edge of the box. A quarter
+  of it was older than this change (v0.10.6's bamboo was already cut; nobody saw).
+- **Rule:** nothing may be cut by the edge of its PNG unless it meets that edge on purpose
+  (it tiles, it is a platform's walking line, it stands on the ground, it hangs, it stacks) —
+  `RealmStyleBible.md` §2.7. In a painter: fold or shorten a mark that would leave the sheet
+  (`leaf(keep=…)`, `pine(keep=…)`); let a growing limb **turn back**, never clamp its tip to
+  the border (`np.clip(end, 6, W − 6)` lays the limb *along* the edge, which is the same cut);
+  stand a pinned far silhouette on a **dome** that reaches zero at both ends, not a slab; fade
+  what dissolves well inside the canvas. Then run `Tools/realm_art/audit_edges.py` and account
+  for every line, and **look at the map in the engine** (`MapScreenshot.tscn`) before calling
+  a set done.
+- **Why:** a sprite is composited at an arbitrary place over arbitrary art; its canvas edge
+  is visible exactly when paint reaches it. The review artefact has to be the map, not the
+  sheet — the sheet hides the one defect that depends on what is next to the sprite.
+
+### A soft volume's art is a promise about its physics — the sea's surface was drawn a row above the water (v0.10.9, realm maps)
+- **Symptom:** in Loong's Nest the water volumes start on row 4, and the "sea surface" strip
+  was a 3-row decoration placed at row 2 with its bright skin a third of the way down — so
+  the visible surface sat about a cell above the level where a body starts to float. A
+  fighter rising toward the surface popped into full gravity while still drawn under water.
+- **Rule:** art that *shows where a volume is* is registered to that volume, in the tile
+  itself: `deco.ln_surface` is now 16×5 with the skin on its fifth row, and its doc comment
+  says to lay that row on the first row of water. Same for a waterfall's ribbon (as wide as
+  the column that carries) and a bubble column. Check it in an in-engine shot taken where the
+  boundary is on screen. The one licensed exception is a *hidden* current, drawn faint on
+  purpose (`RealmStyleBible.md` §2.8).
+- **Why:** decoration and collision are separate tiles on separate layers; nothing in the
+  data ties them together, so only a convention carried by the tile's own shape can.
+
+### Measuring physics in a test: enter the physics loop first, and speed time up by ticks, not by delta (v0.10.9, reference)
+- **Symptom:** the probe compared a body falling in open air with one falling in a waterfall,
+  tick for tick, and reported the waterfall as 15.07 m/s — one tick of gravity (34 px/s)
+  more than its 14. The first stage was started from `_Ready`, between frames; every later
+  one from inside a `physics_frame` callback, where a body added to the tree already moves in
+  *that* tick. The first stage ran one tick behind all the others.
+- **Rule:** in an async test that steps physics, `await ToSignal(GetTree(),
+  SceneTree.SignalName.PhysicsFrame)` once before the first stage, so every stage starts at
+  the same point of a tick. Press input with `Input.ActionPress` right after such an await —
+  the body's `_PhysicsProcess` in the same tick then sees `IsActionJustPressed`. Measure
+  velocity from positions, not from `Velocity`. To run fast, set
+  `Engine.PhysicsTicksPerSecond = 60 × N` **and** `Engine.TimeScale = N`: each tick still
+  receives `delta = 1/60` (Godot passes `TimeScale / ticksPerSecond`), so the simulation is
+  bit-for-bit the normal one, N times sooner. Restore both afterwards. It all runs headless.
+- **Why:** nodes added during the `physics_frame` signal are in the tree before that tick's
+  `_PhysicsProcess` pass; nodes added from `_Ready` wait for the next one. An off-by-one tick
+  is 34 px/s of gravity — larger than most tolerances worth having.
+
+### Far layers again: two things that overlap need two layers, and a pin left of the spawn's screen is off the grid (v0.10.9, realm maps, reference)
+- **Symptom:** composing the Wulin scroll, a village placed in front of the hero peak was
+  refused ("cell occupied") although both are far decorations; and light shafts pinned to
+  start-screen column 0 were refused as off-grid on a map whose spawn is near the west wall.
+- **Rule:** far layers obey one-tile-per-cell like any other, and far tiles are large, so
+  anything meant to be seen *in front of* another far thing gets its own layer with the same
+  parallax (Wulin has "The Peak" and "Valley" at 0.14/0.17). And `layer.pin(tile, col, row)`
+  converts a start-screen column to a layer cell through the spawn anchor: with the spawn a
+  few cells from the wall, screen columns left of about 2.5 map to negative cells. Keep the
+  spawn 9+ cells from the edge, or pin further right.
+- **Why:** same arithmetic as the v0.10.6 far-layer caveat — a far layer's cells are not
+  where they appear, even on the first frame.
+
+### Small realm-art traps (v0.10.9, reference)
+- **A sprite whose alpha never passes 40/255 is "fully transparent"** to the used-rect trim
+  and to `TileSetAudit` (the light shafts were first painted at alpha 0.12). Soft, faint
+  sprites still need to cross that somewhere — 0.30 at their core is enough.
+- **No calligraphic Chinese font ships with macOS** (Heiti, Songti, PingFang, Hiragino only),
+  so an inscription set in a font looks typeset. `Tools/realm_art/wulin.py` defines the few
+  glyphs it needs (山 水 竹) as brush strokes in `GLYPHS` and paints them with `write()`.
+- **A black cut-out needs a sky lighter than black.** The scratchboard realm's board is
+  `#070A14`; its canvas is `#111B3D`, or every silhouette vanishes into the background.
+- **A "moon as unpainted paper" is transparent** — put it where bare paper is behind it. Over
+  a far waterfall it showed the falling water through the disc.
 
 ### Where a placed tile sits is one function; "cell × cell size" in a builder is a second opinion (v0.10.8, sub-cell nudge)
 - **Symptom (caught while adding the nudge, before it shipped):** tiles gained a quarter-cell

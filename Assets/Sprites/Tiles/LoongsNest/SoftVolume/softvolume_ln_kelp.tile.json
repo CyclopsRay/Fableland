@@ -1,0 +1,12 @@
+{
+  "id": "softvolume.ln_kelp",
+  "displayName": "Kelp",
+  "role": "SoftVolume",
+  "footprint": {
+    "w": 2,
+    "h": 6
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: Long kelp blades, ink-lined with a midrib, dark teal at the root running to cyan tips. Enterable cover.",
+  "tileSet": "ln"
+}

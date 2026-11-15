@@ -10,7 +10,7 @@
   "autotileGroup": "terrain.bm_rock",
   "autotileKind": "layered_hill_strip",
   "artSource": "res://Assets/Sprites/Tiles/BambooMaze/Ground/ground_bm_rock_atlas.png",
-  "prompt": "Chinese ink-wash (shuimo) game sprite on transparent ground: loaded-brush strokes with visible bristle streaks and flying-white, diluted grey washes for mass, no outline-and-fill, no gradients from an airbrush. Monochrome ink; only grey-green bamboo and cinnabar red lacquer/seals carry colour. Orthographic side view, no cast shadow, no text unless specified. SUBJECT: Ink-wash boulder mass: opaque grey wash body, bold dry-brush contour where rock meets air, axe-cut texture strokes, moss dots on the walkable lip, underside dissolving into dry tatters.",
+  "prompt": "Freehand Chinese ink painting (xieyi) game sprite on transparent ground: calligraphic brush strokes that swell and taper, dry flying-white streaks, splashed wet ink that bleeds at its edges, and large areas left as bare paper. Black ink in five dilutions; the only colours are indigo-cyan (water, distance) and ink green (plants). No warm colour, no outline-and-fill, no airbrush. Orthographic side view, no cast shadow. SUBJECT: Freehand ink rock: opaque dark wash body with axe-cut texture strokes, its top-lit faces left almost as bare paper, a bold dry contour where rock meets air, moss dots on the lip, underside in dry tatters.",
   "autotileVariants": 4,
   "tileSet": "bm"
 }

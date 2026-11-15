@@ -18,21 +18,24 @@ using Fableland.Run;
 /// markers each of its goals needs, a usable nest for both foe types, tiles from one realm.
 /// It then builds a small map with every piece nudged off the grid (GDD §2.3) through the
 /// arena path AND the editor Playtest, and requires art, colliders, hazards and markers to
-/// land on the same shifted spots in both. Last, it asks the run's own map selection
+/// land on the same shifted spots in both. It asks the run's own map selection
 /// (<see cref="CombatMapCatalog"/>) whether every kind of combat node in every world would
-/// be dealt a shipped map.
+/// be dealt a shipped map. Last come water, currents and waterfalls
+/// (<c>MapContentCheckPhysics.cs</c>): both builders must make the same soft volumes, and a
+/// real character is run through each shipped water kind to measure what it does to a body.
 ///
 ///     Godot --headless --path . res://Scenes/MapCreation/MapContentCheck.tscn
 ///
 /// Exit code 0 = clean, 1 = at least one problem (each printed on its own `FAIL` line).
-/// It builds maps but never starts a fight, so it is safe to run on any machine.
+/// It builds maps and runs about ten simulated seconds of movement (a second or two of real
+/// time) but never starts a fight, so it is safe to run on any machine.
 /// </summary>
 public partial class MapContentCheck : Node
 {
     private readonly List<string> _problems = new();
     private int _checks;
 
-    public override void _Ready()
+    public override async void _Ready()
     {
         try
         {
@@ -41,6 +44,8 @@ public partial class MapContentCheck : Node
             CheckBuiltInMaps();
             CheckNudgedPlacement();
             CheckRealmCoverage();
+            CheckSoftVolumeParity();
+            await ProbeSoftVolumePhysics();   // runs physics frames; everything above is immediate
         }
         catch (Exception e)
         {
@@ -84,6 +89,8 @@ public partial class MapContentCheck : Node
         Absorb("CombatMapCatalog", CombatMapCatalog.SelfTest());
         Absorb("TileManifestLoader", TileManifestLoader.SelfTest());
         Absorb("TileManifestLoader fixtures", TileManifestLoader.SelfTestFixtures(root));
+        Absorb("SoftVolumeSet", SoftVolumeSet.SelfTest());
+        Absorb("MapCollision", MapCollision.SelfTest());
         Absorb("TileSetAudit", TileSetAudit.Run(root));
     }
 

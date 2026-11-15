@@ -1,0 +1,12 @@
+{
+  "id": "deco.ln_lantern",
+  "displayName": "Night Pearl",
+  "role": "Decoration",
+  "footprint": {
+    "w": 1,
+    "h": 2
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese gongbi (meticulous brush, heavy mineral colour) game sprite on transparent ground, set under the sea: fine even ink contour lines enclosing smoothly graded azurite blue, purple and cyan, modelled realistically under pale cyan light from above. Palette strictly black, purple, blue, cyan; pearls are the only lamps. Orthographic side view, no cast shadow, no text. SUBJECT: A glowing night pearl held in claws on a purple stand: the realm's only lamp.",
+  "tileSet": "ln"
+}

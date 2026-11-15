@@ -1,0 +1,12 @@
+{
+  "id": "deco.bm_boat",
+  "displayName": "Fishing Boat",
+  "role": "Decoration",
+  "footprint": {
+    "w": 3,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Freehand Chinese ink painting (xieyi) game sprite on transparent ground: calligraphic brush strokes that swell and taper, dry flying-white streaks, splashed wet ink that bleeds at its edges, and large areas left as bare paper. Black ink in five dilutions; the only colours are indigo-cyan (water, distance) and ink green (plants). No warm colour, no outline-and-fill, no airbrush. Orthographic side view, no cast shadow. SUBJECT: A fisherman's boat: one curved hull stroke, an awning, a figure in a straw hat with a rod, two pale lines of water.",
+  "tileSet": "bm"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "deco.bm_peak_b",
+  "displayName": "Karst Peak (slender)",
+  "role": "Decoration",
+  "footprint": {
+    "w": 5,
+    "h": 10
+  },
+  "fillFootprint": false,
+  "prompt": "Freehand Chinese ink painting (xieyi) game sprite on transparent ground: calligraphic brush strokes that swell and taper, dry flying-white streaks, splashed wet ink that bleeds at its edges, and large areas left as bare paper. Black ink in five dilutions; the only colours are indigo-cyan (water, distance) and ink green (plants). No warm colour, no outline-and-fill, no airbrush. Orthographic side view, no cast shadow. SUBJECT: A slender second peak in the same splashed ink, to stand beside or behind the first.",
+  "tileSet": "bm"
+}

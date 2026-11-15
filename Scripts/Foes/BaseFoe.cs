@@ -78,9 +78,11 @@ public partial class BaseFoe : CharacterBody2D
     }
 
     // ── Soft volume (go-inside), same contract as Enemy ─────────────────────────────
-    private SoftVolume _softVolume;
-    public void EnterSoftVolume(SoftVolume v) => _softVolume = v;
-    public void ExitSoftVolume(SoftVolume v) { if (_softVolume == v) _softVolume = null; }
+    // Every volume this foe overlaps, and what they add up to (same contract as the player).
+    private readonly SoftVolumeSet _softVolumes = new();
+    private const string SoftVolumeFlowSource = "softvolume.flow";
+    public void EnterSoftVolume(SoftVolume v) => _softVolumes.Enter(v);
+    public void ExitSoftVolume(SoftVolume v) => _softVolumes.Exit(v);
 
     // ── Hazard-driven statuses, identical semantics to CharacterController ──────────
     private readonly DecayingDebuff _fire = new();
@@ -317,20 +319,24 @@ public partial class BaseFoe : CharacterBody2D
 
     private void Integrate(float dt)
     {
-        float damp = ExternalDamping * (_softVolume != null ? _softVolume.ExternalDampingMult : 1f);
+        _softVolumes.Prune();
+        if (_softVolumes.Flow != Vector2.Zero) SetContinuousExternalVelocity(SoftVolumeFlowSource, _softVolumes.Flow);
+        else ClearContinuousExternalVelocity(SoftVolumeFlowSource);
+
+        float damp = ExternalDamping * _softVolumes.ExternalDampingMult;
         ExternalVel = ExternalVel.MoveToward(Vector2.Zero, damp * dt);
 
         if (UseGravity)
         {
-            if (!IsOnFloor()) IntentVel.Y += Gravity * dt;
+            // a buoyant medium leaves only part of gravity (same contract as the player)
+            if (!IsOnFloor()) IntentVel.Y += Gravity * _softVolumes.GravityScale * dt;
             else if (IntentVel.Y > 0f) IntentVel.Y = 0f;
         }
         // no-gravity foes: IntentVel is fully controlled by the subclass movement/skills.
 
         // Match the player contract: the volume slows existing velocity over time but
         // never replaces gravity, an aerial move, or a launched foe with a fixed field.
-        if (_softVolume != null)
-            IntentVel = _softVolume.ApplyVelocityResistance(IntentVel, CurrentMoveSpeed, dt);
+        IntentVel = _softVolumes.Resist(IntentVel, CurrentMoveSpeed, dt);
 
         Vector2 continuous = Vector2.Zero;
         foreach (Vector2 value in _continuousExternalVelocity.Values) continuous += value;

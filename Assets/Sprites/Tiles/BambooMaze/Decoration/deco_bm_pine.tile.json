@@ -1,0 +1,12 @@
+{
+  "id": "deco.bm_pine",
+  "displayName": "Pine",
+  "role": "Decoration",
+  "footprint": {
+    "w": 4,
+    "h": 5
+  },
+  "fillFootprint": false,
+  "prompt": "Freehand Chinese ink painting (xieyi) game sprite on transparent ground: calligraphic brush strokes that swell and taper, dry flying-white streaks, splashed wet ink that bleeds at its edges, and large areas left as bare paper. Black ink in five dilutions; the only colours are indigo-cyan (water, distance) and ink green (plants). No warm colour, no outline-and-fill, no airbrush. Orthographic side view, no cast shadow. SUBJECT: A leaning pine on a spur of rock, for far and foreground layers.",
+  "tileSet": "bm"
+}
