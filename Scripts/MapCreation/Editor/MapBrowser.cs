@@ -78,12 +78,23 @@ public partial class MapBrowser : Control
         foreach (var failure in HillAutotile.SelfTest())
             GD.PushError("[MapCreation] " + failure);
 
+        foreach (var failure in TileVisualResolver.SelfTest())
+            GD.PushError("[MapCreation] " + failure);
+
+        foreach (var failure in AutotileProbe.SelfTest())
+            GD.PushError("[MapCreation] " + failure);
+
         foreach (var failure in TileManifestLoader.SelfTest())
             GD.PushError("[MapCreation] " + failure);
 
         string projectRoot = ProjectSettings.GlobalizePath("res://");
         foreach (var failure in TileManifestLoader.SelfTestFixtures(projectRoot))
             GD.PushError("[MapCreation] " + failure);
+
+        // Registry <-> sidecar <-> sprite-canvas agreement for every realm tile set. Only
+        // meaningful where the art sits on disk as loose files, i.e. a debug/editor run.
+        foreach (var problem in TileSetAudit.Run(projectRoot))
+            GD.PushError("[MapCreation] " + problem);
     }
 
     // ---------------------------------------------------------------- UI build

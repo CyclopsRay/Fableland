@@ -1,0 +1,12 @@
+{
+  "id": "deco.pl_moon",
+  "displayName": "Night Pearl",
+  "role": "Decoration",
+  "footprint": {
+    "w": 4,
+    "h": 4
+  },
+  "fillFootprint": false,
+  "prompt": "Cloisonné-enamel game sprite on transparent ground: every shape is a cell of flat saturated jewel enamel (imperial purple, lapis blue, turquoise, cinnabar red, jade green, ivory) enclosed by a raised, gleaming gold wire; faint enamel mottling, no other outlines, no gradients across cells. Chinese court motifs: dragon scales, ruyi cloud scrolls, running meander, lotus. A celestial palace above the clouds. Orthographic side view, no cast shadow, no text. SUBJECT: Heaven's moon as a great pearl: an ivory disc of pale turquoise seas in a rayed gold ring.",
+  "tileSet": "pl"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "hazard.hc_lava",
+  "displayName": "Lava",
+  "role": "Hazard",
+  "footprint": {
+    "w": 1,
+    "h": 1
+  },
+  "fillFootprint": true,
+  "autotileGroup": "hazard.hc_lava",
+  "autotileKind": "layered_hill_strip",
+  "artSource": "res://Assets/Sprites/Tiles/HollowCastle/Hazard/hazard_hc_lava_atlas.png",
+  "prompt": "Realistic, physically lit dark-fantasy dungeon game sprite on transparent ground: weighty stone, iron and rotting timber shaded as real relief by a dim cold key light from the upper left and a hot orange lava bounce from below; desaturated, damp, worn, crowded with detail; fire is the only saturated colour. Orthographic side view, no cast shadow, no text. SUBJECT: Molten lava as a fill material: glaring wavy surface with heat haze, dark cooled plates on a body glowing through its cracks.",
+  "autotileVariants": 4,
+  "tileSet": "hc"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "softvolume.bm_bamboo_tall",
+  "displayName": "Bamboo (tall)",
+  "role": "SoftVolume",
+  "footprint": {
+    "w": 2,
+    "h": 10
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese ink-wash (shuimo) game sprite on transparent ground: loaded-brush strokes with visible bristle streaks and flying-white, diluted grey washes for mass, no outline-and-fill, no gradients from an airbrush. Monochrome ink; only grey-green bamboo and cinnabar red lacquer/seals carry colour. Orthographic side view, no cast shadow, no text unless specified. SUBJECT: Two tall grey-green bamboo culms, one flat-brush stroke per internode with dark hooked joints, twigs and drooping black leaf fans in the upper two thirds. Enterable soft volume.",
+  "tileSet": "bm"
+}

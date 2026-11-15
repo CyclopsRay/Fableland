@@ -50,6 +50,14 @@ The contract, already in place for Pomegraknight:
 
 ## 4. Map & UI art
 
+- **Combat-map art is per realm, and each realm is a different medium** — flat poster
+  (Starfield), ink-wash (Wulin), lit realism (Dungeon), linocut print (Ghost Town), cloisonné
+  enamel (Cloud Court), storybook watercolour (the beach). The art direction, kits, palettes and
+  the rules every tile obeys are in **`Docs/Art/RealmStyleBible.md`**; the beach's own catalog is
+  `Docs/Art/BeachTileSet.md`. The five newer sets are painted by code
+  (`Tools/realm_art/`, deterministic, about a minute for all of them) and any sprite can be
+  swapped for a hand-made one by keeping its file name, footprint and canvas — the placeholder-
+  first policy (§1), applied to a whole world at a time.
 - Atlas terrain is deliberately restrained for now: irregular coast, subtle altitude tint, and
   contour strokes make each realm legible without implying a blocked route. A future art pass
   may replace these with shoreline, biome, and contour assets, but must preserve road clarity

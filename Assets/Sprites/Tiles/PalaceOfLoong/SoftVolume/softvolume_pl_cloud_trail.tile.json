@@ -1,0 +1,12 @@
+{
+  "id": "softvolume.pl_cloud_trail",
+  "displayName": "Trailing Cloud",
+  "role": "SoftVolume",
+  "footprint": {
+    "w": 4,
+    "h": 2
+  },
+  "fillFootprint": false,
+  "prompt": "Cloisonné-enamel game sprite on transparent ground: every shape is a cell of flat saturated jewel enamel (imperial purple, lapis blue, turquoise, cinnabar red, jade green, ivory) enclosed by a raised, gleaming gold wire; faint enamel mottling, no other outlines, no gradients across cells. Chinese court motifs: dragon scales, ruyi cloud scrolls, running meander, lotus. A celestial palace above the clouds. Orthographic side view, no cast shadow, no text. SUBJECT: A ruyi cloud drawing a long tail behind it. Enterable.",
+  "tileSet": "pl"
+}

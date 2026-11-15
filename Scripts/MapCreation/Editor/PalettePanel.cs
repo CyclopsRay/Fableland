@@ -3,16 +3,21 @@ namespace Fableland.MapCreation.Editor;
 using System;
 using System.Collections.Generic;
 using Godot;
+using Fableland.Map;
 using Fableland.MapCreation.Data;
 using Fableland.MapCreation.Editor.Tools;
 
 /// <summary>
 /// GDD §2.2, §7.1 — the tile palette, now a HORIZONTAL bottom-dock strip (item 1) instead
 /// of a right-panel column. Every registered tile def is a "chip" (sprite thumbnail +
-/// name + a ⚙ effect-config gear), grouped by <see cref="TileCategory"/> in
-/// <see cref="TileRegistry.All"/>'s own order (a category header appears whenever the
-/// category changes; the registry is authored grouped-by-category so no re-sort is needed —
-/// T00 rule 1 stays true).
+/// name + a ⚙ effect-config gear), grouped by realm tile set and <see cref="TileCategory"/>
+/// in <see cref="TileRegistry.All"/>'s own order (a header appears whenever either changes;
+/// the registry is authored grouped that way so no re-sort is needed — T00 rule 1 stays true).
+///
+/// A **Realm** selector at the left end filters the strip to one tile set (plus the shared
+/// markers, which always stay). Each realm has its own art language and a map is meant to
+/// stay inside one, so the selector opens on the realm the map is tagged for; with six
+/// realms' kits registered, an unfiltered strip is far too long to scan.
 ///
 /// Chips show the def's real sprite when its <see cref="TileDef.SpriteSlot"/> loads (item 8),
 /// so "implemented vs placeholder" is obvious at a glance; a missing/absent sprite falls back
@@ -27,6 +32,9 @@ public sealed class PalettePanel
     private readonly Action<string> _onConfigureEffect;
     private readonly Dictionary<string, PanelContainer> _chipByDefId = new();
     private readonly Dictionary<string, Texture2D> _thumbCache = new();
+    private readonly List<(Control Group, Control Separator, string TileSet)> _groups = new();
+    private readonly List<string> _filterSetIds = new();   // OptionButton index -> set id (null = all)
+    private OptionButton _setFilter;
 
     private const float ThumbSize = 32f;
     private const float ChipWidth = 76f;
@@ -42,6 +50,17 @@ public sealed class PalettePanel
 
     private void Build(Control container)
     {
+        var dock = new HBoxContainer
+        {
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+        };
+        dock.AddThemeConstantOverride("separation", 8);
+        container.AddChild(dock);
+
+        dock.AddChild(BuildRealmFilter());
+        dock.AddChild(new VSeparator());
+
         var scroll = new ScrollContainer
         {
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
@@ -49,32 +68,39 @@ public sealed class PalettePanel
             HorizontalScrollMode = ScrollContainer.ScrollMode.Auto,
             VerticalScrollMode = ScrollContainer.ScrollMode.Disabled,
         };
-        container.AddChild(scroll);
+        dock.AddChild(scroll);
 
-        // One horizontal strip of per-category groups.
+        // One horizontal strip of per-(tile set, category) groups.
         var strip = new HBoxContainer();
         strip.AddThemeConstantOverride("separation", 12);
         scroll.AddChild(strip);
 
         TileCategory? lastCategory = null;
-        VBoxContainer group = null;
+        string lastSet = null;
         HBoxContainer chipsRow = null;
 
         foreach (var def in TileRegistry.All)
         {
-            if (lastCategory != def.Category)
+            if (lastCategory != def.Category || lastSet != def.TileSet)
             {
                 lastCategory = def.Category;
+                lastSet = def.TileSet;
 
-                if (group != null) strip.AddChild(new VSeparator());
+                Control separator = null;
+                if (_groups.Count > 0)
+                {
+                    separator = new VSeparator();
+                    strip.AddChild(separator);
+                }
 
-                group = new VBoxContainer();
+                var group = new VBoxContainer();
                 group.AddThemeConstantOverride("separation", 2);
                 strip.AddChild(group);
+                _groups.Add((group, separator, def.TileSet));
 
                 group.AddChild(new Label
                 {
-                    Text = def.Category.ToString(),
+                    Text = GroupTitle(def),
                     MouseFilter = Control.MouseFilterEnum.Ignore,
                 });
 
@@ -85,6 +111,82 @@ public sealed class PalettePanel
 
             chipsRow.AddChild(BuildChip(def));
         }
+
+        ApplyRealmFilter(TileSetForDocument(_state.Document));
+    }
+
+    /// <summary>"Ground" for shared tiles, "SL · Ground" for a realm's — the prefix keeps
+    /// groups distinguishable when the selector is on "All realms".</summary>
+    private static string GroupTitle(TileDef def)
+    {
+        if (TileSets.TryGet(def.TileSet, out var info) && !string.IsNullOrEmpty(info.WorldAbbr))
+            return info.WorldAbbr + " · " + def.Category;
+        return def.Category.ToString();
+    }
+
+    private Control BuildRealmFilter()
+    {
+        var box = new VBoxContainer { CustomMinimumSize = new Vector2(190, 0) };
+        box.AddThemeConstantOverride("separation", 2);
+        box.AddChild(new Label { Text = "Realm", MouseFilter = Control.MouseFilterEnum.Ignore });
+
+        _setFilter = new OptionButton
+        {
+            FocusMode = Control.FocusModeEnum.None,
+            TooltipText = "Show one realm's tile set. Shared marker tiles are always shown.",
+        };
+        _setFilter.AddItem("All realms");
+        _filterSetIds.Add(null);
+        foreach (var info in TileSets.All)
+        {
+            if (info.Id == TileSets.Core) continue;
+            _setFilter.AddItem(info.DisplayName);
+            _filterSetIds.Add(info.Id);
+        }
+        _setFilter.ItemSelected += index =>
+        {
+            int i = (int)index;
+            ApplyRealmFilter(i >= 0 && i < _filterSetIds.Count ? _filterSetIds[i] : null);
+        };
+        box.AddChild(_setFilter);
+        return box;
+    }
+
+    /// <summary>Shows the groups of <paramref name="tileSet"/> plus the shared set; null shows
+    /// everything. Only visibility changes — chips are still built exactly once.</summary>
+    private void ApplyRealmFilter(string tileSet)
+    {
+        int index = _filterSetIds.IndexOf(tileSet);
+        if (index < 0) { index = 0; tileSet = null; }
+        if (_setFilter != null && _setFilter.Selected != index) _setFilter.Select(index);
+
+        bool first = true;
+        foreach (var (group, separator, set) in _groups)
+        {
+            bool show = tileSet == null || set == TileSets.Core || set == tileSet;
+            group.Visible = show;
+            if (separator != null) separator.Visible = show && !first;
+            if (show) first = false;
+        }
+    }
+
+    /// <summary>The tile set of the first world this map is tagged for (`MapDocument.Worlds`
+    /// holds names or abbreviations), or null when it is untagged / unknown.</summary>
+    private static string TileSetForDocument(MapDocument doc)
+    {
+        if (doc?.Worlds == null) return null;
+        foreach (string world in doc.Worlds)
+        {
+            string abbr = world?.Trim();
+            if (string.IsNullOrEmpty(abbr)) continue;
+            foreach (WorldDef def in WorldDef.Pool)
+            {
+                if (string.Equals(def.Name, abbr, StringComparison.OrdinalIgnoreCase)) { abbr = def.Abbr; break; }
+            }
+            string set = TileSets.ForWorldAbbr(abbr);
+            if (set != null) return set;
+        }
+        return null;
     }
 
     private Control BuildChip(TileDef def)

@@ -75,6 +75,28 @@ The atlas remains flat: low land is tinted darker and high land lighter, with cl
 at the lowland/plain and plain/highland thresholds. These contours are decoration only — they do
 not block roads or alter movement.
 
+### 2.2 Combat identity per world (v0.10.6)
+
+Each world's combat arenas have their own art language, building kit and map shape, so
+crossing a river changes how a fight is fought, not only how it looks. The realm name is what
+the combat layer calls that world's arenas. Art direction and kits:
+`Docs/Art/RealmStyleBible.md`; the map system: `Docs/MapCreation.gdd` §2.6.
+
+| World | Realm in combat | Medium | Arena shape | Favours |
+|-------|-----------------|--------|-------------|---------|
+| VanillaKindom | Beach | storybook watercolour | small flat cove | all-rounders |
+| Starland | Starfield | flat minimalist poster | vast, level, nearly empty; colossal stone monuments | long range |
+| Banboo Maze | Wulin (武林) | Chinese ink-wash | vertical; every bamboo is a soft volume | assassins |
+| HollowCastle | Dungeon | lit realism | crowded, low, hazardous; lava | brawlers, fire |
+| TheDeserted | Ghost Town | linocut print | two-storey street, mid-range | skirmishers, duellists |
+| Palace of LOOING | Cloud Court | cloisonné enamel | aerial; cloud soft volumes, scarce footing | air mobility |
+
+Starfield, Wulin and Dungeon are decided. Ghost Town and Cloud Court are proposals awaiting
+sign-off, and each realm has one built-in map so far (terrain label `sea-level`); nodes with
+another terrain label or in a realm with no matching map still fall back to the legacy arena
+(§2.1, `MapCreation.gdd` §9). Open questions — Cleopastar's home world, whether Gui Lin is the
+Banboo Maze — are listed in the style bible §10.
+
 ## 3. The seed
 
 Every run has an **8-character seed** (`[0-9A-Z]`). **All** map/game randomness flows

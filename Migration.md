@@ -9,6 +9,26 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.10.6** — **Realm tile sets: every world gets its own art and its own kind of arena.**
+  Five new combat-map tile sets, each in a different medium, with one built-in map apiece:
+  **Starfield** (Starland — flat minimalist poster; vast and empty, colossal stone monuments;
+  long range), **Wulin** (Banboo Maze — Chinese ink-wash; vertical, every bamboo a soft volume;
+  assassins), **Dungeon** (HollowCastle — lit realism; crowded, lava, spikes, chains to climb),
+  **Ghost Town** (TheDeserted — linocut print; two-storey duelling street) and **Cloud Court**
+  (Palace of LOOING — cloisonné enamel; aerial, cloud soft volumes). 100 new tile kinds, painted
+  by deterministic scripts (`Tools/realm_art/`); maps written as code (`Tools/realm_maps/`).
+  Engine: realm tile sets with a palette **Realm** filter; one shared resolver for tile art and
+  code-painted strip ground atlases that now draw in play; the Playtest and the arena build maps
+  from shared parts, so real runs gain **parallax**, Closeview finally draws in front of the
+  fighters, and prop sprites sit where the editor shows them; hazards are bound to scenes by
+  data and touching lava tiles merge into one hazard; the arena backdrop covers large maps.
+  New dev tools: a headless map content check and an in-engine map screenshot scene. Art
+  direction: `Docs/Art/RealmStyleBible.md`. The beach keeps its look: its ground still draws
+  as a seamless fill in play, and the three pieces on its parallax sky layer were re-placed
+  (`Maps/seashore.json`) so the sun and clouds sit where they did now that real runs honour
+  that layer's 0.55 parallax. (Verification:
+  `dotnet build`, 0 errors/warnings; headless Godot content check, 224 checks over 127 tile
+  kinds and 6 maps; all six maps rendered in-engine and reviewed.)
 - **0.10.4** — **Pixolotl click boost and universal combat opening.** SOBRECARGA is now a
   click-activated 1.5× local-time burst lasting ten generated frames or three real seconds.
   Bubble collision and the fallback visual now match the authored 2 m diameter. The Arena owns

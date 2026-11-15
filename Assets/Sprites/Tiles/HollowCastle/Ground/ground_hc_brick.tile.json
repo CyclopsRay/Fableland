@@ -1,0 +1,16 @@
+{
+  "id": "ground.hc_brick",
+  "displayName": "Dungeon Brick",
+  "role": "Ground",
+  "footprint": {
+    "w": 1,
+    "h": 1
+  },
+  "fillFootprint": true,
+  "autotileGroup": "terrain.hc_brick",
+  "autotileKind": "layered_hill_strip",
+  "artSource": "res://Assets/Sprites/Tiles/HollowCastle/Ground/ground_hc_brick_atlas.png",
+  "prompt": "Realistic, physically lit dark-fantasy dungeon game sprite on transparent ground: weighty stone, iron and rotting timber shaded as real relief by a dim cold key light from the upper left and a hot orange lava bounce from below; desaturated, damp, worn, crowded with detail; fire is the only saturated colour. Orthographic side view, no cast shadow, no text. SUBJECT: Damp dungeon masonry in running bond: chipped, cracked grey-blue bricks proud of dark recessed mortar, moss in the joints, a worn dusty lip with a cold glint on the walkable top, bricks fallen away from the underside.",
+  "autotileVariants": 4,
+  "tileSet": "hc"
+}

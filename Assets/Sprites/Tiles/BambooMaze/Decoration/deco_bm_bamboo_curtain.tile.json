@@ -1,0 +1,12 @@
+{
+  "id": "deco.bm_bamboo_curtain",
+  "displayName": "Bamboo Curtain",
+  "role": "Decoration",
+  "footprint": {
+    "w": 4,
+    "h": 8
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese ink-wash (shuimo) game sprite on transparent ground: loaded-brush strokes with visible bristle streaks and flying-white, diluted grey washes for mass, no outline-and-fill, no gradients from an airbrush. Monochrome ink; only grey-green bamboo and cinnabar red lacquer/seals carry colour. Orthographic side view, no cast shadow, no text unless specified. SUBJECT: A stand of distant bamboo in pale grey ink that tiles both ways: the backdrop of a bamboo sea at any height.",
+  "tileSet": "bm"
+}

@@ -112,9 +112,19 @@ public abstract partial class Hazard : Area2D
 
     public override void _Draw()
     {
-        var rect = _runtimeShapes == null ? new Rect2(-BoxSize / 2f, BoxSize) : _runtimeDebugBounds;
-        DrawRect(rect, TintFill);
-        DrawRect(rect, TintEdge, false, 3f);
+        if (_runtimeShapes == null)
+        {
+            // Scene-authored hazard with no art of its own: the tinted box IS its look.
+            var box = new Rect2(-BoxSize / 2f, BoxSize);
+            DrawRect(box, TintFill);
+            DrawRect(box, TintEdge, false, 3f);
+            return;
+        }
+
+        // Map-authored hazard: the tile's sprite is drawn by the map, so a filled box would
+        // paint over the art it describes. Keep the telegraph as an outline only — still the
+        // true hit bounds, from the same shapes the collision uses.
+        DrawRect(_runtimeDebugBounds, TintEdge, false, 2f);
     }
 
     protected abstract Color TintFill { get; }

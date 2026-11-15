@@ -61,12 +61,15 @@ public static class TileManifestLoader
         Dictionary<string, string> props = null;
         if (!string.IsNullOrWhiteSpace(manifest.ArtSource) ||
             !string.IsNullOrWhiteSpace(manifest.Prompt) ||
-            !string.IsNullOrWhiteSpace(manifest.AutotileKind))
+            !string.IsNullOrWhiteSpace(manifest.AutotileKind) ||
+            manifest.AutotileVariants.HasValue)
         {
             props = new Dictionary<string, string>();
-            if (!string.IsNullOrWhiteSpace(manifest.ArtSource)) props["artSource"] = manifest.ArtSource;
-            if (!string.IsNullOrWhiteSpace(manifest.Prompt)) props["prompt"] = manifest.Prompt;
-            if (!string.IsNullOrWhiteSpace(manifest.AutotileKind)) props["autotileKind"] = manifest.AutotileKind;
+            if (!string.IsNullOrWhiteSpace(manifest.ArtSource)) props[TileProps.ArtSource] = manifest.ArtSource;
+            if (!string.IsNullOrWhiteSpace(manifest.Prompt)) props[TileProps.Prompt] = manifest.Prompt;
+            if (!string.IsNullOrWhiteSpace(manifest.AutotileKind)) props[TileProps.AutotileKind] = manifest.AutotileKind;
+            if (manifest.AutotileVariants.HasValue)
+                props[TileProps.AutotileVariants] = manifest.AutotileVariants.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         return new TileDef
@@ -74,6 +77,7 @@ public static class TileManifestLoader
             Id = manifest.Id,
             DisplayName = string.IsNullOrWhiteSpace(manifest.DisplayName) ? manifest.Id : manifest.DisplayName,
             Category = category,
+            TileSet = string.IsNullOrWhiteSpace(manifest.TileSet) ? TileSets.Core : manifest.TileSet.Trim(),
             FootprintW = Math.Max(1, manifest.Footprint?.W ?? 1),
             FootprintH = Math.Max(1, manifest.Footprint?.H ?? 1),
             SpriteSlot = spriteSlot,

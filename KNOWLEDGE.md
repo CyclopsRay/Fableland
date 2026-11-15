@@ -84,14 +84,127 @@ are stored separately and persist across the entire run.
 repo-root `VERSION` file, and the HUD `VersionLabel` (`Scenes/Hud.tscn`) in sync. Shown
 top-left in-game.
 
-**Verification** — the dev host has **no Godot/.NET toolchain**, so edits are checked
-statically (brace/paren balance, `.tscn` resource paths, `GetNode` paths). This does NOT
-catch API-existence or type errors — do a real build when possible, and log anything the
-compiler surfaces below.
+**Verification** — check which host you are on before assuming. The main dev Mac **has** a
+toolchain (`dotnet` 9 on the PATH; Godot 4.7 .NET at
+`/Applications/Godot_mono.app/Contents/MacOS/Godot`), so build for real:
+`dotnet build Fableland.csproj`, and for map/tile work the headless content check
+(`Docs/Instructions/40-QA.md` §(2)). A host with no toolchain falls back to static checks
+(brace/paren balance, `.tscn` resource paths, `GetNode` paths), which do NOT catch
+API-existence or type errors — say so, and log anything a later compile surfaces below.
+Python tools (`Tools/`) need Pillow + numpy: use `/opt/homebrew/bin/python3` on the dev Mac —
+the Anaconda `python3` first on the PATH has a broken numpy (missing MKL) and dies on import.
 
 ---
 
 ## Caveats / gotchas (grow this on every bug fix)
+
+### A doc can say a renderer is wired when the code is not — and "the editor shows it" is not "the game shows it" (v0.10.6, realm tile sets)
+- **Symptom:** `BeachTileSet.md`, `MapCreation.gdd` and `HillAutotile.cs`'s own header all said
+  the layered-hill atlas was "WIRED" into `GridView` through `Props["autotileKind"]`; the
+  shipped `GridView` only ever called the older two-state `AutotileAtlas`, so the dispatch was
+  dead (lost between machines, with the docs kept). Separately, *nothing* outside the editor
+  canvas consulted any atlas: the Playtest and the arena each had a private `CreateTileVisual`
+  that stretched `SpriteSlot` over the cell, so built-up terrain would have drawn in play as
+  one repeated swatch with no surface, sides or underside.
+- **Rule:** which art a tile shows is decided by one pure function, `TileVisualResolver`, and
+  every view — editor canvas, Playtest, arena — calls it. Any intended difference between views
+  is a row in that class's table, not a second implementation. When a doc claims a code path
+  exists, grep for the call before building on it.
+- **Why:** three copies of "draw a tile" drift silently because each still draws *something*.
+  One resolver makes "what the editor shows", "what Play shows" and "what a run shows" the
+  same question, and a `SelfTest` can pin every branch.
+
+### Two builders for one map drift: real runs had no parallax, and the foreground drew behind the fighters (v0.10.6, realm tile sets)
+- **Symptom:** the editor Playtest and the combat arena built a map with separate, nearly
+  identical code. Only the Playtest's had a parallax layer class, so in a real run every far
+  layer sat rigidly behind the battlefield at its authored cells. In both, all map layers were
+  parented under the world node while characters were added elsewhere, so a Closeview layer —
+  documented as the foreground you hide behind — drew *behind* the player.
+- **Rule:** anything that plays a map builds it from the shared parts in
+  `Scripts/MapCreation/Runtime/` (`MapVisualBuilder`, `MapParallaxLayer`, `MapCollision`,
+  `MapHazardFactory`). Closeview layers are lifted over actors with `CloseviewZIndex`; parallax
+  layers read the viewport's current camera each frame instead of holding one, so a body swap
+  needs no rebinding. A fix made in a builder's private copy is a bug waiting in the other.
+- **Why:** "the Play button looked right" was the only test either path ever got, and it only
+  exercised one of them. Draw order that depends on which node happens to be added later is
+  not a layer order.
+
+### The arena's backdrop rect is the legacy arena's size, not the map's (v0.10.6, realm tile sets)
+- **Symptom:** `Arena.tscn`'s `Background` ColorRect spans x −400…2400, y −400…1000. An
+  authored map takes the canvas colour from it, but a map wider than ~37 cells or taller than
+  ~15 ran past the rect: beyond it the screen showed the engine's clear colour.
+- **Rule:** when a scene node is reused as an authored map's canvas, size it from the map
+  (`GameManager.TryBuildSelectedMap` now stretches it over the battlefield plus a margin), the
+  same way camera limits are overwritten from the map rather than trusted from the scene.
+- **Why:** scene-authored extents are defaults for the scene's own content. Every one of them
+  — camera limits (v0.6.17), now the backdrop — has to be re-derived when a map replaces that
+  content, and a small test map never shows the ones that were missed.
+
+### Touching hazard tiles each tick a body; a hazard painted as an area must be one hazard (v0.10.6, realm tile sets)
+- **Symptom:** every hazard tile became its own `Hazard` Area2D with its own per-body timer. A
+  pool painted from 1×1 lava tiles would tick a fighter once per tile they overlapped — double
+  damage for standing across a grid line, with no visible reason.
+- **Rule:** a hazard kind that is painted as a contiguous area declares
+  `Props["mergeAdjacent"] = "true"`; `MapHazardFactory.Plan` fuses touching tiles of that kind
+  into one hazard with many shapes. Hazards also name their runtime scene in `Props["scene"]` —
+  the builders no longer `switch` on tile ids, so a new hazard is a registry entry plus a scene.
+- **Why:** the grid is an authoring unit, not a gameplay unit (GDD §2.4). Anything whose effect
+  depends on where the cell boundaries fall is leaking the grid into combat.
+
+### A prop sprite's canvas and its footprint must agree — pin the canvas, or the editor and the game place it differently (v0.10.6, realm tile sets)
+- **Symptom:** the editor trims a prop to its used rect, aspect-fits that into the footprint
+  and anchors it bottom-centre; the Playtest and arena fitted the *whole texture* instead. Any
+  sprite with transparent padding therefore sat smaller and higher in play than in the editor
+  (a tower floating above its floor), and a platform whose paint stopped short of its canvas
+  top left the player hovering above it.
+- **Rule:** play now uses the same used-rect fit as the editor (`MapVisualBuilder`). Painted
+  realm sprites go further: the canvas *is* the footprint (`footprint × 128 px`) with the four
+  corner pixels at alpha 1/255 so the used rect is the whole canvas, and platforms put their
+  walking line on the top row. `TileSetAudit` fails a painted sprite whose canvas is not its
+  footprint's shape, and `save_sprite(walk_top=…)` refuses a platform painted too low.
+- **Why:** "fit whatever bounds the art happens to have" makes placement a property of the
+  export, not of the design. A pinned canvas makes what you paint in footprint coordinates
+  exactly what appears, in every view, and lets multi-cell pieces register against each other.
+
+### Far layers: anchored at the spawn, not the opening camera; they sink as you climb; never mirror a loop (v0.10.6, realm maps)
+- **Symptom:** first previews of the realm maps showed (a) sky pieces a couple of rows away
+  from where they were authored on the very first frame, (b) a dark band under the horizon and
+  under the dunes once the camera rose, (c) "butterfly" twins in every looping range, (d) a
+  hairline seam every 16 cells in one looping range.
+- **Rule:** the layer offset is `(camera − anchor) × (1 − parallax)` and the anchor is the
+  **spawn marker point** — the opening camera is clamped inside the map, so the two differ and
+  a far layer is displaced from frame one. Compose far layers in start-screen rows
+  (`mapkit.Layer.srow` / `pin` / `seen_from`). A far layer moves *down* the screen by
+  `parallaxY ×` the camera's climb, so land-like far sprites carry flat colour to the bottom of
+  their canvas. A looping layer takes one sprite per 16-cell period — never a sprite beside its
+  own flip. Anything that shifts a tiling sprite's paint (a print's off-register nudge) must
+  wrap around in x, not leave a bare strip. Keep the spawn ≥ 9 cells from the left edge when a
+  screen-pinned layer needs its left side (authored columns cannot be negative).
+- **Why:** parallax is authored in a space that is not the screen and not the map. Until the
+  arithmetic lives in one helper, every far layer is placed by trial and error — and far
+  layers also obey one-tile-per-cell, so at parallax *p* a tile *W* wide uses *W/p* cells of
+  travel and only two or three silhouettes fit per layer.
+
+### There is no kill plane: an authored map must be sealed (v0.10.6, realm maps)
+- **Symptom (found by reading, before it shipped):** nothing ends a fall. A character that
+  leaves the bottom of an authored battlefield, or walks off its side above the wall, falls or
+  runs forever outside the camera limits.
+- **Rule:** every battlefield has solid floor edge to edge, solid walls to the top row on both
+  sides, and solid rock under any pool of a fill hazard (lava is a hazard, not ground). The map
+  kit cannot check this; the map author must.
+- **Why:** the legacy arena was a closed box, so the question never arose. Open maps make it a
+  content rule until the game has an out-of-bounds rule of its own.
+
+### A registry that throws in its static constructor takes every map with it (v0.10.6, realm tile sets)
+- **Symptom (avoided):** `TileRegistry` built its id lookup with `ToDictionary`, which throws on
+  a duplicate id — inside a static constructor, i.e. a `TypeInitializationException` the first
+  time *anything* touches a tile, in the middle of a run.
+- **Rule:** registries built at type-init time must not throw on bad content: first
+  registration wins, the duplicate is recorded, and `Validate()` reports it at boot (T00 rule
+  4: fail loudly in debug, degrade gracefully in release). With one file per realm, two files
+  minting the same id is now a realistic slip.
+- **Why:** a static-constructor failure is permanent for the process and surfaces far from its
+  cause. Content errors belong in the validation report, not in the type loader.
 
 ### Boss placement must come from the selected authored arena (v0.10.4, Seashore V fix)
 - **Symptom:** the LV4 boss used the fixed legacy-Arena centre, placing it in the wrong part of a

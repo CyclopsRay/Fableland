@@ -1,0 +1,16 @@
+{
+  "id": "ground.bm_rock",
+  "displayName": "Ink Rock",
+  "role": "Ground",
+  "footprint": {
+    "w": 1,
+    "h": 1
+  },
+  "fillFootprint": true,
+  "autotileGroup": "terrain.bm_rock",
+  "autotileKind": "layered_hill_strip",
+  "artSource": "res://Assets/Sprites/Tiles/BambooMaze/Ground/ground_bm_rock_atlas.png",
+  "prompt": "Chinese ink-wash (shuimo) game sprite on transparent ground: loaded-brush strokes with visible bristle streaks and flying-white, diluted grey washes for mass, no outline-and-fill, no gradients from an airbrush. Monochrome ink; only grey-green bamboo and cinnabar red lacquer/seals carry colour. Orthographic side view, no cast shadow, no text unless specified. SUBJECT: Ink-wash boulder mass: opaque grey wash body, bold dry-brush contour where rock meets air, axe-cut texture strokes, moss dots on the walkable lip, underside dissolving into dry tatters.",
+  "autotileVariants": 4,
+  "tileSet": "bm"
+}

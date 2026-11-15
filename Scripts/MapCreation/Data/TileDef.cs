@@ -94,6 +94,12 @@ public sealed class TileDef
     public string DisplayName { get; init; }
     public TileCategory Category { get; init; }
 
+    /// <summary>The realm tile set this kind belongs to (<see cref="TileSets"/>): "core" for
+    /// markers and art-less placeholders shared by every realm, otherwise a world's lower-case
+    /// abbreviation ("vk", "sl", "bm", ...). Each realm has its own art language, so the
+    /// palette filters by this and a map is expected to stay inside one set plus "core".</summary>
+    public string TileSet { get; init; } = TileSets.Core;
+
     /// <summary>Cells occupied, anchored at the placed tile's (X,Y) top-left. Default 1x1.</summary>
     public int FootprintW { get; init; } = 1;
     public int FootprintH { get; init; } = 1;

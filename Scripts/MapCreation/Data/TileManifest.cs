@@ -37,9 +37,17 @@ public sealed class TileManifest
     /// <summary>Optional connected-look group (§2.5) for ground tiles, e.g. "terrain.beach_sand".</summary>
     public string AutotileGroup { get; set; }
 
-    /// <summary>Optional editor classifier family, e.g. "layered_hill". Omitted groups use
-    /// the legacy two-state north-edge lookup.</summary>
+    /// <summary>Optional classifier family: "layered_hill" (the 4x4 beach sheet) or
+    /// "layered_hill_strip" (a code-painted variant strip). Omitted groups use the legacy
+    /// two-state north-edge lookup.</summary>
     public string AutotileKind { get; set; }
+
+    /// <summary>Variant-group count of a "layered_hill_strip" atlas (see
+    /// <see cref="HillAutotile.ClassifyStrip"/>). Omitted = 1.</summary>
+    public int? AutotileVariants { get; set; }
+
+    /// <summary>Realm tile set id (<see cref="TileSets"/>): "vk", "sl", "bm", ... Omitted = "core".</summary>
+    public string TileSet { get; set; }
 
     /// <summary>Optional per-side neighbor-compatibility tags (§2.5 extension).</summary>
     public TileManifestEdges Edges { get; set; }

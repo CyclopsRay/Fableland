@@ -1,0 +1,12 @@
+{
+  "id": "platform.sl_constellation",
+  "displayName": "Constellation Bridge",
+  "role": "Platform",
+  "footprint": {
+    "w": 4,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Flat minimalist poster-style game sprite on transparent ground: no outlines, each form built from two or three flat colour planes with a hard light/shadow terminator, faint print grain, hairline gold inlay and star-shaped cut-outs as the only ornament. Ancient Egypt at dusk: warm apricot sandstone, plum shadows, indigo sky, a teal accent. Orthographic side view, no cast shadow, no text. SUBJECT: A walkable constellation: a hairline bar of gold strung between five stars, star-dust trailing beneath.",
+  "tileSet": "sl"
+}

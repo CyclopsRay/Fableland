@@ -1,0 +1,12 @@
+{
+  "id": "softvolume.bm_bamboo_young",
+  "displayName": "Bamboo (young)",
+  "role": "SoftVolume",
+  "footprint": {
+    "w": 1,
+    "h": 4
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese ink-wash (shuimo) game sprite on transparent ground: loaded-brush strokes with visible bristle streaks and flying-white, diluted grey washes for mass, no outline-and-fill, no gradients from an airbrush. Monochrome ink; only grey-green bamboo and cinnabar red lacquer/seals carry colour. Orthographic side view, no cast shadow, no text unless specified. SUBJECT: A single young bamboo culm, slim, with small tight leaf fans.",
+  "tileSet": "bm"
+}

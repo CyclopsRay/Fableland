@@ -348,48 +348,47 @@ public partial class GridView : Control
         }
     }
 
-    /// <summary>The texture a placed tile should draw with: its <see cref="TileDef.SpriteSlot"/>,
-    /// or the connected-look autotile region (best-effort v1, see AutotileAtlas doc) when the
-    /// def carries a non-empty <c>AutotileGroup</c> + an <c>artSource</c> atlas path. Shared by
-    /// the authoring draw and the Play preview so both look identical. Null = flat color quad.</summary>
+    /// <summary>The texture (and, for atlas-backed terrain, the one atlas cell) a placed tile
+    /// draws with on the editor canvas. Which art that is comes from
+    /// <see cref="TileVisualResolver"/> — the same class the Playtest and the combat arena
+    /// ask — so this method only turns its answer into pixels. Null = flat color quad.</summary>
     private SpriteTexture ResolveTexture(int layerIndex, PlacedTile tile, TileDef def)
     {
         if (def == null) return null;
-        SpriteTexture texture = TextureFor(def.SpriteSlot);
 
-        if (!string.IsNullOrEmpty(def.AutotileGroup) &&
-            def.Props != null && def.Props.TryGetValue("artSource", out var artPath))
+        TileVisual visual = TileVisualResolver.Resolve(def, tile.X,
+            (dx, dy) => NeighborSharesGroup(layerIndex, tile.X + dx, tile.Y + dy, def.AutotileGroup),
+            authoringView: true);
+
+        SpriteTexture texture = TextureFor(visual.TexturePath);
+        if (!visual.HasRegion) return texture;
+
+        // Atlas missing on disk: degrade to the kind's plain swatch instead of a wrong region.
+        if (texture?.Texture == null) return TextureFor(def.SpriteSlot);
+
+        // Cell size is DERIVED from the sheet (never a typed pixel rect), so an atlas can be
+        // re-exported at another resolution without touching code.
+        Vector2 texSize = texture.Texture.GetSize();
+        float cellW = texSize.X / Mathf.Max(1, visual.Cols);
+        float cellH = texSize.Y / Mathf.Max(1, visual.Rows);
+        return new SpriteTexture
         {
-            var atlasSprite = TextureFor(artPath);
-            if (atlasSprite?.Texture != null)
-            {
-                bool northSame = NeighborSharesGroup(layerIndex, tile.X, tile.Y - 1, def.AutotileGroup);
-                if (AutotileAtlas.TryGetCell(def.AutotileGroup, northSame, out int row, out int col))
-                {
-                    Vector2 texSize = atlasSprite.Texture.GetSize();
-                    float cellW = texSize.X / AutotileAtlas.Cols;
-                    float cellH = texSize.Y / AutotileAtlas.Rows;
-                    texture = new SpriteTexture
-                    {
-                        Texture = atlasSprite.Texture,
-                        SourceRect = new Rect2(col * cellW, row * cellH, cellW, cellH)
-                    };
-                }
-            }
-        }
-
-        return texture;
+            Texture = texture.Texture,
+            SourceRect = new Rect2(visual.Col * cellW, visual.Row * cellH, cellW, cellH),
+        };
     }
 
     /// <summary>Whether the cell at (x, y) on `layerIndex` holds a tile whose def shares
-    /// `autotileGroup` — out-of-bounds/empty/unknown-def all count as "not same" (an edge).
-    /// Only tests the anchor cell, not a placed tile's full footprint: fine while every
-    /// AutotileGroup-tagged def is 1x1 (GDD §2.5/Docs/Art/BeachTileSet.md).</summary>
+    /// `autotileGroup`. Delegates to <see cref="AutotileProbe"/> — the same neighbour and
+    /// map-edge rule the play view uses — and only tests each placed tile's anchor cell, which
+    /// is exact while every AutotileGroup-tagged def is 1x1 (TileRegistry.Validate enforces
+    /// that for strip atlases).</summary>
     private bool NeighborSharesGroup(int layerIndex, int x, int y, string autotileGroup)
     {
-        var neighbor = State?.OccupancyOf(layerIndex)?.TileAt(x, y);
-        if (neighbor == null) return false;
-        return TileRegistry.TryGet(neighbor.DefId, out var neighborDef) && neighborDef.AutotileGroup == autotileGroup;
+        var layers = State?.Document?.Layers;
+        if (layers == null || layerIndex < 0 || layerIndex >= layers.Count || layers[layerIndex] == null) return false;
+        return AutotileProbe.SameGroup(State.OccupancyOf(layerIndex), layers[layerIndex].GridW, layers[layerIndex].GridH,
+            x, y, autotileGroup, id => TileRegistry.TryGet(id, out var def) ? def : null);
     }
 
     private SpriteTexture TextureFor(string path)

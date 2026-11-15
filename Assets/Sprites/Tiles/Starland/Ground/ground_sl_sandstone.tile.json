@@ -1,0 +1,16 @@
+{
+  "id": "ground.sl_sandstone",
+  "displayName": "Monument Sandstone",
+  "role": "Ground",
+  "footprint": {
+    "w": 1,
+    "h": 1
+  },
+  "fillFootprint": true,
+  "autotileGroup": "terrain.sl_sandstone",
+  "autotileKind": "layered_hill_strip",
+  "artSource": "res://Assets/Sprites/Tiles/Starland/Ground/ground_sl_sandstone_atlas.png",
+  "prompt": "Flat minimalist poster-style game sprite on transparent ground: no outlines, each form built from two or three flat colour planes with a hard light/shadow terminator, faint print grain, hairline gold inlay and star-shaped cut-outs as the only ornament. Ancient Egypt at dusk: warm apricot sandstone, plum shadows, indigo sky, a teal accent. Orthographic side view, no cast shadow, no text. SUBJECT: Monument masonry: huge dressed sandstone blocks in running bond, engraved four-point stars, a pale cornice with a gold inlay line on top and a plum plinth course at the base.",
+  "autotileVariants": 4,
+  "tileSet": "sl"
+}

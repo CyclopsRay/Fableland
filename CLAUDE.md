@@ -21,6 +21,10 @@ live in `Migration.md` (see §0 for the delivered prototype).
   first and graduate into GDDs via the change workflow.
 - **`Docs/Art/BeachTileSet.md`** — beach combat-map tile catalog, sprite provenance,
   footprints/effect areas, style lock, and the remaining terrain-atlas slicing work.
+- **`Docs/Art/RealmStyleBible.md`** — every other realm's combat-map art direction (one
+  medium per world), tile kits, arena grammar, and the rules a tile and a map must obey.
+  Read it before adding a tile, repainting art (`Tools/realm_art/`) or composing a map
+  (`Tools/realm_maps/`).
 
 ## Mandatory workflow
 - **After fixing ANY bug, add a caveat to `KNOWLEDGE.md`** (symptom → rule → why) under
@@ -32,7 +36,8 @@ live in `Migration.md` (see §0 for the delivered prototype).
 - **Verify before committing.** The dev host may have no Godot/.NET toolchain, so at minimum
   check statically (brace/paren balance, `.tscn` resource paths resolve, `GetNode` paths
   match scenes). Remember static checks miss type/API-existence errors — do a real build
-  when a toolchain is available.
+  when a toolchain is available (`dotnet build Fableland.csproj`; for map/tile work also the
+  headless content check in `Docs/Instructions/40-QA.md` §(2)).
 
 ## Conventions (details in KNOWLEDGE.md / Units.cs)
 - **Units:** 32 px/m; player 2 m, jump 8 m, 1 s ground jump ⇒ g = 2048 px/s², jump 1024 px/s.

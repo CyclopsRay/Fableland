@@ -6,14 +6,19 @@ using System.Linq;
 
 /// <summary>
 /// GDD §2.2 (T20 registry pattern) — the code-defined table of tile kinds.
-/// Adding a tile kind means adding an entry here, never editing a switch
-/// (T00 rule 1). Built once in the static constructor; read-only after boot.
-/// Pure C# — no Godot.
+/// Adding a tile kind means adding an entry, never editing a switch (T00 rule 1).
+/// Built once in the static constructor; read-only after boot. Pure C# — no Godot.
+///
+/// The table is this file's shared/beach list followed by one realm tile set per file
+/// under `Data/TileSets/` (see <see cref="TileSets"/> and `Docs/Art/RealmStyleBible.md`).
+/// The set list in the constructor is explicit and ordered: a realm's tiles are live only
+/// once its `Defs()` is named there — still no scan-on-boot.
 /// </summary>
 public static class TileRegistry
 {
     private static readonly List<TileDef> _order;
     private static readonly Dictionary<string, TileDef> _defs;
+    private static readonly List<string> _duplicateIds = new();
 
     /// <summary>Ordered enumeration for the palette (GDD §7.1).</summary>
     public static IReadOnlyList<TileDef> All => _order;
@@ -25,24 +30,26 @@ public static class TileRegistry
             new()
             {
                 Id = "ground.grass", DisplayName = "Grass", Category = TileCategory.Ground,
+                TileSet = TileSets.VanillaKingdom,
                 EditorColor = "#76B947", AutotileGroup = "terrain.coastal_grass",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/ground_grass_seamless.png",
                 SpriteFillFootprint = true,
                 Props = new Dictionary<string, string>
                 {
-                    ["artSource"] = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/terrain_beach_atlas.png",
+                    [TileProps.ArtSource] = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/terrain_beach_atlas.png",
                 },
             },
             new()
             {
                 Id = "ground.sand", DisplayName = "Beach Sand", Category = TileCategory.Ground,
+                TileSet = TileSets.VanillaKingdom,
                 EditorColor = "#E8C878", AutotileGroup = "terrain.sand_hill",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/ground_sand_seamless.png",
                 SpriteFillFootprint = true,
                 Props = new Dictionary<string, string>
                 {
-                    ["artSource"] = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/terrain_sand_hill_atlas.png",
-                    ["autotileKind"] = "layered_hill",
+                    [TileProps.ArtSource] = "res://Assets/Sprites/Tiles/VanillaKingdom/Ground/terrain_sand_hill_atlas.png",
+                    [TileProps.AutotileKind] = HillAutotile.KindSheet,
                 },
             },
             new()
@@ -64,18 +71,21 @@ public static class TileRegistry
             new()
             {
                 Id = "platform.bench", DisplayName = "Beach Bench", Category = TileCategory.Platform,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 2, FootprintH = 1, EditorColor = "#B88755",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Platform/platform_bench.png",
             },
             new()
             {
                 Id = "platform.sun_lounger", DisplayName = "Sun Lounger", Category = TileCategory.Platform,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 3, FootprintH = 1, EditorColor = "#C8A675",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Platform/platform_sun_lounger.png",
             },
             new()
             {
                 Id = "platform.lifeguard_tower", DisplayName = "Lifeguard Tower", Category = TileCategory.Platform,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 4, FootprintH = 8, EditorColor = "#4F9B9B",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Platform/platform_lifeguard_tower.png",
             },
@@ -88,6 +98,7 @@ public static class TileRegistry
             new()
             {
                 Id = "softvolume.cloud1x1", DisplayName = "Cloud (1x1)", Category = TileCategory.SoftVolume,
+                TileSet = TileSets.VanillaKingdom,
                 EditorColor = "#B0E0E6",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/SoftVolume/softvolume_cloud_small.png",
                 SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.3f },
@@ -95,6 +106,7 @@ public static class TileRegistry
             new()
             {
                 Id = "softvolume.cloud2x1", DisplayName = "Cloud (2x1)", Category = TileCategory.SoftVolume,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 2, FootprintH = 1, EditorColor = "#ADD8E6",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/SoftVolume/softvolume_cloud_medium.png",
                 SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.3f },
@@ -102,6 +114,7 @@ public static class TileRegistry
             new()
             {
                 Id = "softvolume.cloud3x2", DisplayName = "Cloud (3x2)", Category = TileCategory.SoftVolume,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 3, FootprintH = 2, EditorColor = "#A9D7E3",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/SoftVolume/softvolume_cloud_large.png",
                 SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.3f },
@@ -109,6 +122,7 @@ public static class TileRegistry
             new()
             {
                 Id = "softvolume.palm_tree", DisplayName = "Palm Tree", Category = TileCategory.SoftVolume,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 3, FootprintH = 4, EditorColor = "#4E9A51",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/SoftVolume/softvolume_palm_tree_v2.png",
                 SoftVolumeTuning = new SoftVolumeTuning { StagnationIndex = 0.1f },
@@ -117,27 +131,31 @@ public static class TileRegistry
             new()
             {
                 Id = "hazard.bonfire", DisplayName = "Bonfire", Category = TileCategory.Hazard,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 2, FootprintH = 1, EditorColor = "#FF4500",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Hazard/hazard_bonfire_flat.png",
                 // Deliberately catches only the hot center, not the full 2 m art width.
                 EffectArea = ShapeDef.Circle(MapGrid.PixelsPerCell, MapGrid.PixelsPerCell * 0.65f,
                     MapGrid.PixelsPerCell * 0.35f),
+                Props = new Dictionary<string, string> { [TileProps.Scene] = "res://Scenes/FireHazard.tscn" },
             },
             new()
             {
                 Id = "hazard.freezepit", DisplayName = "Freeze Pit", Category = TileCategory.Hazard,
                 EditorColor = "#66CCFF",
                 EffectArea = ShapeDef.Rect(0f, 0f, MapGrid.PixelsPerCell, MapGrid.PixelsPerCell),
+                Props = new Dictionary<string, string> { [TileProps.Scene] = "res://Scenes/FreezeHazard.tscn" },
             },
             new()
             {
                 Id = "hazard.tsunami_trigger", DisplayName = "Tsunami Trigger", Category = TileCategory.Hazard,
+                TileSet = TileSets.VanillaKingdom,
                 EditorColor = "#287DB5",
                 EffectArea = ShapeDef.Rect(0f, 0f, MapGrid.PixelsPerCell, MapGrid.PixelsPerCell),
                 Props = new Dictionary<string, string>
                 {
-                    ["scene"] = "res://Scenes/TsunamiTrigger.tscn",
-                    ["spawnHazard"] = "hazard.tsunami",
+                    [TileProps.Scene] = "res://Scenes/TsunamiTrigger.tscn",
+                    [TileProps.SpawnHazard] = "hazard.tsunami",
                 },
             },
 
@@ -176,6 +194,7 @@ public static class TileRegistry
             new()
             {
                 Id = "deco.caution_sign", DisplayName = "Caution Sign", Category = TileCategory.Decoration,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 1, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#E66B42",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Decoration/deco_caution_monkey.png",
@@ -183,6 +202,7 @@ public static class TileRegistry
             new()
             {
                 Id = "deco.sand_castle", DisplayName = "Sand Castle", Category = TileCategory.Decoration,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 2, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#DDBB68",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Decoration/deco_sand_castle.png",
@@ -190,6 +210,7 @@ public static class TileRegistry
             new()
             {
                 Id = "deco.sun", DisplayName = "Sun", Category = TileCategory.Decoration,
+                TileSet = TileSets.VanillaKingdom,
                 FootprintW = 2, FootprintH = 2, AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#FFD24A",
                 SpriteSlot = "res://Assets/Sprites/Tiles/VanillaKingdom/Decoration/deco_sun_chibi.png",
@@ -207,6 +228,7 @@ public static class TileRegistry
             new()
             {
                 Id = "rule.cloudZone", DisplayName = "Cloud Zone (rule)", Category = TileCategory.Rule,
+                TileSet = TileSets.VanillaKingdom,
                 AllowedRoles = LayerRoleMask.Any,
                 EditorColor = "#DDA0DD",
                 RuleProps = new RuleProps
@@ -226,7 +248,27 @@ public static class TileRegistry
             },
         };
 
-        _defs = _order.ToDictionary(d => d.Id, d => d);
+        // Realm tile sets, in TileSets.All order.
+        _order.AddRange(StarlandTileSet.Defs());
+        _order.AddRange(WulinTileSet.Defs());
+        _order.AddRange(DungeonTileSet.Defs());
+        _order.AddRange(DesertedTileSet.Defs());
+        _order.AddRange(LoongTileSet.Defs());
+
+        // A duplicate id must not take the whole registry down with a type-initializer
+        // exception (T00 rule 4): first registration wins, Validate() reports the rest.
+        _defs = new Dictionary<string, TileDef>(_order.Count);
+        for (int i = _order.Count - 1; i >= 0; i--)
+        {
+            TileDef def = _order[i];
+            if (def == null || string.IsNullOrEmpty(def.Id)) { _order.RemoveAt(i); continue; }
+        }
+        for (int i = 0; i < _order.Count; i++)
+        {
+            if (_defs.TryAdd(_order[i].Id, _order[i])) continue;
+            _duplicateIds.Add(_order[i].Id);
+            _order.RemoveAt(i--);
+        }
     }
 
     public static bool TryGet(string id, out TileDef def)
@@ -239,16 +281,41 @@ public static class TileRegistry
         return _defs.TryGetValue(id, out def);
     }
 
-    /// <summary>Pure validation (no Godot): duplicate ids can't happen (dictionary keys), so
-    /// this checks rule spawnTable defIds resolve, footprints &gt;= 1, and weights &gt; 0.</summary>
+    /// <summary>Pure validation (no Godot): duplicate ids, unknown tile sets, hazards with no
+    /// runtime scene, malformed strip-atlas tiles, footprints &gt;= 1, soft-volume tuning ranges,
+    /// and that rule spawnTable defIds resolve with weights &gt; 0.</summary>
     public static List<string> Validate()
     {
         var problems = new List<string>();
+
+        foreach (string id in _duplicateIds)
+            problems.Add($"{id}: registered more than once; only the first definition is live");
 
         foreach (var def in _order)
         {
             if (def.FootprintW < 1 || def.FootprintH < 1)
                 problems.Add($"{def.Id}: footprint must be >= 1x1 (got {def.FootprintW}x{def.FootprintH})");
+
+            if (!TileSets.TryGet(def.TileSet, out _))
+                problems.Add($"{def.Id}: unknown tile set '{def.TileSet}' (add it to TileSets.All)");
+
+            // A hazard with no scene would paint in the editor and then do nothing in play.
+            if (def.Category == TileCategory.Hazard &&
+                (def.Props == null || !def.Props.TryGetValue(TileProps.Scene, out string scene) || string.IsNullOrWhiteSpace(scene)))
+                problems.Add($"{def.Id}: Hazard tile declares no Props[\"{TileProps.Scene}\"] runtime scene");
+
+            if (def.Props != null && def.Props.TryGetValue(TileProps.AutotileKind, out string kind) &&
+                kind == HillAutotile.KindStrip)
+            {
+                if (def.FootprintW != 1 || def.FootprintH != 1)
+                    problems.Add($"{def.Id}: a strip-atlas tile must be 1x1 (got {def.FootprintW}x{def.FootprintH})");
+                if (string.IsNullOrEmpty(def.AutotileGroup))
+                    problems.Add($"{def.Id}: a strip-atlas tile needs an AutotileGroup");
+                if (!def.Props.ContainsKey(TileProps.ArtSource))
+                    problems.Add($"{def.Id}: a strip-atlas tile needs Props[\"{TileProps.ArtSource}\"]");
+                if (!def.Props.ContainsKey(TileProps.AutotileVariants))
+                    problems.Add($"{def.Id}: a strip-atlas tile needs Props[\"{TileProps.AutotileVariants}\"]");
+            }
 
             if (def.SoftVolumeTuning != null)
             {

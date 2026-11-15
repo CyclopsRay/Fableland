@@ -1,0 +1,12 @@
+{
+  "id": "platform.bm_roof_wide",
+  "displayName": "Temple Roof (wide)",
+  "role": "Platform",
+  "footprint": {
+    "w": 6,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese ink-wash (shuimo) game sprite on transparent ground: loaded-brush strokes with visible bristle streaks and flying-white, diluted grey washes for mass, no outline-and-fill, no gradients from an airbrush. Monochrome ink; only grey-green bamboo and cinnabar red lacquer/seals carry colour. Orthographic side view, no cast shadow, no text unless specified. SUBJECT: Sweeping blue-grey tiled temple roof in side view, heavy inked ridge beam with owl-tail curls, flying upturned eaves, a row of round tile-ends, faded red lacquer fascia.",
+  "tileSet": "bm"
+}

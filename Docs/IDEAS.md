@@ -37,6 +37,14 @@ numbers on old verbs, it's a skin, not a character.
 
 ## 2. New realms / worlds (each needs: palette, terrain/coast identity, foe pair, node gimmick)
 
+> **Graduated (v0.10.6): combat-map art direction.** Each world's combat arenas are now drawn
+> in a different *medium* with its own tile kit and arena grammar — canon lives in
+> `Docs/Art/RealmStyleBible.md`. The six pool worlds are built. That file's §9 reserves a
+> medium for each world below that is still an idea (shadow-puppet theatre for Kingdom of
+> Horror, unfinished pencil for The Margins, …), and its §10 notes that Gui Lin's ink-wash
+> identity is already what the Banboo Maze's "Wulin" set draws. A new world needs a fifth
+> thing on top of the four in this heading: **a medium nobody else is using.**
+
 | World | Palette | Landmark / terrain identity | Gimmick |
 |-------|---------|------------------------------|---------|
 | **Gui Lin** (owed to Pangda — TBD #19) | ink-wash green/grey | broken moon bridge / mist sea | Mist: nodes hide their type icon until adjacent (mist-of-war *inside* a revealed world). |

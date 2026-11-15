@@ -4,6 +4,13 @@ Production catalog for the beach assets used by `Docs/MapCreation.gdd`. One map 
 is 64 px / 2 m. The footprint is authoring occupancy; the effect area is the runtime
 collider/trigger and may be smaller than the visible art.
 
+> **This is one realm of six.** The beach is the Vanilla Kingdom tile set (`vk`). Every other
+> world has its own art language and kit — see **`Docs/Art/RealmStyleBible.md`**. Two things
+> differ here from those code-painted sets: beach sprites keep free transparent padding (they
+> are trimmed and fitted, not pinned to their footprint), and the beach's ground atlases are
+> shown on the editor canvas only — in play `ground.sand` / `ground.grass` draw their seamless
+> fills (`TileVisualResolver`, `MapCreation.gdd` §2.5).
+
 ## Style lock
 
 - Storybook watercolor-and-ink sprites with bold dark-brown outlines.

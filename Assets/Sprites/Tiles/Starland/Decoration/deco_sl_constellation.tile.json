@@ -1,0 +1,12 @@
+{
+  "id": "deco.sl_constellation",
+  "displayName": "Star-Fruit Constellation",
+  "role": "Decoration",
+  "footprint": {
+    "w": 5,
+    "h": 4
+  },
+  "fillFootprint": false,
+  "prompt": "Flat minimalist poster-style game sprite on transparent ground: no outlines, each form built from two or three flat colour planes with a hard light/shadow terminator, faint print grain, hairline gold inlay and star-shaped cut-outs as the only ornament. Ancient Egypt at dusk: warm apricot sandstone, plum shadows, indigo sky, a teal accent. Orthographic side view, no cast shadow, no text. SUBJECT: A five-pointed constellation of stars joined by gold hairlines around a teal heart.",
+  "tileSet": "sl"
+}

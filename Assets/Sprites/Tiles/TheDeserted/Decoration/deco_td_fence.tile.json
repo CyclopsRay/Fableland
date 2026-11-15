@@ -1,0 +1,12 @@
+{
+  "id": "deco.td_fence",
+  "displayName": "Ranch Fence",
+  "role": "Decoration",
+  "footprint": {
+    "w": 3,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Linocut / woodblock relief-print game sprite on transparent ground: a black key block cut with visible gouge marks over two or three flat spot colours (rust red, mustard ochre, faded teal) printed slightly out of register on cream paper. No gradients; tone is hatching and bare paper; every edge wobbles like a hand-cut block, solids are speckled with ink skips. An abandoned frontier town. Orthographic side view, no cast shadow, no lettering. SUBJECT: A ranch fence with leaning posts and one fallen rail.",
+  "tileSet": "td"
+}

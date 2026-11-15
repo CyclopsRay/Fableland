@@ -1,0 +1,12 @@
+{
+  "id": "platform.hc_grate",
+  "displayName": "Iron Gantry",
+  "role": "Platform",
+  "footprint": {
+    "w": 3,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Realistic, physically lit dark-fantasy dungeon game sprite on transparent ground: weighty stone, iron and rotting timber shaded as real relief by a dim cold key light from the upper left and a hot orange lava bounce from below; desaturated, damp, worn, crowded with detail; fire is the only saturated colour. Orthographic side view, no cast shadow, no text. SUBJECT: A riveted, slotted wrought-iron rail on diagonal brackets with short chains and a hook dangling beneath.",
+  "tileSet": "hc"
+}

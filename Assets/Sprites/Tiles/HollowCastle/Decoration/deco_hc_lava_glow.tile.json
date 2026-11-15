@@ -1,0 +1,12 @@
+{
+  "id": "deco.hc_lava_glow",
+  "displayName": "Lava Glow",
+  "role": "Decoration",
+  "footprint": {
+    "w": 2,
+    "h": 3
+  },
+  "fillFootprint": false,
+  "prompt": "Realistic, physically lit dark-fantasy dungeon game sprite on transparent ground: weighty stone, iron and rotting timber shaded as real relief by a dim cold key light from the upper left and a hot orange lava bounce from below; desaturated, damp, worn, crowded with detail; fire is the only saturated colour. Orthographic side view, no cast shadow, no text. SUBJECT: Orange heat haze and rising embers to lay over the foreground above a lava pool. Tiles horizontally.",
+  "tileSet": "hc"
+}

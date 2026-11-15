@@ -1,0 +1,12 @@
+{
+  "id": "deco.bm_lantern",
+  "displayName": "Stone Lantern",
+  "role": "Decoration",
+  "footprint": {
+    "w": 1,
+    "h": 2
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese ink-wash (shuimo) game sprite on transparent ground: loaded-brush strokes with visible bristle streaks and flying-white, diluted grey washes for mass, no outline-and-fill, no gradients from an airbrush. Monochrome ink; only grey-green bamboo and cinnabar red lacquer/seals carry colour. Orthographic side view, no cast shadow, no text unless specified. SUBJECT: Stone pagoda lantern with a warm glowing paper window.",
+  "tileSet": "bm"
+}

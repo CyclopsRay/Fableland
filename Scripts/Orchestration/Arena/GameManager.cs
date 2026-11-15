@@ -230,6 +230,12 @@ public partial class GameManager : Node2D
         if (_authoredRespawnSpawns.Count == 0 && _player != null)
             GD.PushWarning("[GameManager] authored map '" + document.Name + "' has no Respawn Point; using its Character Spawn.");
 
+        // Far layers are painted to line up when the camera sits on the character spawn, so
+        // that is the parallax anchor here exactly as in the editor Playtest (MapCreation §1).
+        build.AnchorParallax(build.CharacterSpawns.Count > 0
+            ? build.CharacterSpawns[0]
+            : new Vector2(_authoredMapWidth * 0.5f, _authoredMapHeight * 0.5f));
+
         var camera = _player?.GetNodeOrNull<Camera2D>("Camera2D");
         if (camera != null)
         {
@@ -240,10 +246,21 @@ public partial class GameManager : Node2D
         }
 
         var backdrop = GetNodeOrNull<ColorRect>("Background");
-        if (backdrop != null && !string.IsNullOrWhiteSpace(document.Canvas?.Color))
+        if (backdrop != null)
         {
-            try { backdrop.Color = new Color(document.Canvas.Color); }
-            catch { GD.PushWarning("[GameManager] invalid canvas color on authored map '" + document.Name + "'; keeping Arena backdrop."); }
+            // The scene's backdrop rect is sized for the legacy 2000 px arena. An authored map
+            // can be several screens wide or tall (a 96-cell Starland plain is 6144 px), so
+            // stretch the canvas over the whole battlefield plus a screen of margin for shake
+            // and for views wider than the map.
+            Vector2 margin = new(Units.Px(60f), Units.Px(40f));
+            backdrop.Position = -margin;
+            backdrop.Size = new Vector2(_authoredMapWidth, _authoredMapHeight) + margin * 2f;
+
+            if (!string.IsNullOrWhiteSpace(document.Canvas?.Color))
+            {
+                try { backdrop.Color = new Color(document.Canvas.Color); }
+                catch { GD.PushWarning("[GameManager] invalid canvas color on authored map '" + document.Name + "'; keeping Arena backdrop."); }
+            }
         }
 
         DebugManager.Instance?.LogMission("Combat map: " + document.Name + " (" + document.Id + ")");

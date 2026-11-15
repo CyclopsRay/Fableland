@@ -1,0 +1,16 @@
+{
+  "id": "ground.td_timber",
+  "displayName": "Clapboard Wall",
+  "role": "Ground",
+  "footprint": {
+    "w": 1,
+    "h": 1
+  },
+  "fillFootprint": true,
+  "autotileGroup": "terrain.td_timber",
+  "autotileKind": "layered_hill_strip",
+  "artSource": "res://Assets/Sprites/Tiles/TheDeserted/Ground/ground_td_timber_atlas.png",
+  "prompt": "Linocut / woodblock relief-print game sprite on transparent ground: a black key block cut with visible gouge marks over two or three flat spot colours (rust red, mustard ochre, faded teal) printed slightly out of register on cream paper. No gradients; tone is hatching and bare paper; every edge wobbles like a hand-cut block, solids are speckled with ink skips. An abandoned frontier town. Orthographic side view, no cast shadow, no lettering. SUBJECT: Clapboard building wall: vertical ochre boards with black gaps, grain cuts and nail heads, a heavy rust-banded beam on top, a corner post where the wall ends.",
+  "autotileVariants": 4,
+  "tileSet": "td"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "deco.bm_lattice",
+  "displayName": "Lattice Wall",
+  "role": "Decoration",
+  "footprint": {
+    "w": 2,
+    "h": 3
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese ink-wash (shuimo) game sprite on transparent ground: loaded-brush strokes with visible bristle streaks and flying-white, diluted grey washes for mass, no outline-and-fill, no gradients from an airbrush. Monochrome ink; only grey-green bamboo and cinnabar red lacquer/seals carry colour. Orthographic side view, no cast shadow, no text unless specified. SUBJECT: Paper lattice window bay over a lacquered dado panel, dark timber frame.",
+  "tileSet": "bm"
+}

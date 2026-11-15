@@ -1,0 +1,12 @@
+{
+  "id": "deco.sl_pyramid",
+  "displayName": "Great Pyramid (far)",
+  "role": "Decoration",
+  "footprint": {
+    "w": 10,
+    "h": 6
+  },
+  "fillFootprint": false,
+  "prompt": "Flat minimalist poster-style game sprite on transparent ground: no outlines, each form built from two or three flat colour planes with a hard light/shadow terminator, faint print grain, hairline gold inlay and star-shaped cut-outs as the only ornament. Ancient Egypt at dusk: warm apricot sandstone, plum shadows, indigo sky, a teal accent. Orthographic side view, no cast shadow, no text. SUBJECT: A colossal distant pyramid: one lit face, one shadow face, gold capstone with a star, base lost in horizon haze.",
+  "tileSet": "sl"
+}

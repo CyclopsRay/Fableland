@@ -35,6 +35,19 @@ public static class HillAutotile
     public const int Cols = 4;
     public const int Rows = 4;
 
+    /// <summary><c>Props["autotileKind"]</c> for the original hand-generated 4x4 sheet
+    /// (beach sand): one [Left, Mid, Right, Peak] group, Peak only on Layer 1.</summary>
+    public const string KindSheet = "layered_hill";
+
+    /// <summary><c>Props["autotileKind"]</c> for a code-painted strip atlas
+    /// (`Tools/realm_art/`): <c>Props["autotileVariants"]</c> groups of
+    /// [Left, Mid, Right, Peak] side by side, a Peak on every layer. See
+    /// <see cref="ClassifyStrip"/>.</summary>
+    public const string KindStrip = "layered_hill_strip";
+
+    /// <summary>Columns per variant group in a strip atlas.</summary>
+    public const int StripGroupCols = 4;
+
     /// <summary>Safety cap on the up/down neighbor walk in <see cref="Classify"/> — the map
     /// grid is finite (`MapJson` clamps `GridH` to 256), so a well-behaved probe delegate
     /// always terminates well under this; it only guards against a misbehaving caller.</summary>
@@ -83,7 +96,15 @@ public static class HillAutotile
     /// offset from the one being classified part of the same autotile group" — out-of-bounds/
     /// empty/different-group should all return false, the same convention
     /// `GridView.NeighborSharesGroup` already uses for the 2-state system.</summary>
-    public static void Classify(Func<int, int, bool> sameGroupAt, out HillLayer layer, out HillPosition position)
+    public static void Classify(Func<int, int, bool> sameGroupAt, out HillLayer layer, out HillPosition position) =>
+        Classify(sameGroupAt, peakOnEveryLayer: false, out layer, out position);
+
+    /// <summary>As <see cref="Classify(Func{int,int,bool}, out HillLayer, out HillPosition)"/>,
+    /// but when <paramref name="peakOnEveryLayer"/> is true a cell with open air on both
+    /// sides is a Peak at any depth, not only at the surface — strip atlases paint a
+    /// both-sides-exposed tile for every layer, so a one-cell-wide pillar keeps its edges.</summary>
+    public static void Classify(Func<int, int, bool> sameGroupAt, bool peakOnEveryLayer,
+        out HillLayer layer, out HillPosition position)
     {
         if (sameGroupAt == null) throw new ArgumentNullException(nameof(sameGroupAt));
 
@@ -99,7 +120,26 @@ public static class HillAutotile
 
         bool leftIsAir = !sameGroupAt(-1, 0);
         bool rightIsAir = !sameGroupAt(1, 0);
-        position = ClassifyPosition(leftIsAir, rightIsAir, allowPeak: layer == HillLayer.Layer1);
+        position = ClassifyPosition(leftIsAir, rightIsAir, allowPeak: peakOnEveryLayer || layer == HillLayer.Layer1);
+    }
+
+    /// <summary>
+    /// Classify + cell lookup for a strip atlas (<see cref="KindStrip"/>). The sheet is
+    /// 4 rows (Layer 1-4) by <c>variants x 4</c> columns; a cell at map column
+    /// <paramref name="cellX"/> draws from group <c>cellX mod variants</c>. Because the
+    /// painter cuts every group from one continuous material strip <c>variants</c> cells
+    /// wide, neighbouring cells never repeat the same paint and every seam matches by
+    /// construction — which a single repeated Mid tile cannot do for a textured material.
+    /// </summary>
+    public static void ClassifyStrip(Func<int, int, bool> sameGroupAt, int cellX, int variants,
+        out int row, out int col, out int cols)
+    {
+        Classify(sameGroupAt, peakOnEveryLayer: true, out var layer, out var position);
+        int groups = Math.Max(1, variants);
+        int group = ((cellX % groups) + groups) % groups;
+        row = (int)layer;
+        col = group * StripGroupCols + (int)position;
+        cols = groups * StripGroupCols;
     }
 
     /// <summary>Classify + atlas-cell lookup in one call — the convenience form a renderer
@@ -186,6 +226,18 @@ public static class HillAutotile
         Check(row == 0 && col == 3, "TryGetCell Layer1/Peak (expected row0,col3)");
         TryGetCell(HillLayer.Layer2, HillPosition.Peak, out row, out col);
         Check(row == 1 && col == 1, "TryGetCell Layer2/Peak fallback (expected row1,col1 = Layer2/Mid)");
+
+        // Strip atlases: the group follows the map column, and a pillar's body is a Peak.
+        ClassifyStrip(probeAt(1, 1), cellX: 1, variants: 4, out row, out col, out int cols);
+        Check(row == 1 && col == 1 * StripGroupCols + (int)HillPosition.Mid && cols == 16,
+            "ClassifyStrip 4-tall mound (1,1) at x=1 (expected row1, group1/Mid, 16 cols)");
+        ClassifyStrip(probeAt(2, 3), cellX: 6, variants: 4, out row, out col, out cols);
+        Check(row == 3 && col == 2 * StripGroupCols + (int)HillPosition.Right,
+            "ClassifyStrip 4-tall mound (2,3) at x=6 (expected row3, group2/Right)");
+        ClassifyStrip(spikeProbe(0, 1), cellX: 0, variants: 4, out row, out col, out cols);
+        Check(col == (int)HillPosition.Peak, "ClassifyStrip 3-tall spike middle (expected Peak, strips paint one per layer)");
+        ClassifyStrip(probeAt(0, 0), cellX: -3, variants: 4, out row, out col, out cols);
+        Check(col == 1 * StripGroupCols + (int)HillPosition.Left, "ClassifyStrip negative column wraps to a valid group");
 
         return failures;
     }

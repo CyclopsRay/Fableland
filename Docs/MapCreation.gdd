@@ -26,6 +26,16 @@ bushes, Roman columns — that the player can duck behind. Because it is last in
 draws *in front* of the battlefield; the "hide behind" effect is that draw order (there is still no
 gameplay collision on closeview — it is purely visual). Sway stays 0 ("steady").
 
+**Closeview draws above the actors (v0.10.6).** "In front of the battlefield" has to mean in front
+of the *fighters*, or nothing can be hidden behind. Map tiles sit under the world node while
+characters, foes and projectiles are added elsewhere in the tree, so in play every map layer —
+closeview included — used to draw behind them. `MapVisualBuilder` now raises closeview layers
+(`CloseviewZIndex`, above every actor's default z, below the HUD's CanvasLayer). A foreground
+haze, a leaf fringe or a roof parapet therefore covers whoever stands behind it, in the editor
+Playtest and in a real run alike. This is the one place a z-index is used: the *map's* layer
+order is still the list order (T00 rule 3); the z only lifts a whole layer over actors that are
+not part of the map.
+
 **Default layer stack (v0.6.17).** `MapDocument.CreateNew` now seeds a ready-made stack so a new
 map starts with parallax depth instead of a bare battlefield (the user shouldn't have to hand-build
 it): back-to-front — *Very Far Mountains* (0.15, 16-cell loop) · *Far Mountains* (0.30, 16-cell loop) · *Backdrop
@@ -93,6 +103,7 @@ is adding a registry entry, never editing a switch** (T00 rule 1).
 | `id` | string | e.g. `"ground.grass"`, `"softvolume.cloud2x1"`, `"rule.cloudZone"` |
 | `displayName` | string | palette label |
 | `category` | enum | Ground, Platform, SoftVolume, Hazard, EnemySpawn, Respawn, LevelGoal, Character, Decoration, Rule, Misc |
+| `tileSet` | string | realm tile set: `core` (shared markers/placeholders) or a world's lower-case abbreviation — `vk`, `sl`, `bm`, `hc`, `td`, `pl` (`TileSets.cs`, §2.6). The palette filters by it |
 | `footprintW`, `footprintH` | int | cells occupied; default 1×1 (§2.3) |
 | `allowedRoles` | flags | which layer roles may hold it. **Default Any (v0.6.17):** grounds/platforms/soft-volumes/spawns can be placed on background/foreground layers, not just the battlefield. Placement ≠ collision — Battlefield collision applies normally; a non-loop Farview's Collision switch applies only to its fixed-world SoftVolumes (§3) |
 | `editorColor` | hex | placeholder quad color until art lands |
@@ -101,7 +112,7 @@ is adding a registry entry, never editing a switch** (T00 rule 1).
 | `edges` | `EdgeRule?` | reserved: per-side (top/right/bottom/left) neighbor-compatibility tags for future stamp/edge matching (§2.5); not yet consulted by any runtime/editor code |
 | `effectArea` | shape def? | collision/trigger shape in px relative to anchor (§2.4); null = footprint rect |
 | `softVolumeTuning` | `SoftVolumeTuning?` | optional per-kind traversal data for SoftVolumes; currently `stagnationIndex` only (§2.4) |
-| `props` | dict | per-kind extras (foe table id for EnemySpawn, spawn rules for Rule tiles §6, …) |
+| `props` | dict | per-kind extras, read by key (`TileProps.cs`): `artSource` / `autotileKind` / `autotileVariants` (§2.5), `scene` + `mergeAdjacent` for hazards (§9), `spawnHazard` for triggers, `prompt` (the art brief) |
 
 Beach hazard content includes `hazard.tsunami_trigger`, a 1x1 battlefield marker whose
 runtime scene starts the storm presentation and moving tsunami. The 16x8 tsunami itself
@@ -180,6 +191,37 @@ through `TileDef.Props["autotileKind"] = "layered_hill"`; `GridView` selects one
 from `terrain_sand_hill_atlas.png`. `Tools/compose_hill_atlas.py` deterministically composites
 the 13 equal-size RGBA sources prepared by the coded-guide generation pipeline.
 
+**One resolver for all three views (v0.10.6).** Which art a placed tile shows is decided in
+exactly one place — `TileVisualResolver` (pure data) — and asked by the editor canvas, the editor
+Playtest and the combat arena. It dispatches on `props["autotileKind"]`, never on a tile id:
+
+| `autotileKind` | Atlas | Editor canvas | Play (Playtest + arena) |
+|---|---|---|---|
+| `layered_hill_strip` | code-painted strip (below) | atlas cell | **atlas cell** |
+| `layered_hill` | the beach's hand-assembled 4×4 sheet | atlas cell | plain `spriteSlot` |
+| *(absent)* | legacy 2-state north-edge lookup | atlas cell | plain `spriteSlot` |
+
+The two older lookups stay authoring-time approximations, exactly as this section already
+recorded; only the new strip kind is drawn in play, because its atlases are painted *by code
+against this classifier* and cannot disagree with it. This replaces the earlier position that
+no hand-rolled classifier would ever render at runtime: the layered-hill model is a four-probe
+column walk (how deep below the surface, is either side open), not a bitmask autotiler, and it
+expresses depth layers that Godot's TileSet terrains cannot. The TileSet-terrain plan remains
+open for generic corner/edge blob terrain if a realm ever needs it.
+
+**Strip atlases (v0.10.6).** `HillAutotile.ClassifyStrip`: 4 rows (Layer 1–4) by
+`autotileVariants × 4` columns — that many groups of [Left, Mid, Right, Peak]. A cell at map
+column *x* uses group `x mod variants`, and the painter cuts every group from one continuous
+material strip, so neighbouring cells never repeat the same paint and every seam matches by
+construction. Unlike the 4×4 sheet, every layer has a Peak (a one-cell-wide pillar keeps both
+faces). `TileRegistry.Validate` requires a strip tile to be 1×1 with a group, an `artSource` and
+a variant count. Painting rules: `Docs/Art/RealmStyleBible.md` §2.3.
+
+**Map-edge rule (v0.10.6).** `AutotileProbe.SameGroup` is the single neighbour test: terrain is
+taken to continue one cell past the left, right and bottom edges of a layer's grid, and to be
+open air above the top. A floor on the map's last row is therefore not drawn as an underside,
+and a wall on the first column gets no exposed face at the screen edge.
+
 **Manifest-driven authoring (v0.6.12).** `TileRegistry` is still the code-defined table
 (T00 rule 1: registration is a hand-edited list, never a switch or an implicit
 scan-on-boot), but the hand-transcription step between "an asset was generated" and
@@ -193,6 +235,33 @@ anchoring, `autotileGroup`, the new `edges` tags, and the exact generation promp
 "Generation prompt lock" section for the shared invariant prompt block they extend.
 `TileManifestLoader.SelfTestFixtures` is the structural guard (mirrors
 `MapJson.RoundTripSelfTest`) — run it after adding or editing a manifest.
+
+### 2.6 Realm tile sets (v0.10.6)
+
+Every world has its own art language and building kit (`Docs/Art/RealmStyleBible.md`); a
+`TileDef` names the set it belongs to in `tileSet`. `TileRegistry` is its own shared/beach list
+followed by one file per realm under `Scripts/MapCreation/Data/TileSets/`, added by an explicit,
+ordered list in the registry constructor — still no scan-on-boot (T00 rule 1). Adding a realm is
+one `TileSets.All` entry, one tile-set file, one line in that list.
+
+| Set | World | Realm | Kit |
+|---|---|---|---|
+| `core` | — | shared | spawn/goal markers, rule zones, art-less placeholders |
+| `vk` | VanillaKindom | Beach | `BeachTileSet.md` |
+| `sl` | Starland | Starfield | 18 tiles |
+| `bm` | Banboo Maze | Wulin | 24 tiles |
+| `hc` | HollowCastle | Dungeon | 20 tiles |
+| `td` | TheDeserted | Ghost Town | 22 tiles |
+| `pl` | Palace of LOOING | Cloud Court | 16 tiles |
+
+The five painted sets follow three contracts the registry cannot express in types, so
+`TileSetAudit` checks them at editor boot and in the headless content check: every sprite and
+atlas a def names exists; each def agrees with its `.tile.json` sidecar (role, footprint, fill,
+sprite, group, kind, variants, set); and each PNG's canvas is its footprint (the *pinned canvas*
+— a prop's canvas is exactly `footprint × 128 px` with pinned corner pixels, so the editor's
+used-rect trim and the play view place it identically; a strip atlas is `variants × 4` by 4
+square cells). A map is expected to stay inside one realm set plus `core`; the content check
+reports a built-in map that mixes sets.
 
 ## 3. Farview physics policy
 
@@ -311,6 +380,12 @@ wider. The top bar gained **▶ Play** (item 5) and **Generate** (item 4).
 Palette chips (item 8) show each tile's real sprite when its `spriteSlot` loads (trimmed +
 aspect-fit) and fall back to the `editorColor` swatch otherwise, so "implemented vs placeholder"
 reads at a glance. The **⚙** gear on each non-Rule chip opens the effect painter (§2.4).
+
+**Realm selector (v0.10.6).** The dock's left end carries a **Realm** drop-down that filters the
+strip to one tile set; `core` tiles always stay. It opens on the realm the map is tagged for
+(`Worlds[0]`, name or abbreviation), or on *All realms* for an untagged map. Groups are titled
+by set and category ("BM · SoftVolume"). Filtering only toggles visibility — chips are still
+built once.
 
 ### 7.1a Playtest (prototype)
 
@@ -437,6 +512,26 @@ The unsaved-changes dot derives from stack position vs. last-saved marker.
   `ArenaEnvironmentController` can tint that visual root in one operation; future
   responsive/destructible tiles opt in through data tags and receive only visual or
   runtime-instance changes. Events never mutate the authored `MapDocument` during combat.
+- **Shared builders (v0.10.6).** The Playtest and the arena build a map from the same parts in
+  `Scripts/MapCreation/Runtime/`, so a map plays in a run exactly as it played from the editor:
+  `MapVisualBuilder` (every layer's art: resolver-driven sprites, used-rect prop fitting,
+  closeview above actors), `MapParallaxLayer` (camera parallax, auto-scroll, looping),
+  `MapCollision` (effect area → shapes) and `MapHazardFactory` (hazards). Before this the two
+  each carried private copies; the arena's had no parallax, so far layers sat rigidly behind the
+  battlefield in a real run, and neither drew a ground atlas.
+- **Parallax in a real run.** `CombatMapBuild.AnchorParallax(spawn)` gives every art layer the
+  same anchor rule as the Playtest (§1). Layers follow the viewport's *current* camera each frame
+  rather than holding one, so a protagonist switch needs no rebinding. `GameManager` also
+  stretches the arena's backdrop rect over the whole authored battlefield, which can be several
+  screens wide or tall.
+- **Hazards are data.** A hazard tile names its runtime scene in `props["scene"]`; the builders
+  hold no `switch` on tile ids. A new hazard is a registry entry plus a small scene that sets an
+  existing hazard script's numbers (`LavaHazard.tscn`, `SpikeHazard.tscn`). A scene rooted in a
+  `Hazard` receives the tile's effect area as its collision; a tile that also names
+  `props["spawnHazard"]` is an event trigger (the tsunami) wired by the orchestrator.
+  `props["mergeAdjacent"] = "true"` fuses touching tiles of one kind into a single hazard, so a
+  body wading through a lava pool is ticked once, not once per tile it straddles. A map-authored
+  hazard draws its telegraph as an outline only — the tile's sprite is its look.
 - `CombatMapCatalog` + `CombatMapRuntime` are the normal-adventure consumers. At
   `RunState.BeginAdventure`, the catalog scans built-in `res://Maps/*.json` and authored
   `user://maps/*.json`, filters by the node snapshot, sorts candidates by immutable map id,
@@ -473,6 +568,10 @@ Scripts/MapCreation/
     MapGrid.cs             2 m / 64 px authored cell scale (§2.1)
     PlacedTile.cs          defId, anchorX, anchorY, overrides
     TileDef.cs / TileRegistry.cs      §2.2
+    TileSets.cs, TileSets/*.cs        §2.6 realm tile sets (one file per realm)
+    TileProps.cs           keys of TileDef.Props that code reads
+    HillAutotile.cs / AutotileAtlas.cs / AutotileProbe.cs / TileVisualResolver.cs   §2.5
+    TileManifest*.cs / TileSetAudit.cs   sidecars, and the registry-vs-art audit (§2.6)
     RuleResolver.cs        §6 zone grouping + seeded placement (pure, testable)
     MapJson.cs             versioned (de)serialization, atomic save
   Editor/                  (PRESENTATION)
@@ -488,7 +587,18 @@ Scripts/MapCreation/
   Runtime/
     CombatMapCatalog.cs       deterministic selection + v1/v2 map loading
     CombatMapRuntime.cs       normal-adventure tile/collider/marker instantiation
+    MapVisualBuilder.cs       every layer's art, shared by Playtest and arena (§9)
+    MapParallaxLayer.cs       one layer's parallax / scroll / loop node
+    MapCollision.cs           effect area -> collision shapes (shared)
+    MapHazardFactory.cs       hazard tiles -> runtime hazards, by data; pool merging
+  Dev/
+    MapContentCheck.cs        headless: self-tests + audit + builds every built-in map
+    MapScreenshot.cs          renders built-in maps to PNG through the real runtime
 Scenes/MapCreation/MapBrowser.tscn, MapEditor.tscn   (thin roots, no fabricated uid=)
+Scenes/MapCreation/MapContentCheck.tscn, MapScreenshot.tscn   (dev tools, 40-QA.md)
+Tools/realm_art/          the realm painters (Docs/Art/RealmStyleBible.md §1)
+Tools/realm_maps/         the built-in realm maps, written as code
+Tools/render_map_preview.py   offline PNG of any map JSON (mirrors the play view)
 ```
 
 Existing `CustomMapData.cs` / `MapSaveLoad.cs` / old scene scripts are deleted (no
@@ -559,3 +669,18 @@ the closeview blur shader is dropped (closeview is real scenery now, §1, not a 
   spawn, protect-core placement, or destroy-target placement based on the node goal; Slaughter
   deliberately has no use for it. A LV4 Boss map also uses its authored goal marker as the
   boss's opening stage, avoiding any fixed legacy-Arena coordinates.
+- **(v0.10.6) One resolver, and strip atlases render in play.** The editor canvas, the Playtest
+  and the arena ask one pure function which art a tile shows. Code-painted strip atlases are
+  drawn everywhere; the beach's two hand-assembled lookups stay editor-only approximations, so
+  the beach looks exactly as it did. Reverses "no hand-rolled classifier at runtime" for the
+  layered-hill model only — it is a column walk, not a bitmask autotiler, and TileSet terrains
+  cannot express its depth layers.
+- **(v0.10.6) Play is built once.** Art, parallax, collision shapes and hazards come from shared
+  builders; the Playtest and the arena cannot drift apart, and real runs gained parallax.
+- **(v0.10.6) Closeview is in front of the actors.** A z lift on closeview layers makes
+  "hide behind" true; map layer order remains the list order.
+- **(v0.10.6) Hazards and realm sets are data.** A hazard names its scene; touching fill hazards
+  merge; a tile names its realm set and the palette filters by it. No builder switches on an id.
+- **(v0.10.6) The canvas is the footprint.** Painted props pin their canvas to their footprint,
+  and a boot audit checks registry, sidecar and PNG agree — chosen over auto-fitting whatever
+  bounds a sprite happens to have.

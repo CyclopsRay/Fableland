@@ -1,0 +1,12 @@
+{
+  "id": "platform.bm_beam",
+  "displayName": "Bracket Beam",
+  "role": "Platform",
+  "footprint": {
+    "w": 3,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Chinese ink-wash (shuimo) game sprite on transparent ground: loaded-brush strokes with visible bristle streaks and flying-white, diluted grey washes for mass, no outline-and-fill, no gradients from an airbrush. Monochrome ink; only grey-green bamboo and cinnabar red lacquer/seals carry colour. Orthographic side view, no cast shadow, no text unless specified. SUBJECT: Red-lacquer timber tie-beam on stepped dougong bracket clusters, inked edges.",
+  "tileSet": "bm"
+}

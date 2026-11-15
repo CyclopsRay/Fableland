@@ -1,0 +1,12 @@
+{
+  "id": "softvolume.sl_stardust",
+  "displayName": "Stardust Nebula",
+  "role": "SoftVolume",
+  "footprint": {
+    "w": 3,
+    "h": 2
+  },
+  "fillFootprint": false,
+  "prompt": "Flat minimalist poster-style game sprite on transparent ground: no outlines, each form built from two or three flat colour planes with a hard light/shadow terminator, faint print grain, hairline gold inlay and star-shaped cut-outs as the only ornament. Ancient Egypt at dusk: warm apricot sandstone, plum shadows, indigo sky, a teal accent. Orthographic side view, no cast shadow, no text. SUBJECT: A nebula of star-dust in posterised violet-to-teal bands, scattered with pinprick and four-point stars. Enterable.",
+  "tileSet": "sl"
+}

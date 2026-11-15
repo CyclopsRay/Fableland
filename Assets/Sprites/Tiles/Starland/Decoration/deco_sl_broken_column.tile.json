@@ -1,0 +1,12 @@
+{
+  "id": "deco.sl_broken_column",
+  "displayName": "Fallen Column",
+  "role": "Decoration",
+  "footprint": {
+    "w": 1,
+    "h": 2
+  },
+  "fillFootprint": false,
+  "prompt": "Flat minimalist poster-style game sprite on transparent ground: no outlines, each form built from two or three flat colour planes with a hard light/shadow terminator, faint print grain, hairline gold inlay and star-shaped cut-outs as the only ornament. Ancient Egypt at dusk: warm apricot sandstone, plum shadows, indigo sky, a teal accent. Orthographic side view, no cast shadow, no text. SUBJECT: A broken fluted column drum half-drifted with sand.",
+  "tileSet": "sl"
+}

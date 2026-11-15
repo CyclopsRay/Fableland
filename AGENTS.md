@@ -19,6 +19,9 @@ live in `Migration.md` (see §0 for the delivered prototype).
   and performance budgets. Read the relevant T-doc before building a new system.
 - `Docs/IDEAS.md` — the design idea ledger (non-canon). New content ideas land there
   first and graduate into GDDs via the change workflow.
+- **`Docs/Art/RealmStyleBible.md`** — each realm's combat-map art direction (one medium per
+  world), tile kits, arena grammar, and the rules a tile and a map must obey. Read it before
+  adding a tile, repainting art (`Tools/realm_art/`) or composing a map (`Tools/realm_maps/`).
 
 ## Mandatory workflow
 - **After fixing ANY bug, add a caveat to `KNOWLEDGE.md`** (symptom → rule → why) under

@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Hazard/DamageHazard.cs" id="1"]
+
+[node name="SpikeHazard" type="Area2D"]
+script = ExtResource("1")
+TickInterval = 0.5
+Damage = 12.0

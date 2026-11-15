@@ -4,6 +4,7 @@
   "role": "Ground",
   "footprint": { "w": 1, "h": 1 },
   "fillFootprint": true,
+  "tileSet": "vk",
   "autotileGroup": "terrain.sand_hill",
   "autotileKind": "layered_hill",
   "edges": {

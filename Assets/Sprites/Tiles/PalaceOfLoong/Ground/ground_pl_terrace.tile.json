@@ -1,0 +1,16 @@
+{
+  "id": "ground.pl_terrace",
+  "displayName": "Palace Terrace",
+  "role": "Ground",
+  "footprint": {
+    "w": 1,
+    "h": 1
+  },
+  "fillFootprint": true,
+  "autotileGroup": "terrain.pl_terrace",
+  "autotileKind": "layered_hill_strip",
+  "artSource": "res://Assets/Sprites/Tiles/PalaceOfLoong/Ground/ground_pl_terrace_atlas.png",
+  "prompt": "Cloisonné-enamel game sprite on transparent ground: every shape is a cell of flat saturated jewel enamel (imperial purple, lapis blue, turquoise, cinnabar red, jade green, ivory) enclosed by a raised, gleaming gold wire; faint enamel mottling, no other outlines, no gradients across cells. Chinese court motifs: dragon scales, ruyi cloud scrolls, running meander, lotus. A celestial palace above the clouds. Orthographic side view, no cast shadow, no text. SUBJECT: Palace terrace in cloisonné: purple enamel in gold dragon scales, an ivory key-fret coping over a cinnabar band on top, a jade pilaster where it ends, a hanging turquoise ruyi valance beneath.",
+  "autotileVariants": 4,
+  "tileSet": "pl"
+}

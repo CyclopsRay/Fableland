@@ -1,0 +1,12 @@
+{
+  "id": "deco.hc_banner",
+  "displayName": "Tattered Banner",
+  "role": "Decoration",
+  "footprint": {
+    "w": 1,
+    "h": 3
+  },
+  "fillFootprint": false,
+  "prompt": "Realistic, physically lit dark-fantasy dungeon game sprite on transparent ground: weighty stone, iron and rotting timber shaded as real relief by a dim cold key light from the upper left and a hot orange lava bounce from below; desaturated, damp, worn, crowded with detail; fire is the only saturated colour. Orthographic side view, no cast shadow, no text. SUBJECT: A moth-eaten crimson standard on an iron rod, bearing a faded hollow crown.",
+  "tileSet": "hc"
+}
