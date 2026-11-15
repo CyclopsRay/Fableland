@@ -357,7 +357,10 @@ function per map opening with its design intent, on top of `mapkit.py`:
 ```
 
 The kit enforces the editor's rules as you compose (one tile per cell, footprints inside
-the grid, known ids). Rules a map must satisfy that no tool can check for you:
+the grid, known ids, and a sub-cell nudge only where the editor allows one —
+`put(..., nudge=(2, -1))` slides a prop half a cell right and a quarter cell up,
+MapCreation.gdd §2.3; terrain cannot be nudged). Rules a map must satisfy that no tool can
+check for you:
 
 - **Seal it.** There is no kill plane: a character that leaves the bottom falls forever.
   Solid floor edge to edge, solid walls to the top row on both sides, rock under any lava.

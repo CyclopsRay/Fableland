@@ -33,7 +33,6 @@ public static class MapHazardFactory
         var placements = new List<MapHazardPlacement>();
         if (tiles == null) return placements;
 
-        float cell = MapGrid.PixelsPerCell;
         var hazards = new List<(PlacedTile Tile, TileDef Def)>();
         foreach (PlacedTile tile in tiles)
         {
@@ -65,7 +64,7 @@ public static class MapHazardFactory
                 placements.Add(new MapHazardPlacement
                 {
                     Def = def,
-                    Origin = new Vector2(tile.X * cell, tile.Y * cell),
+                    Origin = OriginOf(tile, def),
                     Specs = MapCollision.BuildSpecs(def, tile.FlipX),
                 });
                 continue;
@@ -91,24 +90,36 @@ public static class MapHazardFactory
                 }
             }
 
-            int minX = int.MaxValue, minY = int.MaxValue;
+            // The pool's origin is its top-left member corner. Corners come from
+            // TilePlacement like every other tile's; today's merging kinds are autotiled
+            // fills, which are grid-locked, so these are whole cells — but the pool would
+            // stay correct if a nudgeable kind ever opted into merging.
+            Vector2 poolOrigin = new(float.MaxValue, float.MaxValue);
             foreach (int member in pool)
             {
-                minX = Mathf.Min(minX, hazards[member].Tile.X);
-                minY = Mathf.Min(minY, hazards[member].Tile.Y);
+                Vector2 corner = OriginOf(hazards[member].Tile, def);
+                poolOrigin = new Vector2(Mathf.Min(poolOrigin.X, corner.X), Mathf.Min(poolOrigin.Y, corner.Y));
             }
             var specs = new List<MapCollisionSpec>();
             foreach (int member in pool)
             {
                 PlacedTile memberTile = hazards[member].Tile;
-                Vector2 delta = new((memberTile.X - minX) * cell, (memberTile.Y - minY) * cell);
+                Vector2 delta = OriginOf(memberTile, def) - poolOrigin;
                 foreach (MapCollisionSpec spec in MapCollision.BuildSpecs(def, memberTile.FlipX))
                     specs.Add(spec.Offset(delta));
             }
-            placements.Add(new MapHazardPlacement { Def = def, Origin = new Vector2(minX * cell, minY * cell), Specs = specs });
+            placements.Add(new MapHazardPlacement { Def = def, Origin = poolOrigin, Specs = specs });
         }
 
         return placements;
+    }
+
+    /// <summary>A hazard tile's footprint corner in layer pixels: anchor cell plus sub-cell
+    /// nudge (GDD §2.3), so a nudged bonfire burns where it is drawn.</summary>
+    private static Vector2 OriginOf(PlacedTile tile, TileDef def)
+    {
+        (float x, float y) = TilePlacement.Origin(tile, def);
+        return new Vector2(x, y);
     }
 
     /// <summary>True when the kind's scene is an event trigger (it spawns another hazard

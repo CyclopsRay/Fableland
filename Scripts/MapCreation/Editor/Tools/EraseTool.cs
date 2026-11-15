@@ -84,7 +84,7 @@ public sealed class EraseTool : ToolBase
         return new GhostInfo
         {
             Valid = false,
-            Cells = new List<(Vector2I, int, int, string)> { (cell.Value, 1, 1, null) },
+            Cells = new List<(Vector2I, int, int, string, int, int)> { (cell.Value, 1, 1, null, 0, 0) },
         };
     }
 }

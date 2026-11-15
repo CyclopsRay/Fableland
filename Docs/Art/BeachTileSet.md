@@ -62,6 +62,9 @@ their footprint, and anchors those bounds bottom-center. Transparent export padd
 therefore cannot make an object float above its footprint floor. Seamless ground uses
 the separate fill-footprint mode. Each `PlacedTile` serializes `FlipX`; select one or
 more tiles and press `H` (or use **Flip H**) to mirror them, with undo/redo support.
+A prop need not sit on a whole cell: `Alt` + arrow keys slide the selection a quarter cell
+(`SubX` / `SubY`, MapCreation.gdd §2.3). Art, effect area and collision move together;
+sand, grass and other terrain stay on the grid.
 
 ## Generation prompt lock
 

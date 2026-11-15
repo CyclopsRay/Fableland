@@ -169,6 +169,12 @@ public partial class MapBrowser : Control
         foreach (var failure in EffectAreaTransform.SelfTest())
             GD.PushError("[MapCreation] " + failure);
 
+        foreach (var failure in TilePlacement.SelfTest())
+            GD.PushError("[MapCreation] " + failure);
+
+        foreach (var failure in TileNudge.SelfTest())
+            GD.PushError("[MapCreation] " + failure);
+
         foreach (var problem in TileRegistry.Validate())
             GD.PushError("[MapCreation] " + problem);
 

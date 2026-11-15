@@ -15,12 +15,16 @@ using Fableland.MapCreation.Editor;
 /// delta, the WHOLE move is aborted with no command — simpler and acceptable per
 /// the brief's own call — rather than partially moving or reverting individual
 /// tiles.
+///
+/// A move changes anchors only, so a tile keeps its sub-cell nudge (GDD §2.3). "Leaves
+/// the grid" therefore counts the nudge: a bench nudged half a cell right cannot be
+/// dropped on the last column, and the ghost goes red there like any other bad drop.
 /// </summary>
 public sealed class MoveTool : ToolBase
 {
     private Vector2I? _grabCell;
     private Vector2I? _currentCell;
-    private List<(PlacedTile Tile, int OrigX, int OrigY, int Fw, int Fh)> _dragging;
+    private List<(PlacedTile Tile, int OrigX, int OrigY, int Fw, int Fh, int SubX, int SubY)> _dragging;
 
     public MoveTool(EditorState state, GridView view) : base(state, view) { }
 
@@ -40,12 +44,12 @@ public sealed class MoveTool : ToolBase
 
         _grabCell = cell;
         _currentCell = cell;
-        _dragging = new List<(PlacedTile, int, int, int, int)>();
+        _dragging = new List<(PlacedTile, int, int, int, int, int, int)>();
         foreach (var t in State.Selection)
         {
             int fw = 1, fh = 1;
             if (TileRegistry.TryGet(t.DefId, out var def)) { fw = def.FootprintW; fh = def.FootprintH; }
-            _dragging.Add((t, t.X, t.Y, fw, fh));
+            _dragging.Add((t, t.X, t.Y, fw, fh, TilePlacement.NudgeX(t, def), TilePlacement.NudgeY(t, def)));
         }
     }
 
@@ -83,10 +87,10 @@ public sealed class MoveTool : ToolBase
         var (dx, dy) = CurrentDelta();
         if (dx == 0 && dy == 0) return; // no-op move: nothing to record
 
-        foreach (var (_, ox, oy, fw, fh) in _dragging)
+        foreach (var (_, ox, oy, fw, fh, subX, subY) in _dragging)
         {
-            int nx = ox + dx, ny = oy + dy;
-            if (nx < 0 || ny < 0 || nx + fw > layer.GridW || ny + fh > layer.GridH) return; // abort whole move
+            if (!TilePlacement.FitsGrid(ox + dx, oy + dy, subX, subY, fw, fh, layer.GridW, layer.GridH))
+                return; // abort whole move
         }
 
         // INVARIANT (review-adjudicated): every dragged tile moves by the SAME (dx,dy),
@@ -96,10 +100,10 @@ public sealed class MoveTool : ToolBase
         // If per-tile skips are ever introduced here (paste-style), that uniformity
         // breaks and a self-overlap check on destCells becomes mandatory.
         var movedSet = new HashSet<PlacedTile>();
-        foreach (var (t, _, _, _, _) in _dragging) movedSet.Add(t);
+        foreach (var (t, _, _, _, _, _, _) in _dragging) movedSet.Add(t);
 
         var destCells = new HashSet<(int, int)>();
-        foreach (var (_, ox, oy, fw, fh) in _dragging)
+        foreach (var (_, ox, oy, fw, fh, _, _) in _dragging)
         {
             int nx = ox + dx, ny = oy + dy;
             for (int cy = 0; cy < fh; cy++)
@@ -124,7 +128,7 @@ public sealed class MoveTool : ToolBase
         }
 
         var moved = new List<(PlacedTile, int, int)>();
-        foreach (var (t, ox, oy, _, _) in _dragging) moved.Add((t, ox, oy));
+        foreach (var (t, ox, oy, _, _, _, _) in _dragging) moved.Add((t, ox, oy));
 
         State.Commands.Push(new MoveCommand(State, layer, moved, dx, dy, overwritten));
     }
@@ -136,13 +140,13 @@ public sealed class MoveTool : ToolBase
         var (dx, dy) = CurrentDelta();
         var layer = State.CurrentLayer;
         bool valid = layer != null;
-        var cells = new List<(Vector2I, int, int, string)>();
+        var cells = new List<(Vector2I, int, int, string, int, int)>();
 
-        foreach (var (t, ox, oy, fw, fh) in _dragging)
+        foreach (var (t, ox, oy, fw, fh, subX, subY) in _dragging)
         {
             int nx = ox + dx, ny = oy + dy;
-            if (layer != null && (nx < 0 || ny < 0 || nx + fw > layer.GridW || ny + fh > layer.GridH)) valid = false;
-            cells.Add((new Vector2I(nx, ny), fw, fh, t.DefId));
+            if (layer != null && !TilePlacement.FitsGrid(nx, ny, subX, subY, fw, fh, layer.GridW, layer.GridH)) valid = false;
+            cells.Add((new Vector2I(nx, ny), fw, fh, t.DefId, subX, subY));
         }
 
         return new GhostInfo { Valid = valid, Cells = cells };

@@ -9,6 +9,27 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.10.8** — **Map editor: props are no longer stuck on the 2 m grid.** A placed tile can
+  carry a sub-cell **nudge** — `SubX` / `SubY`, whole quarter cells (16 px = 0.5 m), −3..3.
+  Select tiles and press **Alt + arrow** to slide them; a fourth step carries into the next
+  cell, a step into an occupied cell or past the layer edge is refused (a nudge never
+  overwrites), each press is one undo step, and the status bar reads the offset. The integer
+  anchor still owns occupancy, erase and selection; the nudge moves art, effect area
+  (collider / SoftVolume / hazard) and marker point together, so a nudged bench is stood on
+  exactly where it is drawn — in the editor canvas, ▶ Play, a real run and the offline
+  preview. Ground, autotiled fills and rule zones stay on the grid. Move, copy/paste and
+  Flip H keep the nudge. A nudge of 0 is not written, so existing map files are unchanged and
+  load as before. Engine: one placement function (`TilePlacement`) replaces the cell-to-pixel
+  arithmetic that five builders and two Python tools each carried; `TileNudge` plans a step;
+  the Python map kit and preview understand `nudge=`. Out of scope, by decision: moving map
+  pieces, several tiles per cell, free pixel placement. (Verification: `dotnet build`, 0
+  errors/warnings; headless content check, 315 checks, including a new arena-vs-Playtest
+  nudge parity check; nine mutation runs, each breaking one nudge site and each failing the
+  check by name; the editor driven end to end against a scratch save folder — select, nudge,
+  carry, blocked, undo/redo, copy/paste, move, flip, save, reload, ▶ Play — 24 assertions;
+  the nudged pieces located at the same world position in the editor canvas, the Playtest,
+  the arena runtime and the offline preview. Regenerating the five realm maps with the
+  updated kit leaves `Maps/` byte-identical.)
 - **0.10.7** — **The realm maps actually reach the player, and the map browser is rebuilt.**
   Three separate reasons the v0.10.6 maps were not seen. (1) A run's map selection treated
   every file in `user://maps` as playable: an empty or half-built draft — which answers to

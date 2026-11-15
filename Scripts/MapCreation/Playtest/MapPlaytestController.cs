@@ -168,7 +168,8 @@ public partial class MapPlaytestController : Node2D
                 if (!canBuildBattlefieldPhysics && !canBuildSoftVolume) continue;
                 if (def.Category == TileCategory.Hazard) continue;   // planned per layer below
 
-                Vector2 origin = new(tile.X * MapGrid.PixelsPerCell, tile.Y * MapGrid.PixelsPerCell);
+                (float originX, float originY) = TilePlacement.Origin(tile, def);   // cell + nudge (§2.3)
+                Vector2 origin = new(originX, originY);
                 List<MapCollisionSpec> shapes = MapCollision.BuildSpecs(def, tile.FlipX);
                 if (shapes.Count == 0) continue;
 
@@ -321,17 +322,10 @@ public partial class MapPlaytestController : Node2D
 
     private Vector2 FindPlayerSpawn()
     {
-        float cell = MapGrid.PixelsPerCell;
-        foreach (MapLayerData layer in _document.Layers)
-        {
-            if (layer?.Role != MapLayerData.RoleBattlefield || layer.Tiles == null) continue;
-            foreach (PlacedTile tile in layer.Tiles)
-            {
-                if (tile.DefId != "spawn.character") continue;
-                // Spawn tiles author the character's feet at the bottom of their cell.
-                return new Vector2((tile.X + 0.5f) * cell, (tile.Y + 1f) * cell - Units.Px(1f));
-            }
-        }
+        // The same marker point a real run is handed (`CombatMapRuntime`): the spawn tile's
+        // cell centre, a metre above its floor, moved by the tile's nudge.
+        if (MapDocumentQueries.TryGetCharacterSpawnPoint(_document, out float spawnX, out float spawnY))
+            return new Vector2(spawnX, spawnY);
 
         GD.PushWarning("[MapPlaytest] no battlefield Character Spawn; using the battlefield center.");
         return new Vector2(_battlefieldWidth * 0.5f, Units.Px(2f));

@@ -14,7 +14,7 @@ using Fableland.MapCreation.Editor;
 /// Move is the one verb with a different shape (see <see cref="MoveCommand"/>): it
 /// repositions existing tiles in place rather than swapping instances, which for
 /// free keeps Selection pointed at the right objects across the move without any
-/// extra bookkeeping here.
+/// extra bookkeeping here. <see cref="NudgeCommand"/> follows the same in-place shape.
 /// </summary>
 public sealed class TileBatchCommand : IEditorCommand
 {
@@ -108,6 +108,41 @@ public sealed class MoveCommand : IEditorCommand
         }
         foreach (var t in _overwritten)
             if (!_layer.Tiles.Contains(t)) _layer.Tiles.Add(t);
+        _state.InvalidateOccupancy();
+    }
+}
+
+/// <summary>
+/// GDD §2.3 "Sub-cell nudge" — one Alt+arrow press: every nudgeable selected tile slides a
+/// quarter cell (see <see cref="TileNudge"/>, which planned <paramref name="moves"/> and
+/// already refused anything that would leave the grid or cross into an occupied cell).
+/// Like <see cref="MoveCommand"/> it edits the SAME <see cref="PlacedTile"/> instances in
+/// place, so the Selection keeps pointing at them and the next press continues the slide.
+/// A step that crosses a cell boundary changes the tile's anchor, hence the occupancy
+/// invalidation on both paths.
+/// </summary>
+public sealed class NudgeCommand : IEditorCommand
+{
+    public string Name => "Nudge";
+
+    private readonly EditorState _state;
+    private readonly List<NudgeMove> _moves;
+
+    public NudgeCommand(EditorState state, IEnumerable<NudgeMove> moves)
+    {
+        _state = state;
+        _moves = new List<NudgeMove>(moves);
+    }
+
+    public void Do()
+    {
+        foreach (NudgeMove move in _moves) move.Apply();
+        _state.InvalidateOccupancy();
+    }
+
+    public void Undo()
+    {
+        foreach (NudgeMove move in _moves) move.Revert();
         _state.InvalidateOccupancy();
     }
 }

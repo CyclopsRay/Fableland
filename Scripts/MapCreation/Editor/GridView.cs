@@ -287,6 +287,7 @@ public partial class GridView : Control
             visible = VisibleCellRange(currentLayer);
             var occ = State.OccupancyOf(State.CurrentLayerIndex);
             DrawSketchline(occ, State.AccentOf(State.CurrentLayerIndex), visible);
+            DrawNudgeTethers(currentLayer, State.AccentOf(State.CurrentLayerIndex), visible);
 
             if (State.ShowEffectAreas)
                 DrawEffectAreas(currentLayer, visible);
@@ -336,6 +337,8 @@ public partial class GridView : Control
             int fw = def?.FootprintW ?? 1;
             int fh = def?.FootprintH ?? 1;
 
+            // Culled by anchor cells: VisibleCellRange pads a cell on every side, and a
+            // sub-cell nudge is always less than one cell.
             if (tile.X + fw <= vx0 || tile.X >= vx1 || tile.Y + fh <= vy0 || tile.Y >= vy1)
                 continue;
 
@@ -343,9 +346,19 @@ public partial class GridView : Control
             bool hatched = def != null && def.Category == TileCategory.Rule;
             SpriteTexture texture = ResolveTexture(layerIndex, tile, def);
 
-            DrawTileQuad(tile.X, tile.Y, fw, fh, baseColor, layerAlphaMul, tint, hatched,
+            DrawTileQuad(TileOrigin(tile, def), fw, fh, baseColor, layerAlphaMul, tint, hatched,
                 texture, def?.SpriteFillFootprint ?? false, tile.FlipX);
         }
+    }
+
+    /// <summary>A placed tile's footprint corner in world pixels: its anchor cell plus its
+    /// sub-cell nudge (GDD §2.3). Every tile-shaped thing this view draws — art, effect area,
+    /// selection — starts here, and it is the same <see cref="TilePlacement"/> answer the
+    /// Playtest and the arena build from.</summary>
+    private static Vector2 TileOrigin(PlacedTile tile, TileDef def)
+    {
+        (float x, float y) = TilePlacement.Origin(tile, def);
+        return new Vector2(x, y);
     }
 
     /// <summary>The texture (and, for atlas-backed terrain, the one atlas cell) a placed tile
@@ -413,11 +426,11 @@ public partial class GridView : Control
         return result;
     }
 
-    private void DrawTileQuad(int x, int y, int fw, int fh, Color baseColor, float alphaMul, Color? tint,
+    private void DrawTileQuad(Vector2 originWorld, int fw, int fh, Color baseColor, float alphaMul, Color? tint,
         bool hatched, SpriteTexture sprite = null, bool fillFootprint = false, bool flipX = false)
     {
         float cell = MapGrid.PixelsPerCell;
-        Vector2 screenTL = WorldToScreen(new Vector2(x * cell, y * cell));
+        Vector2 screenTL = WorldToScreen(originWorld);
         Vector2 screenSize = new Vector2(fw * cell, fh * cell) * _zoom;
         DrawTileVisual(new Rect2(screenTL, screenSize), baseColor, alphaMul, tint, hatched, sprite, fillFootprint, flipX);
     }
@@ -528,6 +541,32 @@ public partial class GridView : Control
         }
     }
 
+    /// <summary>GDD §2.3 — a nudged tile is drawn away from the cells it owns, and those
+    /// cells (traced by the sketchline) are still where it is clicked, erased and selected.
+    /// A short tether from the middle of its home footprint to the middle of the drawn one,
+    /// with a dot on the home end, says which art belongs to which cells.</summary>
+    private void DrawNudgeTethers(MapLayerData layer, Color accent, (int x0, int y0, int x1, int y1) visible)
+    {
+        if (layer.Tiles == null) return;
+        float cell = MapGrid.PixelsPerCell;
+        Color line = accent;
+        line.A = 0.85f;
+
+        foreach (var tile in layer.Tiles)
+        {
+            if (!TileRegistry.TryGet(tile.DefId, out var def) || !TilePlacement.IsNudged(tile, def)) continue;
+            if (tile.X + def.FootprintW <= visible.x0 || tile.X >= visible.x1 ||
+                tile.Y + def.FootprintH <= visible.y0 || tile.Y >= visible.y1)
+                continue;
+
+            Vector2 half = new Vector2(def.FootprintW * cell, def.FootprintH * cell) * 0.5f;
+            Vector2 home = WorldToScreen(new Vector2(tile.X * cell, tile.Y * cell) + half);
+            Vector2 drawn = WorldToScreen(TileOrigin(tile, def) + half);
+            DrawLine(home, drawn, line, 1.5f);
+            DrawCircle(home, 3f, line);
+        }
+    }
+
     /// <summary>GDD §2.4 — orange outline of every visible non-Rule tile's effect area
     /// on the current layer (null EffectArea = outline the footprint rect).</summary>
     private void DrawEffectAreas(MapLayerData layer, (int x0, int y0, int x1, int y1) visible)
@@ -543,7 +582,9 @@ public partial class GridView : Control
                 tile.Y + def.FootprintH <= visible.y0 || tile.Y >= visible.y1)
                 continue;
 
-            Vector2 anchorWorld = new(tile.X * cell, tile.Y * cell);
+            // The effect area rides with the tile: its frame is the nudged footprint corner,
+            // exactly the origin the runtime colliders are placed at.
+            Vector2 anchorWorld = TileOrigin(tile, def);
 
             // A sub-cell override (or code-default mask) is mirrored across the whole
             // footprint before it is drawn, matching the runtime collision transform.
@@ -691,11 +732,28 @@ public partial class GridView : Control
         {
             int fw = 1, fh = 1;
             if (TileRegistry.TryGet(tile.DefId, out var def)) { fw = def.FootprintW; fh = def.FootprintH; }
-
-            Vector2 tl = WorldToScreen(new Vector2(tile.X * cell, tile.Y * cell));
             Vector2 size = new Vector2(fw * cell, fh * cell) * _zoom;
-            DrawRect(new Rect2(tl, size), yellow, filled: false, width: 2f);
+
+            // The solid outline follows the tile to where it is drawn; a nudged tile also
+            // gets a dashed one on the cells it still owns (GDD §2.3).
+            if (TilePlacement.IsNudged(tile, def))
+                DrawDashedRect(new Rect2(WorldToScreen(new Vector2(tile.X * cell, tile.Y * cell)), size), yellow, 1f);
+
+            DrawRect(new Rect2(WorldToScreen(TileOrigin(tile, def)), size), yellow, filled: false, width: 2f);
         }
+    }
+
+    /// <summary>A dashed rectangle outline: "the cells this piece owns", as opposed to the
+    /// solid outline of where it is drawn.</summary>
+    private void DrawDashedRect(Rect2 rect, Color color, float width)
+    {
+        Vector2 tl = rect.Position, br = rect.End;
+        Vector2 tr = new(br.X, tl.Y), bl = new(tl.X, br.Y);
+        const float dash = 5f;
+        DrawDashedLine(tl, tr, color, width, dash);
+        DrawDashedLine(tr, br, color, width, dash);
+        DrawDashedLine(br, bl, color, width, dash);
+        DrawDashedLine(bl, tl, color, width, dash);
     }
 
     /// <summary>MC4 — draws whatever the active tool (or MapEditor's paste-mode
@@ -714,13 +772,19 @@ public partial class GridView : Control
 
         if (ghost.Cells != null)
         {
-            foreach (var (c, w, h, _) in ghost.Cells)
+            foreach (var (c, w, h, _, subX, subY) in ghost.Cells)
             {
-                Vector2 tl = WorldToScreen(new Vector2(c.X * cell, c.Y * cell));
+                // The filled ghost is where the piece will be drawn (anchor + nudge); for a
+                // nudged piece a dashed outline adds the cells it will own — the ones a
+                // move or paste overwrites.
+                Vector2 homeWorld = new(c.X * cell, c.Y * cell);
+                Vector2 nudgeWorld = new(subX * TilePlacement.SubcellPx, subY * TilePlacement.SubcellPx);
                 Vector2 size = new Vector2(w * cell, h * cell) * _zoom;
-                var rect = new Rect2(tl, size);
+                var rect = new Rect2(WorldToScreen(homeWorld + nudgeWorld), size);
                 DrawRect(rect, fill);
                 DrawRect(rect, outline, filled: false, width: 1.5f);
+                if (subX != 0 || subY != 0)
+                    DrawDashedRect(new Rect2(WorldToScreen(homeWorld), size), outline, 1f);
             }
         }
 

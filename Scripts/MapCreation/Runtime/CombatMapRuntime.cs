@@ -45,9 +45,12 @@ public static class CombatMapRuntime
                 if (tile == null || !TileRegistry.TryGet(tile.DefId, out TileDef def) || def.Category == TileCategory.Rule)
                     continue;   // unknown ids were already reported by the visual pass
 
-                Vector2 origin = new(tile.X * MapGrid.PixelsPerCell, tile.Y * MapGrid.PixelsPerCell);
-                Vector2 marker = new((tile.X + 0.5f) * MapGrid.PixelsPerCell,
-                    (tile.Y + 1f) * MapGrid.PixelsPerCell - Units.Px(1f));
+                // Anchor cell plus sub-cell nudge (GDD §2.3) — the same origin the art uses,
+                // so a nudged platform is stood on exactly where it is drawn.
+                (float originX, float originY) = TilePlacement.Origin(tile, def);
+                (float markerX, float markerY) = TilePlacement.Marker(tile, def);
+                Vector2 origin = new(originX, originY);
+                Vector2 marker = new(markerX, markerY);
 
                 switch (def.Category)
                 {
@@ -58,6 +61,8 @@ public static class CombatMapRuntime
                         result.RespawnSpawns.Add(marker);
                         break;
                     case TileCategory.EnemySpawn:
+                        // The spawn-rule row is the anchor row: a nudge moves the point, not
+                        // which authored row the nest belongs to.
                         result.EnemySpawns.Add(new CombatMapSpawnPoint(marker, tile.Y));
                         break;
                     case TileCategory.LevelGoal:

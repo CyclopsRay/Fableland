@@ -73,8 +73,11 @@ public abstract class ToolBase
 /// </summary>
 public sealed class GhostInfo
 {
-    /// <summary>Footprint-rect ghosts, one entry per placed/moved/pasted tile preview.</summary>
-    public List<(Vector2I cell, int W, int H, string DefId)> Cells = new();
+    /// <summary>Footprint-rect ghosts, one entry per placed/moved/pasted tile preview.
+    /// <c>cell</c> is the anchor the tile would own; <c>SubX</c>/<c>SubY</c> is the sub-cell
+    /// nudge it would keep (GDD §2.3; 0 for a fresh brush), so GridView can show both where
+    /// the piece lands and which cells it claims.</summary>
+    public List<(Vector2I cell, int W, int H, string DefId, int SubX, int SubY)> Cells = new();
 
     /// <summary>Legal (green) vs illegal (red) tint for every rect-shaped ghost above.
     /// A single flag for the whole ghost (not per-cell) — simplest shape that still

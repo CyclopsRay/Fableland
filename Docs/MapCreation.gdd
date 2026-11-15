@@ -127,10 +127,60 @@ is not a placed tile; it is spawned by the trigger and sweeps beyond its anchor 
 - Erasing **any** occupied cell removes the whole tile (you can't half-delete a tree).
 - Footprints never extend outside the layer grid.
 
+**Sub-cell nudge (v0.10.8).** A placed piece is not limited to whole 2 m cells. Besides its
+anchor it may carry a **nudge**: `subX`, `subY`, each a whole number of **quarter cells**
+(16 px = 0.5 m — the 4×4 sub-grid of §2.4), **−3..3**, positive = right / down. Default 0;
+a nudge of 0 is not written to the file, so a map nobody nudged is byte-for-byte unchanged.
+
+The anchor still owns the cells; the nudge moves what the piece shows and does:
+
+| Decided by the **anchor** (never the nudge) | Moves with the **nudge**, as one rigid piece |
+|---|---|
+| Occupancy: one tile per cell, what paint / paste / a move may overwrite | The art |
+| Which cell you click to select, erase, eyedrop or grab it | The effect area: collider, SoftVolume, hazard (§2.4) |
+| Autotile neighbours, rule-zone grouping (§2.5, §6) | A marker's point — spawn, respawn, nest, goal (§9) |
+| An Enemy Spawn's row for `foeSpawnRules` (§9) | The parallax anchor, when the character spawn is nudged (§1) |
+
+- **Terrain stays on the grid.** Ground, any connected-look fill (a kind with an
+  `autotileGroup`, e.g. lava) and rule zones are defined by which cells they cover and which
+  neighbours they touch. A nudge on one is ignored wherever it is read and cleared on load.
+  Everything else can be nudged: platforms, soft volumes, stand-alone hazards, decoration,
+  and the four markers.
+- **A nudged piece stays inside its layer's grid**, like a footprint.
+- **Flip and nudge do not interact.** `flipX` mirrors art and effect area *inside* the
+  footprint (§2.4); the nudge slides the footprint. Flipping a nudged piece leaves it where
+  it is.
+- **Art may overlap a neighbour's cell** — a bench nudged ¾ cell covers most of the next
+  cell, which is still free to paint. That is the point of a nudge and is allowed; it is
+  still one tile per cell per layer, and draw order is still the layer's list order.
+- **One answer for every view.** `TilePlacement` (pure data) is the only code that turns an
+  anchor and a nudge into pixels — `Origin` for the footprint corner, `Marker` for a marker's
+  point. The editor canvas, the Playtest, the arena, the map cards, the collision / hazard /
+  marker builders all ask it; `Tools/render_map_preview.py` and `Tools/realm_maps/mapkit.py`
+  mirror it. The headless content check builds a map with every category nudged through the
+  arena path and the Playtest and fails if art, collider, hazard or marker land anywhere but
+  the same shifted spot.
+- **Loading repairs, never trusts.** A file may carry a nudge the editor would not write
+  (hand-edited, or from a script). `MapJson.Load` clears it on terrain, clamps it to ±3 and
+  pulls it back inside the grid, with a warning each time.
+
+*In the editor (§7.3):* **Alt + arrow** slides every nudgeable selected tile one quarter cell.
+- A selection moves as a group or not at all; terrain in the selection is left where it is.
+- A fourth step in one direction is a whole cell, so it **carries**: the anchor moves one cell
+  and the nudge returns to 0. The piece is in the same place on screen; what changes is which
+  cells it owns. A carry needs those cells free — **a nudge never overwrites anything**
+  (unlike a Move), and a refused nudge changes nothing and says why in the status bar.
+- One key press is one undo step. Move, cut / copy / paste and Flip H keep a piece's nudge.
+- The canvas shows both facts: the selection outline is solid where the piece is drawn and
+  dashed on the cells it owns, and a short tether with a dot on the home end joins the two for
+  every nudged piece on the current layer. The status bar reads the selection's nudge in
+  quarter cells and metres (`Nudge: x +½, y −¼ cell (+1 m, −0.5 m)`), or `mixed`.
+
 ### 2.4 Effect areas — cells are not the collision unit
 
 A cell is the *authoring* unit, not the *physics* unit. Each TileDef may carry an
-`effectArea` (rect/circle/polygon in pixels, anchored to the tile's anchor cell) used
+`effectArea` (rect/circle/polygon in pixels, anchored to the tile's footprint corner — its
+anchor cell, moved by the tile's sub-cell nudge, §2.3) used
 at runtime for its collider or trigger. Default = the footprint rectangle. The editor
 gets a **"Show effect areas"** toggle (top bar) that outlines them in orange so
 designers see what a hazard actually touches.
@@ -373,7 +423,7 @@ wider. The top bar gained **▶ Play** (item 5) and **Generate** (item 4).
 ├───┴──────────────────────────────────────────────┴───────────┤
 │ Palette dock: tile chips (sprite thumb + name + ⚙), by cat.  │
 ├──────────────────────────────────────────────────────────────┤
-│ Status: cursor cell (x, y) · selection count · unsaved dot   │
+│ Status: cursor cell (x, y) · selection count · nudge · dot   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -426,6 +476,11 @@ the visible camera frame stays inside the authored map and can reach its final r
 `Shift+click` adds to selection, `Alt+click` subtracts. Any paint tool honors the
 current layer only.
 
+Every tool works on **anchor cells**. A nudged piece (§2.3) is selected, erased, eyedropped
+and grabbed by the cells it owns — the ones the sketchline (§7.4) traces and its tether points
+back to — not by where its art has been slid to. A Move keeps the nudge and counts it when
+testing the layer's edge.
+
 ### 7.3 Shortcuts
 
 | Action | Keys |
@@ -435,6 +490,7 @@ current layer only.
 | Delete selection | `Delete` or `Backspace` |
 | Cut / Copy / Paste | `Ctrl/Cmd+X / C / V` (paste ghost follows cursor, click to stamp) |
 | Flip selected tiles horizontally | `H` (also top-bar **Flip H**) |
+| Nudge selection a quarter cell (§2.3) | `Alt` + `←` `→` `↑` `↓` (no key repeat: one press, one step) |
 | Save | `Ctrl/Cmd+S` |
 | Toggle grid | `G` |
 | Cycle layer up/down | `PageUp` / `PageDown` |
@@ -541,6 +597,9 @@ edited, as a wall of cards (rebuilt in v0.10.7).
   `{}`" bug). A round-trip unit check (save → load → compare) guards this class of bug.
 - `{ "version": 1 }` from byte one; version-switched loader; unknown tile ids skip
   with `GD.PushWarning`, unknown fields are preserved (T20 §5).
+- An additive per-tile field is written only when it differs from its default (`SubX` /
+  `SubY`, §2.3), so adding one never rewrites existing maps and needs no version bump; a
+  build from before the field keeps it in `Extra` and writes it back untouched.
 - Atomic writes: temp file + rename (T30 §6). Missing/corrupt files degrade to an
   empty list + warning, never a crash.
 - Location: `user://maps/<guid>.json`. **No `_index.json`** — the browser lists by
@@ -568,6 +627,10 @@ edited, as a wall of cards (rebuilt in v0.10.7).
   `MapCollision` (effect area → shapes) and `MapHazardFactory` (hazards). Before this the two
   each carried private copies; the arena's had no parallax, so far layers sat rigidly behind the
   battlefield in a real run, and neither drew a ground atlas.
+- **Placement is asked once (v0.10.8).** Where a tile's art, collider, hazard or marker point
+  sits is `TilePlacement.Origin` / `.Marker` — anchor cell plus sub-cell nudge (§2.3) — for
+  the arena, the Playtest and the map cards alike. No builder multiplies a cell by the cell
+  size itself. `MapContentCheck` builds a fully nudged map both ways and compares.
 - **Parallax in a real run.** `CombatMapBuild.AnchorParallax(spawn)` gives every art layer the
   same anchor rule as the Playtest (§1). Layers follow the viewport's *current* camera each frame
   rather than holding one, so a protagonist switch needs no rebinding. `GameManager` also
@@ -627,7 +690,9 @@ Scripts/MapCreation/
     MapDocument.cs         map = meta + canvas + layers
     MapLayerData.cs        role, attributes (§1.2), placed tiles
     MapGrid.cs             2 m / 64 px authored cell scale (§2.1)
-    PlacedTile.cs          defId, anchorX, anchorY, overrides
+    PlacedTile.cs          defId, anchorX, anchorY, sub-cell nudge, flip, overrides
+    TilePlacement.cs       anchor + nudge -> pixels: the one placement function (§2.3)
+    TileNudge.cs           plans one quarter-cell step for a selection (carry, edges, no overwrite)
     TileDef.cs / TileRegistry.cs      §2.2
     TileSets.cs, TileSets/*.cs        §2.6 realm tile sets (one file per realm)
     TileProps.cs           keys of TileDef.Props that code reads
@@ -659,6 +724,7 @@ Scripts/MapCreation/
     MapHazardFactory.cs       hazard tiles -> runtime hazards, by data; pool merging
   Dev/
     MapContentCheck.cs        headless: self-tests + audit + builds every built-in map
+                              + nudge parity (arena vs Playtest, §2.3)
                               + asks the catalogue whether every node kind has a map
     MapScreenshot.cs          renders built-in maps to PNG through the real runtime
 Scenes/MapCreation/MapBrowser.tscn, MapEditor.tscn   (thin roots, no fabricated uid=)
@@ -693,7 +759,10 @@ saved user maps are worth migrating — they're all `{}` on disk anyway).
 
 Weather canvas modes (IDEAS §6) · Mirage tiles (IDEAS §6) · autotile art via TileSet
 terrains (§2.5) · map sharing/export · seeded adventure-map integration (the persistent
-`MapInstantiator` form of §9). **Delivered in this workspace:** isolated editor playtesting with
+`MapInstantiator` form of §9) · moving or animated map pieces ("dynamics": moving platforms,
+timed hazards — a design pass of their own) · more than one tile per cell on a layer ·
+free pixel placement (the nudge of §2.3 is quarter cells on an anchor, by decision) ·
+picking a nudged piece by its drawn position instead of its cells. **Delivered in this workspace:** isolated editor playtesting with
 Pomegraknight, authored runtime collision, and opt-in deterministic Farview SoftVolumes (§3, §7.1a);
 the closeview blur shader is dropped (closeview is real scenery now, §1, not a blurred band).
 
@@ -762,3 +831,28 @@ the closeview blur shader is dropped (closeview is real scenery now, §1, not a 
 - **(v0.10.6) The canvas is the footprint.** Painted props pin their canvas to their footprint,
   and a boot audit checks registry, sidecar and PNG agree — chosen over auto-fitting whatever
   bounds a sprite happens to have.
+- **(v0.10.8) A nudge is a quarter-cell offset on an integer anchor.** Authored maps looked
+  rigid because every bench and tower sat on the 2 m grid. Chosen over (a) a finer grid —
+  16 px cells would multiply every footprint, map file and tool by four and still snap — and
+  (b) free pixel positions, which need object picking, overlap and ordering rules this editor
+  does not have. The anchor keeps occupancy, erase, selection, autotiling and rule zones
+  exactly as they were; only "where is it drawn and where does it collide" gained two small
+  integers. Quarter cells because the effect painter already works on that sub-grid, so a
+  nudged collider still lands on it.
+- **(v0.10.8) Terrain is grid-locked.** Ground, autotiled fills and rule zones mean "these
+  cells"; an offset would open seams in a floor and break the neighbour tests that pick their
+  art. Ignored on read and cleared on load rather than rejected, so a stray value in a file
+  cannot stop a map loading.
+- **(v0.10.8) A nudge carries at the fourth step, never overwrites, and moves a selection
+  rigidly.** Holding the offset to ±3 keeps a piece within a cell of the cells it owns; the
+  carry lets Alt+arrows walk a piece across the map without switching tools. Overwriting is
+  right for a deliberate drag (Move) and wrong for a key tap, so a blocked nudge does nothing
+  and reports the blocker. One member at an edge stops the whole group, so a nudge can never
+  rearrange it.
+- **(v0.10.8) Tools still pick by cell.** A nudged piece is clicked where its cells are, not
+  where its art is. Accepted for now, and made visible (sketchline on the owned cells, dashed
+  selection outline, tether); picking by drawn position is listed in §12.
+- **(v0.10.8) Alt+arrows, matched exactly, no repeat.** Bare arrows belong to GUI focus
+  navigation once any button has focus, so they would nudge only some of the time. An exact
+  modifier match keeps other arrow combos free. No key repeat: one press is one quarter cell
+  and one undo step, so a held key cannot flood the 200-step history.

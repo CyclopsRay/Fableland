@@ -16,6 +16,8 @@ using Fableland.MapCreation.Data;
 ///   • a prop sprite is trimmed to its used rect, aspect-fitted in its footprint and
 ///     anchored bottom-centre — the same rule the editor canvas draws by, so transparent
 ///     export padding can never float a prop above its footprint floor;
+///   • where that footprint sits comes only from <see cref="TilePlacement"/> (anchor cell
+///     plus sub-cell nudge), the same answer the collision and marker builders use;
 ///   • Closeview layers draw ABOVE every actor (<see cref="CloseviewZIndex"/>): that is the
 ///     "hide behind" in MapCreation.gdd §1, and is what lets a foreground haze or leaf
 ///     fringe sit over the fight.
@@ -67,16 +69,19 @@ public static class MapVisualBuilder
         category == TileCategory.EnemySpawn || category == TileCategory.Respawn ||
         category == TileCategory.LevelGoal || category == TileCategory.Character;
 
-    /// <summary>One placed tile's art, positioned at its authored cell.</summary>
+    /// <summary>One placed tile's art, positioned at its authored cell plus its sub-cell
+    /// nudge (GDD §2.3). Autotile neighbours are still probed by anchor cell: terrain is
+    /// never nudged, and a nudged prop has no connected look to break.</summary>
     public static Node2D CreateTileVisual(PlacedTile tile, TileDef def, LayerOccupancy occupancy,
         int gridW, int gridH)
     {
         float cell = MapGrid.PixelsPerCell;
         Vector2 footprint = new(def.FootprintW * cell, def.FootprintH * cell);
+        (float originX, float originY) = TilePlacement.Origin(tile, def);
         var host = new Node2D
         {
             Name = def.Id.Replace('.', '_'),
-            Position = new Vector2(tile.X * cell, tile.Y * cell),
+            Position = new Vector2(originX, originY),
         };
 
         TileVisual visual = TileVisualResolver.Resolve(def, tile.X,

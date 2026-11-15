@@ -63,8 +63,11 @@ public sealed class EditorState
     public readonly HashSet<PlacedTile> Selection = new();
 
     /// <summary>Cut/copy payload, cell-relative to the selection's anchor. MC4 fills
-    /// this on Cut/Copy and consumes it on Paste.</summary>
-    public readonly List<(string DefId, int Dx, int Dy, bool FlipX)> Clipboard = new();
+    /// this on Cut/Copy and consumes it on Paste. Each entry keeps a detached copy of the
+    /// tile itself (`TilePlacement.CopyAt`) rather than a list of chosen fields, so whatever
+    /// a placed tile carries — flip, sub-cell nudge, per-tile props — is pasted with it and
+    /// a new PlacedTile field cannot be forgotten here.</summary>
+    public readonly List<(PlacedTile Template, int Dx, int Dy)> Clipboard = new();
 
     public bool ShowGrid = true;
     public bool ShowEffectAreas;

@@ -116,8 +116,8 @@ public partial class MapThumbnailRenderer : Node
         List<MapParallaxLayer> layers = MapVisualBuilder.Build(job.Doc, world, "MapThumbnail");
 
         // Same parallax anchor as a fight (the spawn), so far layers sit where they would.
-        Vector2 anchor = MapDocumentQueries.TryGetCharacterSpawnCell(job.Doc, out int sx, out int sy)
-            ? new Vector2((sx + 0.5f) * cell, (sy + 0.5f) * cell)
+        Vector2 anchor = MapDocumentQueries.TryGetCharacterSpawnPoint(job.Doc, out float spawnX, out float spawnY)
+            ? new Vector2(spawnX, spawnY)
             : mapSize * 0.5f;
         foreach (MapParallaxLayer layer in layers) layer.SetAnchor(anchor);
 

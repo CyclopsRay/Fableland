@@ -181,6 +181,17 @@ public static class MapJson
                     continue;
                 }
 
+                // GDD §2.3 — a nudge is kept only in its legal form: none on terrain, within
+                // ±3 quarter cells, and inside the layer grid. The editor cannot produce
+                // anything else; a hand-edited or script-written file can.
+                int subX = tile.SubX, subY = tile.SubY;
+                if (TilePlacement.Normalize(tile, def, layer.GridW, layer.GridH))
+                {
+                    warnings.Add($"tile '{tile.DefId}' at ({tile.X},{tile.Y}): nudge ({subX},{subY}) is not allowed there " +
+                        $"({(TilePlacement.IsGridLocked(def) ? "terrain stays on the grid" : "it must stay within 3 quarter cells and inside the layer")}); " +
+                        $"now ({tile.SubX},{tile.SubY})");
+                }
+
                 kept.Add(tile);
             }
             layer.Tiles = kept;
@@ -189,8 +200,9 @@ public static class MapJson
 
     /// <summary>GDD §11.2 — the structural guard against the STJ-"public fields are
     /// ignored" bug that made every v0.5.x save `{}`. Builds a representative document
-    /// (2+ layers, a multi-cell tile, a painted rule zone, per-tile Props, a non-default
-    /// canvas color, World set), saves it, reloads it, and deep-compares every property.
+    /// (2+ layers, a multi-cell tile, a painted rule zone, per-tile Props, nudged tiles, a
+    /// non-default canvas color, World set), saves it, reloads it, and deep-compares every
+    /// property.
     /// Returns an empty list on success. A later phase runs this from the browser in
     /// debug builds.</summary>
     public static List<string> RoundTripSelfTest()
@@ -218,14 +230,18 @@ public static class MapJson
             if (l.Role == MapLayerData.RoleBattlefield) { battlefield = l; break; }
         battlefield.GridW = 64;
         battlefield.GridH = 36;
-        battlefield.Tiles.Add(new PlacedTile { DefId = "softvolume.cloud2x1", X = 5, Y = 5 });
+        // A nudged prop (GDD §2.3) beside un-nudged ones, and a nudged marker that also
+        // carries per-tile props: the two new fields must survive on their own and together.
+        battlefield.Tiles.Add(new PlacedTile { DefId = "softvolume.cloud2x1", X = 5, Y = 5, SubX = 2, SubY = -1 });
         battlefield.Tiles.Add(new PlacedTile
         {
             DefId = "spawn.enemy",
             X = 10,
             Y = 10,
+            SubX = -TilePlacement.MaxNudge,
             Props = new Dictionary<string, string> { ["foeTable"] = "crabPatrol" },
         });
+        battlefield.Tiles.Add(new PlacedTile { DefId = "platform.bench", X = 30, Y = 12, FlipX = true, SubY = TilePlacement.MaxNudge });
         battlefield.Tiles.Add(new PlacedTile { DefId = "rule.cloudZone", X = 20, Y = 5 });
         battlefield.Tiles.Add(new PlacedTile { DefId = "rule.cloudZone", X = 21, Y = 5 });
 
@@ -239,6 +255,13 @@ public static class MapJson
         try
         {
             Save(doc, tmpPath);
+
+            // A nudge of 0 is not written at all, so a map nobody nudged is the same file it
+            // was before the fields existed (and old builds keep reading new files).
+            string written = File.ReadAllText(tmpPath);
+            if (CountOf(written, "\"SubX\"") != 2) failures.Add("round-trip: SubX must be written for exactly the two tiles nudged in x");
+            if (CountOf(written, "\"SubY\"") != 2) failures.Add("round-trip: SubY must be written for exactly the two tiles nudged in y");
+
             var loaded = Load(tmpPath, out var loadWarnings);
 
             if (loaded == null)
@@ -249,6 +272,7 @@ public static class MapJson
             foreach (var w in loadWarnings) failures.Add("unexpected load warning: " + w);
 
             CompareDoc(doc, loaded, failures);
+            NudgeRepairSelfTest(failures);
         }
         catch (Exception e)
         {
@@ -260,6 +284,70 @@ public static class MapJson
         }
 
         return failures;
+    }
+
+    private static int CountOf(string text, string needle)
+    {
+        int count = 0;
+        for (int at = text.IndexOf(needle, StringComparison.Ordinal); at >= 0;
+             at = text.IndexOf(needle, at + needle.Length, StringComparison.Ordinal))
+            count++;
+        return count;
+    }
+
+    /// <summary>A file can carry a nudge the editor would never write (hand-edited, or from
+    /// the Python map kit). Loading must repair it and say so, never draw terrain off the
+    /// grid or a prop outside its layer.</summary>
+    private static void NudgeRepairSelfTest(List<string> failures)
+    {
+        var doc = MapDocument.CreateNew("Nudge Repair Test");
+        MapLayerData field = null;
+        foreach (var l in doc.Layers)
+            if (l.Role == MapLayerData.RoleBattlefield) { field = l; break; }
+        field.GridW = 20;
+        field.GridH = 12;
+        var ground = new PlacedTile { DefId = "ground.stone", X = 3, Y = 10, SubX = 2 };
+        var wild = new PlacedTile { DefId = "deco.flower", X = 5, Y = 5, SubX = 9, SubY = -9 };
+        var atEdge = new PlacedTile { DefId = "deco.flower", X = 0, Y = 0, SubX = -1, SubY = -1 };
+        var fine = new PlacedTile { DefId = "deco.flower", X = 8, Y = 8, SubX = 1, SubY = -2 };
+        field.Tiles.AddRange(new[] { ground, wild, atEdge, fine });
+
+        string tmpPath = Path.Combine(Path.GetTempPath(), "fableland_nudgetest_" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            Save(doc, tmpPath);
+            var loaded = Load(tmpPath, out var warnings);
+            MapLayerData loadedField = null;
+            if (loaded != null)
+                foreach (var l in loaded.Layers)
+                    if (l.Role == MapLayerData.RoleBattlefield) { loadedField = l; break; }
+            if (loadedField == null || loadedField.Tiles.Count != 4)
+            {
+                failures.Add("nudge repair: the test map did not load with its four tiles");
+                return;
+            }
+
+            void Expect(int index, int subX, int subY, string what)
+            {
+                var t = loadedField.Tiles[index];
+                if (t.SubX != subX || t.SubY != subY)
+                    failures.Add($"nudge repair: {what} loaded as ({t.SubX},{t.SubY}), expected ({subX},{subY})");
+            }
+            Expect(0, 0, 0, "a nudge on ground");
+            Expect(1, TilePlacement.MaxNudge, -TilePlacement.MaxNudge, "an out-of-range nudge");
+            Expect(2, 0, 0, "a nudge leaving the layer grid");
+            Expect(3, 1, -2, "a legal nudge");
+            if (warnings.Count != 3)
+                failures.Add($"nudge repair: expected a warning for each of the 3 repaired tiles, got {warnings.Count}");
+        }
+        catch (Exception e)
+        {
+            failures.Add("nudge repair threw: " + e.Message);
+        }
+        finally
+        {
+            try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { /* best-effort cleanup */ }
+        }
     }
 
     private static void CompareDoc(MapDocument a, MapDocument b, List<string> failures)
@@ -323,6 +411,8 @@ public static class MapJson
                 Check(ta.DefId == tb.DefId, ttag + ".DefId");
                 Check(ta.X == tb.X, ttag + ".X");
                 Check(ta.Y == tb.Y, ttag + ".Y");
+                Check(ta.SubX == tb.SubX, ttag + ".SubX");
+                Check(ta.SubY == tb.SubY, ttag + ".SubY");
                 Check(ta.FlipX == tb.FlipX, ttag + ".FlipX");
 
                 bool aHasProps = ta.Props is { Count: > 0 };

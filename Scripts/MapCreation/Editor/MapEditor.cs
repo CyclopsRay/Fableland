@@ -56,7 +56,13 @@ public partial class MapEditor : Control
 	private Label _zoomLabel;
 	private Label _cursorCellLabel;
 	private Label _selectionCountLabel;
+	private Label _nudgeLabel;
 	private Label _unsavedDotLabel;
+
+	/// <summary>GDD §2.3 — why the last Alt+arrow did nothing (or what it left behind), shown
+	/// in the status bar in place of the nudge readout until the next state change.</summary>
+	private string _nudgeNotice;
+	private bool _nudgeNoticeFresh;
 
 	private ConfirmationDialog _discardConfirmDialog;
 	// Combat-map selection metadata (world / hardship / goal / terrain + immediate spawn tuning).
@@ -495,6 +501,16 @@ public partial class MapEditor : Control
 
 		_selectionCountLabel = new Label { Text = "Sel: 0" };
 		hbox.AddChild(_selectionCountLabel);
+
+		// GDD §2.3 — the selection's sub-cell nudge, or why the last nudge was refused.
+		_nudgeLabel = new Label
+		{
+			Text = "",
+			TooltipText = "Alt + arrow keys slide the selected tiles a quarter cell (0.5 m).\n" +
+				"Ground and other terrain stay on the grid.",
+			MouseFilter = Control.MouseFilterEnum.Pass,
+		};
+		hbox.AddChild(_nudgeLabel);
 
 		_unsavedDotLabel = new Label { Text = "●", TooltipText = "Unsaved changes", Visible = false };
 		hbox.AddChild(_unsavedDotLabel);
@@ -1198,6 +1214,12 @@ public partial class MapEditor : Control
 		_effectAreasToggleBtn.SetPressedNoSignal(_state.ShowEffectAreas);
 		_selectionCountLabel.Text = $"Sel: {_state.Selection.Count}";
 
+		// A nudge notice is shown by the state change that carries it, then gives way to
+		// the plain readout on the next one (any click or key).
+		if (_nudgeNoticeFresh) _nudgeNoticeFresh = false;
+		else _nudgeNotice = null;
+		_nudgeLabel.Text = _nudgeNotice ?? DescribeSelectionNudge();
+
 		// GDD §5 — canvas color is editable in map properties (MC5's LayerPanel Canvas
 		// row); re-read it every StateChanged rather than special-casing the one command
 		// that can change it (cheap: one hex-parse + ColorRect write).
@@ -1274,14 +1296,16 @@ public partial class MapEditor : Control
 		var toAdd = new List<PlacedTile>();
 		var toRemoveSet = new HashSet<PlacedTile>();
 
-		foreach (var (defId, dx, dy, flipX) in _state.Clipboard)
+		foreach (var (template, dx, dy) in _state.Clipboard)
 		{
-			if (!TileRegistry.TryGet(defId, out var def)) continue;
+			if (!TileRegistry.TryGet(template.DefId, out var def)) continue;
 			if ((def.AllowedRoles & ToolBase.RoleMaskOf(layer.Role)) == 0) continue;
 
 			int x = anchorCell.X + dx, y = anchorCell.Y + dy;
 			int fw = def.FootprintW, fh = def.FootprintH;
-			if (x < 0 || y < 0 || x + fw > layer.GridW || y + fh > layer.GridH) continue;
+			// "Inside the grid" counts the tile's sub-cell nudge (GDD §2.3), like a Move.
+			if (!TilePlacement.FitsGrid(x, y, TilePlacement.NudgeX(template, def), TilePlacement.NudgeY(template, def),
+					fw, fh, layer.GridW, layer.GridH)) continue;
 
 			for (int cy = 0; cy < fh; cy++)
 				for (int cx = 0; cx < fw; cx++)
@@ -1290,7 +1314,7 @@ public partial class MapEditor : Control
 					if (existing != null) toRemoveSet.Add(existing);
 				}
 
-			toAdd.Add(new PlacedTile { DefId = def.Id, X = x, Y = y, FlipX = flipX });
+			toAdd.Add(TilePlacement.CopyAt(template, x, y));
 		}
 
 		if (toAdd.Count > 0)
@@ -1303,13 +1327,13 @@ public partial class MapEditor : Control
 		var cursor = _gridView.HoverCell;
 		if (layer == null || !cursor.HasValue || _state.Clipboard.Count == 0) return null;
 
-		var cells = new List<(Vector2I, int, int, string)>();
+		var cells = new List<(Vector2I, int, int, string, int, int)>();
 		bool valid = true;
 
-		foreach (var (defId, dx, dy, _) in _state.Clipboard)
+		foreach (var (template, dx, dy) in _state.Clipboard)
 		{
 			int fw = 1, fh = 1;
-			bool legal = TileRegistry.TryGet(defId, out var def);
+			bool legal = TileRegistry.TryGet(template.DefId, out var def);
 			if (legal)
 			{
 				fw = def.FootprintW;
@@ -1318,9 +1342,10 @@ public partial class MapEditor : Control
 			}
 
 			int x = cursor.Value.X + dx, y = cursor.Value.Y + dy;
-			if (!legal || x < 0 || y < 0 || x + fw > layer.GridW || y + fh > layer.GridH) valid = false;
+			int subX = TilePlacement.NudgeX(template, def), subY = TilePlacement.NudgeY(template, def);
+			if (!legal || !TilePlacement.FitsGrid(x, y, subX, subY, fw, fh, layer.GridW, layer.GridH)) valid = false;
 
-			cells.Add((new Vector2I(x, y), fw, fh, defId));
+			cells.Add((new Vector2I(x, y), fw, fh, template.DefId, subX, subY));
 		}
 
 		return new GhostInfo { Valid = valid, Cells = cells };
@@ -1328,9 +1353,10 @@ public partial class MapEditor : Control
 
 	// ---------------------------------------------------------------- selection shortcuts (MC4)
 
-	/// <summary>Clipboard = selection's tiles as (DefId, Dx, Dy) offsets relative to
-	/// the selection's min-(y,x) anchor tile (GDD §7.3; same sort order as the §6
-	/// zone-resolution "sorted by anchor y, then x" convention).</summary>
+	/// <summary>Clipboard = a detached copy of each selected tile plus its (Dx, Dy) cell
+	/// offset from the selection's min-(y,x) anchor tile (GDD §7.3; same sort order as the
+	/// §6 zone-resolution "sorted by anchor y, then x" convention). The copy carries the
+	/// tile's flip and sub-cell nudge, so a pasted arrangement looks like its source.</summary>
 	private void CopySelectionInternal()
 	{
 		_state.Clipboard.Clear();
@@ -1341,8 +1367,78 @@ public partial class MapEditor : Control
 			if (anchor == null || t.Y < anchor.Y || (t.Y == anchor.Y && t.X < anchor.X)) anchor = t;
 
 		foreach (var t in _state.Selection)
-			_state.Clipboard.Add((t.DefId, t.X - anchor.X, t.Y - anchor.Y, t.FlipX));
+			_state.Clipboard.Add((TilePlacement.CopyAt(t, t.X, t.Y), t.X - anchor.X, t.Y - anchor.Y));
 	}
+
+	// ---------------------------------------------------------------- sub-cell nudge (GDD §2.3)
+
+	/// <summary>One Alt+arrow press: slide every nudgeable selected tile a quarter cell.
+	/// <see cref="TileNudge"/> decides whether the step is possible; a good one becomes a
+	/// single undoable <see cref="NudgeCommand"/>, a refused one changes nothing and says why
+	/// in the status bar. Ignored while a mouse stroke is in progress — a Move drag holds
+	/// each tile's starting cell, and a carry underneath it would move that cell.</summary>
+	private void NudgeSelection(int stepX, int stepY)
+	{
+		var layer = _state.CurrentLayer;
+		if (layer == null || Input.IsMouseButtonPressed(MouseButton.Left)) return;
+
+		NudgePlan plan = TileNudge.Plan(layer, _state.Selection, stepX, stepY,
+			id => TileRegistry.TryGet(id, out var def) ? def : null);
+
+		if (plan.Ok)
+		{
+			_state.Commands.Push(new NudgeCommand(_state, plan.Moves));
+			_nudgeNotice = plan.Held > 0
+				? $"{DescribeSelectionNudge()}  ·  {plan.Held} terrain tile{(plan.Held == 1 ? "" : "s")} stayed on the grid"
+				: null;
+		}
+		else
+		{
+			_nudgeNotice = "Nudge: " + plan.Blocker;
+		}
+
+		_nudgeNoticeFresh = _nudgeNotice != null;
+		_state.RaiseStateChanged();
+	}
+
+	/// <summary>The status-bar readout for the current selection's nudge: the offset when
+	/// every nudgeable selected tile shares one, "mixed" when they differ, and a hint when
+	/// nothing in the selection can be nudged.</summary>
+	private string DescribeSelectionNudge()
+	{
+		if (_state.Selection.Count == 0) return "";
+
+		bool any = false, mixed = false;
+		int subX = 0, subY = 0;
+		foreach (var tile in _state.Selection)
+		{
+			TileRegistry.TryGet(tile.DefId, out var def);
+			if (TilePlacement.IsGridLocked(def)) continue;
+
+			int x = TilePlacement.NudgeX(tile, def), y = TilePlacement.NudgeY(tile, def);
+			if (!any) { subX = x; subY = y; any = true; }
+			else if (x != subX || y != subY) mixed = true;
+		}
+
+		if (!any) return "Nudge: terrain stays on the grid";
+		if (mixed) return "Nudge: mixed  (Alt+arrows)";
+		if (subX == 0 && subY == 0) return "Nudge: none  (Alt+arrows = ¼ cell)";
+
+		float metersPerStep = MapGrid.MetersPerCell / TilePlacement.SubcellsPerCell;
+		return $"Nudge: x {QuarterCells(subX)}, y {QuarterCells(subY)} cell  " +
+			$"({Signed(subX * metersPerStep)} m, {Signed(subY * metersPerStep)} m)";
+	}
+
+	/// <summary>−3..3 quarter cells as a signed fraction: "+¼", "−½", "0".</summary>
+	private static string QuarterCells(int quarters)
+	{
+		if (quarters == 0) return "0";
+		string fraction = System.Math.Abs(quarters) switch { 1 => "¼", 2 => "½", 3 => "¾", _ => $"{System.Math.Abs(quarters)}/4" };
+		return (quarters > 0 ? "+" : "−") + fraction;
+	}
+
+	private static string Signed(float value) =>
+		value == 0f ? "0" : (value > 0f ? "+" : "−") + System.Math.Abs(value).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
 	private void FlipSelectionHorizontal()
 	{
@@ -1501,6 +1597,16 @@ public partial class MapEditor : Control
 			Accept();
 			return;
 		}
+
+		// GDD §2.3/§7.3 — Alt+arrows nudge the selection a quarter cell. Kept in the
+		// modifier-combo block, ahead of the bare-key tool shortcuts (KNOWLEDGE v0.6.7), and
+		// matched EXACTLY: no bare-arrow editor action exists today, but an exact match means
+		// a future one (or Shift+Alt+arrow) cannot be shadowed by these, whatever the order.
+		// No echo: one press is one quarter cell and one undo step.
+		if (@event.IsActionPressed("mapedit_nudge_left", false, true)) { NudgeSelection(-1, 0); Accept(); return; }
+		if (@event.IsActionPressed("mapedit_nudge_right", false, true)) { NudgeSelection(1, 0); Accept(); return; }
+		if (@event.IsActionPressed("mapedit_nudge_up", false, true)) { NudgeSelection(0, -1); Accept(); return; }
+		if (@event.IsActionPressed("mapedit_nudge_down", false, true)) { NudgeSelection(0, 1); Accept(); return; }
 
 		// Orchestrator fix (F-MC2, review BLOCKER): the bare-key tool shortcuts MUST be
 		// checked AFTER every modifier-combo action above. IsActionPressed defaults to

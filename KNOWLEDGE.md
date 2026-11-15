@@ -98,6 +98,67 @@ the Anaconda `python3` first on the PATH has a broken numpy (missing MKL) and di
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Where a placed tile sits is one function; "cell × cell size" in a builder is a second opinion (v0.10.8, sub-cell nudge)
+- **Symptom (caught while adding the nudge, before it shipped):** tiles gained a quarter-cell
+  offset (`PlacedTile.SubX/SubY`, GDD §2.3). The *art* already had one builder
+  (`MapVisualBuilder`), but the collider origin was `tile.X * PixelsPerCell` in **two** places
+  — `CombatMapRuntime` and the Playtest's own physics pass — hazards had a third, and the
+  marker point (`(X + 0.5) * cell, (Y + 1) * cell − 1 m`) was typed out in the arena, the
+  Playtest and the map-card renderer, plus two Python tools. Miss any one and a nudged bench
+  is drawn in one place and stood on in another, in one view only.
+- **Rule:** nobody multiplies a cell by the cell size to place a tile. Ask
+  `TilePlacement.Origin` (footprint corner) or `.Marker` (a marker's point); the Python
+  mirrors are `render_map_preview.nudge` / `grid_locked`. Terrain (ground, autotiled fills,
+  rule zones) is grid-locked there, so no caller needs its own "is this nudgeable" test.
+  `MapContentCheck.CheckNudgedPlacement` builds a fully nudged map through the arena AND the
+  Playtest and compares art, colliders, hazards and markers — keep it passing, and add a
+  probe when a new category gains geometry.
+- **Why:** v0.10.6 unified *what* a tile looks like (`TileVisualResolver`) and *how* a map is
+  built; *where* a tile is was still copy-pasted arithmetic, because without an offset every
+  copy gave the same answer. A new per-tile field is exactly when copies diverge. The checks
+  were mutation-tested: breaking each site in turn fails the content check by name.
+
+### Copy a placed tile with `TilePlacement.CopyAt`, never field by field (v0.10.8, sub-cell nudge)
+- **Symptom (caught before it shipped):** the editor clipboard stored
+  `(DefId, Dx, Dy, FlipX)` and paste rebuilt a tile from those four values. It had already
+  been dropping per-tile `Props` without anyone noticing, and would have dropped the new nudge
+  the same way — a pasted bench snapping back onto the grid.
+- **Rule:** the clipboard keeps a detached copy of the tile (`TilePlacement.CopyAt`), and
+  paste copies that. Anything that duplicates a `PlacedTile` goes through `CopyAt`; anything
+  that repositions one edits it in place (`MoveCommand`, `NudgeCommand`). A new `PlacedTile`
+  field then needs one line in `CopyAt` and one in `MapJson.CompareDoc`, nowhere else.
+- **Why:** a list of "the fields worth copying" is a second schema, and it only ever shrinks
+  relative to the real one.
+
+### A fresh worktree has no import cache — and `$?` after a pipe is the pipe's (v0.10.8, reference)
+- **Symptom:** in a brand-new session worktree the headless content check printed 124
+  `SpriteSlot does not load as a texture` lines for art that is in the repository, and the
+  wrapper line still said `exit=0`.
+- **Rule:** `.godot/` (the import cache) is per checkout and git-ignored, so the first thing
+  to run in a new worktree is `Godot --headless --path . --import` (about half a minute),
+  then `dotnet build`, then the content check — not "only after repainting art". And read
+  the check's own exit status: `Godot … > log 2>&1; echo $?`. `Godot … | tail; echo $?`
+  reports `tail`'s, which is always 0.
+- **Why:** a missing cache looks exactly like 124 broken assets, and a green exit code from
+  the wrong process is worse than no exit code.
+
+### Driving the map editor from a script: what reaches it and what does not (v0.10.8, reference)
+- Extends the v0.10.7 note below on out-of-project `SceneTree` scripts and scratch `HOME`.
+- GDScript cannot set a C# static (`EditorLaunch.MapId`) or call `MapPlaytestController`'s
+  C# API. Enter the editor the way a user does: load `MapBrowser.tscn` under the scratch
+  `HOME`, find the card's **Open** button in the tree and emit `pressed`.
+- Mouse: `root.push_input(event, true)` takes viewport coordinates directly (no hi-dpi or
+  stretch arithmetic). With the canvas at its opening pan and zoom, world pixels are screen
+  pixels, so cell (x, y) is clicked at `((x + 0.5) * 64, (y + 0.5) * 64)` — keep test tiles
+  clear of the panels (roughly cells 3–12 across, 1–6 down at 1152×648).
+- Keys: `Input.parse_input_event`, not `push_input` — the Playtest polls
+  `Input.IsPhysicalKeyPressed(Escape)`, which only the Input singleton feeds. `Cmd` is
+  `meta_pressed` on macOS for the `command_or_control_autoremap` actions.
+- Read results from what the user sees and what is saved: status-bar labels and the map file.
+  Match labels by an exact prefix (`"Nudge:"`) — a map *named* "Nudge E2E" answers to
+  `"Nudge"` first. Launch with `--debug-collisions` to see colliders in the Playtest and in
+  `MapScreenshot.tscn`; the latter only reads `res://Maps`, so lend it a copy and remove it.
+
 ### A commit in a session worktree is not in the checkout the game is run from (v0.10.7, "the new maps weren't loaded")
 - **Symptom:** v0.10.6 — five realm tile sets and maps — was committed on a session branch in
   its own worktree under `.claude/worktrees/`. The game is launched from the main checkout,

@@ -22,14 +22,36 @@ public static class MapDocumentQueries
     public static bool TryGetCharacterSpawnCell(MapDocument doc, out int x, out int y)
     {
         x = y = 0;
+        if (!TryGetCharacterSpawn(doc, out PlacedTile tile, out _)) return false;
+        x = tile.X;
+        y = tile.Y;
+        return true;
+    }
+
+    /// <summary>Where the entering character is placed, in battlefield pixels: the first
+    /// Character Spawn's marker point (<see cref="TilePlacement.Marker"/>), nudge included.
+    /// It is also the parallax anchor, so the Playtest, the arena and the map cards must
+    /// all read it from here.</summary>
+    public static bool TryGetCharacterSpawnPoint(MapDocument doc, out float x, out float y)
+    {
+        x = y = 0f;
+        if (!TryGetCharacterSpawn(doc, out PlacedTile tile, out TileDef def)) return false;
+        (x, y) = TilePlacement.Marker(tile, def);
+        return true;
+    }
+
+    private static bool TryGetCharacterSpawn(MapDocument doc, out PlacedTile spawn, out TileDef spawnDef)
+    {
+        spawn = null;
+        spawnDef = null;
         MapLayerData field = Battlefield(doc);
         if (field?.Tiles == null) return false;
         foreach (PlacedTile tile in field.Tiles)
         {
             if (tile == null || !TileRegistry.TryGet(tile.DefId, out TileDef def) ||
                 def.Category != TileCategory.Character) continue;
-            x = tile.X;
-            y = tile.Y;
+            spawn = tile;
+            spawnDef = def;
             return true;
         }
         return false;

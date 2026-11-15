@@ -120,7 +120,7 @@ public sealed class BucketTool : ToolBase
         return new GhostInfo
         {
             Valid = valid,
-            Cells = new List<(Vector2I, int, int, string)> { (cell.Value, fw, fh, State.BrushDefId) },
+            Cells = new List<(Vector2I, int, int, string, int, int)> { (cell.Value, fw, fh, State.BrushDefId, 0, 0) },
         };
     }
 }

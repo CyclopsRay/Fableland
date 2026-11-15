@@ -5,7 +5,9 @@ using Godot;
 using Fableland.MapCreation.Data;
 
 /// <summary>One collision shape of a placed tile, positioned relative to the tile's
-/// top-left anchor cell corner.</summary>
+/// footprint corner — `TilePlacement.Origin`: its anchor cell's top-left, moved by the
+/// tile's sub-cell nudge. Shapes are built in that local frame, so a nudge (a translation
+/// of the frame) and a flip (a mirror inside it) cannot interfere.</summary>
 public readonly struct MapCollisionSpec
 {
     public readonly Shape2D Shape;

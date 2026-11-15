@@ -6,6 +6,7 @@ using System.IO;
 using Godot;
 using Fableland.Map;
 using Fableland.MapCreation.Data;
+using Fableland.MapCreation.Playtest;
 using Fableland.MapCreation.Runtime;
 using Fableland.Run;
 
@@ -15,8 +16,11 @@ using Fableland.Run;
 /// tile sprite, then builds every built-in `res://Maps/*.json` through the same
 /// <see cref="CombatMapRuntime"/> path a real run uses and checks it is playable: the
 /// markers each of its goals needs, a usable nest for both foe types, tiles from one realm.
-/// Last, it asks the run's own map selection (<see cref="CombatMapCatalog"/>) whether every
-/// kind of combat node in every world would be dealt a shipped map.
+/// It then builds a small map with every piece nudged off the grid (GDD §2.3) through the
+/// arena path AND the editor Playtest, and requires art, colliders, hazards and markers to
+/// land on the same shifted spots in both. Last, it asks the run's own map selection
+/// (<see cref="CombatMapCatalog"/>) whether every kind of combat node in every world would
+/// be dealt a shipped map.
 ///
 ///     Godot --headless --path . res://Scenes/MapCreation/MapContentCheck.tscn
 ///
@@ -35,6 +39,7 @@ public partial class MapContentCheck : Node
             RunDomainSelfTests();
             CheckTileAssets();
             CheckBuiltInMaps();
+            CheckNudgedPlacement();
             CheckRealmCoverage();
         }
         catch (Exception e)
@@ -67,6 +72,8 @@ public partial class MapContentCheck : Node
         Absorb("MapJson", MapJson.RoundTripSelfTest());
         Absorb("TileEffectStore", TileEffectStore.RoundTripSelfTest());
         Absorb("EffectAreaTransform", EffectAreaTransform.SelfTest());
+        Absorb("TilePlacement", TilePlacement.SelfTest());
+        Absorb("TileNudge", TileNudge.SelfTest());
         Absorb("TileRegistry", TileRegistry.Validate());
         Absorb("RuleResolver", RuleResolver.SelfTest());
         Absorb("HillAutotile", HillAutotile.SelfTest());
@@ -158,6 +165,171 @@ public partial class MapContentCheck : Node
             world.Free();
             hazards.Free();
         }
+    }
+
+    // ---------------------------------------------------------------- sub-cell nudge (GDD §2.3)
+
+    /// <summary>One piece of the nudge test map: a kind, its anchor cell and the nudge it is
+    /// given in the nudged build (quarter cells).</summary>
+    private readonly record struct NudgeProbe(string DefId, int X, int Y, int SubX, int SubY, bool Flip = false);
+
+    private static readonly NudgeProbe[] NudgeProbes =
+    {
+        new("platform.bench", 5, 9, 2, -1, Flip: true),
+        new("softvolume.cloud2x1", 3, 3, -3, 2),
+        new("hazard.bonfire", 10, 9, -3, 1),
+        new("spawn.character", 1, 9, 1, 0),
+        new("spawn.respawn", 2, 9, 0, -2),
+        new("spawn.enemy", 14, 9, -2, 0),
+        new("goal.level", 16, 9, 3, -3),
+    };
+
+    private const int NudgeFloorY = 10, NudgeGridW = 20, NudgeGridH = 12;
+
+    /// <summary>A 20x12 battlefield: a stone floor and one piece of every nudgeable category.
+    /// In the nudged build the floor is given a nudge too — one it must ignore.</summary>
+    private static MapDocument NudgeTestMap(bool nudged)
+    {
+        MapDocument doc = MapDocument.CreateNew("Nudge Parity");
+        doc.Layers.RemoveAll(layer => layer.Role != MapLayerData.RoleBattlefield);
+        MapLayerData field = MapDocumentQueries.Battlefield(doc);
+        field.GridW = NudgeGridW;
+        field.GridH = NudgeGridH;
+        for (int x = 0; x < NudgeGridW; x++)
+            field.Tiles.Add(new PlacedTile { DefId = "ground.stone", X = x, Y = NudgeFloorY, SubX = nudged ? 2 : 0, SubY = nudged ? 1 : 0 });
+        foreach (NudgeProbe probe in NudgeProbes)
+        {
+            field.Tiles.Add(new PlacedTile
+            {
+                DefId = probe.DefId, X = probe.X, Y = probe.Y, FlipX = probe.Flip,
+                SubX = nudged ? probe.SubX : 0, SubY = nudged ? probe.SubY : 0,
+            });
+        }
+        return doc;
+    }
+
+    /// <summary>Where one build put everything, in creation order.</summary>
+    private sealed class PlacementSnapshot
+    {
+        public readonly List<Vector2> Art = new();
+        public readonly List<Vector2> Physics = new();
+        public readonly List<Vector2> Hazards = new();
+        public Vector2 CharacterSpawn, Respawn, EnemySpawn, LevelGoal;
+        public int EnemySpawnRow;
+    }
+
+    private PlacementSnapshot SnapshotArenaBuild(MapDocument doc)
+    {
+        var world = new Node2D();
+        var hazards = new Node2D();
+        AddChild(world);
+        AddChild(hazards);
+        CombatMapBuild build = CombatMapRuntime.Build(doc, world, hazards);
+
+        var snapshot = new PlacementSnapshot();
+        // One battlefield layer -> one parallax layer -> its "SingleVisuals" holder.
+        foreach (Node host in world.GetNode("AuthoredMapVisuals").GetChild(0).GetChild(0).GetChildren())
+            snapshot.Art.Add(((Node2D)host).Position);
+        foreach (Node body in world.GetNode("AuthoredMapPhysics").GetChildren())
+            snapshot.Physics.Add(((Node2D)body).Position);
+        foreach (Node hazard in hazards.GetChildren())
+            snapshot.Hazards.Add(((Node2D)hazard).Position);
+        if (build.CharacterSpawns.Count > 0) snapshot.CharacterSpawn = build.CharacterSpawns[0];
+        if (build.RespawnSpawns.Count > 0) snapshot.Respawn = build.RespawnSpawns[0];
+        if (build.LevelGoalSpawns.Count > 0) snapshot.LevelGoal = build.LevelGoalSpawns[0];
+        if (build.EnemySpawns.Count > 0)
+        {
+            snapshot.EnemySpawn = build.EnemySpawns[0].Position;
+            snapshot.EnemySpawnRow = build.EnemySpawns[0].CellY;
+        }
+
+        world.Free();
+        hazards.Free();
+        return snapshot;
+    }
+
+    /// <summary>The editor's Play button builds physics in its own pass. Stand it up for
+    /// this one map — no frame runs — and read back where it put things.</summary>
+    private PlacementSnapshot SnapshotPlaytest(MapDocument doc)
+    {
+        var playtest = new MapPlaytestController();
+        playtest.Initialize(doc);
+        AddChild(playtest);
+
+        var snapshot = new PlacementSnapshot();
+        foreach (Node host in playtest.GetNode("WorldVisual").GetChild(0).GetChild(0).GetChildren())
+            snapshot.Art.Add(((Node2D)host).Position);
+        foreach (Node body in playtest.GetNode("Physics").GetChildren())
+            snapshot.Physics.Add(((Node2D)body).Position);
+        foreach (Node hazard in playtest.GetNode("Hazards").GetChildren())
+            snapshot.Hazards.Add(((Node2D)hazard).Position);
+        Node entities = playtest.GetNode("Entities");
+        if (entities.GetChildCount() > 0) snapshot.CharacterSpawn = ((Node2D)entities.GetChild(0)).Position;
+
+        playtest.Free();
+        return snapshot;
+    }
+
+    private void CheckNudgedPlacement()
+    {
+        PlacementSnapshot plain = SnapshotArenaBuild(NudgeTestMap(nudged: false));
+        PlacementSnapshot nudged = SnapshotArenaBuild(NudgeTestMap(nudged: true));
+        PlacementSnapshot playtest = SnapshotPlaytest(NudgeTestMap(nudged: true));
+
+        static bool Near(Vector2 a, Vector2 b) => a.DistanceTo(b) < 0.01f;
+        static Vector2 Shift(NudgeProbe probe) =>
+            new(probe.SubX * TilePlacement.SubcellPx, probe.SubY * TilePlacement.SubcellPx);
+
+        NudgeProbe bench = NudgeProbes[0], cloud = NudgeProbes[1], bonfire = NudgeProbes[2];
+        int floor = NudgeGridW;   // the floor tiles come first in every list
+
+        // Shape of the build: floor + bench + cloud + bonfire art; floor + bench + cloud bodies; one hazard.
+        bool shaped = plain.Art.Count == floor + 3 && nudged.Art.Count == floor + 3 &&
+                      plain.Physics.Count == floor + 2 && nudged.Physics.Count == floor + 2 &&
+                      plain.Hazards.Count == 1 && nudged.Hazards.Count == 1;
+        Expect(shaped, "nudge: the test map did not build one art node per piece, a body per collider and one hazard");
+        if (!shaped) return;
+
+        // Terrain ignores a nudge: art and collider stay on their cells.
+        bool floorHeld = true;
+        for (int i = 0; i < floor; i++)
+            floorHeld &= Near(nudged.Art[i], plain.Art[i]) && Near(nudged.Physics[i], plain.Physics[i]);
+        Expect(floorHeld, "nudge: ground moved off the grid when its tile carried a nudge");
+
+        // Every nudgeable piece moves by exactly its nudge — art and collider together.
+        Expect(Near(nudged.Art[floor] - plain.Art[floor], Shift(bench)), "nudge: the bench's art did not move by its nudge");
+        Expect(Near(nudged.Physics[floor] - plain.Physics[floor], Shift(bench)), "nudge: the bench's collider did not move by its nudge");
+        Expect(Near(nudged.Art[floor], nudged.Physics[floor]), "nudge: the bench is drawn and collided with at different origins");
+        Expect(Near(nudged.Art[floor], new Vector2(
+                bench.X * MapGrid.PixelsPerCell + bench.SubX * MapGrid.PixelsPerCell / 4f,
+                bench.Y * MapGrid.PixelsPerCell + bench.SubY * MapGrid.PixelsPerCell / 4f)),
+            "nudge: a quarter-cell nudge is not a quarter of a cell in pixels");
+        Expect(Near(nudged.Art[floor + 1] - plain.Art[floor + 1], Shift(cloud)), "nudge: the cloud's art did not move by its nudge");
+        Expect(Near(nudged.Physics[floor + 1] - plain.Physics[floor + 1], Shift(cloud)), "nudge: the cloud's SoftVolume did not move by its nudge");
+        Expect(Near(nudged.Art[floor + 2] - plain.Art[floor + 2], Shift(bonfire)), "nudge: the bonfire's art did not move by its nudge");
+        Expect(Near(nudged.Hazards[0] - plain.Hazards[0], Shift(bonfire)), "nudge: the bonfire's hazard did not move by its nudge");
+
+        // Markers: the point moves, the authored row a nest belongs to does not.
+        Expect(Near(nudged.CharacterSpawn - plain.CharacterSpawn, Shift(NudgeProbes[3])), "nudge: the character spawn point did not move by its nudge");
+        Expect(Near(nudged.Respawn - plain.Respawn, Shift(NudgeProbes[4])), "nudge: the respawn point did not move by its nudge");
+        Expect(Near(nudged.EnemySpawn - plain.EnemySpawn, Shift(NudgeProbes[5])), "nudge: the enemy spawn point did not move by its nudge");
+        Expect(nudged.EnemySpawnRow == NudgeProbes[5].Y && plain.EnemySpawnRow == NudgeProbes[5].Y,
+            "nudge: an enemy spawn's rule row must stay its anchor row");
+        Expect(Near(nudged.LevelGoal - plain.LevelGoal, Shift(NudgeProbes[6])), "nudge: the level goal point did not move by its nudge");
+
+        // The Playtest builds physics in its own pass: it must agree with the arena on everything.
+        bool sameShape = playtest.Art.Count == nudged.Art.Count && playtest.Physics.Count == nudged.Physics.Count &&
+                         playtest.Hazards.Count == nudged.Hazards.Count;
+        Expect(sameShape, "nudge: the Playtest and the arena built a different number of pieces from one map");
+        if (!sameShape) return;
+
+        bool sameArt = true, samePhysics = true;
+        for (int i = 0; i < nudged.Art.Count; i++) sameArt &= Near(playtest.Art[i], nudged.Art[i]);
+        for (int i = 0; i < nudged.Physics.Count; i++) samePhysics &= Near(playtest.Physics[i], nudged.Physics[i]);
+        Expect(sameArt, "nudge: the Playtest draws a piece somewhere other than the arena does");
+        Expect(samePhysics, "nudge: the Playtest puts a collider somewhere other than the arena does");
+        Expect(Near(playtest.Hazards[0], nudged.Hazards[0]), "nudge: the Playtest puts a hazard somewhere other than the arena does");
+        Expect(Near(playtest.CharacterSpawn, nudged.CharacterSpawn), "nudge: the Playtest and the arena start the character at different points");
     }
 
     /// <summary>

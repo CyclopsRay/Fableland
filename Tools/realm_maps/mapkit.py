@@ -11,7 +11,9 @@ The kit enforces the editor's own rules while you compose, so a script cannot wr
 map the editor would refuse or silently repair on load:
   * one tile per cell per layer (multi-cell footprints included);
   * every footprint inside its layer's grid;
-  * tile ids that actually exist (read from the `.tile.json` sidecars).
+  * tile ids that actually exist (read from the `.tile.json` sidecars);
+  * a sub-cell nudge only where the editor allows one (`nudge=` on `put` / `stand` / `spawn`):
+    whole quarter cells, -3..3, never on terrain, never pushing a tile out of its grid.
 
 Parallax helper: a far layer is authored in *parallax space* — see `Layer.at_camera`.
 """
@@ -61,8 +63,12 @@ class Layer:
 
     # ------------------------------------------------------------ placement
 
-    def put(self, def_id, x, y, flip=False):
-        """Place a tile by its top-left cell."""
+    def put(self, def_id, x, y, flip=False, nudge=(0, 0)):
+        """Place a tile by its top-left cell.
+
+        `nudge` slides what the tile shows and does - art, collision, a marker's point - by
+        whole quarter cells (16 px = 0.5 m), each of -3..3, without changing the cells it
+        owns (MapCreation.gdd 2.3). Terrain cannot be nudged."""
         info = tiles().get(def_id)
         if info is None:
             raise MapError(f"{self.owner.name}/{self.name}: unknown tile '{def_id}'")
@@ -71,6 +77,7 @@ class Layer:
         if x < 0 or y < 0 or x + w > self.grid_w or y + h > self.grid_h:
             raise MapError(f"{self.owner.name}/{self.name}: '{def_id}' at ({x},{y}) size {w}x{h} "
                            f"leaves the {self.grid_w}x{self.grid_h} grid")
+        sub_x, sub_y = self._check_nudge(def_id, info, x, y, nudge)
         for dy in range(h):
             for dx in range(w):
                 other = self._occ.get((x + dx, y + dy))
@@ -81,14 +88,40 @@ class Layer:
             for dx in range(w):
                 self._occ[(x + dx, y + dy)] = def_id
         tile = {"DefId": def_id, "X": x, "Y": y}
+        if sub_x:                       # written only when non-zero, like the editor's own saves
+            tile["SubX"] = sub_x
+        if sub_y:
+            tile["SubY"] = sub_y
         if flip:
             tile["FlipX"] = True
         self.tiles.append(tile)
         return self
 
-    def stand(self, def_id, x, floor_y, flip=False):
+    def _check_nudge(self, def_id, info, x, y, nudge):
+        """The editor's nudge rules (`TilePlacement`), enforced here so a script cannot write
+        a nudge that `MapJson.Load` would repair with a warning."""
+        sub_x, sub_y = nudge
+        where = f"{self.owner.name}/{self.name}: '{def_id}' at ({x},{y})"
+        if sub_x != int(sub_x) or sub_y != int(sub_y):
+            raise MapError(f"{where}: a nudge is a whole number of quarter cells, got {nudge}")
+        sub_x, sub_y = int(sub_x), int(sub_y)
+        if sub_x == 0 and sub_y == 0:
+            return 0, 0
+        limit = preview.MAX_NUDGE
+        if abs(sub_x) > limit or abs(sub_y) > limit:
+            raise MapError(f"{where}: nudge {nudge} is outside -{limit}..{limit} quarter cells "
+                           f"(move the tile a whole cell instead)")
+        if preview.grid_locked(def_id, info):
+            raise MapError(f"{where}: terrain and rule zones stay on the grid and cannot be nudged")
+        n = preview.SUBCELLS
+        if (x * n + sub_x < 0 or y * n + sub_y < 0 or
+                (x + info["w"]) * n + sub_x > self.grid_w * n or (y + info["h"]) * n + sub_y > self.grid_h * n):
+            raise MapError(f"{where}: nudge {nudge} pushes it out of the {self.grid_w}x{self.grid_h} grid")
+        return sub_x, sub_y
+
+    def stand(self, def_id, x, floor_y, flip=False, nudge=(0, 0)):
         """Place a tile so it STANDS on row `floor_y` (its bottom edge on that row's top)."""
-        return self.put(def_id, x, floor_y - tiles()[def_id]["h"], flip)
+        return self.put(def_id, x, floor_y - tiles()[def_id]["h"], flip, nudge)
 
     def fill(self, def_id, x0, y0, x1, y1):
         """Fill the inclusive cell rectangle with a 1x1 tile; cells already taken are skipped
@@ -204,6 +237,7 @@ class Map:
         self.layers = []
         self.battlefield = None
         self._spawn = None
+        self._spawn_nudge = (0, 0)
 
     # layers are appended back to front; add farviews, then the battlefield, then closeviews
     def farview(self, name, parallax, loop=False, grid=None, tint=None, opacity=1.0, autoscroll=(0.0, 0.0)):
@@ -222,18 +256,22 @@ class Map:
         self.layers.append(layer)
         return layer
 
-    def spawn(self, x, floor_y):
+    def spawn(self, x, floor_y, nudge=(0, 0)):
         """Character spawn standing on row `floor_y`. Must be set before any far layer uses
-        `at_camera`, because the spawn is the parallax anchor."""
+        `at_camera`, because the spawn is the parallax anchor. `nudge` (quarter cells, see
+        `Layer.put`) moves the spawn point - and with it the anchor - off the cell centre."""
         self._spawn = (int(x), int(floor_y) - 1)
+        self._spawn_nudge = (int(nudge[0]), int(nudge[1]))
         return self
 
     def anchor(self):
         """The parallax anchor, in cells: the spawn marker point the game hands to every art
-        layer (`CombatMapBuild.AnchorParallax`) — the middle of the spawn cell."""
+        layer (`CombatMapBuild.AnchorParallax`) — the middle of the spawn cell, plus the
+        spawn's nudge (`TilePlacement.Marker`)."""
         if self._spawn is None:
             raise MapError(f"{self.name}: call spawn() before composing far layers")
-        return (self._spawn[0] + 0.5, self._spawn[1] + 0.5)
+        return (self._spawn[0] + 0.5 + self._spawn_nudge[0] / preview.SUBCELLS,
+                self._spawn[1] + 0.5 + self._spawn_nudge[1] / preview.SUBCELLS)
 
     def start_camera(self):
         """Camera centre when the fight starts: the spawn, clamped so the screen stays inside
@@ -248,7 +286,7 @@ class Map:
             raise MapError(f"{self.name}: no battlefield")
         if self._spawn is None:
             raise MapError(f"{self.name}: no character spawn")
-        bf.put("spawn.character", *self._spawn)
+        bf.put("spawn.character", *self._spawn, nudge=self._spawn_nudge)
         counts = {m: sum(1 for t in bf.tiles if t["DefId"] == m) for m in MARKERS}
         for need in ("spawn.respawn", "spawn.enemy", "goal.level"):
             if counts[need] == 0:

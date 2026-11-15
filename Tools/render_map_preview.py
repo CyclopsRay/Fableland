@@ -9,7 +9,9 @@ launching Godot:
   * layered-hill ground atlases classified from same-group neighbours
     (`HillAutotile.cs`), including the per-column variant groups;
   * prop sprites trimmed to their used rect, aspect-fitted in the footprint and anchored
-    bottom-centre.
+    bottom-centre;
+  * each tile at its anchor cell plus its sub-cell nudge (`TilePlacement.cs`): `SubX` /
+    `SubY` quarter cells for props, platforms, hazards and markers, never for terrain.
 
 Tile metadata comes from the `*.tile.json` sidecars under `Assets/Sprites/Tiles/`, plus a
 small table for the older beach tiles that predate sidecars. The C# `TileRegistry` is
@@ -39,6 +41,8 @@ REPO = Path(__file__).resolve().parents[1]
 TILES = REPO / "Assets" / "Sprites" / "Tiles"
 VK = "Assets/Sprites/Tiles/VanillaKingdom/"
 VIEW_W, VIEW_H = 1152 / 64.0, 648 / 64.0      # base viewport in cells (project default 1152x648)
+SUBCELLS = 4                                  # nudge steps per cell (TilePlacement.SubcellsPerCell): 16 px = 0.5 m
+MAX_NUDGE = SUBCELLS - 1                      # a nudge is -3..3 quarter cells; a fourth is the next cell
 
 # Beach / core tiles registered in TileRegistry.cs without a sidecar: (sprite, w, h, color).
 LEGACY = {
@@ -75,10 +79,29 @@ MARKERS = {
 }
 
 
+def grid_locked(def_id, info):
+    """`TilePlacement.IsGridLocked`: terrain (ground and every connected-look fill, such as
+    lava), rule zones and unknown ids stay on the grid; everything else can be nudged."""
+    if def_id in MARKERS:
+        return False
+    if info is None or def_id.startswith("rule."):
+        return True
+    return bool(info.get("locked"))
+
+
+def nudge(tile, info):
+    """A placed tile's sub-cell nudge in CELLS, as `TilePlacement.NudgeX/NudgeY` read it:
+    0 for a grid-locked kind, otherwise the stored quarter cells kept within +-3."""
+    if grid_locked(tile["DefId"], info):
+        return 0.0, 0.0
+    clamp = lambda v: max(-MAX_NUDGE, min(MAX_NUDGE, int(v or 0)))
+    return clamp(tile.get("SubX")) / SUBCELLS, clamp(tile.get("SubY")) / SUBCELLS
+
+
 def load_tiles():
     tiles = {}
     for k, v in LEGACY.items():
-        tiles[k] = dict(w=1, h=1, fill=False)
+        tiles[k] = dict(w=1, h=1, fill=False, locked=k.startswith("ground."))
         tiles[k].update(v)
     for side in sorted(TILES.rglob("*.tile.json")):
         d = json.loads(side.read_text(encoding="utf-8"))
@@ -88,7 +111,8 @@ def load_tiles():
         png = Path(str(side)[: -len(".tile.json")] + ".png")
         rel = str(png.relative_to(REPO))
         entry = dict(w=d.get("footprint", {}).get("w", 1), h=d.get("footprint", {}).get("h", 1),
-                     fill=bool(d.get("fillFootprint")), sprite=rel, color="#FF00FF")
+                     fill=bool(d.get("fillFootprint")), sprite=rel, color="#FF00FF",
+                     locked=str(d.get("role", "")).lower() == "ground" or bool(d.get("autotileGroup")))
         if d.get("autotileGroup") and d.get("autotileKind") == "layered_hill_strip" and d.get("artSource"):
             entry.update(group=d["autotileGroup"], atlas=d["artSource"][len("res://"):],
                          variants=int(d.get("autotileVariants", 1)), strip=True)
@@ -190,7 +214,10 @@ def render(doc, tiles, scale=48, markers=False, view=None):
     if bf:
         for t in bf.get("Tiles", []):
             if t["DefId"] == "spawn.character":
-                anchor = (t["X"] + 0.5, t["Y"] + 0.5)   # the spawn marker point: 1 m above the cell floor
+                # The spawn marker point (TilePlacement.Marker): the cell's middle, 1 m above
+                # its floor, moved by the marker's nudge.
+                nx, ny = nudge(t, None)
+                anchor = (t["X"] + nx + 0.5, t["Y"] + ny + 0.5)
                 break
     anchor = anchor or (gw / 2.0, gh / 2.0)
     if view:
@@ -256,15 +283,17 @@ def render(doc, tiles, scale=48, markers=False, view=None):
             if did in MARKERS or did.startswith("rule."):
                 continue
             info = tiles.get(did)
+            nx, ny = nudge(t, info)                 # before the unknown-id fallback: unknown stays on grid
             if info is None:
                 info = dict(w=1, h=1, color="#FF00FF")
+            tx, ty = t["X"] + nx, t["Y"] + ny       # footprint corner in cells: anchor + nudge
             if loop:
-                first = int((-(off_x + t["X"] + info["w"])) // loop_w) - 1
-                last = int((gw - off_x - t["X"]) // loop_w) + 1
+                first = int((-(off_x + tx + info["w"])) // loop_w) - 1
+                last = int((gw - off_x - tx) // loop_w) + 1
                 for k in range(first, last + 1):
-                    draw_at(t, info, t["X"] + off_x + k * loop_w, t["Y"] + off_y)
+                    draw_at(t, info, tx + off_x + k * loop_w, ty + off_y)
             else:
-                draw_at(t, info, t["X"] + off_x, t["Y"] + off_y)
+                draw_at(t, info, tx + off_x, ty + off_y)
 
         tint = layer.get("Tint")
         opacity = float(layer.get("Opacity", 1.0))
@@ -282,7 +311,8 @@ def render(doc, tiles, scale=48, markers=False, view=None):
         for t in bf.get("Tiles", []):
             if t["DefId"] in MARKERS:
                 col, ch = MARKERS[t["DefId"]]
-                x0, y0 = t["X"] * scale, t["Y"] * scale
+                nx, ny = nudge(t, None)
+                x0, y0 = round((t["X"] + nx) * scale), round((t["Y"] + ny) * scale)
                 d.rectangle([x0 + 2, y0 + 2, x0 + scale - 3, y0 + scale - 3], outline=hex_rgba(col), width=max(2, scale // 16))
                 d.text((x0 + scale * 0.36, y0 + scale * 0.28), ch, fill=hex_rgba(col))
 
