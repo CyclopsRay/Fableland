@@ -12,18 +12,26 @@ and the recipes. When the two overlap, KNOWLEDGE.md wins on Godot/C# specifics.
 Scripts/
 ├── Foundation/              # Units.cs + GameVersion.cs
 ├── Gameplay/
-│   ├── Characters/          # CharacterController shared playable base
-│   ├── Combat/              # HitInfo + DecayingDebuff universal combat effects
+│   ├── Characters/          # CharacterController (a fighter, on either side) + CharacterControls
+│   │                        #   (ControlAction, PlayerControls, VirtualPad)
+│   ├── Combat/              # HitInfo, DecayingDebuff, CombatTarget (sides, ICombatTarget,
+│   │                        #   CombatTargets) — universal combat contracts
 │   └── World/               # SoftVolume + WonderCorePickup shared world gameplay
 ├── Protagonists/
 │   ├── Pomegraknight/       # Pomegraknight + PomeSeed
 │   ├── PumpKing/            # PumpKing + PumpKingHead
 │   └── Legacy/              # throwaway prototype Player, isolated until deletion
+├── Bosses/                  # v0.10.11 — BossBrain (rules, scheduler, senses), BossFighter
+│   │                        #   (what every boss shares), one class per boss
+│   ├── PumpKing/            # BossPumpKing : PumpKing
+│   └── Dev/                 # BossFightCheck (headless, 40-QA.md)
+├── Data/                    # balance tables: CharacterTable, BossTable, …
 ├── Hazard/                  # Hazard base + Fire/Freeze/Damage/Tsunami + trigger
 ├── Orchestration/Arena/     # GameManager scene/run/mission integrator
 ├── UI/                      # Hud, HpBlockBar, DamageNumberManager, ShakeCamera2D
-├── Map/                     # DetRandom, MapGenerator, MapData, MapController(+Atlas),
-│                            #   MapRenderModel — the seeded overworld
+├── Map/                     # DetRandom, MapGenerator, MapData (WorldDef.Pool — append-only),
+│                            #   MapController(+Atlas), MapRenderModel — the seeded overworld
+├── Run/Dev/                 # v0.11.0 — RunWalkCheck (headless: plays real runs, 40-QA.md)
 └── Menu/MenuController.cs
 
 PLANNED (create at each milestone — names already referenced by GDDs):
@@ -45,6 +53,13 @@ assignments; don't shadow inherited members; never commit the PAT.
   `AddImpulse(Δv)` decaying at `ExternalDamping`. Continuous forces (pulls, tornado,
   Blackhole, Pangda's Ult) = per-tick impulses. Never write `Velocity` directly from a
   skill.
+- **Sides and targets (v0.10.11):** a fighter is on a `CombatSide`; an attack hits
+  `CombatTargets.HostileTo(GetTree(), Side)` and talks to `ICombatTarget`. Never cast to
+  `BaseFoe`, never name a group in attack code, and give a projectile the side of whoever
+  launched it. (T10 §4a.)
+- **Controls (v0.10.11):** a kit reads `Controls.Held / JustPressed / JustReleased(ControlAction…)`
+  and `Controls.AimPoint(this)` — never `Input`, never `GetGlobalMousePosition()`. That is
+  what lets a boss brain press the same buttons.
 - **Hits:** author per skill as `HitInfo { Damage, Knockback, Stun }`. `Stun < 0` ⇒
   default gain-no window `Units.StunPerDamage · Damage`. Melee/AoE checks are
   **radius-aware** (target circle overlap, not center point — KNOWLEDGE caveat v0.1.5).
@@ -99,11 +114,20 @@ the arena derives mission from node level and foe level from day (FOES §10).
 
 **New character** — 1) GDD complete per `10-DESIGN.md` §2. 2) Subclass
 `CharacterController`; override `InitCharacter`, `HandleBA/HandleSkill1/2/Ult`,
-`DrawDebug`, later `UpdateAnimator`. 3) New base-class needs (e.g. a continuous-force source)
+`DrawDebug`, later `UpdateAnimator`. Read input only through `Controls` and find targets
+only through `CombatTargets` (core patterns, above) — the character may be a boss one day. 3) New base-class needs (e.g. a continuous-force source)
 go in as minimal, non-breaking, documented additions. 4) Scene: CharacterBody2D +
 Camera2D + FirePoint + empty AnimationPlayer, collision 48-wide×64 class shape, layers
 per `Units.cs`. 5) Projectiles = own scenes/scripts; guard 0-lifetime first-tick.
 6) Damage applied inline with `// NOTE(animation)` markers for later event tracks.
+
+**New boss (v0.10.11+)** — a boss is its protagonist's class on the Foe side (FOES §8,
+T30 §9): a `BossTable` row; `class BossY : Y, IBossFighter` (`Side => Foe`, `BeginFight`,
+a rule list — and nothing else: differences in the *kit* are `protected virtual`s on `Y`);
+`Scenes/Bosses/BossY.tscn` inheriting `Y.tscn`; make `Y`'s projectiles take their side from
+the launcher; a `boss` map with perches; a stage in `BossFightCheck`, and one scenario per
+rule of its brain in the check's rules probe. Run the check, then its mutation habit: break
+the new mechanism — and every rule, not a sample — and see each fail by name.
 
 **New foe (v0.4.0+)** — subclass `BaseFoe` (FOES §9): override `InitFoe`,
 `UpdatePatrol/UpdateAggro`, `Skill1/Skill2` (base gates by level via `FoeStats`),

@@ -2,6 +2,7 @@ using Godot;
 using Fableland.Map;
 using Fableland.Missions;
 using Fableland.Run;
+using Fableland.Data;
 using Fableland.Debug;
 using Fableland.MapCreation.Data;
 using Fableland.MapCreation.Runtime;
@@ -52,6 +53,23 @@ public partial class GameManager : Node2D
     /// </summary>
     [Export] public string DebugCombatMapPath = "";
 
+    /// <summary>
+    /// Direct-F5 mission knobs, consulted only when NO run exists (the v0.5.0 rule: a debug
+    /// default must never reach a real run). Together they stage any fight without the
+    /// overworld: <c>DebugMission = Boss</c>, <c>DebugNodeLevel = 4</c> and a
+    /// <see cref="BossTable"/> id in <c>DebugBossId</c> is a boss fight — and with
+    /// <see cref="DebugCombatMapPath"/> left empty the arena is chosen by the run's own map
+    /// selection for that boss's world. `Scenes/Bosses/PumpKingBossFight.tscn` is exactly that.
+    /// </summary>
+    [Export] public MissionType DebugMission = MissionType.Collection;
+    [Export] public int DebugNodeLevel = 1;
+    [Export] public string DebugBossId = "";
+
+    /// <summary>Debug mode's "Boss fights" page stages a boss here; every no-run Arena
+    /// fields it until the page clears it (so R-restart keeps the same fight). Never read
+    /// while a run's adventure is in progress.</summary>
+    public static string StagedDebugBossId;
+
     [Export] public float RespawnDelay = 1.2f;
     /// <summary>Universal arena opening countdown. All mission and ambient foe sources stay
     /// gated until it completes; individual missions never own this policy.</summary>
@@ -65,6 +83,30 @@ public partial class GameManager : Node2D
 
     /// <summary>Current foe level for this fight (debug override, else day-based; FOES §2).</summary>
     public int FoeLevel { get; private set; }
+
+    /// <summary><see cref="BossTable"/> id of the boss this node fields, or empty — the
+    /// handshake's <c>AdventureContext.BossId</c> (a debug knob when no run exists).</summary>
+    public string BossId { get; private set; } = "";
+
+    /// <summary>The selected map's Level Goal marker points, in authored order (empty in
+    /// the legacy arena). A boss reads them as its perches (FOES §8.5).</summary>
+    public System.Collections.Generic.IReadOnlyList<Vector2> LevelGoalPoints => _authoredLevelGoalSpawns;
+
+    /// <summary>The mission this arena is hosting (read-only: tests and tooling).</summary>
+    public Mission CurrentMission => _mission;
+
+    /// <summary>True on an authored combat map, false on the legacy arena — which is what a
+    /// node gets when no shipped map matches it (read-only: tests and tooling).</summary>
+    public bool UsesAuthoredMap => _usingAuthoredMap;
+
+    /// <summary>The authored map's size in pixels (zero on the legacy arena).</summary>
+    public Vector2 AuthoredMapSize => _usingAuthoredMap ? new Vector2(_authoredMapWidth, _authoredMapHeight) : Vector2.Zero;
+
+    /// <summary>True once the mission has resolved and its outcome was reported to the run.</summary>
+    public bool GoalResolved => _goalResolved;
+
+    /// <summary>Where the player's body is right now (the origin when there is none).</summary>
+    public Vector2 PlayerPosition => _player != null && IsInstanceValid(_player) ? _player.GlobalPosition : Vector2.Zero;
 
     private Node2D _world;
     private Node2D _hazards;
@@ -134,9 +176,19 @@ public partial class GameManager : Node2D
 
         _foeSpawnMarkers = GetTree().GetNodesInGroup("enemy_spawn");
 
+        // Debug mode's boss page: a staged boss turns any no-run Arena into its fight.
+        if (!_hasRun && !string.IsNullOrWhiteSpace(StagedDebugBossId))
+        {
+            DebugBossId = StagedDebugBossId;
+            DebugMission = MissionType.Boss;
+            DebugNodeLevel = 4;
+            DebugCombatMapPath = "";
+        }
+
         string nodeId = adv?.NodeId ?? "debug";
-        _nodeLevel = adv?.NodeLevel ?? 1;
-        _missionType = adv?.Mission ?? MissionType.Collection;
+        _nodeLevel = adv?.NodeLevel ?? Mathf.Clamp(DebugNodeLevel, 1, 6);
+        _missionType = adv?.Mission ?? DebugMission;
+        BossId = _hasRun ? adv.BossId ?? "" : DebugBossId ?? "";
         int day = adv?.Day ?? DebugDay;
 
         // Foe level (FOES §2): day-based outside zone 6; zone 6 is per-node — LV5 nodes fight
@@ -152,6 +204,14 @@ public partial class GameManager : Node2D
 
         string combatMapPath = !string.IsNullOrWhiteSpace(adv?.CombatMapPath)
             ? adv.CombatMapPath : (!_hasRun ? DebugCombatMapPath : "");
+        // A debug boss fight with no map named asks the run's own selection for that boss's
+        // world: the same rule, and so the same arena, a real 4-1 would be dealt.
+        if (!_hasRun && string.IsNullOrWhiteSpace(combatMapPath) && _missionType == MissionType.Boss
+            && BossTable.TryGet(BossId, out BossDef debugBoss))
+        {
+            combatMapPath = CombatMapCatalog.Select("debug", nodeId, debugBoss.WorldAbbr, _nodeLevel,
+                _missionType, CombatMapTerrain.SeaLevel)?.AbsolutePath ?? "";
+        }
         _usingAuthoredMap = TryBuildSelectedMap(combatMapPath);
         if (!_usingAuthoredMap)
         {
@@ -697,6 +757,7 @@ public partial class GameManager : Node2D
     {
         _goalResolved = true;
         Spawner.Enabled = false;   // FOES §11: the cap only gates the periodic spawner anyway
+        _mission.OnResolved();     // e.g. a boss still standing after a debug skip stands down
 
         // Resolution is a terminal combat state: both sides stop taking damage while
         // the reward/Finish Day flow is visible. The controller-level gate covers
@@ -739,7 +800,7 @@ public partial class GameManager : Node2D
                 return;
             }
 
-            _hud.ShowToast(success ? "Goal achieved!" : "Mission failed.");
+            _hud.ShowToast(success ? _mission.SuccessToast : "Mission failed.");
             _hud.SetFinishDayEnabled(true);
         }
         else

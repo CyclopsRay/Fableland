@@ -310,8 +310,8 @@ public partial class MapBrowser : Control
         for (int level = 1; level <= 6; level++) levelLabels.Add("LV " + level);
         AddFilter(filters, "Level", levelLabels, _levelFilter, i => _levelFilter = i);
 
-        var goalIds = new List<string> { Any, CombatMapGoals.Claim, CombatMapGoals.Protect, CombatMapGoals.Destroy, CombatMapGoals.Slaughter };
-        AddFilter(filters, "Goal", new List<string> { "Any goal", "Claim", "Protect", "Destroy", "Slaughter" },
+        var goalIds = new List<string> { Any, CombatMapGoals.Claim, CombatMapGoals.Protect, CombatMapGoals.Destroy, CombatMapGoals.Slaughter, CombatMapGoals.Boss };
+        AddFilter(filters, "Goal", new List<string> { "Any goal", "Claim", "Protect", "Destroy", "Slaughter", "Boss" },
             Math.Max(0, goalIds.IndexOf(_goalFilter)), i => _goalFilter = goalIds[i]);
 
         var terrainIds = new List<string> { Any, CombatMapTerrain.SeaLevel, CombatMapTerrain.High, CombatMapTerrain.Lowground };

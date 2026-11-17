@@ -11,8 +11,8 @@ using System.Collections.Generic;
 /// climbs it becomes pyramid — terraces of <c>ground.tf_stone</c>, floating slabs, light
 /// bridges — where the city's security still works (beams, obsidian).
 ///
-/// Not in the overworld pool yet (design TBD #24): its maps are tagged "TF" and play from
-/// the editor until the world is added.
+/// In the overworld pool since v0.11.0: a run can draw The Forgotten as one of its five
+/// realms, and its maps are tagged "TF".
 /// Art: `Tools/realm_art/forgotten.py`. Direction: `Docs/Art/RealmStyleBible.md` §The Forgotten.
 /// </summary>
 internal static class ForgottenTileSet

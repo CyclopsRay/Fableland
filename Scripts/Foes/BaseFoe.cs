@@ -21,7 +21,7 @@ using System.Collections.Generic;
 /// AddChild). Base stats come from InitFoe in _Ready; level multipliers apply once in
 /// Init. _PhysicsProcess guards against running before Init (KNOWLEDGE caveat).
 /// </summary>
-public partial class BaseFoe : CharacterBody2D
+public partial class BaseFoe : CharacterBody2D, ICombatTarget
 {
     // ── Base stats (set by subclass InitFoe, then scaled once by Init(level)) ──────
     protected float BaseHP = 70f;
@@ -42,6 +42,11 @@ public partial class BaseFoe : CharacterBody2D
     public bool Invincible { get; set; }
     public float BurnDamagePerSecond = 14f;
     public float HitRadius = 26f;              // melee/AoE bounding circle (read by attackers)
+
+    // ── ICombatTarget: a foe is a target on the Foe side (CombatTarget.cs) ──────────
+    public CombatSide Side => CombatSide.Foe;
+    float ICombatTarget.HitRadius => HitRadius;
+    public ulong TargetId => GetInstanceId();
     public float ExternalDamping = 1200f;      // px/s² decay of knockback (read by TsunamiHazard)
     protected float SightInterval = 1f;        // sight-check period (crab 1 s, gull 2 s)
 
@@ -179,6 +184,8 @@ public partial class BaseFoe : CharacterBody2D
         AddToGroup("enemy");   // existing GameManager cap counting
         AddToGroup("foe");
         InitFoe();
+        // A walking foe stays on a slope instead of stepping off it every tick (Units.cs).
+        if (UseGravity) FloorSnapLength = Mathf.Max(FloorSnapLength, Units.FloorSnapPx);
         Dir = Rng.Randf() < 0.5f ? -1f : 1f;
         FacingDir = Dir;
         // If no spawner calls Init (e.g. a foe placed directly in a scene), default to

@@ -17,6 +17,10 @@ public sealed class AdventureContext
     public bool IsRevisitCombat;   // re-attempt of a previously-failed combat node (NODES §1.3)
     public string Terrain;         // combat-map selection terrain from the entered node's altitude label
     public string CombatMapPath;   // absolute selected authored map path; empty => legacy Arena fallback
+    /// <summary><c>BossTable</c> id of the boss holding this node, when the node is a realm's
+    /// 4-1 — every realm names one, its own boss or the stand-in (<c>BossTable.ForWorld</c>).
+    /// Empty (the LV6 core) ⇒ the arena fields the placeholder (FOES §8.1).</summary>
+    public string BossId = "";
     /// <summary>Frozen party order captured exactly once at combat entry. The Arena
     /// owns its live switch cursor; shelter edits affect the next battle only.</summary>
     public BattleTeamSnapshot BattleTeam;

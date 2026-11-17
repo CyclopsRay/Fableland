@@ -309,7 +309,7 @@ public partial class SifuPangda : CharacterController
     {
         if (_heliShiftCd > 0f) return;
         _heliShiftCd = Def.HeliShiftCooldown;
-        Vector2 aim = GetGlobalMousePosition() - GlobalPosition;
+        Vector2 aim = Controls.AimPoint(this) - GlobalPosition;
         _dashDirection = aim.LengthSquared() > 0.01f ? aim.Normalized() : new Vector2(Facing, 0f);
         _dashDistanceRemaining = Units.Px(Def.HeliDashDistanceM);
         _state = PangdaState.HeliShift;
@@ -367,7 +367,7 @@ public partial class SifuPangda : CharacterController
         if (_heliECd > 0f || BottleScene == null || GetParent() == null) return;
         _heliECd = Def.HeliECooldown;
         Vector2 origin = FirePoint != null ? FirePoint.GlobalPosition : GlobalPosition;
-        Vector2 aim = GetGlobalMousePosition() - origin;
+        Vector2 aim = Controls.AimPoint(this) - origin;
         Vector2 direction = aim.LengthSquared() > 0.01f ? aim.Normalized() : new Vector2(Facing, 0f);
         PangdaBottle bottle = BottleScene.Instantiate<PangdaBottle>();
         GetParent().AddChild(bottle);
@@ -381,9 +381,8 @@ public partial class SifuPangda : CharacterController
     {
         float halfW = Units.Px(widthM * 0.5f);
         float halfH = Units.Px(heightM * 0.5f);
-        foreach (Node node in GetTree().GetNodesInGroup("enemy"))
+        foreach (ICombatTarget foe in CombatTargets.HostileTo(GetTree(), Side))
         {
-            if (node is not BaseFoe foe) continue;
             Vector2 delta = foe.GlobalPosition - center;
             if (Mathf.Abs(delta.X) > halfW + foe.HitRadius || Mathf.Abs(delta.Y) > halfH + foe.HitRadius) continue;
             float dealt = foe.TakeHit(new HitInfo(damage * DamageDealtMultiplier, knockback, stun), GlobalPosition);
@@ -396,9 +395,8 @@ public partial class SifuPangda : CharacterController
         float halfW = Units.Px(widthM * 0.5f);
         float halfH = Units.Px(heightM * 0.5f);
         Vector2 perpendicular = new(-forward.Y, forward.X);
-        foreach (Node node in GetTree().GetNodesInGroup("enemy"))
+        foreach (ICombatTarget foe in CombatTargets.HostileTo(GetTree(), Side))
         {
-            if (node is not BaseFoe foe) continue;
             Vector2 delta = foe.GlobalPosition - center;
             if (Mathf.Abs(delta.Dot(forward)) <= halfW + foe.HitRadius
                 && Mathf.Abs(delta.Dot(perpendicular)) <= halfH + foe.HitRadius)

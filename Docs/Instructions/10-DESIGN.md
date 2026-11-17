@@ -114,7 +114,7 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | # | TBD | Home |
 |---|-----|------|
 | 1 | Dark leader (final boss) name + full design | MapGDD §10, FOES §8 |
-| 2 | Boss foes: phases, arenas, kits (incl. LV4 boss-as-protagonist player kits) | FOES §8, NODES §4.5 |
+| 2 | Boss foes. *v0.10.11: the system is built — a boss is its protagonist's kit on the Foe side with its own table row, a rule-based brain and an arena made for it; BOSS PumpKing is the first (FOES §8).* Still open: **what makes a boss differ from its protagonist** (larger magazine, quicker cooldowns, a held item, … — every `BossTable` value is a first-pass placeholder); phases; the other realms' bosses; the LV6 final boss; whether a boss can be executed (Cleopastar's Blackhole under 10% HP currently can); whether BOSS PumpKing should let a closing head arrive instead of setting it off beside the player (a touch costs a standing player 48, a detonation 30 — FOES §8.3). *v0.11.0: PumpKing stands in as **every** realm's boss until each has its own — "the other realms' bosses" is now seven rows to add to `BossTable`* | FOES §8, NODES §4.5 |
 | 3 | Question-mark node event content + probabilities | NODES §6.1 |
 | 4 | Shelter **Wish** action | NODES §5.5 |
 | 5 | Plantation GDD (slots, watering, growth) | ITEMS §4.3, NODES §5.2 |
@@ -132,21 +132,26 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | 17 | Surprise shelter functions (VOID TRADER surprise, treasure box, teleport) | MapGDD §6 |
 | 18 | Pixolotl & PumpKing & Pangda visual design + leveling curves | their GDDs |
 | 19 | Sifu Pangda Ult model/CD and realm (Gui Lin not yet in world pool) | Sifu Pangda.gdd |
-| 20 | PumpKing realm "Kingdom of Horror" not in world pool. *v0.10.9: its combat realm — the Dark Wood, tile set `kh`, one map — is built and plays from the map editor; adding the world to the pool is what is still open* | PumpKing.gdd, MapGDD §2/§2.2, RealmStyleBible §7A |
+| 20 | ~~PumpKing realm "Kingdom of Horror" not in world pool.~~ **Resolved v0.11.0:** the Kingdom of Horror is in the pool (danger red on the map), with a map per altitude band and PumpKing's castle as its boss arena. Still open under this number: whether PumpKing becomes a *starter* with it as his home | PumpKing.gdd, MapGDD §2/§2.2, RealmStyleBible §7A |
 | 21 | Ult resource/charge model + per-character Ult CDs (Pangda Ult CD TBD; foe Ult-charge loot orb) | Sifu Pangda.gdd, FOES §7 |
 | 22 | Protagonist Landing Effects — the per-character switch-in effect (all 5 GDDs stub it TODO) | character GDDs, NODES §3.3 |
 | 23 | Per-mission-type victory loot beyond the demo (Protect/Destroy/Slaughter reward tables) | NODES §4 |
-| 24 | Pixolotl home world / realm — not in the world pool, so she is a non-starter. *v0.10.9: the owner named it **The Forgotten** (a Teotihuacan-style city everyone takes for a ruin, in fact highly developed; swamp at sea level, pyramids above); its combat realm — the Forgotten City, tile set `tf`, one map — is built. Adding the world to the pool is still open, and so is whether "Not Found" stays as her origin story* | MapGDD §2/§2.2, Pixolotl.gdd, RealmStyleBible §7B |
+| 24 | Pixolotl home world / realm. *v0.10.9: the owner named it **The Forgotten** (a Teotihuacan-style city everyone takes for a ruin, in fact highly developed; swamp at sea level, pyramids above); its combat realm — the Forgotten City, tile set `tf` — is built. **v0.11.0: The Forgotten is in the pool** (canal jade on the map), with a map per altitude band and a boss arena.* Still open: whether Pixolotl becomes a starter there, and whether "Not Found" stays as her origin story | MapGDD §2/§2.2, Pixolotl.gdd, RealmStyleBible §7B |
 | 25 | Destroyable trees (and destructible scenery in general) — asked for in the Kingdom of Horror brief, not built; the realm's trees are decoration | RealmStyleBible §7A, MapCreation.gdd §2.2 |
 | 26 | Cloud Court — a finished realm set and map with no world since Loong's Nest became the Palace of LOOING: keep for a sky world, fold into the Palace, or delete | RealmStyleBible §7C, §10 |
 | 27 | Water balance — swim / sink / stroke / current / waterfall numbers are measured but untested in fights; holding Down to swim down was added without being specified | RealmStyleBible §10, Gameplay.gdd A.2, MapCreation.gdd §2.2a |
+| 28 | Boss presentation — BOSS PumpKing wears a placeholder red mark because his black coat vanishes against his castle's stone when his head is off; his boss art, entrance and defeat are undesigned (he fades) | FOES §8, RealmStyleBible §7A |
+| 29 | The prototype roster owns every protagonist from the start, so recruiting a beaten boss changes nothing yet. When that policy ends, recruitable protagonists leave the starting roster (the reward path is in place) | NODES §4.5, FOES §8.6 |
+| 30 | Slopes for other realms, and other grades — only the Dark Wood has a slope block, at 1:2 | MapCreation.gdd §2.2b |
+| 31 | **Does a boss get faster with the day, and does it evolve?** Every foe does both (FOES §2 SPD multiplier; §5: not eliminated in 25 s → +1 level and a 30% heal), and the old crab stand-in did. BOSS PumpKing does neither — HP and damage follow the day, checked on every band. Applying evolution would give every boss a level and up to +540 HP 25 s into a fight whose timer is permadeath; applying speed needs boss legs that hold a perch at up to 2× | FOES §8.2 |
+| 32 | The band maps and boss arenas of v0.11.0 are **plain test maps** (three shapes and one arena per realm, `build_band_maps.py`): each realm needs designed low-ground / sea-level / high-ground maps and a boss arena that takes its own boss's side, as PumpKing's castle does. Whether each realm's showcase map should then be narrowed from `*` to the band it is built for is part of that | MapGDD §2.2, RealmStyleBible §8, FOES §8.5 |
+| 33 | Zone 6 has no authored combat maps: LV5 and the LV6 core open the legacy arena | MapCreation.gdd §9 |
 
-Note #19/#20/#24: **realm ↔ world-pool consistency** is a design debt — every playable
-character must have a home world in `MapGDD.md` §2 (home world = start zone). Either
-add Gui Lin / Kingdom of Horror / The Forgotten to the world pool or reassign realms
-before those characters become starters. Since v0.10.9 the last two have their combat
-realms; what each still lacks is everything the *overworld* needs (palette, zone rules,
-boss), and the decision to change what existing seeds generate.
+Note #19/#20/#24: **realm ↔ world-pool consistency** — every playable character must have
+a home world in `MapGDD.md` §2 (home world = start zone). The Kingdom of Horror and The
+Forgotten joined the pool in v0.11.0 (palette, maps, a boss); Gui Lin (#19) is the one left
+without a world. Adding a world is append-only and changes what a *new* seed draws; a run
+that already exists keeps the pool it was made from (`MapGDD.md` §2).
 
 ## 7. Writing for the other hats
 

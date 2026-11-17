@@ -1,0 +1,13 @@
+{
+  "id": "ground.kh_slope",
+  "displayName": "Rooted Slope",
+  "role": "Ground",
+  "footprint": {
+    "w": 2,
+    "h": 2
+  },
+  "fillFootprint": false,
+  "autotileGroup": "terrain.kh_earth",
+  "prompt": "Scratchboard game sprite on transparent ground: a black board with light scratched out of it in fine, tangled, wandering hatch lines; crowded scratches where moonlight falls, bare black in shadow. Moon-blue scratches for everything, yellow only for things that give light, red only for danger. Entangled, chaotic, uneasy. Orthographic side view, no cast shadow, no text. SUBJECT: A block of the same rooted earth whose top is a ramp rising to the right, one cell in two, with the moonlit crest of scratched grass running up it; solid below. Joins end to end into one long slope.",
+  "tileSet": "kh"
+}

@@ -10,8 +10,13 @@ using System.Collections.Generic;
 /// (stagnation 0.15), fog and bare canopy hide what is in them, and the floor is sown with
 /// traps. Some of its maps have a castle (<c>ground.kh_stone</c>); the wood needs none.
 ///
-/// Not in the overworld pool yet (design TBD #20): its maps are tagged "KH" and play from
-/// the editor until the world is added.
+/// The castle is PumpKing's (v0.10.11, FOES.gdd §8.3): a balcony to stand on, a gate that
+/// stays shut, and — the piece his boss fight is built around — <c>ground.kh_slope</c>, a
+/// ramp of the wood's own earth. His head dies within a few metres on level ground and runs
+/// a slope to its foot.
+///
+/// In the overworld pool since v0.11.0: a run can draw the Kingdom of Horror as one of its
+/// five realms, and its maps are tagged "KH".
 /// Art: `Tools/realm_art/horror.py`. Direction: `Docs/Art/RealmStyleBible.md` §Kingdom of Horror.
 /// </summary>
 internal static class HorrorTileSet
@@ -25,9 +30,13 @@ internal static class HorrorTileSet
 
         yield return RealmTiles.Ground(Set, Dir, "ground.kh_earth", "Rooted Earth", "#1B2D6B", "ground_kh_earth", "terrain.kh_earth");
         yield return RealmTiles.Ground(Set, Dir, "ground.kh_stone", "Castle Stone", "#3F6FD8", "ground_kh_stone", "terrain.kh_stone");
+        // One cell up in two along (26.6°): steep enough to read as a hill and to outrun a
+        // rolling head's friction many times over, well inside what a fighter can walk (45°).
+        yield return RealmTiles.Slope(Set, Dir, "ground.kh_slope", "Rooted Slope", run: 2, solidRows: 1, "#1B2D6B", "ground_kh_slope", "terrain.kh_earth");
 
         yield return RealmTiles.Platform(Set, Dir, "platform.kh_branch", "Gnarled Limb", 4, 1, "#3F6FD8", "platform_kh_branch");
         yield return RealmTiles.Platform(Set, Dir, "platform.kh_plank", "Rotten Hoarding", 3, 1, "#9DBEFF", "platform_kh_plank");
+        yield return RealmTiles.Platform(Set, Dir, "platform.kh_balcony", "Castle Balcony", 4, 1, "#9DBEFF", "platform_kh_balcony");
 
         yield return RealmTiles.Soft(Set, Dir, "softvolume.kh_bramble", "Bramble", 3, 2, "#D8323A", "softvolume_kh_bramble", 0.15f);
         yield return RealmTiles.Soft(Set, Dir, "softvolume.kh_fog", "Ground Fog", 4, 2, "#9DBEFF", "softvolume_kh_fog", 0.45f);
@@ -43,6 +52,11 @@ internal static class HorrorTileSet
         yield return RealmTiles.Deco(Set, Dir, "deco.kh_lantern", "Jack-o'-Lantern", 1, 2, "#FFD23F", "deco_kh_lantern");
         yield return RealmTiles.Deco(Set, Dir, "deco.kh_window", "Lit Window", 1, 2, "#FFD23F", "deco_kh_window");
         yield return RealmTiles.Deco(Set, Dir, "deco.kh_fence", "Iron Railings", 3, 1, "#9DBEFF", "deco_kh_fence");
+        yield return RealmTiles.Deco(Set, Dir, "deco.kh_balustrade", "Balustrade", 4, 1, "#9DBEFF", "deco_kh_balustrade");
+        yield return RealmTiles.Deco(Set, Dir, "deco.kh_gate", "Castle Gate", 4, 5, "#3F6FD8", "deco_kh_gate");
+        yield return RealmTiles.Deco(Set, Dir, "deco.kh_door", "Balcony Door", 2, 3, "#FFD23F", "deco_kh_door");
+        yield return RealmTiles.Deco(Set, Dir, "deco.kh_battlement", "Battlements", 4, 1, "#3F6FD8", "deco_kh_battlement");
+        yield return RealmTiles.Deco(Set, Dir, "deco.kh_pennant", "Pennant", 1, 2, "#D8323A", "deco_kh_pennant");
         yield return RealmTiles.Deco(Set, Dir, "deco.kh_fireflies", "Fireflies", 4, 3, "#FFD23F", "deco_kh_fireflies");
         yield return RealmTiles.Deco(Set, Dir, "deco.kh_moon", "Moon", 4, 4, "#FFD23F", "deco_kh_moon");
         yield return RealmTiles.Deco(Set, Dir, "deco.kh_castle_far", "Far Castle", 10, 8, "#070A14", "deco_kh_castle_far");

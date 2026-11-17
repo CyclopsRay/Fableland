@@ -24,14 +24,35 @@ public static class CombatMapCatalog
     private const string BuiltInDirectory = "res://Maps";
     private const string UserDirectory = "user://maps";
 
+    /// <summary>Whether a run is dealt the player's own maps (<c>user://maps</c>) as well as
+    /// the shipped ones. True in the game. A headless check that plays a run turns it off, so
+    /// what it is dealt does not depend on what one developer has saved in the editor.</summary>
+    public static bool UserMapsEnabled { get; set; } = true;
+
     public static CombatMapSelection Select(string seed, string nodeId, string world, int hardship,
         MissionType mission, string terrain)
     {
-        List<CombatMapSelection> candidates = Candidates(world, hardship, GoalFor(mission), terrain);
+        List<CombatMapSelection> candidates = CandidatesFor(world, hardship, mission, terrain, UserMapsEnabled);
         if (candidates.Count == 0) return null;
 
         var rng = new DetRandom((seed ?? "debug") + ":combat-map:" + (nodeId ?? "debug"));
         return candidates[rng.Range(0, candidates.Count - 1)];
+    }
+
+    /// <summary>
+    /// What a node with this mission is dealt from — the rule <see cref="Select"/> draws
+    /// with, and the one the content check audits, so the two cannot disagree. A Boss
+    /// mission is dealt its world's boss arena (goal <c>boss</c>) when one exists; a world
+    /// whose boss has no arena of its own yet fights on its ordinary (<c>claim</c>) maps, as
+    /// every boss did before v0.10.11.
+    /// </summary>
+    public static List<CombatMapSelection> CandidatesFor(string world, int hardship, MissionType mission,
+        string terrain, bool includeUserMaps = true)
+    {
+        List<CombatMapSelection> candidates = Candidates(world, hardship, GoalFor(mission), terrain, includeUserMaps);
+        if (candidates.Count == 0 && mission == MissionType.Boss)
+            candidates = Candidates(world, hardship, CombatMapGoals.Claim, terrain, includeUserMaps);
+        return candidates;
     }
 
     /// <summary>
@@ -79,6 +100,7 @@ public static class CombatMapCatalog
         MissionType.Protect => CombatMapGoals.Protect,
         MissionType.Destroy => CombatMapGoals.Destroy,
         MissionType.Slaughter => CombatMapGoals.Slaughter,
+        MissionType.Boss => CombatMapGoals.Boss,
         _ => CombatMapGoals.Claim,
     };
 

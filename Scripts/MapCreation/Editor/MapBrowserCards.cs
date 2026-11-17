@@ -293,7 +293,7 @@ public partial class MapBrowser
         List<string> goals = doc.Goals ?? new List<string>();
         bool all = goals.Contains(CombatMapGoals.Claim) && goals.Contains(CombatMapGoals.Protect) &&
                    goals.Contains(CombatMapGoals.Destroy) && goals.Contains(CombatMapGoals.Slaughter);
-        if (all) return "All goals";
+        if (all) return goals.Contains(CombatMapGoals.Boss) ? "All goals · Boss" : "All goals";
         if (goals.Count == 0) return "Claim";
         var names = new List<string>();
         foreach (string goal in goals)

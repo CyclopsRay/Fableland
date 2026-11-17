@@ -1,4 +1,4 @@
-# PumpKing — GDD v1.0
+# PumpKing — GDD v1.2
 
 > **Ported from the Unity `GloryOfFableland` source.** Numbers reflect the shipped Unity
 > kit; Godot movement derives from `Units.cs` (all speeds/distances in meters·seconds).
@@ -70,10 +70,25 @@ PumpKing launches his head as a rolling projectile in the aimed direction. The h
 - The **6 m/s horizontal speed cap only applies once the head has touched down** — the
   initial launch flies free so the impulse actually covers ground before the head settles
   into a capped roll; vertical speed is capped at **15 m/s** throughout (terminal fall speed)
-- Bounces off terrain with **85% speed retention**
+- **Bounces** off terrain with **85% speed retention** — while it lands hard enough to
+  leave the surface again at **1.5 m/s** or more
+- **Rolls** once it lands more gently than that: it keeps the speed it has along the surface,
+  slowed only by **3 m/s²** of rolling friction, at most **6 m/s** across (v0.10.11 — see
+  below)
 - Has mouse steering (optional in inspector; off by default — pure physics bounce)
 - Deals **30 contact damage** on hitting an enemy, then explodes
 - **Auto-explodes** after **10 s** lifetime or after sitting still (< 0.1 m/s) for **0.5 s**
+
+**What that adds up to** (measured by the boss check, `40-QA.md`):
+
+| Ground | What the head does |
+|--------|--------------------|
+| Level | Thrown level at 16 m/s it carries **7.7 m** in flight and bounces, then goes off. Set rolling at 6 m/s it runs **6 m** in 2 s, sits 0.5 s, goes off. |
+| A slope | Gravity down a 1:2 slope (29 m/s²) beats the friction ten times over: it reaches the 6 m/s cap in a quarter of a second and **does not stop** — 32 m of slope in 5.5 s — until something does: a body it fights, the level ground at the foot (where it rolls on, 6 m more), or its 10 s. |
+| The foot of a slope | It keeps rolling. A change of slope is not a fall, so it does not bounce there. |
+
+So level ground is where the head is weakest and a slope below PumpKing is where it is
+strongest. His castle is built on that (`FOES.gdd` §8.5).
 
 On fire: pump stacks reset to 0, shield is removed, neck head hidden, state → Rolling.
 
@@ -151,6 +166,22 @@ stacks to 0) or Soul Form is entered (shield cleared, stacks reset).
 
 ---
 
+
+---
+
+## BOSS PumpKing
+
+At the Kingdom of Horror's 4-1 PumpKing is the BOSS, met on his castle's balcony; beating
+him recruits him (`NODES.gdd` §4.5). The boss is this kit — the same class, inherited
+(`BossPumpKing : PumpKing`) — fighting on the other side: his head bowls at the player. He is
+**not** this protagonist: his HP, damage, poise, magazine and cooldowns are his own row in
+`BossTable`, all first-pass. Everything about the fight — the row, the rules his brain
+follows, his arena — is in `FOES.gdd` §8.
+
+Since v0.11.0 the Kingdom of Horror is in the world pool, so a run can reach his castle; and
+until the other realms have bosses of their own, **he stands in at every realm's 4-1**, on
+that realm's boss arena (`FOES.gdd` §8.1). His HP there is his row's × the day: 600 on days
+1–10, 720, 900, 1200, and 1800 from day 36.
 
 ---
 
@@ -244,6 +275,24 @@ the full write-up:
   pushed ~1.1 m (about one body length); 15 m/s pushes exactly 3 m, i.e. to the edge of the
   blast radius.
 
+### Sides, controls and a head that rolls (v0.10.11)
+Three changes to the kit, made for the boss fight and true for the protagonist too:
+- **The head rolls.** Until now a head resting on a floor took the 85% bounce retention on
+  its *whole* velocity every physics tick and threw away the rest of that tick's move, so the
+  "capped roll" this document describes never happened: a landed head lost its speed within
+  0.7 m, and on a slope it would have crawled. It now bounces *or* rolls (see Fire Head). On
+  level ground a high throw behaves as before — fourteen bounces leave almost nothing to
+  roll with; what is new is that a gently landed head rolls, and that slopes work at all.
+  `RestBounceSpeed` (1.5 m/s) is the threshold and was already the code's intent.
+- **The head fights for whoever threw it.** `PumpKingHead.Init` takes a `CombatSide`: the
+  protagonist's head strikes foes, the boss's strikes the player. One scene, two masks.
+- **The kit reads `Controls`, not the keyboard.** Movement in Soul Form, the aim of a throw
+  and every button come from the body's control source, so a boss brain can press them.
+  `ResolveLaunchDirection` reads the aim point from there (the mouse, for a player).
+- Read-only state for the HUD, tests and a brain: `PumpStacks`, `HeadReady`, `HasLiveHead`,
+  `LiveHeadPosition`, `SoulReady`, `PumpReady`, `HeadLaunchPoint`. `AmmoDefinition` is
+  virtual so the boss can answer with its own magazine.
+
 ### State Machine
 Three states (`PKState` enum: Normal, Rolling, Soul). State transitions are gated —
 BA does nothing in Soul; Pump Up only works in Normal; firing head only works in
@@ -279,4 +328,18 @@ when the magazine is full.
 
 ---
 
-*Last Updated: July 2026 (v0.5.3 Godot port) | Version: 1.1 | Generated from Unity source PumpKing.cs + PumpKingHead.cs*
+## Decisions log
+
+- **(v0.10.11) Bounce or roll, decided by how hard it lands.** The 1.5 m/s threshold, the
+  3 m/s² friction and the 6 m/s cap were all already in this document; the code applied the
+  bounce every resting tick and so never reached the roll. Fixed toward the document rather
+  than the document toward the code: "his head can crash along the slope" needs a roll.
+- **(v0.10.11) The roll cap is on speed across, and holds on a slope.** Capping before
+  gravity's pull was added let a head run a slope at 6.5 m/s; the cap is now applied to what
+  the roll keeps.
+- **(v0.10.11) A rolling head does not bounce at a change of slope.** At the foot of a slope
+  it used to bounce four times and reach level ground with half its speed.
+- **(v0.10.11) Whether a boss's head should roll faster, last longer or be thrown harder is
+  boss design** (`FOES.gdd` §8.2) and is not decided; today both heads are the same head.
+
+*Last Updated: November 2026 (v0.10.11 boss fight) | Version: 1.2 | Generated from Unity source PumpKing.cs + PumpKingHead.cs*

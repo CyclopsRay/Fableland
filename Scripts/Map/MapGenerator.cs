@@ -82,7 +82,13 @@ public static class MapGenerator
         public float Length;
     }
 
-    public static MapGraph Generate(string seed, string homeAbbr = PomegraknightHome)
+    /// <summary>
+    /// Builds the overworld for a seed. <paramref name="worlds"/> is the pool the run draws
+    /// its five realms from, in pool order — a run records it (<c>RunState.WorldPool</c>), so
+    /// a save made when the pool was smaller regenerates the map it was made on. Null (or a
+    /// list too short to fill the realms) draws from <see cref="WorldDef.Pool"/>.
+    /// </summary>
+    public static MapGraph Generate(string seed, string homeAbbr = PomegraknightHome, IReadOnlyList<WorldDef> worlds = null)
     {
         seed ??= "";
         var graph = new MapGraph
@@ -95,7 +101,7 @@ public static class MapGenerator
         };
 
         var worldRng = new DetRandom(seed);
-        var pool = new List<WorldDef>(WorldDef.Pool);
+        var pool = new List<WorldDef>(worlds is { Count: >= MapGenTable.RealmCount } ? worlds : WorldDef.Pool);
         WorldDef home = pool.Find(world => world.Abbr == homeAbbr) ?? pool[0];
         pool.RemoveAll(world => world.Abbr == home.Abbr);
         worldRng.Shuffle(pool);

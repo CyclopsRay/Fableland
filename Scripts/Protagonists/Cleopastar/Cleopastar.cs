@@ -47,7 +47,7 @@ public partial class Cleopastar : CharacterController
         // The base dispatches BA on press. Release is intentionally handled here so a
         // click before 8 m becomes the documented buffered release, rather than a
         // special short shot.
-        if (Input.IsActionJustReleased("attack") && IsInstanceValid(_flightStar))
+        if (Controls.JustReleased(ControlAction.Attack) && IsInstanceValid(_flightStar))
             _flightStar.ReleaseFlight();
     }
 
@@ -58,7 +58,7 @@ public partial class Cleopastar : CharacterController
         if (!TryConsumeAmmo()) return;
 
         Vector2 origin = FirePoint != null ? FirePoint.GlobalPosition : GlobalPosition;
-        Vector2 direction = GetGlobalMousePosition() - origin;
+        Vector2 direction = Controls.AimPoint(this) - origin;
         if (direction.LengthSquared() < 0.0001f) direction = new Vector2(Facing, 0f);
         else direction = direction.Normalized();
 
@@ -80,7 +80,7 @@ public partial class Cleopastar : CharacterController
         PruneStars();
 
         _shiftCooldown = ShiftCooldownSeconds;
-        Vector2 capturedAim = GetGlobalMousePosition();
+        Vector2 capturedAim = Controls.AimPoint(this);
         var volley = new CleoGlideVolley();
 
         foreach (CleoStar star in _stars)
@@ -94,7 +94,7 @@ public partial class Cleopastar : CharacterController
         PruneStars();
         if (_stars.Count == 0) return;
 
-        Vector2 aim = GetGlobalMousePosition() - GlobalPosition;
+        Vector2 aim = Controls.AimPoint(this) - GlobalPosition;
         if (aim.LengthSquared() < 0.0001f) aim = new Vector2(Facing, 0f);
         else aim = aim.Normalized();
 
@@ -162,7 +162,7 @@ public partial class Cleopastar : CharacterController
 
     protected override void DrawDebug()
     {
-        Vector2 aim = GetGlobalMousePosition() - GlobalPosition;
+        Vector2 aim = Controls.AimPoint(this) - GlobalPosition;
         if (aim.LengthSquared() < 0.0001f) aim = new Vector2(Facing, 0f);
         else aim = aim.Normalized();
         DrawLine(Vector2.Zero, aim * StarMaxDistance, new Color(0.25f, 0.95f, 0.95f, 0.28f), 2f);

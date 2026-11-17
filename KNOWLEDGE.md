@@ -19,6 +19,9 @@ For architecture, controls, and the file map, see `Migration.md` §0.
 `1 Player, 2 Foes, 3 Ground, 4 Platform, 5 Projectile, 6 Hazard`.
 Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
 - Player mask = Ground|Platform (12); Foe mask = 12; Seed mask = Foes|Ground|Platform (14).
+- A **Foe-side fighter** (a BOSS: a protagonist's class on the other side, v0.10.11) sits on
+  layer Foes with the Foe mask — set in code from its side, whatever its scene says. A
+  projectile's mask is aimed at the other side by `CombatTargets.AimMask`.
 - Ground and Platform are **distinct**. Platforms are one-way; drop through by pressing
   down (Platform bit toggled off the mask ~0.25 s, hold = fall further). Ground is solid.
 
@@ -50,6 +53,23 @@ Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
   receiver can't act and its **animation is frozen** (knockback/gravity still move it).
 - Inside a **SoftVolume**, external impulses are extra-damped by `ExternalDampingMult` (viscous), so
   knockback still shoves you in but fades fast.
+
+**Sides, targets, controls** (v0.10.11; `Docs/Tech/T10` §4a) — the three rules that let one
+kit be worn by the player or fought as a BOSS:
+- A fighter is on a `CombatSide` (`CharacterController.Side`, virtual: Player; a `BossX : X`
+  class overrides it to Foe). From that one fact the base picks the group (`player` /
+  `enemy`), the collision layer, whether it owns the camera and `LocalPlayer`, whether it has
+  post-hit i-frames, and what happens at 0 HP.
+- Attacks hit `CombatTargets.HostileTo(GetTree(), Side)` and talk to **`ICombatTarget`**
+  (`BaseFoe` and every `CharacterController` are one). Never cast to `BaseFoe`, never name a
+  group in attack code; a projectile takes the side of whoever launched it.
+- Kits read **`Controls`** (`Held` / `JustPressed` / `JustReleased(ControlAction.…)`,
+  `AimPoint(this)`) — never `Input`, never `GetGlobalMousePosition()`. The player's is
+  `PlayerControls`; a boss brain fills a `VirtualPad`.
+
+**Slopes** (v0.10.11) — ground can be a ramp (`RealmTiles.Slope`, `MapCreation.gdd` §2.2b).
+Bodies stay on one because `FloorSnapLength` is `Units.FloorSnapPx` (12 px) for fighters and
+walking foes. A 1:2 slope costs a fighter a fifth of its speed uphill, nothing downhill.
 
 **Jumps** — per-character `MaxJumps` (jumps before touching down again; Pomegraknight = 1),
 refreshed on touching ground / platform / active SoftVolume. A universal `JumpCooldown` (0.3 s) is the
@@ -86,6 +106,13 @@ actions (Sharpen Weapon: +10 ATK; Sharpen Armor: +10 DEF). Unlike the temporary 
 bonus (which uses the `_defenseBonuses` dictionary), permanent ATK/DEF from shelter Blessings
 are stored separately and persist across the entire run.
 
+**The world pool** (`WorldDef.Pool`, `Scripts/Map/MapData.cs`, v0.11.0) is the eight worlds
+whose combat realm is built: SL, HC, VK, TD, PL, BM, KH, TF — in that order, which is data. A
+seed shuffles the list, so **append only**; a run records the pool it was generated from and a
+save keeps it (`RunState.WorldPool`, save version 4). A pool world must have a realm tile set,
+a city colour and land tint no other world is close to, a map authored for each altitude band,
+a boss arena, and a boss (its own row in `BossTable`, else the stand-in — PumpKing).
+
 **Versioning** — bump patch (+0.0.1) every commit; keep `Scripts/Foundation/GameVersion.cs`, the
 repo-root `VERSION` file, and the HUD `VersionLabel` (`Scenes/Hud.tscn`) in sync. Shown
 top-left in-game.
@@ -94,7 +121,10 @@ top-left in-game.
 toolchain (`dotnet` 9 on the PATH; Godot 4.7 .NET at
 `/Applications/Godot_mono.app/Contents/MacOS/Godot`), so build for real:
 `dotnet build Fableland.csproj`, and for map/tile work the headless content check
-(`Docs/Instructions/40-QA.md` §(2)). A host with no toolchain falls back to static checks
+(`Docs/Instructions/40-QA.md` §(2)); for bosses, kits with a BOSS variant, input, hit intake,
+sides or slopes, also the boss check (`res://Scenes/Bosses/BossFightCheck.tscn`, same §); for
+the world pool, map generation, saves, the run flow or a shipped map, also the run check
+(`res://Scenes/Run/RunWalkCheck.tscn`, same § — it plays real runs, in a scratch save folder). A host with no toolchain falls back to static checks
 (brace/paren balance, `.tscn` resource paths, `GetNode` paths), which do NOT catch
 API-existence or type errors — say so, and log anything a later compile surfaces below.
 Python tools (`Tools/`) need Pillow + numpy: use `/opt/homebrew/bin/python3` on the dev Mac —
@@ -103,6 +133,253 @@ the Anaconda `python3` first on the PATH has a broken numpy (missing MKL) and di
 ---
 
 ## Caveats / gotchas (grow this on every bug fix)
+
+### Anything a seed is fed is part of the save — growing the world pool would have moved every saved run (v0.11.0, world pool)
+- **Symptom (caught before it shipped):** a save stores the seed, not the map, and
+  `MapGenerator` shuffled `WorldDef.Pool` to pick a run's five realms. Adding the Kingdom of
+  Horror and The Forgotten to that list would have made every existing save regenerate into
+  *different realms*: the `HC-2-3` it was standing on gone, its visited and completed ids
+  dropped with a warning each, the player back at the start node. Three real slots on this
+  machine were in that position.
+- **Rule:** an input to a seeded generator that can change between versions is saved with
+  the seed, or frozen. A run records its pool (`RunSaveData.WorldPool`, save version 4),
+  `MapGenerator.Generate` takes the pool it is given, the migration hands an older save the
+  six worlds of its day (`SaveGameService.WorldPoolBeforeV4`), and `WorldDef.Pool` is
+  **append-only**. Before changing such an input, record what the old one generated — six
+  seeds' realms, node ids, kinds, levels, missions and road counts are pinned in
+  `RunWalkCheck.BeforeV4` — because afterwards there is nothing left to compare against.
+- **Why:** "the map is derived state, so do not save it" (T30 §6) is only true while the
+  derivation is frozen. The pool looked like content; it was part of the function.
+
+### A scripted run writes and deletes real save slots — `user://` is one folder for every checkout (v0.11.0, run check)
+- **Hazard (designed around, never hit):** `NewRun` claims slot 1 when no slot is active,
+  every mission resolution and day end checkpoints it, and `EndRun` deletes it. A headless
+  check or a capture script that plays a run — from any worktree — would overwrite the
+  player's slot 1 and then delete it.
+- **Rule:** redirect first, then start anything: `SaveGameService.DirectoryOverride` from C#,
+  the environment variable `FABLELAND_SAVE_DIR` for a GDScript tool that cannot reach it. Turn
+  `CombatMapCatalog.UserMapsEnabled` off as well, so what a run is dealt does not depend on
+  the developer's own maps. Afterwards, look at the real folder's timestamps. To test real
+  saves, copy them (`RunWalkCheck -- --saves=<folder>`).
+- **Why:** the v0.10.7 caveat below ("use a scratch `HOME`") covers a process you launch; a
+  check that runs inside the game needs the same isolation as a seam in the code.
+
+### An arena adopts the first node in group `player` — open one in the frame you free another and it gets a dying player (v0.11.0, capture tooling)
+- **Symptom:** a windowed capture of twelve arenas: the first looked right, the other eleven
+  showed sky and far hills and nothing else — no ground, no fighter. The headless run check,
+  entering all 45 maps, passed.
+- **Cause:** the tool freed an arena and instantiated the next in the same frame.
+  `queue_free()` is deferred, so the new arena's `_Ready` found the OLD arena's player first
+  (`GetFirstNodeInGroup("player")`), put *it* on the spawn and set *its* camera's limits; the
+  new arena's own body stayed at the scene origin with an unlimited camera, looking at empty
+  sky. The check waits three ticks between arenas.
+- **Rule:** one arena in the tree at a time; let a frame pass after freeing one. In the game
+  this cannot happen — a scene change frees the old scene before the new one enters.
+- **Why it is here:** the picture said "the maps are broken"; the assertion beside it ("the
+  player stands inside the map, on the floor") said they were not. A screenshot is evidence
+  of what the tool did; it takes a check to say what the game does.
+
+### Generating a map for eight kits at once: what the kit catches, and what it cannot (v0.11.0, band maps, reference)
+- **Every realm's pieces have their own footprints** (a 3 × 4 palm, a 2 × 6 kelp, a 4-wide
+  roof, a 1 × 2 cactus). A shared layout that says "a soft volume here" overlaps something in
+  some realm. Reserve the marker cells in the layout and fit each realm's furniture round
+  them; `mapkit` refuses an overlap, which found each of the five on the first build.
+- **A marker cannot stand in a soft volume's cell** (one tile per cell per layer). Water wide
+  enough to fight in goes on its own colliding Farview layer, added before the battlefield
+  (style bible §8, "a sea is a layer") — the Forgotten City's canal, like Loong's Nest's sea.
+- **The kit does not know a boss's reach.** The first boss arenas had their two perches 28 m
+  apart; a Soul Form flight covers about 20 m with the climb. The run check now measures it.
+- **Five beach tiles have no art** and draw as flat coloured squares in the game:
+  `deco.rock`, `deco.flower`, `deco.column`, `softvolume.bush1x1`, `ground.stone`. Nothing
+  fails; only a rendered frame shows it. `preview.load_tiles()[id].get("sprite")` tells.
+
+### Playing a run from a check: what bit, in order (v0.11.0, reference)
+- **A scene change frees the current scene** — which is the check itself when it is launched
+  as a scene. `GetTree().CurrentScene = null` (deferred, from `_Ready`) lets it live under
+  the root through every `ChangeSceneToFile` that follows.
+- **The swap is deferred.** After `BeginAdventure` the *previous* arena is still the current
+  scene for a frame: wait for an arena that is not the last one and whose adventure is the
+  node just entered.
+- **Enter debug arenas before any run exists.** `ReturnToMap` leaves `CurrentAdventure` set
+  (v0.10.11), so an arena instantiated by hand afterwards believes it is in that run.
+- **`BeginAdventure` is not a legal move** — it enters any node. Good for coverage; it proves
+  nothing about roads. **`EndDay` on a devour day** (10, 20, 30, 40, 43, 45) can end the run
+  under a check standing on a city: set the day for a boss and do not end it.
+- **A node's band and mission are data on the node.** A seed may not hold every pair, so the
+  walk writes `node.Terrain` and `node.Mission` before entering, instead of hunting seeds.
+- **A restored source file is not a restored assembly.** The mutation runner rebuilt only
+  when it had mutated a `.cs` file, so the two *data* mutations that followed a code mutation
+  ran against that mutation's DLL and "failed" with its failures. Build before every
+  mutation, data ones included — and read which line caught it (v0.10.11's rule, again).
+- **The number that went into the design doc was wrong until it was printed.** Reading
+  `_invulnTimer` said a head that touches the player costs the contact only (18), because the
+  blast would land inside the i-frames; the check printed 80 at ×1 — both land, since only a
+  hit *with knockback* arms the timer. A design number is one a check prints.
+
+### A "resting" branch that multiplies the velocity every tick is not friction — PumpKing's head never rolled (v0.10.11, boss fight)
+- **Symptom:** the head's code and GDD both describe a roll — "settles into a capped roll",
+  6 m/s cap, 3 m/s² roll friction — but a head on a floor stopped within 0.7 m. Every tick it
+  rested, gravity pushed it 0.5 px into the floor, `MoveAndCollide` reported the contact, and
+  the contact branch applied the 85% *bounce* retention to the whole velocity — 15% of the
+  speed gone sixty times a second, about 1600 px/s² against a designed 96. It also threw away
+  the rest of that tick's move (`MoveAndCollide` stops at the contact; nobody slid the
+  remainder). Nobody noticed on level ground because a thrown head has spent its speed on
+  fourteen bounces before it rests. On a slope it would have crawled at 1–2 m/s.
+- **Rule:** decide *bounce or roll* by how hard the contact is (the speed it would leave the
+  surface with), and in the roll keep the velocity along the surface, apply friction to that,
+  and spend the unspent part of the tick moving along it. A restitution factor belongs to a
+  bounce, never to a resting contact. The boss check measures both: a 6 m/s roll must run 6 m.
+- **Why:** with a kinematic body, "is touching the floor" happens every tick, so anything
+  written in the collision branch is applied at 60 Hz. A per-contact factor is silently a
+  per-second rate of `factor⁶⁰`.
+
+### A cap applied before the tick's acceleration is not a cap, and the leftover of a move carries the old speed (v0.10.11, boss fight)
+- **Symptom (found by the probe, never shipped):** with the roll fixed, a head ran a 1:2 slope
+  at 6.5 m/s across against a 6.0 cap — then, with the cap moved, still at 6.4. Two causes.
+  The cap clamped `_velocity.X` at the top of the tick, *then* gravity's pull down the slope
+  was added and kept. And the rest of the tick was spent along `GetRemainder().Slide(normal)`
+  — the leftover of the pre-contact motion, which still carried that uncapped speed.
+- **Rule:** cap what the tick *ends* with, and move the remainder at the new velocity
+  (`_velocity × dt × unspent fraction`), not along the old motion's leftover.
+- **Why:** a slope turns "gravity" into "acceleration along the direction you are capping";
+  on level ground the same code was exact, which is why the cap looked right for months.
+
+### A change of slope is not a fall — a rolling head bounced four times at the foot of the slope (v0.10.11, boss fight)
+- **Symptom (found by the probe, never shipped):** the boss's head reached the bottom of his
+  slope and died 3 cells later, far short of a player standing there. Rolling off a 1:2 slope
+  onto level ground it met the floor at 3 m/s — above the 1.5 m/s roll threshold — so it
+  bounced, and each bounce kept 85% of everything: four bounces, half its speed.
+- **Rule:** a body that was rolling on the previous tick and meets floor at another angle
+  keeps rolling (`_ticksSinceRoll`). Only a contact after real air time is judged as a landing.
+- **Why:** the threshold answers "did it fall onto this?", and a corner in the floor looks
+  like a fall to a test that only sees the speed into the surface.
+
+### AddChild to your parent from `_Ready` fails when you are authored in its scene — Pixolotl's bubble pool was 18 orphans (v0.10.11, found by the boss check)
+- **Symptom:** the first headless run of `Arena.tscn` printed `Parent node is busy setting up
+  children, add_child() failed` eighteen times. `Pixolotl.WarmBubblePool` (from `_Ready`) did
+  `GetParent().AddChild(bubble)`; when she is the body authored in `Arena.tscn`, that parent
+  is still setting up its children and Godot refuses. The eighteen bubbles stayed in her pool
+  list, never entered the tree, and her BA rented them and fired nothing. A Pixolotl created
+  later by a swap (Tab, the debug page) worked, which is why it went unseen: a real run's
+  team leader replaces the authored body unless the leader *is* Pixolotl.
+- **Rule:** from `_Ready`, add siblings with `GetParent().CallDeferred(Node.MethodName.AddChild, node)`.
+  A node may add children to *itself* in `_Ready`; its parent is busy until the whole scene
+  is ready.
+- **Why:** `_Ready` runs while the parent is still propagating ready to its children, and
+  Godot blocks changes to a child list it is iterating. The same code works when the node is
+  added at runtime, so only the scene-authored instance breaks.
+
+### A fighter built from a protagonist's scene brings the player's camera, group and keyboard with it (v0.10.11, boss fight — designed around)
+- **Symptom (avoided):** `BossPumpKing.tscn` inherits `PumpKing.tscn`, which has a `Camera2D`
+  with the shake script, and `CharacterController` used to claim `LocalPlayer`, join `player`
+  and read `Input` unconditionally. A boss made that way steals `ShakeCamera2D.Instance` (and
+  possibly the view), is attacked by crabs as "the player", is skipped by every player attack
+  (they looked for `BaseFoe`), and walks when the player presses right.
+- **Rule:** the base decides all of it from `Side`. A Foe-side body removes its camera in
+  `_EnterTree` — before the child enters the tree and claims the singleton — and swaps
+  `PlayerControls` for a `VirtualPad` there too, so it never reads the keyboard, not even for
+  the frame before a brain is attached. The boss check pins each (and was mutation-tested).
+- **Why:** a protagonist scene is "the player" in a dozen small ways that are not in one
+  place. Inheriting the scene is still right — it is 560 lines of animation — but the
+  identity has to be taken out explicitly, at the one moment it is still inert.
+
+### One button, two loops: a tap must be owed to the physics loop and the process loop separately (v0.10.11, boss brain)
+- **Symptom (avoided):** abilities read input in `_Process`, jumps in `_PhysicsProcess`. A
+  virtual pad that held a tapped button "for one frame" would be seen by whichever loop ran
+  next and missed by the other whenever no physics tick fell inside that frame — a boss that
+  sometimes does not jump, depending on the frame rate.
+- **Rule:** `VirtualPad.Tap` arms the press once for each loop; `StepProcess` / `StepPhysics`
+  each consume their own, before the body runs (`BossBrain` has process priorities of −100).
+  Its `SelfTest` steps one loop many times and checks the other is still owed.
+- **Why:** Godot's own `is_action_just_pressed` keeps a frame number per loop for the same
+  reason. Anything that imitates input has to imitate that.
+
+### Testing a fight headless: what bit, in order (v0.10.11, reference)
+- **A crab walks left or right at random** (`BaseFoe.Rng` is unseeded unless a spawner seeds
+  it). A probe that rolled a head at a crab passed two runs in three: when the crab walked
+  away, the head caught it a few ticks after the probe had stopped looking. Wait for the
+  event with a budget (`for … && hp >= before`), never for a fixed count.
+- **Set a rolling thing down at rest height.** Dropped from even 4 px it bounces first, and
+  a bounce keeps 85%: "a 6 m/s roll ran 4.7 m" was the probe's start, not the physics.
+- **A debug arena pauses the tree under its win banner.** Tweens and fades stop with it; a
+  check that waits for a beaten boss to fade must unpause first (a real run does not pause).
+- **`RunState.ReturnToMap` leaves `CurrentAdventure` set**, so an Arena loaded from the map
+  screen is not a debug arena — it replays the last node. Debug staging (the boss page)
+  therefore refuses while a run's adventure exists; stage from the title screen.
+- **The fight is not frame-deterministic** — abilities, kit timers and the brain run in
+  `_Process`. Assert behaviour (did he throw, did it arrive), not timings.
+- **A mutation that survives is information.** Removing the side filter from `HostileTo`
+  changed nothing, because groups already separate the sides: the check now puts a body in
+  the wrong group to prove the filter. Gating a boss's hits on an i-frame timer changed
+  nothing either, because nothing arms that timer for a boss — an equivalent mutant, noted.
+- **Break every rule of a brain, not a sample — and read WHICH assertion caught it.** The
+  first mutation run removed two of BOSS PumpKing's seven rules. Removing the other five
+  later showed: "hold perch" and "call back" could be deleted and the check still passed
+  (neither had ever been watched working — the fight probe never knocks him off his perch
+  or gets behind him), and removing "detonate" was "caught" by `sides: the player's own head
+  must not hurt the player`, an assertion about something else entirely. That probe's boss
+  had a live brain and was bowling at the player while the probe counted the player's HP, so
+  when his head went off moved the damage into the wrong window. Rules: (1) a probe that
+  counts HP hit by hit must own every hit — once the decisions under test are over, put the
+  brain to sleep (`BossBrain.Sleep()`; not `StandDown()`, which also makes him invincible)
+  and let any head already out finish; (2) a rule whose effect another mechanism can also
+  produce (a head that bumps into the player hurts them without any rule) needs a stage
+  where ONLY the rule can produce it — `ProbeHisRules` puts a wall at the player's shoulder
+  for "detonate" and sends the player behind him for "call back" — and must be attributed
+  (`BossRule.Starts`), not inferred from the damage; (3) a new rule gets its scenario there
+  and is broken once before it ships.
+- **A headless check that "hangs" for twelve minutes and then passes: the Mac slept.** On
+  battery with nobody at the keyboard macOS drops into maintenance sleep and wakes for
+  ~45 s at a time; a run that takes 11 s took 742 s, with a perfect log. Every loop in the
+  checks has a tick budget, so they cannot wait forever by construction — when the wall
+  clock stalls, look at `pmset -g log | grep -E "Sleep|Wake"` before suspecting the check.
+
+### The version number was already taken by uncommitted work next door (v0.10.11, hand-off)
+- **Symptom (caught before the bump):** this branch was cut from v0.10.9 and would have become
+  v0.10.10. A sibling session worktree (`game-map-editor-ui-b1ced6`) already held an
+  **uncommitted** v0.10.10 — "a fighter swims in every soft volume" — touching the same
+  `CharacterController.cs`. Two different builds with one version string merge without a
+  conflict on the version files (identical edits), which is exactly the v0.6.8 trap.
+- **Rule:** before bumping, look at `VERSION` in every worktree (`git worktree list`), dirty
+  ones included — uncommitted work has a number too. Take the next free one; a skipped
+  number is harmless. This branch is **v0.10.11**.
+- **When the two meet:** the swimming work reads `Input.IsActionPressed("move_down")` and
+  `InputDefaults.MoveUp` directly inside `CharacterController._PhysicsProcess`. Route both
+  through `Controls` (`ControlAction.MoveDown`, and `ControlAction.MoveUp`, which exists for
+  this and is guarded for checkouts whose InputMap lacks `move_up`) — otherwise the player's
+  W and S keys swim the boss.
+
+### A slope's crest sits under its ramp, so a one-row slope tile loses it at every joint (v0.10.11, realm art)
+- **Symptom (caught on paper):** the Dark Wood's earth draws its walking line 13 px under the
+  top of the cell. Painted the same way on a ramp, the line is *below* the ramp's foot at the
+  low end — outside a one-row sprite — and reappears at the top of the next block: a gap in
+  the grass at every joint, with the bare cell below showing through.
+- **Rule:** a slope block is two rows (`RealmTiles.Slope`, style bible §2.3a): the ramp
+  crosses the upper row and the lower row is solid, so the crest has room. Make the crest's
+  wobble periodic over the block's width so blocks join, and give the block its material's
+  `AutotileGroup` so the earth around it draws no crest or flank against it.
+- **Why:** a tile can only paint inside its own footprint, and the offset between "where you
+  stand" and "where the line is drawn" is a property of the material, not of the tile.
+
+### What you can stand on must be the lightest thing in its wall — and nothing goes in front of a black boss (v0.10.11, realm maps)
+- **Symptom:** the first in-engine frames of the castle showed the balcony vanishing into the
+  castle front behind it (same stone, same tone) and the balustrade — a foreground layer —
+  hiding the legs of a black-coated, momentarily headless PumpKing against black masonry.
+- **Rule:** tint a backdrop built from a solid material darker than the solid (`#3D4978` on
+  the castle front); give a platform in front of a wall a broad bright coping and a face
+  crowded with scratches; put railings *behind* the fighters. The boss wears a red mark until
+  his boss art exists (`BossPumpKing._Draw`, `NOTE(art)`).
+- **Why:** style bible §2.6 — a fighter must read first — is easy to keep for the hero and
+  easy to forget for an opponent whose own palette is the realm's.
+
+### Laying a slope with the map kit: order and layers (v0.10.11, reference)
+- `f.slope(...)` first, the floor `fill` after: the lowest block's solid row is part of the
+  floor, and `fill` skips taken cells while `put` refuses them.
+- Trees, lanterns, the gate and the windows cannot share a layer where they overlap (one tile
+  per cell per layer): the castle map uses "Wood" for trunks and "Lights" for everything that
+  glows, both at parallax 1.
+- On a 1:2 slope the middle of an odd column is a quarter cell above a row line:
+  `stand(tile, x, 32 - x // 2, nudge=(0, 1))` for a slope whose foot is at column 14, row 26.
 
 ### A resistance weaker than a body's own acceleration is not a speed cap — the first water let a swimmer run at 95% and out-jump the air (v0.10.9, water)
 - **Symptom (caught by doing the arithmetic, then measured; never shipped):** water was first
@@ -1118,10 +1395,12 @@ is a mistake already paid for once.
   dict; first key at t=0; include a `RESET`). You don't need a clip for every Unity state — omit
   `dead`/`stun` when there's no art (the base freezes the frame via `Anim.SpeedScale` for stun and
   a gray tint reads as death).
-- **Projectiles:** call `Init(...)` **after** `AddChild`; damage foes via
-  `GetTree().GetNodesInGroup("enemy")` → cast `BaseFoe` → `TakeHit(new HitInfo(dmg, knockback), origin)`;
-  hit tests subtract `BaseFoe.HitRadius`; projectile scene uses `collision_layer = 16` (layer 5),
-  `collision_mask = 14` (Foe+Ground+Platform).
+- **Projectiles:** call `Init(...)` **after** `AddChild`; find targets with
+  `CombatTargets.HostileTo(GetTree(), side)` → `ICombatTarget.TakeHit(new HitInfo(dmg, knockback), origin)`
+  (v0.10.11 — never cast to `BaseFoe`: a boss is not one); hit tests subtract the target's
+  `HitRadius`; projectile scene uses `collision_layer = 16` (layer 5), `collision_mask = 14`
+  (Foe+Ground+Platform), and `CombatTargets.AimMask` swaps Foe for Player when a boss threw it.
+- **Input:** read `Controls`, not `Input` or the mouse (v0.10.11) — see Conventions.
 - **Ship discipline:** keep the character self-contained — do NOT change the default protagonist
   (`Arena.tscn` / `RunState.Owned[0]`) unless asked. Version-bump the trio, add caveats here,
   doc-sync the character GDD, and **commit with explicit paths — never `git add -A`/`.`** (an

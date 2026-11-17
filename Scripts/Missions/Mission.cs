@@ -54,6 +54,14 @@ public abstract class Mission
     public virtual bool NeedsRewardChoice => false;
     public virtual void ChooseReward(bool atk) { }
 
+    /// <summary>What the HUD says when the goal is achieved in a run.</summary>
+    public virtual string SuccessToast => "Goal achieved!";
+
+    /// <summary>Called once by GameManager the moment the mission stops Running, however it
+    /// ended (won, lost, debug-forced). For entities the mission staged that must not fight
+    /// on past the result — a boss still standing after a debug skip.</summary>
+    public virtual void OnResolved() { }
+
     /// <summary>QA cheat (40-QA §1): force the goal to Succeeded. Debug builds only — called by
     /// GameManager on F9. Skips any pending reward choice (the mission's default reward applies).</summary>
     public void DebugForceComplete() => Status = MissionStatus.Succeeded;

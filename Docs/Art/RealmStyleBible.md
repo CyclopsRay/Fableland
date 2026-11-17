@@ -4,7 +4,7 @@ The art direction, tile kits and arena grammar of each realm's combat maps. Comp
 `Docs/Art/BeachTileSet.md` (the original Vanilla Kingdom beach set) and to
 `Docs/MapCreation.gdd` (the map system these kits plug into). First landed in **v0.10.6**;
 **v0.10.9** repainted Wulin as freehand ink and added Loong's Nest, the Dark Wood and the
-Forgotten City.
+Forgotten City; **v0.10.11** gave the Dark Wood its castle, a slope, and the first boss arena.
 
 ## 0. The principle: a realm is a *medium*, not a palette
 
@@ -29,17 +29,21 @@ Each realm therefore fixes three things together, and they must stay together:
 | HollowCastle (HC) | **Dungeon** | Lit realism (relief shading) | `#0E0D12` | crowded, low, hazardous; lava | brawlers, fire | `hc` — §5 | `dungeon_hollow_gaol` |
 | TheDeserted (TD) | **Ghost Town** | Linocut / woodblock print | `#F1E3C4` | two-storey street, mid-range | skirmishers, duellists | `td` — §6 | `ghost_town_main_street` |
 | Palace of LOOING (PL) | **Loong's Nest** 龙宫 | Gongbi (工笔重彩): even ink line, graded mineral colour | `#0C1230` | the whole map is water — buoyant, resisting; hidden currents, bubble lifts | precise movers | `ln` — §7 | `loongs_nest_sunken_court` |
-| Kingdom of Horror (KH) — *not in the overworld yet* | **Dark Wood** | Scratchboard | `#111B3D` | traps, thickets and fog; a castle in some maps | guards, tanks, the patient | `kh` — §7A | `horror_hanging_wood` |
-| The Forgotten (TF) — *not in the overworld yet* | **Forgotten City** | Pixel art | `#0C0C22` | swamp at the bottom, pyramid above it | whoever goes over, not through | `tf` — §7B | `forgotten_canals_of_the_sun` |
+| Kingdom of Horror (KH) — *in the pool since v0.11.0* | **Dark Wood** | Scratchboard | `#111B3D` | traps, thickets and fog; a castle in some maps | guards, tanks, the patient | `kh` — §7A | `horror_hanging_wood`; boss arena `horror_pumpkings_castle` |
+| The Forgotten (TF) — *in the pool since v0.11.0* | **Forgotten City** | Pixel art | `#0C0C22` | swamp at the bottom, pyramid above it | whoever goes over, not through | `tf` — §7B | `forgotten_canals_of_the_sun` |
 | *(unassigned — tagged CC)* | **Cloud Court** | Cloisonné enamel | `#2A1B4A` | aerial; cloud soft volumes, scarce footing | air mobility | `pl` — §7C | `cloud_court_heavens` |
 
 Starfield, Wulin, Dungeon, Loong's Nest and the Dark Wood follow the design owner's briefs;
 the Forgotten City's direction was handed to this document ("your design"). Ghost Town and
 Cloud Court are this document's proposals — see §10 for what is still the owner's call.
-The Dark Wood and the Forgotten City belong to worlds the overworld does not deal yet, and
-Cloud Court lost its world to Loong's Nest: those three maps are played from the map editor.
+The **Map** column names each realm's showcase. Since v0.11.0 every pool world also ships a
+plain map for each altitude band and a boss arena — `<realm>_sea_level`, `_low_ground`,
+`_high_ground`, `_boss_arena` (§8) — and the Dark Wood and the Forgotten City are in the
+overworld pool. Cloud Court lost its world to Loong's Nest: its map is played from the map
+editor.
 Reference views (rendered from the built-in maps):
-`Docs/Art/References/Realms/{starfield,wulin,dungeon,ghost_town,loongs_nest,dark_wood,forgotten_city,cloud_court}.png`.
+`Docs/Art/References/Realms/{starfield,wulin,dungeon,ghost_town,loongs_nest,dark_wood,forgotten_city,cloud_court}.png`,
+and `pumpkings_castle.png` — the whole of the Dark Wood's boss arena (§7A).
 
 ## 1. How the art is made
 
@@ -117,6 +121,25 @@ Rules for painting a material so that *any* stacking is seamless:
 
 Terrain is taken to continue one cell past the left, right and bottom edges of a layer
 (`AutotileProbe`), so a floor on the map's last row is not drawn as an underside.
+
+### 2.3a A slope is a block (v0.10.11)
+
+A material may also ship a **slope block** (`MapCreation.gdd` §2.2b): one sprite, `run`
+cells wide and two rows tall, whose top is a ramp rising to the right across its upper row
+over a solid lower row. Rules for painting one:
+
+- **Cut it from the material's own strip.** The body is the same paint as the cells around
+  it (`horror._earth_strip`, tiled twice), so only the ramp is new.
+- **The walking line sits where it sits on level ground.** The Dark Wood's earth draws its
+  crest 13 px under the collider's top; the slope's crest runs 13 px under the ramp. That is
+  why the block has a solid row: at the low end the crest is *below* the ramp's foot, inside
+  the lower row. On a one-row ramp it would fall out of the sprite at every joint.
+- **The crest's wobble is periodic over the block's width**, so the left end of one block is
+  the right end of the one before and a slope of any length has no joints.
+- **Nothing is cut by the sheet** (§2.7): grass blades near the top and left edges are left
+  out rather than clipped. The sides and bottom meet more earth on purpose.
+- The sidecar carries the material's `autotileGroup` (and no atlas): `export_set` writes it
+  from `group=` on a non-fill item.
 
 ### 2.4 Solid things are opaque; only air is translucent
 
@@ -481,15 +504,35 @@ is part of this kit — solid `ground.kh_stone`, climbed by rotten hoardings, li
 and belongs in some maps, not all. **Destroyable trees** are planned and not built: today
 `deco.kh_tree` is scenery, and a map should not depend on one being cover.
 
+**The castle is PumpKing's (v0.10.11).** Its pieces: a **balcony** to stand on (a slab on a
+corbelled console, the lightest stone in the wall so the one thing you can stand on reads), a
+**balustrade** for it, a **gate** that is shut with light in its seam, the **door** he comes
+out of with lamplight in it, **battlements** and red **pennants** — red is this realm's
+"keep away", and it flies over the man who means it. And one piece of terrain: the **slope**
+(§2.3a), a ramp of the wood's own earth, one cell up in two along.
+
+**Arena grammar of his boss fight — the map takes his side** (`FOES.gdd` §8.5). His head
+dies within a few metres on level ground and does not stop on a slope, so the castle stands
+at the top of one. `horror_pumpkings_castle`, left to right: a strip of wood where the player
+arrives, with the moon low over it; one unbroken slope, nothing on it to hide behind, lit by
+pumpkin lanterns; the forecourt and the gate; the balcony, a clean jump above the forecourt;
+the keep, solid to the top of the map. The castle's **front** is the same stone on a layer
+behind the fighters, tinted a tone darker (`#3D4978`), so what can be walked into reads apart
+from what cannot; the balustrade stands *behind* whoever is on the balcony, because in front
+it hid a black-coated boss's legs against black stone (§2.6).
+
 | Tile | Role | Size | Notes |
 |---|---|---:|---|
 | `ground.kh_earth` · `kh_stone` | Ground | 1×1 | Root-tangled earth; castle masonry |
+| `ground.kh_slope` | Ground (slope block) | 2×2 | A ramp of the same earth, rising to the right 1 in 2; joins end to end; Flip H for the other way |
 | `platform.kh_branch` · `kh_plank` | Platform | 4×1 · 3×1 | A gnarled limb with hanging roots; a rotten hoarding |
+| `platform.kh_balcony` | Platform | 4×1 | The castle balcony; its console deepens toward the wall on its right (Flip H for a wall on the left) |
 | `softvolume.kh_bramble` · `kh_fog` · `kh_canopy` | SoftVolume | 3×2 · 4×2 · 4×3 | Stagnation 0.15 · 0.45 · 0.5 |
 | `hazard.kh_trap` | Hazard (damage) | 2×1 | Bear trap |
 | `hazard.kh_wisp` | Hazard (fire) | 1×2 | Will-o'-the-wisp; circle effect area |
 | `deco.kh_tree` · `kh_tree_b` | Decoration | 5×8 · 3×6 | Dead trees; the big one's hollow is nearly a face |
 | `deco.kh_lantern` · `kh_window` · `kh_fence` · `kh_fireflies` | Decoration | 1×2 · 1×2 · 3×1 · 4×3 | Pumpkin lantern, lit window, iron fence, fireflies |
+| `deco.kh_balustrade` · `kh_gate` · `kh_door` · `kh_battlement` · `kh_pennant` | Decoration | 4×1 · 4×5 · 2×3 · 4×1 · 1×2 | The castle: balustrade, the shut gate, the lit balcony door, battlements (tile in x), a red pennant |
 | `deco.kh_moon` · `kh_castle_far` · `kh_forest_far` | Decoration | 4×4 · 10×8 · 16×6 | The moon, the castle on its hill, a looping far wood |
 
 ## 7B. Forgotten City — The Forgotten (TF)
@@ -591,6 +634,17 @@ check for you:
 
 - **Seal it.** There is no kill plane: a character that leaves the bottom falls forever.
   Solid floor edge to edge, solid walls to the top row on both sides, rock under any lava.
+- **A slope is laid with `f.slope(tile, x, surface_row, steps, fill=…)`** — it places the
+  blocks one step up and to the right and packs the ground under them, and returns where the
+  plateau starts. Lay it *before* the floor around it (the lowest block's solid row is part
+  of that floor; `fill` leaves taken cells alone). Things that stand on a slope are nudged:
+  the middle of an odd column is a quarter cell above a row line on a 1:2 slope, so
+  `stand(…, nudge=(0, 1))` puts a lantern's foot on it. Trees stand a little into the bank,
+  on a layer behind the battlefield, which hides the difference.
+- **A boss arena** is a map with `goals=("boss",)` and the level it serves; its
+  `goal.level` markers are the boss's perches, the one the boss should open on farthest from
+  the spawn. Keep two perches within one flight of each other if the boss can fly (PumpKing:
+  30 m of Soul Form, so under about 20 m apart with the climb).
 - **Jump budget.** A ground jump rises 4 cells and covers about 5; one-way ledges 3 rows up
   are a clean jump, 4 is not (use an intermediate, or a soft volume).
 - **Mark it for every goal.** One `spawn.character`, respawns, enemy nests, and `goal.level`
@@ -617,16 +671,34 @@ check for you:
   a surface drawn a row away from its physics and a moon behind a waterfall were only
   visible in `MapScreenshot.tscn` shots (40-QA.md).
 
-Each realm currently has **one** built-in map (Loong's Nest's is the Palace of LOOING's;
-the Dark Wood's, the Forgotten City's and Cloud Court's are tagged for worlds the overworld
-does not deal, so they are reached from the map editor only), tagged for **every** terrain band (`"*"`,
-the map kit's default since v0.10.7). A combat node carries `low-ground` / `sea-level` /
-`high-ground` (`MapGDD` §2.1) and map selection otherwise needs an exact match — tagged
-`sea-level`, as these maps first shipped, a realm's art was missing from two nodes in three,
-which opened the legacy arena instead. Terrain variants are still the next content step, and
-the cheapest one (the kits and the map kit are done, so a variant is one more function): when
-a realm gains one, give each of its maps the band it is built for. `MapContentCheck` fails a
-realm that leaves any band without a map.
+Each realm has one **showcase** map (`build_maps.py`), tagged for **every** terrain band
+(`"*"`, the map kit's default since v0.10.7): a combat node carries `low-ground` /
+`sea-level` / `high-ground` (`MapGDD` §2.1) and map selection otherwise needs an exact match
+— tagged `sea-level`, as these maps first shipped, a realm's art was missing from two nodes
+in three, which opened the legacy arena instead.
+
+**The band maps and boss arenas (v0.11.0)** are the terrain variants, in their plainest
+form — `Tools/realm_maps/build_band_maps.py`, one data row per realm (ground, the solid a
+wall is built of, its ledge, a soft volume, a hazard, props, a sky recipe) and four shapes:
+
+| Map | Shape | The realm's own touch |
+|---|---|---|
+| `<realm>_sea_level` (48 × 22) | a flat field, three ledges, each one clean jump | one soft volume, one hazard |
+| `<realm>_low_ground` (48 × 28) | a basin: you spawn on the west rim, the fight is in the pit, two 3-row steps down | what the realm keeps in its low places — palms (Beach), stardust (Starfield), mist and bamboo (Wulin), a lava pool under a catwalk (Dungeon), dust (Ghost Town), kelp and a bubble lift (Loong's Nest), fog and bramble (Dark Wood), a canal bank to bank (Forgotten City) |
+| `<realm>_high_ground` (48 × 28) | a mesa: three terraces of three rows and a summit, ledges up the east side | the Dark Wood's is climbed from the west by its **slope** |
+| `<realm>_boss_arena` (48 × 28) | a floor, a tower 12 m high on the east side, a ledge 18 m west of it: two perches | none yet — the Dark Wood's boss arena is the real one, PumpKing's castle |
+
+They are **test maps**: valid, sealed, readable, and deliberately easy, so every node of
+every realm opens a map of its own realm and band while the designed ones are written
+(TBD #32). The showcase maps were left on `*`, so a band is served by its plain map *and* the
+showcase; when a realm gets designed band maps, narrow its showcase to the band it is built
+for. `MapContentCheck` fails a pool world without a map authored for each band and a boss
+arena. Two things the generator had to learn: every realm's pieces have different footprints
+(a 3 × 4 palm, a 2 × 6 kelp, a 4-wide roof), so a shared layout reserves its marker cells and
+each realm's furniture is fitted round them — the kit refuses an overlap, which is how each
+one was found; and five beach tiles have no art and draw as flat squares (`deco.rock`,
+`deco.flower`, `deco.column`, `softvolume.bush1x1`, `ground.stone`) — a generated map must
+not use them.
 
 ## 9. Realms not yet built — proposals
 
@@ -663,15 +735,16 @@ Recorded here rather than silently chosen (`00-OVERVIEW.md` §5):
    **Cloud Court has no world** since Loong's Nest took the Palace of LOOING (§7C): keep it
    for a future sky world, make it a district of the Palace (retag its map `PL`), or delete
    the set, the painter and the map. It costs nothing while it waits.
-5. **Terrain variants** (§8) and **hazard numbers** — `LavaHazard.tscn` (30 fire stacks per
+5. **Terrain variants** (§8) — *v0.11.0: every realm has a plain map per band and a boss
+   arena, generated; designing the real ones is TBD #32* — and **hazard numbers** — `LavaHazard.tscn` (30 fire stacks per
    tick, no knockback) and `SpikeHazard.tscn` (12 damage per 0.5 s) are first-pass values,
    not balanced against real fights.
-6. **The Kingdom of Horror and The Forgotten are not in the overworld.** Their realms are
-   built and playable from the editor, tagged `KH` and `TF`. Adding either to `WorldDef.Pool`
-   is a design decision with a cost — it changes which worlds every existing seed generates,
-   and each needs its overworld colour, zone rules and a boss (`MapGDD` §2) — so it was not
-   done silently. It also resolves TBD #20 (PumpKing's home) and TBD #24 (Pixolotl's) in
-   `10-DESIGN.md`.
+6. ~~**The Kingdom of Horror and The Forgotten are not in the overworld.**~~ **Decided,
+   v0.11.0** — the owner asked for the realm pool to be arranged, and both joined
+   `WorldDef.Pool`. The cost was the one named here: every seed draws different realms for a
+   new run. It was kept off existing runs — a save records the pool it was made from
+   (`MapGDD` §2). Their map colours are danger red and canal jade. What is still open is
+   whether PumpKing and Pixolotl become *starters* there (TBD #20, #24).
 7. **Water numbers are measured, not balanced.** Swimming 5.5 m/s, sinking 3 m/s, a 3.4 m
    stroke, a 4 m/s current, a 14 m/s waterfall (§4, §7) are what the content check measures
    on a real character; whether they are *fun* needs a fight. They are six constants in
@@ -714,3 +787,11 @@ Recorded here rather than silently chosen (`00-OVERVIEW.md` §5):
   its maps do not all have to.
 - **A sprite's canvas is not a window (v0.10.9, §2.7).** Found in the engine, not on the
   contact sheets: more than a dozen sprites across four sets were cut by their own PNG.
+- **A map may take a side (v0.10.11).** The boss arena is composed from the boss's kit
+  backwards: what his head does on a slope decided that there is a slope, where the castle
+  stands and where he perches. "Terrain can take sides" (v0.10.9) applied to a whole map.
+- **A slope block is two rows (v0.10.11, §2.3a).** The walking line of a realm's ground is
+  drawn under the collider's top; a one-row ramp cannot hold it at its low end.
+- **What you can stand on is the lightest thing in its wall (v0.10.11).** The balcony was
+  first painted in the wall's own tone and vanished into the castle front behind it; its
+  face is now crowded scratches under a broad coping, and the front is tinted darker.

@@ -33,13 +33,14 @@ make a codebase impossible to extend later.
 │                — wires layers together; owns scene flow         │
 ├────────────────────────────────────────────────────────────────┤
 │ GAMEPLAY       CharacterController + characters, Foes/,         │
-│                Items/ runtime, Hazard family, projectiles,      │
-│                SoftVolume, DecayingDebuff, HitInfo              │
+│                Bosses/ (brain + boss classes), Items/ runtime,  │
+│                Hazard family, projectiles, SoftVolume,          │
+│                DecayingDebuff, HitInfo, combat sides/targets    │
 │                — self-contained combat sim; knows nothing of    │
 │                  maps, days, or UI                              │
 ├────────────────────────────────────────────────────────────────┤
-│ DOMAIN DATA    Scripts/Data/ tables, MapGenerator+MapData,      │
-│                FoeStats, DetRandom                              │
+│ DOMAIN DATA    Scripts/Data/ tables (incl. BossTable),          │
+│                MapGenerator+MapData, FoeStats, DetRandom        │
 │                — pure C#, no Godot node types, unit-testable    │
 ├────────────────────────────────────────────────────────────────┤
 │ FOUNDATION     Units.cs, GameVersion.cs                         │
@@ -52,7 +53,13 @@ Consequences you will feel:
   — three values through RunState — and derives everything. This is what keeps the
   arena testable standalone (F5 on `Arena.tscn` must keep working forever).
 - **The map never names a foe class.** It stores `NodeKind` + level; which foes spawn
-  is the arena orchestrator's lookup.
+  is the arena orchestrator's lookup. A boss is named the same way: `RunState` looks the
+  node's world up in `BossTable` and hands the arena an id (`AdventureContext.BossId`); the
+  arena never asks which world it is in.
+- **Kits never read input, and never name a side.** A character reads `Controls` and asks
+  `CombatTargets.HostileTo(Side)`; whether a keyboard or a boss brain is on the other end,
+  and whom "hostile" means, is not the kit's business (T10 §4a). This is what lets a boss be
+  its protagonist's class.
 - **UI is write-only from below.** Gameplay raises events (`HpChanged`, `Died`,
   `UltChargeChanged` — the existing pattern); presentation subscribes. Gameplay code
   containing `GetNode<Hud>` is a violation.

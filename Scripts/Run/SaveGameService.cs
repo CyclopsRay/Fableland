@@ -16,7 +16,26 @@ namespace Fableland.Run;
 public static class SaveGameService
 {
     public const int SlotCount = 3;
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
+
+    /// <summary>The world pool every run was generated from before save version 4, in its
+    /// order. A save does not store the map — only the seed — so a save from that time must
+    /// regenerate from these six, or its realms and every node id in it would change the day
+    /// the pool grew (v0.11.0: the Kingdom of Horror and The Forgotten joined).</summary>
+    public static readonly IReadOnlyList<string> WorldPoolBeforeV4 = new[] { "SL", "HC", "VK", "TD", "PL", "BM" };
+
+    /// <summary>Where the slot files live. Null = <c>user://saves</c>. A headless check points
+    /// this at a scratch folder so a scripted run can checkpoint, end and delete its slot
+    /// without ever touching the player's own saves (one folder shared by every checkout).
+    /// Tooling that cannot reach C# (a windowed capture script) sets the environment variable
+    /// <c>FABLELAND_SAVE_DIR</c> instead: it is read once, at start-up.</summary>
+    public static string DirectoryOverride { get; set; } = FromEnvironment();
+
+    private static string FromEnvironment()
+    {
+        string directory = System.Environment.GetEnvironmentVariable("FABLELAND_SAVE_DIR");
+        return string.IsNullOrWhiteSpace(directory) ? null : directory;
+    }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -123,6 +142,7 @@ public static class SaveGameService
             var source = new RunSaveData
             {
                 Seed = "SAVE1234",
+                WorldPool = new List<string> { "VK", "KH", "TF", "SL", "HC" },
                 Day = 7,
                 Stamina = 3,
                 CurrentNodeId = "VK-1-A",
@@ -141,6 +161,7 @@ public static class SaveGameService
             string json = JsonSerializer.Serialize(source, JsonOptions);
             RunSaveData restored = JsonSerializer.Deserialize<RunSaveData>(json, JsonOptions);
             if (restored?.Version != CurrentVersion || restored.Seed != source.Seed
+                || restored.WorldPool?.Count != 5 || restored.WorldPool[1] != "KH"
                 || restored.Owned?.Count != 1 || restored.Owned[0].BonusAtk != 10
                 || restored.Map?.DevouredNodeIds?.Count != 1
                 || restored.ExtensionData == null || !restored.ExtensionData.ContainsKey("futureValue"))
@@ -164,17 +185,23 @@ public static class SaveGameService
         {
             case CurrentVersion:
                 return true;
+            case 3:
+                MigrateV3ToV4(save);
+                return true;
             case 2:
                 MigrateV2ToV3(save);
+                MigrateV3ToV4(save);
                 return true;
             case 1:
                 MigrateV1ToV2(save);
                 MigrateV2ToV3(save);
+                MigrateV3ToV4(save);
                 return true;
             case 0:
                 MigrateV0ToV1(save);
                 MigrateV1ToV2(save);
                 MigrateV2ToV3(save);
+                MigrateV3ToV4(save);
                 return true;
             default:
                 error = $"Save version {save.Version} is newer than this game supports.";
@@ -215,8 +242,29 @@ public static class SaveGameService
         save.LastDayCheckpoint = null;
     }
 
+    /// <summary>v0.11.0 records the world pool a run was generated from. A save older than that
+    /// was generated from the six worlds of its day; its rewind checkpoint (which is restored
+    /// as a whole run) is of the same run and gets the same pool.</summary>
+    private static void MigrateV3ToV4(RunSaveData save)
+    {
+        save.Version = 4;
+        if (save.WorldPool is not { Count: > 0 }) save.WorldPool = new List<string>(WorldPoolBeforeV4);
+        if (save.LastDayCheckpoint != null)
+        {
+            save.LastDayCheckpoint.Version = 4;
+            if (save.LastDayCheckpoint.WorldPool is not { Count: > 0 })
+                save.LastDayCheckpoint.WorldPool = new List<string>(save.WorldPool);
+        }
+    }
+
+    /// <summary>Runs the migration chain on an in-memory DTO — what <see cref="TryRead"/> does
+    /// to a file, for a check that has no file.</summary>
+    public static bool Migrate(RunSaveData save, out string error) => MigrateToCurrent(save, out error);
+
     private static bool IsValidSlot(int slot) => slot >= 0 && slot < SlotCount;
-    private static string SlotPath(int slot) => ProjectSettings.GlobalizePath($"user://saves/slot_{slot + 1}.json");
+    private static string SlotPath(int slot) => string.IsNullOrWhiteSpace(DirectoryOverride)
+        ? ProjectSettings.GlobalizePath($"user://saves/slot_{slot + 1}.json")
+        : Path.Combine(DirectoryOverride, $"slot_{slot + 1}.json");
 }
 
 /// <summary>Small title-menu projection of a save slot. It deliberately exposes no mutable run data.</summary>
@@ -228,6 +276,9 @@ public sealed class RunSaveData
 {
     public int Version { get; set; } = SaveGameService.CurrentVersion;
     public string Seed { get; set; } = "";
+    /// <summary>The world pool the run's map was generated from, as abbreviations in pool
+    /// order (v4). Seed + this list regenerate the map; the pool may have grown since.</summary>
+    public List<string> WorldPool { get; set; } = new();
     public int Day { get; set; } = 1;
     public bool InVoid { get; set; }
     public int Stamina { get; set; }

@@ -76,7 +76,10 @@ Blush flame loop (5 s), Fire Tornado vortex, burning-seed variant; Pixolotl mari
 ghosts (70%→30% alpha over 10 s, force-fade 0.3 s), SOBRECARGA trails, bubble cracks;
 Cleopastar glow pips on spikes, Blackhole distortion + brighter suspended stars during
 Ult; PumpKing head stages (1.0→1.5×) + explosion; Pangda Chi shield/bottle/9×9 field;
-evolution flash; VOID devour flicker. Rule: a VFX that communicates gameplay state
+evolution flash; VOID devour flicker; **boss presentation** (v0.10.11 — TBD #28): BOSS
+PumpKing wears a placeholder red mark (`BossPumpKing._Draw`) because a headless black coat
+vanishes against his castle's black stone, flashes red when hit and simply fades when
+beaten; his boss look, entrance and defeat are unmade. Rule: a VFX that communicates gameplay state
 (telegraphs, buffs, tells) is a **gameplay deliverable** — it ships with the feature,
 however crude.
 

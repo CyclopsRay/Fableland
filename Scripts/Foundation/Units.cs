@@ -33,6 +33,17 @@ public static class Units
     /// <summary>Meters → pixels.</summary>
     public static float Px(float meters) => meters * PixelsPerMeter;
 
+    /// <summary>
+    /// How far below its feet a walking body looks for the floor it just left
+    /// (<c>CharacterBody2D.FloorSnapLength</c>). Godot's default is 1 px, and a body
+    /// crossing a 1:2 slope downhill at 10 m/s drops 2.7 px per tick: without a longer
+    /// reach it leaves the floor every tick — a stutter of tiny falls, and an animation that
+    /// flickers between walk and jump. 12 px holds the steepest authored slope (1:2) up to
+    /// 45 m/s, knockback included, and is under a quarter cell, so no ledge is "snapped"
+    /// down. A jump is unaffected: snapping never applies to a body moving upward.
+    /// </summary>
+    public const float FloorSnapPx = 12f;
+
     // Collision layer numbers (1-based, matching the project's layer names).
     public const int LayerPlayer = 1;
     public const int LayerFoes = 2;

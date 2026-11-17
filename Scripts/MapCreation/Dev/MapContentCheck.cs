@@ -347,6 +347,11 @@ public partial class MapContentCheck : Node
     /// with none sends the player to the legacy arena, which is how a realm whose only map was
     /// tagged for one altitude band stayed invisible on two nodes in three (v0.10.7).
     /// The VOID's own nodes (zone "XX", LV5–6) have no authored maps yet and are not walked.
+    ///
+    /// Since v0.11.0 every pool world must also ship its own set: a map authored FOR each
+    /// altitude band (not only a "*" map that happens to serve it) and a boss arena for its
+    /// 4-1 — otherwise a band cannot be tested on purpose, and a boss fights on a map that
+    /// gives it no perch.
     /// </summary>
     private void CheckRealmCoverage()
     {
@@ -365,14 +370,28 @@ public partial class MapContentCheck : Node
                     foreach (string terrain in terrains)
                     {
                         kinds++;
-                        string goal = CombatMapCatalog.GoalFor(mission);
-                        if (CombatMapCatalog.Candidates(world.Abbr, level, goal, terrain, includeUserMaps: false).Count == 0)
+                        if (CombatMapCatalog.CandidatesFor(world.Abbr, level, mission, terrain, includeUserMaps: false).Count == 0)
                             missing.Add($"LV{level} {mission} {terrain}");
                     }
                 }
             }
 
-            GD.Print($"  coverage {world.Abbr,-3} {kinds - missing.Count}/{kinds} kinds of combat node are served by a shipped map");
+            // Its own set: one map per band authored for that band, and a boss arena.
+            var set = new List<string>();
+            foreach (string terrain in terrains)
+            {
+                string own = null;
+                foreach (CombatMapSelection map in CombatMapCatalog.Candidates(world.Abbr, 1, CombatMapGoals.Claim, terrain, includeUserMaps: false))
+                    if (string.Equals(map.Document.Terrain?.Trim(), terrain, StringComparison.OrdinalIgnoreCase)) { own = map.Document.Name; break; }
+                Expect(own != null, $"{world.Abbr} ({world.Name}): no shipped map is authored for {terrain} (a '*' map serves the band but cannot be chosen for it)");
+                if (own != null) set.Add(terrain);
+            }
+            List<CombatMapSelection> arenas = CombatMapCatalog.Candidates(world.Abbr, 4, CombatMapGoals.Boss, CombatMapTerrain.SeaLevel, includeUserMaps: false);
+            foreach (string terrain in terrains)
+                Expect(CombatMapCatalog.Candidates(world.Abbr, 4, CombatMapGoals.Boss, terrain, includeUserMaps: false).Count > 0,
+                    $"{world.Abbr} ({world.Name}): its LV4 boss at {terrain} has no boss arena (goal 'boss') and would fight on an ordinary map");
+
+            GD.Print($"  coverage {world.Abbr,-3} {kinds - missing.Count}/{kinds} kinds of combat node are served by a shipped map · own maps for {set.Count}/{terrains.Length} bands · boss arena: {(arenas.Count > 0 ? arenas[0].Document.Name : "none")}");
             Expect(missing.Count == 0,
                 $"{world.Abbr} ({world.Name}): {missing.Count} of {kinds} kinds of combat node have no shipped map and fall back to the legacy arena — e.g. {string.Join("; ", missing.GetRange(0, Math.Min(3, missing.Count)))}");
         }

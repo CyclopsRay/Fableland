@@ -773,6 +773,117 @@ def horror_hanging_wood():
     return m.finish()
 
 
+def horror_pumpkings_castle():
+    """Kingdom of Horror — "PumpKing's Castle": the arena of his BOSS fight (FOES.gdd 8.3).
+
+    INTENT: a map that takes its boss's side. PumpKing's weapon is his own head, bowled:
+    on level ground it bounces, dies within a few metres and goes off; on a slope it does
+    not stop. So his castle stands at the top of one. From the left: a strip of wood where
+    the player arrives — dead trees, pumpkin lanterns to light the way up — then one
+    unbroken slope, nine blocks, eighteen cells along and nine up, with nothing on it to
+    hide behind; then the forecourt, the gate (shut — nobody goes in), and the balcony he
+    comes out onto, three rows above the forecourt and a clean jump from it. The keep
+    behind the balcony is solid to the top of the map and seals the east side.
+
+    He holds the balcony and bowls downhill; every head that lands on the slope runs it to
+    the bottom. Climbing costs a fifth of a fighter's speed; coming down costs nothing. A
+    gnarled limb hangs over the upper slope: when the player reaches him he leaves for it
+    in Soul Form and bowls from there, and the next time he comes back. Both are perches —
+    the map's two Level Goal markers, the balcony first.
+
+    A boss arena: goal `boss`, LV4 only, so only this world's 4-1 is ever dealt it.
+    """
+    m = Map("horror_pumpkings_castle_kh", "Dark Wood · PumpKing's Castle", "KH", 48, 30, "#111B3D",
+            goals=("boss",), hardship=(4,))
+    FLOOR = 26                       # the wood's floor: the walking surface is the top of this row
+    FOOT, STEPS = 14, 9              # the slope starts at this column and climbs this many rows
+    TOP = FLOOR - STEPS              # the forecourt's floor row (17)
+    COURT = FOOT + 2 * STEPS         # the forecourt's first column (32)
+    KEEP = 40                        # the keep's first column
+    BALCONY = TOP - 3                # the balcony's row: a clean jump above the forecourt
+    m.spawn(9, FLOOR)
+
+    # -- far to near ---------------------------------------------------------------
+    moon = m.farview("Moon", (0.03, 0.04), grid=(40, 36))
+    moon.pin("deco.kh_moon", 2.6, 0.6)                                  # low over the wood he looks down on
+
+    wood_far = m.farview("Far Wood", (0.20, 0.22), loop=True, grid=(16, 36))
+    wood_far.put("deco.kh_forest_far", 0, round(wood_far.srow(4.6)))
+
+    trees_far = m.farview("Trees", (0.55, 0.60), grid=(70, 44))
+    trees_far.pin("deco.kh_tree_b", 0.6, 1.2)
+    trees_far.pin("deco.kh_tree", 8.4, 0.0)
+    trees_far.pin("deco.kh_tree_b", 15.6, 2.0)
+
+    # The castle's front, behind the fighters: the same stone as the keep, a tone darker,
+    # so what you can walk into reads apart from what you cannot. It runs down behind the
+    # ground so no underside shows.
+    front = m.farview("Castle Front", (1.0, 1.0), grid=(48, 30), tint="#3D4978")
+    front.fill("ground.kh_stone", 28, 9, KEEP - 1, TOP + 2)
+    for x in (28, 32, 36):
+        front.put("deco.kh_battlement", x, 8)
+
+    # Trunks and the gate: just behind the battlefield.
+    wood = m.farview("Wood", (1.0, 1.0), grid=(48, 30))
+    wood.stand("deco.kh_tree_b", 3, FLOOR)
+    wood.stand("deco.kh_tree", 6, FLOOR, flip=True)
+    wood.stand("deco.kh_tree_b", 17, 24)                                # on the slope: feet a little into the bank
+    wood.stand("deco.kh_tree", 23, 21)                                  # the tree the limb belongs to
+    wood.put("deco.kh_gate", COURT, TOP - 5)                            # the gate stands on the forecourt
+
+    # Everything that gives light, in front of the trunks: pumpkin lanterns to show the way
+    # up, the castle's lit windows, and his colours over the battlements.
+    lights = m.farview("Lights", (1.0, 1.0), grid=(48, 30))
+    lights.stand("deco.kh_lantern", 4, FLOOR)
+    lights.stand("deco.kh_lantern", 12, FLOOR)
+    # Up the slope: the middle of an odd column is a quarter cell above a row line.
+    for x in (15, 21, 29):
+        lights.stand("deco.kh_lantern", x, 32 - x // 2, nudge=(0, 1))
+    lights.stand("deco.kh_lantern", COURT - 1, TOP, nudge=(0, 1))       # one each side of the gate
+    lights.stand("deco.kh_lantern", COURT + 4, TOP)
+    for x, y in ((29, 11), (37, 10)):
+        lights.put("deco.kh_window", x, y)
+    lights.stand("deco.kh_pennant", 30, 8, nudge=(0, 1))                # on the battlements
+    lights.stand("deco.kh_pennant", 37, 8, flip=True, nudge=(0, 1))
+    # The balustrade stands BEHIND whoever is on the balcony: in front it hid the legs of a
+    # black-coated boss against black stone (style bible 2.6 - a fighter must read first).
+    lights.put("deco.kh_balustrade", KEEP - 4, BALCONY - 1)
+
+    # -- battlefield -----------------------------------------------------------------
+    f = m.field()
+    # The slope goes down first: its lowest block's solid row is part of the wood's floor,
+    # and `fill` leaves taken cells alone.
+    end, top = f.slope("ground.kh_slope", FOOT, FLOOR, STEPS, fill="ground.kh_earth")
+    assert (end, top) == (COURT, TOP)
+    f.fill("ground.kh_stone", KEEP, 0, 47, 29)                          # the keep: east wall, to the top row
+    f.fill("ground.kh_earth", 0, FLOOR, KEEP - 1, 29)                   # floor, from the west wall to the keep
+    f.fill("ground.kh_earth", 0, 0, 1, FLOOR - 1)                       # west wall, to the top row
+    f.fill("ground.kh_earth", COURT, TOP, KEEP - 1, FLOOR - 1)          # the forecourt, solid down to the floor
+
+    f.put("platform.kh_balcony", KEEP - 4, BALCONY)                     # the balcony, against the keep
+    f.put("platform.kh_branch", 24, 17)                                 # the limb over the upper slope
+
+    f.stand("softvolume.kh_bramble", 2, FLOOR)                          # the corner is no place to hide
+
+    # Perches (Level Goal markers): the balcony's outer end first, then the limb. From the
+    # balcony's end a head thrown for distance lands on the top of the slope.
+    f.put("goal.level", KEEP - 4, BALCONY - 1)
+    f.put("goal.level", 27, 16)
+    for x, y in ((5, FLOOR - 1), (11, FLOOR - 1)):
+        f.put("spawn.respawn", x, y)
+    for x, y in ((6, FLOOR - 1), (20, 20), (34, TOP - 1)):              # where his two helpers come from at half health
+        f.put("spawn.enemy", x, y)
+
+    # -- foreground --------------------------------------------------------------------
+    fg = m.closeview("Foreground")
+    fg.put("deco.kh_door", KEEP, BALCONY - 3)                           # the door he came out of, on the keep's face
+    for x, y in ((43, 6), (46, 6), (43, 13), (46, 13), (44, 20), (46, 20)):   # lit windows lie wholly over solid wall
+        fg.put("deco.kh_window", x, y)
+    fg.put("deco.kh_fireflies", 8, 20)
+    fg.put("deco.kh_fireflies", 17, 14)
+    return m.finish()
+
+
 # ============================================================= The Forgotten
 
 
@@ -863,7 +974,7 @@ def forgotten_canals_of_the_sun():
 
 
 MAPS = [starfield_long_horizon, wulin_bamboo_sea, dungeon_hollow_gaol, ghost_town_main_street, cloud_court_heavens,
-        loongs_nest_sunken_court, horror_hanging_wood, forgotten_canals_of_the_sun]
+        loongs_nest_sunken_court, horror_hanging_wood, horror_pumpkings_castle, forgotten_canals_of_the_sun]
 
 
 def main():

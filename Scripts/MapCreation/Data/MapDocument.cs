@@ -40,8 +40,10 @@ public sealed class MapDocument
     public List<int> HardshipLevels { get; set; } = new();
 
     /// <summary>
-    /// Combat goals this map can serve. Canonical values are claim, protect, destroy, and
-    /// slaughter. New maps default to claim; the runtime maps claim to the Collection mission.
+    /// Combat goals this map can serve. Canonical values are claim, protect, destroy,
+    /// slaughter and boss. New maps default to claim; the runtime maps claim to the
+    /// Collection mission. A <c>boss</c> map is an arena built for one boss: its Level Goal
+    /// markers are that boss's perches (§9), and only a Boss mission is ever dealt it.
     /// </summary>
     public List<string> Goals { get; set; } = new() { CombatMapGoals.Claim };
 
@@ -120,6 +122,15 @@ public static class CombatMapGoals
     public const string Protect = "protect";
     public const string Destroy = "destroy";
     public const string Slaughter = "slaughter";
+
+    /// <summary>A boss arena (FOES.gdd §8.5): dealt to a world's LV4 Boss mission ahead of
+    /// its ordinary maps, never to anything else.</summary>
+    public const string Boss = "boss";
+
+    /// <summary>Every goal a map may name, in the order the tools list them.</summary>
+    public static readonly string[] All = { Claim, Protect, Destroy, Slaughter, Boss };
+
+    public static bool IsKnown(string goal) => System.Array.IndexOf(All, goal) >= 0;
 }
 
 /// <summary>Canonical combat-map terrain labels. These are map-selection data, not physics.</summary>

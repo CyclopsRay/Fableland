@@ -335,6 +335,15 @@ that affect allies, they may work on the core (TBD per ability).
   character has a full player kit (movement, abilities, animations) in addition to
   its boss-kit used during the fight.
 
+  **Built in v0.10.11** (`FOES.gdd` §8): the boss *is* the protagonist's kit, inherited and
+  fighting on the other side, with its own table row for everything that differs; a
+  rule-based brain presses its buttons; its arena is a map made for it. The node names its
+  boss through the Adventure handshake (`AdventureContext.BossId`, from `BossTable` by the
+  node's world). Recruiting is `RunState.GrantProtagonist` — once: a protagonist already
+  owned is not added again. PumpKing is the first, and since v0.11.0 he **stands in at every
+  realm's 4-1** until each realm has its own boss (`FOES.gdd` §8.1); every realm also has a
+  boss arena of its own. Only the LV6 core still fields the placeholder.
+
   > **Scope note:** boss-as-protagonist doubles the design burden — each LV4 boss
   > needs both a boss encounter kit and a balanced player-character kit. This is a
   > major feature, not a line item.
@@ -771,3 +780,9 @@ designed in a future content pass.
   non-terminal mission resolution and day end; Save & Quit during an unfinished battle
   restarts that deterministic encounter on Continue rather than serializing live combat
   objects. This preserves a safe checkpoint without weakening permadeath.
+- **(v0.10.11) The boss is named by the handshake, and recruiting is idempotent.** The arena
+  must not read the map, so `BeginAdventure` puts the boss's id in the `AdventureContext`
+  (looked up from `BossTable` by the node's world). `GrantProtagonist` adds a protagonist
+  only if it is not already owned: under the prototype roster policy every protagonist is,
+  and a second copy on the roster would be two HP pools and two held-item slots for one
+  character.

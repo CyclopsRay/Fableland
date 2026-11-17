@@ -11,6 +11,10 @@ using Fableland.Run;
 /// individual characters (Pomegraknight, and later Pixolotl/PumpKing/Cleopastar)
 /// subclass it and override the ability hooks.
 ///
+/// A fighter is on one <see cref="CombatSide"/> and reads its input from
+/// <see cref="Controls"/>, never from the Input singleton: the player's keys by default,
+/// a boss brain's virtual pad when the same kit fights on the Foe side (FOES.gdd §8).
+///
 /// Provides: movement + double-jump (with coyote time), HP/lives, i-frames,
 /// knockback, death/respawn, a generic Burning status (DoT for non-immune
 /// targets; a passive trigger for those who are), the hazard-driven OnFire/Frozen
@@ -26,7 +30,7 @@ using Fableland.Run;
 ///   5. (Later) override UpdateAnimator() once real animations exist.
 /// ──────────────────────────────────────────────────────────────────────
 /// </summary>
-public partial class CharacterController : CharacterBody2D
+public partial class CharacterController : CharacterBody2D, ICombatTarget
 {
 	[ExportGroup("Stats")]
 	[Export] public float MaxHP = 200f;
@@ -62,14 +66,34 @@ public partial class CharacterController : CharacterBody2D
 	public event Action<float> DirectDamageTaken;
 	/// <summary>Post-mitigation damage dealt by a melee-cone hit. The foe parameter identifies the
 	/// target so a held reaction can bounce damage without re-triggering the melee event.</summary>
-	public event Action<BaseFoe, float> MeleeDamageDealt;
+	public event Action<ICombatTarget, float> MeleeDamageDealt;
 	/// <summary>Post-mitigation damage caused by this player. Projectiles and area skills report
 	/// through <see cref="ReportDamageDealt"/> so omni-vamp-style held items are not melee-only.</summary>
 	public event Action<float> DamageDealt;
 
 	// Single-player prototype: lets Enemy credit ult charge for damage dealt
 	// without needing a reference back to the player (mirrors ShakeCamera2D.Instance).
+	// Only a Player-side body ever claims it.
 	public static CharacterController LocalPlayer { get; private set; }
+
+	/// <summary>Which side this fighter is on. The player's protagonists are on the Player
+	/// side; a BOSS variant overrides this to <see cref="CombatSide.Foe"/> and from then on
+	/// the base treats the body as an opponent: it joins the group the player's attacks
+	/// iterate, sits on the Foes collision layer, owns no camera, never reads the keyboard,
+	/// and its own attacks look for the player.</summary>
+	public virtual CombatSide Side => CombatSide.Player;
+
+	/// <summary>Where this body reads its input. Kits ask this — never <c>Input</c> or the
+	/// mouse — so the same kit can be worn by the player or driven by an AI.</summary>
+	public ICharacterControls Controls { get; private set; } = PlayerControls.Instance;
+
+	/// <summary>Hand this body to another controller (a boss brain's pad, a test).</summary>
+	public void UseControls(ICharacterControls controls) =>
+		Controls = controls ?? (Side == CombatSide.Player ? PlayerControls.Instance : new VirtualPad());
+
+	/// <summary>Radius of the circle the other side's hit tests treat this body as
+	/// (KNOWLEDGE v0.1.5) — between the half-width and half-height of the 48×64 class shape.</summary>
+	public float HitRadius { get; protected set; } = Units.PlayerHeightPx * 0.45f;
 
 	public float CurrentHP { get; private set; }
 	public bool HasFrozenStatus => _frozenDebuff.Active;
@@ -136,6 +160,10 @@ public partial class CharacterController : CharacterBody2D
 		}
 	}
 
+	/// <summary>What this fighter's damage is multiplied by right now — read-only, for
+	/// checks and tooling (a boss's is its row's share × the day's ATK multiplier).</summary>
+	public float DamageDealtScale => DamageDealtMultiplier;
+
 	/// <summary>Defense → damage-taken multiplier: dmg = 100/(100+defense). Aggregatable
 	/// by source (e.g. Frozen → +30); base is 0, so no status means no mitigation.</summary>
 	private float DefenseMultiplier
@@ -179,6 +207,12 @@ public partial class CharacterController : CharacterBody2D
 	private readonly Dictionary<string, float> _defenseBonuses = new();
 	private readonly Dictionary<string, float> _fireDurationExtensions = new();
 	private readonly Dictionary<string, float> _frozenDurationExtensions = new();
+	// Poise: how much of an incoming hit's knockback / gain-no window this body takes.
+	// Multiplicative by source (a boss's poise × an item's), 1 when nothing is set — so a
+	// protagonist is byte-for-byte unaffected. Set by BossTable rows today.
+	private readonly Dictionary<string, float> _knockbackTakenScales = new();
+	private readonly Dictionary<string, float> _stunTakenScales = new();
+	private float _hitFlashTimer;      // Foe-side hit feedback (a player body blinks instead)
 	// Continuous environmental movement contributions (e.g. Cleopastar Blackholes).
 	// Unlike _externalVel impulses, these are source-keyed target velocities and do not
 	// decay. The owning field refreshes/clears its own key every physics tick.
@@ -227,7 +261,28 @@ public partial class CharacterController : CharacterBody2D
 	private Vector2 _spawnPoint;
 	private Color _baseTint = Colors.White;
 
-	public override void _EnterTree() => LocalPlayer = this;
+	public override void _EnterTree()
+	{
+		if (Side == CombatSide.Player)
+		{
+			LocalPlayer = this;
+			return;
+		}
+
+		// A Foe-side fighter is built from a protagonist's scene, which carries the player's
+		// view. Take the camera out before it enters the tree: once inside it would claim
+		// ShakeCamera2D.Instance and could become the current camera. Children enter after
+		// their parent, so this is the last moment it is still inert.
+		Camera2D camera = GetNodeOrNull<Camera2D>("Camera2D");
+		if (camera != null)
+		{
+			RemoveChild(camera);
+			camera.QueueFree();
+		}
+		// Never the keyboard, not even for the frame before a brain is attached.
+		if (Controls is PlayerControls) Controls = new VirtualPad();
+	}
+
 	public override void _ExitTree() { if (LocalPlayer == this) LocalPlayer = null; }
 
 	public override void _Ready()
@@ -240,7 +295,23 @@ public partial class CharacterController : CharacterBody2D
 
 		CurrentHP = MaxHP;
 		LivesRemaining = MaxLives;
-		AddToGroup("player");
+		if (Side == CombatSide.Player)
+		{
+			AddToGroup(CombatTargets.PlayerGroup);
+		}
+		else
+		{
+			// "enemy" = the player's attacks iterate me. Deliberately not "foe": that group
+			// is the ambient spawn cap and the missions' foe sweeps (KNOWLEDGE v0.5.0).
+			AddToGroup(CombatTargets.EnemyGroup);
+			CollisionLayer = 0;
+			SetCollisionLayerValue(Units.LayerFoes, true);      // player projectiles find it here
+			CollisionMask = 0;
+			SetCollisionMaskValue(Units.LayerGround, true);
+			SetCollisionMaskValue(Units.LayerPlatform, true);
+		}
+		// Keep a walking body on a slope instead of stepping off it every tick (Units.cs).
+		FloorSnapLength = Mathf.Max(FloorSnapLength, Units.FloorSnapPx);
 
 		InitCharacter();
 		_jumpsRemaining = MaxJumps;
@@ -262,9 +333,17 @@ public partial class CharacterController : CharacterBody2D
 	/// <summary>Configure this character's one shared BA magazine from pure balance data.</summary>
 	protected void ConfigureAmmo(string characterId)
 	{
-		if (!CharacterTable.TryGetAmmo(characterId, out CharacterAmmoDef def))
+		CharacterTable.TryGetAmmo(characterId, out CharacterAmmoDef def);
+		ConfigureAmmo(def, characterId);
+	}
+
+	/// <summary>Configure the magazine from a definition the kit resolved itself (a BOSS
+	/// variant's own row). <paramref name="what"/> only names it in the error.</summary>
+	protected void ConfigureAmmo(CharacterAmmoDef def, string what)
+	{
+		if (def == null)
 		{
-			GD.PushError($"CharacterController: no ammo definition for '{characterId}'.");
+			GD.PushError($"CharacterController: no ammo definition for '{what}'.");
 			return;
 		}
 		Ammo = new AmmoController(def);
@@ -433,6 +512,13 @@ public partial class CharacterController : CharacterBody2D
 		}
 		if (_stunTimer > 0f) _stunTimer -= dt;
 		if (_trappedTimer > 0f) _trappedTimer -= dt;
+		if (_hitFlashTimer > 0f)
+		{
+			// The whole body flashes (a multi-part kit's extra sprites included): the root's
+			// Modulate is otherwise only used by the Foe-side defeat fade.
+			_hitFlashTimer -= dt;
+			Modulate = _hitFlashTimer > 0f ? new Color(1f, 0.6f, 0.6f) : Colors.White;
+		}
 	}
 
 	private void UpdateStatus(float dt)
@@ -520,10 +606,10 @@ public partial class CharacterController : CharacterBody2D
 		bool diving = false;
 		if (!Frozen && !Trapped)
 		{
-			if (Input.IsActionPressed("move_left")) inputDir -= 1f;
-			if (Input.IsActionPressed("move_right")) inputDir += 1f;
+			if (Controls.Held(ControlAction.MoveLeft)) inputDir -= 1f;
+			if (Controls.Held(ControlAction.MoveRight)) inputDir += 1f;
 
-			if (Input.IsActionJustPressed("jump") && _jumpCdTimer <= 0f)
+			if (Controls.JustPressed(ControlAction.Jump) && _jumpCdTimer <= 0f)
 			{
 				bool spentNormalJump = _jumpsRemaining > 0;
 				// A character-specific support (Cleopastar's normal star) is asked
@@ -537,7 +623,7 @@ public partial class CharacterController : CharacterBody2D
 				}
 			}
 
-			bool downHeld = Input.IsActionPressed("move_down");
+			bool downHeld = Controls.Held(ControlAction.MoveDown);
 			UpdateDropThrough(downHeld, dt);
 			// Water holds a body's sink to a slow drift; holding Down swims down instead.
 			diving = downHeld && _softVolumes.Buoyant;
@@ -566,6 +652,16 @@ public partial class CharacterController : CharacterBody2D
 
 		if (inputDir > 0.01f) { Facing = 1f; Sprite.FlipH = false; }
 		else if (inputDir < -0.01f) { Facing = -1f; Sprite.FlipH = true; }
+		else if (!Frozen) FaceByHint();
+	}
+
+	/// <summary>A controller may turn a standing fighter (a boss watching the player). A
+	/// player's facing only ever follows their movement keys: their hint is always 0.</summary>
+	protected void FaceByHint()
+	{
+		float hint = Controls.FacingHint;
+		if (hint > 0.01f) { Facing = 1f; Sprite.FlipH = false; }
+		else if (hint < -0.01f) { Facing = -1f; Sprite.FlipH = true; }
 	}
 
 	/// <summary>Full jump refresh + reset of the coyote-time bookkeeping, called
@@ -641,10 +737,10 @@ public partial class CharacterController : CharacterBody2D
 	// ── Ability hooks ─────────────────────────────────────────────────────
 	private void HandleAbilities()
 	{
-		if (Input.IsActionJustPressed("attack")) HandleBA();
-		if (Input.IsActionJustPressed("skill1")) HandleSkill1();
-		if (Input.IsActionJustPressed("skill2")) HandleSkill2();
-		if (Input.IsActionJustPressed("ult")) HandleSkillUlt();
+		if (Controls.JustPressed(ControlAction.Attack)) HandleBA();
+		if (Controls.JustPressed(ControlAction.Skill1)) HandleSkill1();
+		if (Controls.JustPressed(ControlAction.Skill2)) HandleSkill2();
+		if (Controls.JustPressed(ControlAction.Ult)) HandleSkillUlt();
 	}
 
 	protected virtual void HandleBA() { }
@@ -729,10 +825,8 @@ public partial class CharacterController : CharacterBody2D
 		float halfRad = Mathf.DegToRad(halfAngleDeg);
 		float scaledDamage = damage * DamageDealtMultiplier;
 
-		foreach (Node n in GetTree().GetNodesInGroup("enemy"))
+		foreach (ICombatTarget e in CombatTargets.HostileTo(GetTree(), Side))
 		{
-			if (n is not BaseFoe e) continue;
-
 			// Treat the foe as a circle of radius HitRadius and test whether the
 			// cone overlaps it at all — so a glancing clip still counts, not just
 			// a hit dead-on the foe's center.
@@ -793,27 +887,75 @@ public partial class CharacterController : CharacterBody2D
 
 	/// <summary>Apply a fully-authored hit: damage, delta-v knockback, and a gain-no
 	/// (hitstun) window during which control is off and animation is frozen.</summary>
-	public void TakeHit(HitInfo hit)
+	public void TakeHit(HitInfo hit) => TakeHit(hit, GlobalPosition);
+
+	/// <summary>
+	/// The one intake for a discrete hit from the other side (<see cref="ICombatTarget"/>,
+	/// T10 §4). Returns the damage the hit dealt after defense — what a shield then soaked
+	/// still counts as dealt, exactly as it reads on the attacker's side.
+	///
+	/// A Player-side body is protected by its post-hit i-frames (0.8 s after a hit that
+	/// shoved it). A Foe-side body has none — parity with <see cref="BaseFoe"/>: the player
+	/// must never be gated to one hit per window — and credits the player's ult charge for
+	/// the damage, as every foe does.
+	/// </summary>
+	public float TakeHit(HitInfo hit, Vector2 sourcePos)
 	{
-		if (_dead || Invincible || _invulnTimer > 0f) return;
+		bool playerSide = Side == CombatSide.Player;
+		if (_dead || Invincible || (playerSide && _invulnTimer > 0f)) return 0f;
 		if (hit.Damage > 0f) MarkCombatActivity();
 
 		float dealt = hit.Damage * DefenseMultiplier;
-		dealt = AbsorbDamage(dealt);
-		if (dealt > 0f) DirectDamageTaken?.Invoke(dealt);
-		DebugManager.Instance?.LogPlayerDmgReceived(hit.Damage, dealt, "foe");
-		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
+		float toHp = AbsorbDamage(dealt);
+		if (toHp > 0f) DirectDamageTaken?.Invoke(toHp);
+		if (playerSide) DebugManager.Instance?.LogPlayerDmgReceived(hit.Damage, toHp, "foe");
+		else DebugManager.Instance?.LogPlayerDmgDealt(dealt, GetType().Name);
+		CurrentHP = Mathf.Max(0f, CurrentHP - toHp);
 		NotifyHpChanged();
-		PopNumber(dealt, heal: false);
-		GainUltCharge(dealt * UltChargeReceivedRate);
+		PopNumber(playerSide ? toHp : dealt, heal: false);
+		GainUltCharge(toHp * UltChargeReceivedRate);
 
-		AddImpulse(hit.Knockback);
-		float stun = hit.ResolveStun();
+		Vector2 knockback = hit.Knockback * ScaleOf(_knockbackTakenScales);
+		AddImpulse(knockback);
+		float stun = hit.ResolveStun() * ScaleOf(_stunTakenScales);
 		if (stun > 0f) _stunTimer = Mathf.Max(_stunTimer, stun);
 
-		ShakeCamera(hit.Knockback != Vector2.Zero ? 0.5f : 0.3f);
-		if (hit.Knockback != Vector2.Zero) _invulnTimer = 0.8f;
+		if (playerSide)
+		{
+			ShakeCamera(hit.Knockback != Vector2.Zero ? 0.5f : 0.3f);
+			if (hit.Knockback != Vector2.Zero) _invulnTimer = 0.8f;
+		}
+		else
+		{
+			_hitFlashTimer = 0.12f;
+			ShakeCamera2D.Instance?.AddTrauma(0.35f);
+			// Single-player prototype: damage a Foe-side body takes came from the player.
+			CharacterController player = LocalPlayer;
+			player?.GainUltCharge(dealt * player.UltChargeDealtRate);
+		}
 		if (CurrentHP <= 0f) Die();
+		return dealt;
+	}
+
+	private static float ScaleOf(Dictionary<string, float> sources)
+	{
+		float scale = 1f;
+		foreach (float value in sources.Values) scale *= value;
+		return scale;
+	}
+
+	/// <summary>Set or clear (scale 1) a named share of incoming knockback this body
+	/// takes. Sources multiply. A boss's poise is one source; an item can be another.</summary>
+	public void SetKnockbackTakenScale(string source, float scale) => SetScale(_knockbackTakenScales, source, scale);
+
+	/// <summary>Set or clear (scale 1) a named share of incoming gain-no (hitstun).</summary>
+	public void SetStunTakenScale(string source, float scale) => SetScale(_stunTakenScales, source, scale);
+
+	private static void SetScale(Dictionary<string, float> sources, string source, float scale)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (Mathf.IsEqualApprox(scale, 1f)) sources.Remove(source);
+		else sources[source] = Mathf.Max(0f, scale);
 	}
 
 	/// <summary>Environmental hazard tick: damage + knockback that bypasses the
@@ -831,7 +973,7 @@ public partial class CharacterController : CharacterBody2D
 			MarkCombatActivity();
 			float dealt = damage * DefenseMultiplier;
 			dealt = AbsorbDamage(dealt);
-			DebugManager.Instance?.LogHazardDmg(dealt, "player");
+			DebugManager.Instance?.LogHazardDmg(dealt, Side == CombatSide.Player ? "player" : GetType().Name);
 			CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
 			NotifyHpChanged();
 			PopNumber(dealt, heal: false);
@@ -867,6 +1009,40 @@ public partial class CharacterController : CharacterBody2D
 	/// no separate flat "damage reduction" multiplier alongside it.</summary>
 	public void SetDefenseSource(string source, float defense) => _defenseBonuses[source] = defense;
 	public void ClearDefenseSource(string source) => _defenseBonuses.Remove(source);
+
+	/// <summary>Set/clear a named, aggregatable damage-dealt bonus (+0.5 = half again as
+	/// much; bonuses add, so 0.2 and 0.3 give 1.5×). OnFire and run ATK are sources already;
+	/// a boss's level scaling is another.</summary>
+	public void SetDamageDealtBonus(string source, float bonus)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (Mathf.IsZeroApprox(bonus)) _dealtDmgBonuses.Remove(source);
+		else _dealtDmgBonuses[source] = bonus;
+	}
+
+	public void ClearDamageDealtBonus(string source) => _dealtDmgBonuses.Remove(source);
+
+	/// <summary>Give this body a new maximum and fill it — a boss sized by its table row
+	/// and the day's foe level. (A run's protagonist is sized by <see cref="HydrateRun"/>.)</summary>
+	public void SetFullHealth(float maxHp)
+	{
+		MaxHP = Mathf.Max(1f, maxHp);
+		CurrentHP = MaxHP;
+		NotifyHpChanged();
+	}
+
+	// ── ICombatTarget (what the other side's attacks see) ─────────────────────
+	float ICombatTarget.MaxHP => MaxHP;
+	float ICombatTarget.CurrentHp => CurrentHP;
+	public ulong TargetId => GetInstanceId();
+
+	/// <summary>An authored execute (Cleopastar's Blackhole under 10% HP). Only a Foe-side
+	/// body can be executed: nothing on the Foe side executes the player in this slice.</summary>
+	public void Execute()
+	{
+		if (_dead || Invincible || Side == CombatSide.Player) return;
+		Die();
+	}
 
 	/// <summary>Set or clear a held item's extension for future OnFire applications. Extensions
 	/// are source-keyed and additive, following the modifier-stack rule.</summary>
@@ -970,8 +1146,29 @@ public partial class CharacterController : CharacterBody2D
 		_frozenDurationExtensions.Clear();
 		_continuousExternalVelocity.Clear();
 		TempHP = 0f;
+		_hitFlashTimer = 0f;
+		Modulate = Colors.White;
 		Died?.Invoke();
+		if (Side == CombatSide.Foe) OnDefeated();
 	}
+
+	/// <summary>Foe side only — the body's own exit once its HP is gone. There are no
+	/// lives and no respawn on this side: it fades and frees itself. Whoever staged the
+	/// fight listens to <see cref="Died"/>; nobody else has to clean the body up.</summary>
+	protected virtual void OnDefeated()
+	{
+		// Nothing more can hit it. Deferred: the killing blow usually arrives inside a physics
+		// callback (a projectile's body_entered), where collision state must not change.
+		SetDeferred(CollisionObject2D.PropertyName.CollisionLayer, 0u);
+		Tween fade = CreateTween();
+		fade.TweenProperty(this, "modulate:a", 0f, DefeatFadeSeconds);
+		fade.TweenCallback(Callable.From(QueueFree));
+	}
+
+	protected const float DefeatFadeSeconds = 1.2f;
+
+	/// <summary>True once this fighter's HP is gone (until a Player-side respawn).</summary>
+	public bool IsDefeated => _dead;
 
 	/// <summary>
 	/// Re-anchor the respawn point after an external spawner/swapper has placed this body.

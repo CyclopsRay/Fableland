@@ -150,6 +150,31 @@ class Layer:
             self.put(def_id, x, y)
         return self
 
+    def slope(self, def_id, x, surface_row, steps, fill=None, floor=None):
+        """Lay `steps` slope blocks into ONE straight ramp rising to the right.
+
+        The ramp starts on the walking surface of row `surface_row` at column `x` (the top
+        of that row, where level ground would be) and climbs one row per block. A slope
+        block is `run` cells wide and two rows tall - the ramp crosses its upper row, its
+        lower row is solid (`RealmTiles.Slope`, MapCreation.gdd 2.2b) - so block i sits at
+        column x + run*i, one row higher than the one before.
+
+        With `fill` (a 1x1 ground kind) everything under the ramp is packed solid down to
+        row `floor` (default: the bottom of the layer), so nothing can get beneath it.
+        Returns (column where the ramp ends, row whose top is the summit): lay the plateau
+        from there. For a ramp rising to the left, place the blocks yourself with flip=True."""
+        info = tiles().get(def_id)
+        if info is None:
+            raise MapError(f"{self.owner.name}/{self.name}: unknown tile '{def_id}'")
+        run = info["w"]
+        bottom = self.grid_h - 1 if floor is None else int(floor)
+        for i in range(int(steps)):
+            bx, by = int(x) + run * i, int(surface_row) - 1 - i
+            self.put(def_id, bx, by)
+            if fill:
+                self.fill(fill, bx, by + info["h"], bx + run - 1, bottom)
+        return int(x) + run * int(steps), int(surface_row) - int(steps)
+
     def tile_x(self, def_id, y, x0=0, x1=None, flip_alternate=False):
         """Lay a tiling sprite end to end across the layer (looping horizons, mist, walls)."""
         w = tiles()[def_id]["w"]
@@ -341,7 +366,8 @@ class Map:
         for t in bf.tiles:
             info = tiles()[t["DefId"]]
             ch = sym.get(t["DefId"]) or sym.get(t["DefId"].split(".")[0], "?")
+            ramp = t["DefId"].endswith("_slope")            # a slope block: its top row is the ramp
             for dy in range(info["h"]):
                 for dx in range(info["w"]):
-                    g[t["Y"] + dy][t["X"] + dx] = ch
+                    g[t["Y"] + dy][t["X"] + dx] = ("\\" if t.get("FlipX") else "/") if ramp and dy == 0 else ch
         return "\n".join(f"{y:3d} " + "".join(row) for y, row in enumerate(g))

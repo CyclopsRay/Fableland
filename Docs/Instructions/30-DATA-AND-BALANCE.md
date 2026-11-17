@@ -137,6 +137,31 @@ Dark Wood: bramble 0.15, fog 0.45, canopy 0.5. These are first values — measur
 content check's physics probe, not yet balanced in a fight (TBD #27). Tune them by the
 probe's printed `physics` lines, not by the indices: a resistance weaker than a body's own
 acceleration (1900 px/s² in the air, 3200 on the ground) is not a cap.
+v0.10.11: `Scripts/Data/BossTable.cs` — one row per boss (`FOES.gdd` §8.2): scene,
+protagonist recruited, world, `BaseHp`, `DamageScale`, poise (`KnockbackTaken`, `StunTaken`),
+`CooldownScale`, its own magazine, a held item, `DecisionSeconds`. BOSS PumpKing: 600 HP,
+damage ×0.6, poise 0.4 / 0.25, cooldowns ×1, one head with a 1.5 s reload, no item, 0.15 s.
+**All first-pass** (TBD #2): the boss's differences from its protagonist are postponed design,
+and this row is where they will go. HP and damage are multiplied by the day's foe-level
+multipliers (`FoeStats`), so do not bake the day into the row. The rule thresholds of his
+brain (ranges, pump stacks by range, how long before he leaves) are tier-1 constants at the
+top of `BossPumpKing.cs`, in metres and seconds. The slope's grade is the tile's (`run: 2`
+in `HorrorTileSet`), and `Units.FloorSnapPx` (12 px) is what keeps a walking body on it.
+PumpKing's head, unchanged numbers and one more: bounce retention 0.85, roll friction 3 m/s²,
+roll cap 6 m/s across, and `RestBounceSpeed` 1.5 m/s — the landing speed below which it
+rolls instead of bouncing. Tune the head by the boss check's printed `boss` lines.
+v0.11.0: **the world pool is data** — `WorldDef.Pool` (`Scripts/Map/MapData.cs`), eight worlds
+with a city colour each, and `MapRenderModel.Themes` for the land tint. It is **append-only**:
+a seed shuffles the list, so an insertion or reorder changes every seed. New: Kingdom of
+Horror `(0.78, 0.20, 0.24)`, The Forgotten `(0.10, 0.66, 0.62)`. The run check requires any
+two worlds' city colours to be more than 0.20 apart in RGB (closest today: HC/PL, 0.24) and
+land tints more than 0.12 (SL/TD, 0.15). `BossTable.StandIn` (PumpKing) is the boss of every
+realm without a row of its own. A boss's HP by day band, from his row × `FoeStats`: **600 /
+720 / 900 / 1200 / 1800 / 1800**; damage ×0.60 / 0.72 / 0.90 / 0.90 / 0.90 / 1.20 — printed
+by the run check's `boss by day` line. The band maps' shapes are constants at the top of each
+shape function in `Tools/realm_maps/build_band_maps.py` (48 cells wide; steps of 3 rows —
+one clean jump); a realm's row there names its ground, wall solid, ledge, soft volume,
+hazard and props.
 Characters: each kit's skill-summary table verbatim.
 Arena events: tsunami warning/recovery/cooldown, storm tint, gust schedule, wind pulse,
 and subsequent event definitions. Canvas colours stay hex data; Godot colours are made only

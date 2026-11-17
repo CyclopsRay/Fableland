@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using Fableland.Data;
+using Fableland.Run;
 
 namespace Fableland.Debug;
 
@@ -241,6 +243,22 @@ public partial class DebugManager : CanvasLayer
         clearBtn.Pressed += ClearProtagonistOverride;
         vbox.AddChild(clearBtn);
 
+        // Boss fights (FOES.gdd §8): stage any boss without the overworld. One button per
+        // BossTable row, so a new boss appears here by existing.
+        var bossTitle = new Label { Text = "Boss fights (from the title screen — no run in progress)" };
+        bossTitle.AddThemeFontSizeOverride("font_size", 14);
+        vbox.AddChild(bossTitle);
+        foreach (BossDef boss in BossTable.All)
+        {
+            BossDef def = boss;   // captured per-iteration for the closure
+            var fight = new Button { Text = "Fight " + def.DisplayName };
+            fight.Pressed += () => StageBossFight(def);
+            vbox.AddChild(fight);
+        }
+        var clearBoss = new Button { Text = "Clear staged boss" };
+        clearBoss.Pressed += ClearStagedBoss;
+        vbox.AddChild(clearBoss);
+
         // Status feedback label.
         _protagonistStatus = new Label { Text = "" };
         vbox.AddChild(_protagonistStatus);
@@ -376,7 +394,7 @@ public partial class DebugManager : CanvasLayer
     {
         var vp = GetViewport().GetVisibleRect().Size;
         float w = vp.X * 0.40f;
-        float h = vp.Y * 0.50f;
+        float h = vp.Y * 0.68f;      // roster + the boss-fight section
         float x = (vp.X - w) / 2f;
         float y = (vp.Y - h) / 2f;
         _protagonistPanel.Position = new Vector2(x, y);
@@ -414,6 +432,33 @@ public partial class DebugManager : CanvasLayer
             ToggleProtagonistPage();
         }
         LogSystem($"Protagonist selection: {id}");
+    }
+
+    /// <summary>
+    /// Stage a boss fight in a debug arena: the Arena reads
+    /// <see cref="GameManager.StagedDebugBossId"/> only when no run's adventure exists, and
+    /// asks the run's own map selection for that boss's arena. Refused while a run's
+    /// adventure is set: the Arena would stage that node's fight, not this one.
+    /// </summary>
+    private void StageBossFight(BossDef def)
+    {
+        if (RunState.Instance?.CurrentAdventure != null)
+        {
+            _protagonistStatus.Text = "A run is in progress — stage boss fights from the title screen.";
+            return;
+        }
+        GameManager.StagedDebugBossId = def.Id;
+        LogSystem($"Boss fight staged: {def.Id}");
+        if (_protagonistPageVisible) ToggleProtagonistPage();
+        GetTree().Paused = false;
+        GetTree().ChangeSceneToFile("res://Scenes/Arena.tscn");
+    }
+
+    private void ClearStagedBoss()
+    {
+        GameManager.StagedDebugBossId = null;
+        _protagonistStatus.Text = "Staged boss cleared — the next debug Arena is the scene's own.";
+        LogSystem("Staged boss cleared");
     }
 
     private void ClearProtagonistOverride()

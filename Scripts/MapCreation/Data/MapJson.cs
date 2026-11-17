@@ -112,8 +112,7 @@ public static class MapJson
         {
             string goal = doc.Goals[i]?.Trim().ToLowerInvariant();
             if (goal == "collection") goal = CombatMapGoals.Claim; // friendly legacy spelling
-            if (goal != CombatMapGoals.Claim && goal != CombatMapGoals.Protect &&
-                goal != CombatMapGoals.Destroy && goal != CombatMapGoals.Slaughter)
+            if (!CombatMapGoals.IsKnown(goal))
             {
                 warnings.Add($"unknown combat-map goal '{doc.Goals[i]}' removed");
                 doc.Goals.RemoveAt(i);

@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://Scenes/Arena.tscn" id="1"]
+
+[node name="PumpKingBossFight" instance=ExtResource("1")]
+DebugCombatMapPath = ""
+DebugMission = 4
+DebugNodeLevel = 4
+DebugBossId = "boss_pumpking"

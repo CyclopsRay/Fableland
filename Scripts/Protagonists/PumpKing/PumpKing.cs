@@ -1,4 +1,5 @@
 using Godot;
+using Fableland.Data;
 using Fableland.Run;
 
 /// <summary>
@@ -94,16 +95,36 @@ public partial class PumpKing : CharacterController
     private AtlasTexture _neckAtlas;
     private Vector2 _neckBaseScale;
 
+    // ── Read-only kit state (the HUD, tests, and a BOSS variant's brain read these) ──
+    public int PumpStacks => _pumpStacks;
+    /// <summary>The head is on his neck and the magazine can fire it.</summary>
+    public bool HeadReady => CurrentState == PKState.Normal && _activeHead == null && Ammo != null && Ammo.CanUse;
+    /// <summary>A fired head is still out there, rolling.</summary>
+    public bool HasLiveHead => _activeHead != null && IsInstanceValid(_activeHead) && !_activeHead.Exploded;
+    /// <summary>Where the live head is (only meaningful while <see cref="HasLiveHead"/>).</summary>
+    public Vector2 LiveHeadPosition => HasLiveHead ? _activeHead.GlobalPosition : GlobalPosition;
+    public bool SoulReady => _soulCd <= 0f && _soulWindup <= 0f && CurrentState != PKState.Soul;
+    public bool PumpReady => CurrentState == PKState.Normal && _pumpCd <= 0f && _pumpStacks < MaxPumpStacks;
+    /// <summary>Soul Form has been cast and has not ended (windup included).</summary>
+    public bool SoulCommitted => _soulWindup > 0f || CurrentState == PKState.Soul;
+    /// <summary>Where a fired head leaves his body.</summary>
+    public Vector2 HeadLaunchPoint => FirePoint != null ? FirePoint.GlobalPosition : GlobalPosition + NeckOffset;
+
     // HUD skill-icon cooldowns: Shift = Soul Form, E = Pump Up.
     public override (float Remaining, float Max) ShiftCooldown => (_soulCd, SoulCooldown);
     public override (float Remaining, float Max) ESkillCooldown => (_pumpCd, PumpInnerCD);
+
+    /// <summary>The magazine this body uses. The BOSS variant answers with its own
+    /// table row: it is not the protagonist (FOES.gdd §8).</summary>
+    protected virtual CharacterAmmoDef AmmoDefinition =>
+        CharacterTable.TryGetAmmo("PumpKing", out CharacterAmmoDef def) ? def : null;
 
     protected override void InitCharacter()
     {
         MaxJumps = 1;
         MoveSpeed = Units.Px(8f);
         _baseMoveSpeed = MoveSpeed;
-        ConfigureAmmo("PumpKing");
+        ConfigureAmmo(AmmoDefinition, "PumpKing");
 
         _neckHead = GetNode<Sprite2D>("NeckHead");
         _neckBaseScale = _neckHead.Scale;
@@ -189,12 +210,13 @@ public partial class PumpKing : CharacterController
 
         var head = PumpKingHeadScene.Instantiate<PumpKingHead>();
         GetParent().AddChild(head);
-        head.GlobalPosition = FirePoint != null ? FirePoint.GlobalPosition : GlobalPosition + NeckOffset;
+        head.GlobalPosition = HeadLaunchPoint;
         // Carry PumpKing's own momentum into the throw (a head fired while running
-        // forward should fly farther than one fired standing still).
+        // forward should fly farther than one fired standing still). The head fights on
+        // his side: the player's PumpKing bowls at foes, the BOSS bowls at the player.
         head.Init(dir * HeadLaunchSpeed + Velocity, this, scale, DamageDealtMultiplier,
             ExplosionRadius, ExplosionDamage * DamageDealtMultiplier, ExplosionKnockback,
-            HandleHeadResolved);
+            HandleHeadResolved, Side);
 
         _activeHead = head;
         _pumpStacks = 0;
@@ -317,10 +339,10 @@ public partial class PumpKing : CharacterController
         float h = 0f, v = 0f;
         if (!Dead && !ControlsLocked)
         {
-            if (Input.IsActionPressed("move_left")) h -= 1f;
-            if (Input.IsActionPressed("move_right")) h += 1f;
-            if (Input.IsActionPressed("jump")) v -= 1f;        // Space = up
-            if (Input.IsActionPressed("move_down")) v += 1f;   // S = down
+            if (Controls.Held(ControlAction.MoveLeft)) h -= 1f;
+            if (Controls.Held(ControlAction.MoveRight)) h += 1f;
+            if (Controls.Held(ControlAction.Jump)) v -= 1f;        // Space = up
+            if (Controls.Held(ControlAction.MoveDown)) v += 1f;    // S = down
         }
 
         // Accepted simplification: during Soul, transient knockback/gravity don't
@@ -332,6 +354,7 @@ public partial class PumpKing : CharacterController
 
         if (h > 0.01f) { Facing = 1f; Sprite.FlipH = false; }
         else if (h < -0.01f) { Facing = -1f; Sprite.FlipH = true; }
+        else if (!Dead && !ControlsLocked) FaceByHint();
     }
 
     /// <summary>World-space aim constrained to two firing segments — front (−60°..60°)
@@ -339,8 +362,15 @@ public partial class PumpKing : CharacterController
     /// the raw mouse aim falls in a forbidden gap.</summary>
     private Vector2 ResolveLaunchDirection()
     {
-        Vector2 v = GetGlobalMousePosition() - GlobalPosition;
-        if (v.LengthSquared() < 0.0001f) return new Vector2(Facing, 0f);
+        return ClampToFiringSegments(Controls.AimPoint(this) - GlobalPosition, Facing);
+    }
+
+    /// <summary>The firing-segment rule on its own (front −60°..60°, back 120°..240°,
+    /// Y-up): an aim inside a segment is kept, one in a gap snaps to the nearer edge.
+    /// Static so a brain can ask what a throw will really be before it commits to it.</summary>
+    public static Vector2 ClampToFiringSegments(Vector2 v, float facing)
+    {
+        if (v.LengthSquared() < 0.0001f) return new Vector2(facing, 0f);
 
         float deg = Mathf.RadToDeg(Mathf.Atan2(-v.Y, v.X));   // Y-up degrees, -180..180
 

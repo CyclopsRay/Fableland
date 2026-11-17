@@ -47,7 +47,8 @@ public partial class PangdaBottle : Area2D
     private void OnBodyEntered(Node2D body)
     {
         if (!_initialized) return;
-        if (body is BaseFoe foe)
+        // NOTE(boss): Player-side until Sifu Pangda has a BOSS variant (see PumpKingHead).
+        if (CombatTargets.TryGetHostile(body, CombatSide.Player, out ICombatTarget foe))
         {
             float dealt = foe.TakeHit(new HitInfo(_damage, Vector2.Zero, 0f), GlobalPosition);
             foe.ApplyTrapped(_trappedSeconds);

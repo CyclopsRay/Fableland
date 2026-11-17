@@ -25,6 +25,8 @@ public static class MapRenderModel
         ["TD"] = new() { Abbr = "TD", Land = new(0.90f, 0.82f, 0.55f) },
         ["PL"] = new() { Abbr = "PL", Land = new(0.74f, 0.58f, 0.86f) },
         ["BM"] = new() { Abbr = "BM", Land = new(0.55f, 0.75f, 0.52f) },
+        ["KH"] = new() { Abbr = "KH", Land = new(0.84f, 0.52f, 0.50f) },
+        ["TF"] = new() { Abbr = "TF", Land = new(0.52f, 0.82f, 0.78f) },
     };
     private static readonly WorldTheme VoidTheme = new() { Abbr = "XX", Land = new(0.10f, 0.10f, 0.16f) };
 

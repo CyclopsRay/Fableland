@@ -266,15 +266,186 @@ handles the Spawn skill before calling the base loot logic.
 
 ---
 
-## 8. Boss foes (TBD)
+## 8. Boss fights
 
-Design reserved for a future update. Placeholder notes:
+Landed in **v0.10.11** with the first boss, PumpKing. A boss is not a bigger foe. At the
+**4-1 of every realm the player faces that realm's protagonist as a BOSS, and only beating
+it recruits it** (`NODES.gdd` §4.5). Since **v0.11.0** every realm's 4-1 is a boss fight:
+PumpKing stands in wherever a realm's own boss is not built yet (§8.1).
 
-- Bosses use `NodeKind.Boss` map nodes (level 4 world boss, level 6 core boss).
-- Distinct foe types (not just scaled-up crabs/seagulls).
-- Phased behaviour, unique skill sets, arena modifiers.
-- Boss HP bar at top of screen (separate HUD element).
-- Guaranteed loot drop.
+### 8.1 What a boss is
+
+- **The protagonist's kit, on the other side.** A boss is the protagonist's own class,
+  inherited — `class BossPumpKing : PumpKing` — fighting on the Foe side. Its head, shell and
+  Soul Form are the ones the player will wear after recruiting it; nothing is re-implemented.
+- **Not the protagonist.** A boss has its own row in `BossTable` (§8.2) and reads everything
+  that differs from there: bulk, damage, poise, magazine, cooldowns, a held item. It is named
+  BOSS everywhere — class `BossX`, scene `Scenes/Bosses/BossX.tscn`, the bar reads "BOSS X".
+- **Sides.** Every fighter is on a `CombatSide`: Player or Foe. A Foe-side fighter is in the
+  group the player's attacks iterate (`enemy` — not `foe`: it is not ambient population),
+  sits on the Foes collision layer, owns no camera, never reads the keyboard, and its own
+  attacks look for the player. Attack code asks one question, "who is hostile to my side?",
+  so one kit works on either side unchanged (`Docs/Tech/T10` §4a).
+- **Taking damage.** A boss is hit the way a foe is, not the way the player is: **no post-hit
+  i-frames** (the player is never gated to one hit per window), the player's ult charge is
+  credited, and the kit's own mitigation still applies (PumpKing's shell soaks first).
+  **Poise** scales the knockback and the gain-no window it takes.
+- **Giving damage.** The kit's numbers × the row's `DamageScale` × the day's ATK multiplier.
+  The player keeps their post-hit i-frames against it.
+- **Every realm's 4-1 fields a boss (v0.11.0).** A world whose own protagonist has no boss
+  kit yet fields the **stand-in** — `BossTable.StandIn`, which is BOSS PumpKing: the owner's
+  interim rule, "use PumpKing Boss as the BOSS for every realm for now". So today he holds
+  all eight capitals, his own Kingdom of Horror among them (it joined the pool in v0.11.0).
+  A world gets its own row as its boss is built (`BossTable.HomeBossOf`), and the stand-in
+  then covers only what is left. Beating him anywhere recruits PumpKing — once; after that
+  he simply falls. The v0.5.0 scaled-up crab remains for a node that names no boss — the LV6
+  core — and as the fallback when a boss's scene fails to load.
+
+### 8.2 The BOSS row (`Scripts/Data/BossTable.cs`)
+
+| Field | Meaning | BOSS PumpKing |
+|-------|---------|---------------|
+| `BaseHp` | HP at foe level 1, × the day's HP multiplier (§2) | **600** (protagonist: 200; the crab stand-in: 560) |
+| `DamageScale` | share of the kit's damage at foe level 1, × the day's ATK multiplier | **0.6** — a head that lands: 18 on contact + 30 from the blast |
+| `KnockbackTaken` | poise: share of an incoming shove | **0.4** |
+| `StunTaken` | poise: share of an incoming gain-no window | **0.25** |
+| `CooldownScale` | multiplier on the kit's skill cooldowns | **1** |
+| `Ammo` | the boss's own basic-attack magazine | 1 head, 1.5 s reload |
+| `HeldItemDefId` | a wonder item it holds | none — reserved: nothing reads it yet |
+| `DecisionSeconds` | its brain's reaction time (§8.4) | **0.15 s** |
+
+**Every value is a first-pass placeholder.** The owner postponed boss design — "maybe
+larger magazine, quicker CD, extra holding item, or something else" (TBD #2) — so each of
+those knobs exists and sits where the fight is playable, not balanced. What is decided: a boss is
+*not identical* to its protagonist, and the differences are a table row, not code.
+
+The day axis applies to a boss as to any foe: HP and damage scale with the day's foe level
+(§2). Speed does not — a boss is not a faster protagonist.
+
+**What changes a boss's attributes — examined against this design (v0.11.0).** The run check
+(`40-QA.md`) enters a real run's 4-1 in every world, on a different day band in each, and
+reads the boss it finds:
+
+| Cause in the design | A foe | BOSS PumpKing | Checked |
+|---------------------|-------|---------------|---------|
+| The day → foe level 1–6 (§2): **HP** ×1 / 1.2 / 1.5 / 2 / 3 / 3 | yes | **yes** — **600 / 720 / 900 / 1200 / 1800 / 1800** HP on days 1–10 / 11–20 / 21–30 / 31–35 / 36–40 / 41–45, and the boss bar reads the same | every band, in a run |
+| The day → **ATK** ×1 / 1.2 / 1.5 / 1.5 / 1.5 / 2 | yes | **yes** — ×0.60 / 0.72 / 0.90 / 0.90 / 0.90 / 1.20 of the kit's damage | every band, in a run |
+| The day → **SPD** ×1 / 1.2 / 1.2 / 1.2 / 1.5 / 1.5 | yes | **no** — he walks and flies at the protagonist's speeds on every day | open, TBD #31 |
+| **Evolution** (§5): not eliminated within 25 s → +1 level, max HP re-derived, healed 30% | yes — the crab stand-in did | **no** | open, TBD #31 |
+| Zone 6: the node fixes the level (LV5 → 7, the core → 8), whatever the day | yes | not his case (he is an LV4 boss); the core's final boss is still the crab stand-in, 560 × 5 = **2800** HP | yes |
+| Skills unlocked by level (§2) | yes | no — his whole rule list on every day (§8.4) | — |
+| The kit's own state | — | Pump Up: +20 shell per stack, **not** scaled by the day, and slower while pumped | — |
+| The player's own PumpKing (HP, held item, Sharpen bonuses) | — | **nothing carries over** — only the player's body is hydrated from the run | HP exact, in a run |
+
+HP and damage are the design's, to the point. The two **no** rows are a deliberate
+difference from a foe and the owner's to overturn (TBD #31). A 25-second evolution would
+hand every boss a level and a 30% heal before the player has climbed to it — +540 HP on
+days 36–40, with a timer whose expiry is permadeath — and a faster boss needs legs that do
+not overshoot a perch at twice the speed. Neither should arrive by accident.
+
+### 8.3 BOSS PumpKing
+
+PumpKing's weapon is his own head, bowled. **On level ground it does little; on a slope it
+does not stop** (`PumpKing.gdd`, Fire Head): thrown level it carries **7.7 m** and goes off;
+set rolling on a 1:2 slope it runs the whole slope at its **6 m/s** roll cap. So he holds
+high ground and bowls downhill, and his arena is built to let him (§8.5).
+
+His hands and legs are separate rule lists (§8.4), most urgent first:
+
+| Channel | Rule | When | Does |
+|---------|------|------|------|
+| legs | **soul flight** | in Soul Form | flies to the perch he chose: up clear of the higher end, across, down onto it |
+| legs | **hold perch** | otherwise | walks back to his perch, jumps when under it or blocked, faces the player |
+| hands | **detonate** | his rolling head is within 0.8 blast radii of the player | sets it off (BA) |
+| hands | **call back** | his head has been rolling *away* from the player for 0.9 s, 1.5 radii clear | sets it off, so the magazine reloads |
+| hands | **soul away** | the player has been in his face — within 3.5 m, about level — for 1.2 s, and Soul Form is ready | Soul Form (Shift); leaves for the perch farthest from the player |
+| hands | **bowl** | head on his neck and pumped enough for the range | aims and throws (BA) |
+| hands | **pump up** | not yet pumped enough for the range | Pump Up (E) |
+
+- **Pumping by range.** Before a throw he wants 3 stacks with the player beyond 14 m, 2
+  beyond 8 m, 1 beyond 5 m, none closer: the farther the player, the longer he can afford to
+  build shell, and the more he will need it when they arrive. Up close he throws at once.
+- **Aim.** A straight (low-arc) throw if it reaches the player; otherwise the angle that
+  carries farthest for the drop, which from his balcony lands the head on the top of the
+  slope. He leads a moving player by 0.25 s. Always inside the kit's firing segments.
+- **Changing ground.** Soul Form is his way out, exactly as for the player: 12 s cooldown,
+  0.5 s windup, 6 s of flight at 5 m/s, no attacking while it lasts. A head still rolling
+  when he leaves loses its blast (the kit's own rule): it deals only its contact damage if it
+  touches someone, nothing if it goes off by itself — unless he is back in time to set it off.
+- **What a head costs** (foe level 1, measured). A head he sets off beside the player deals
+  its blast: **30**. A head that rolls into them deals its contact damage *and* its blast —
+  18 + 30 = **48** (0.6 of the 80 measured at ×1) — because a hit that carries no knockback
+  starts no i-frames, and the touch carries none. So "detonate", as tuned, gives up the 18
+  against a player who stands still; it is what catches one who jumps or steps aside.
+  Whether he should let a closing head arrive is an open tuning question (TBD #2).
+- **A wasted head.** A head rolling away from a player who got behind him would go off by
+  itself 3.2 s later; "call back" sets it off after 1.2 s, and he has it again 1.6 s on.
+- **What the player can do about it.** Climb: the slope costs a fifth of a fighter's speed
+  going up and nothing coming down. Jump the heads — he sets a head off once it is about
+  3.3 m from the player, centre to centre, and a jump is higher than that for about 0.8 s.
+  Reach him: while his head is out he has no shell, and until Soul Form is back he has
+  nowhere to go.
+
+### 8.4 The brain: rule-based
+
+A boss's brain presses the same buttons the player does. It owns a **virtual pad**; the kit
+reads it exactly as it reads the keyboard, so a brain can never do what the kit does not
+allow (cooldowns, the magazine, firing segments, state gates all still apply).
+
+- **Rules.** "When *this*, do *that*." Each belongs to a **channel** — legs (`move`) or hands
+  (`act`) — and one rule holds each channel at a time, so a boss walks and throws at once but
+  never throws twice. Within a channel the rules are a priority list: the first one off
+  cooldown whose condition holds wins.
+- **Two kinds.** A *one-shot* taps a button once each time it wins, then waits out its
+  cooldown. A *continuous* rule holds buttons for as long as it keeps winning. A rule may
+  also *commit* for a time, during which nothing in its channel interrupts it.
+- **Reaction time.** The brain decides every `DecisionSeconds` (0.15 s), not every frame,
+  and senses the fight only then.
+- **Readable.** With debug mode on, the mission line shows what each channel is doing
+  (`[move:hold perch · act:bowl]`).
+- **Rule-based is the first driver, not the only one.** Anything that can fill a virtual pad
+  can drive a boss — a behaviour tree, a recorded input track, a trained policy — with no
+  change to the kit, the mission or the map.
+
+### 8.5 Boss arenas
+
+A boss map takes its boss's side.
+
+- **Goal `boss`.** A map tagged with it (`MapCreation.gdd` §9) is dealt to its world's LV4
+  Boss mission ahead of the world's ordinary maps, and to nothing else. A world without one
+  fights its boss on an ordinary map, as before.
+- **Perches.** The map's Level Goal markers are the boss's perches: the places its kit works
+  best from. The fight opens with the boss on the perch **farthest from the player**. Two
+  perches let a boss change ground; one is enough to fight.
+- **Every realm has one (v0.11.0).** Seven are plain test arenas in the realm's own kit
+  (`Tools/realm_maps/build_band_maps.py`): a floor, a tower 12 m high on the east side
+  climbed by two 6 m steps — the first perch, as far from the spawn as the map goes — and a
+  ledge 18 m west of it, level with the first step — the second. They are valid, not
+  flattering: only the Dark Wood has a slope block (TBD #30), so nowhere else does his head
+  have a hill to run. Undersea (Loong's Nest) the whole arena is water. The run check stages
+  him on each and he gets a head away at a standing player on all eight.
+- **PumpKing's Castle** (`Maps/horror_pumpkings_castle.json`, `RealmStyleBible.md` §7A). From
+  the left: a strip of wood where the player arrives; one unbroken 1:2 slope, 36 m along and
+  18 m up; the forecourt, the gate (shut — nobody goes in) and the balcony he comes out onto,
+  6 m above the forecourt and a clean jump from it; the keep behind seals the east side. His
+  perches are the balcony's outer end and a limb over the upper slope, 19 m apart — one Soul
+  Form flight. From either, a head thrown for distance lands on the slope and runs it:
+  measured in the fight, his first head travels **51 m** from the balcony and reaches a player
+  standing at the foot.
+
+### 8.6 The fight
+
+- **Timer** as before: 240 s at LV4, expiry is fatal (`NODES.gdd` §4.5).
+- **The boss owns the field.** The ambient spawner is off; two foes at foe level −1 arrive
+  once, when the boss falls below half health.
+- **The bar** names the boss and shows its HP, with the shell beside it while he has one.
+- **Beating it** resolves the mission, grants the node's reward and **recruits the
+  protagonist** — once: a protagonist already on the roster is not added again. The body
+  fades and frees itself; there are no lives on the Foe side.
+- **Prototype note.** A run currently starts with every implemented protagonist owned
+  (`RunState.EnsurePrototypeRoster`), PumpKing included, so recruiting him today changes
+  nothing. When that policy ends, recruitable protagonists leave the starting roster; the
+  reward path is already in place.
 
 ---
 
@@ -289,6 +460,10 @@ Scripts/Foes/
 ├── SeagullFoe.cs      // no-gravity flight physics, cone sight, Poop, Dash
 └── FoeStats.cs        // per-level multiplier table, evolution data, helper: StatsForLevel()
 ```
+
+Bosses are not in this folder: a boss is a protagonist's class on the Foe side (§8).
+`Scripts/Bosses/` holds the brain (`BossBrain.cs`: rules, scheduler, senses), what every boss
+shares (`BossFighter.cs`) and one class per boss; `Scripts/Data/BossTable.cs` holds their rows.
 
 `BaseFoe` inherits `CharacterBody2D`. It provides the physics loop, status effect
 handling (fire/frozen/burn), damage reception (defense multiplier, knockback, stun,
@@ -399,3 +574,40 @@ weighted choice. The selected marker is the foe's nest/spawn origin; map-defined
   contact; one add-wave of 2 foes at foe level −1 when the boss hits 50% HP) until the
   §8 boss kits are designed. Outer BOSS wins grant Yukai's Rope; the starting-realm LV4
   also grants TwistedReality. Recruitable boss protagonists remain TBD.
+- **(v0.10.11) A boss is its protagonist's class on the other side, not a foe class.** The
+  alternative — a `BaseFoe` that re-implements the kit — would make every boss two kits to
+  keep in step, which is exactly the scope bomb `NODES.gdd` flagged. Inheriting makes the
+  boss fight with the moves the player will recruit, for free. The stand-in crab stays for
+  worlds without a kit.
+- **(v0.10.11) One interface for "something an attack can land on".** Every kit used to look
+  for `BaseFoe` in the `enemy` group, so nothing a protagonist did could hit another
+  protagonist's class. A hurtbox that pretended to be a foe was considered and rejected: two
+  bodies for one fighter, forwarding a dozen calls, entering every hazard twice. Instead
+  foes and fighters are both `ICombatTarget`, and attacks ask who is hostile to their side.
+- **(v0.10.11) The brain presses buttons.** A rule cannot do what the kit forbids, a boss
+  cannot drift from its protagonist, and the kind of AI is replaceable behind one seam.
+  Rule-based first, as the owner asked.
+- **(v0.10.11) No i-frames on a boss; poise instead.** The 0.8 s window exists to protect a
+  player. On a boss it would cap every protagonist at one hit per window, and full hitstun
+  would let a fast combo hold him still. Poise is two numbers in his row.
+- **(v0.10.11) A boss scales with the day as foes do** — HP and damage, not speed — so the
+  day axis keeps its meaning in the one room where it matters most (§1).
+- **(v0.10.11) A boss arena is a map goal, and its perches are the goal markers the map
+  format already had.** No new marker kind, no new editor tool; a map author already knows
+  how to place them. The boss opens on the one farthest from the player.
+- **(v0.10.11) PumpKing's head now really rolls**, which is what his arena is built on. Until
+  now a head resting on a floor lost 15% of its speed every physics tick and stopped within
+  0.7 m; it could not have run a slope. See `PumpKing.gdd`.
+- **(v0.10.11) A red mark hangs over the boss.** Placeholder: a black-coated PumpKing with
+  his head off is nearly invisible against his castle's black stone, and a fighter must read
+  first. To be replaced by his boss art.
+- **(v0.11.0) PumpKing stands in as every realm's boss** — the owner's interim rule, so that
+  every 4-1 is a real boss fight to test against. It is one fallback in `BossTable.ForWorld`
+  (the world's own boss, else the stand-in), not eight rows: a world that gets its own boss
+  takes itself out of it by adding a row. He recruits once and then just falls, so meeting
+  him five times in a run says "joins you" at most once.
+- **(v0.11.0) A boss's attributes were examined against the foe design** (§8.2's table): HP
+  and damage follow the day exactly, checked in a real run on every day band; speed and the
+  25-second evolution do not apply to a boss, on purpose, and are the owner's to change
+  (TBD #31). What looked like a third question — whether the player's own PumpKing leaks into
+  the boss — is not one: only the player's body is hydrated from the run.

@@ -199,7 +199,7 @@ internal sealed class ForgottenKashayaBehavior : ICombatItemBehavior
         runtime.Holder.MeleeDamageDealt += OnMeleeDamageDealt;
     }
 
-    private void OnMeleeDamageDealt(BaseFoe target, float dealt)
+    private void OnMeleeDamageDealt(ICombatTarget target, float dealt)
     {
         if (target == null || dealt <= 0f) return;
         target.TakeHit(new HitInfo(dealt * 0.5f, Vector2.Zero, 0f), _holder?.GlobalPosition ?? target.GlobalPosition);
@@ -210,9 +210,8 @@ internal sealed class ForgottenKashayaBehavior : ICombatItemBehavior
     public bool TryUse(ItemRuntime runtime, out string reason)
     {
         float range = Units.Px(4f);
-        foreach (Node node in runtime.Holder.GetTree().GetNodesInGroup("enemy"))
+        foreach (ICombatTarget foe in CombatTargets.HostileTo(runtime.Holder.GetTree(), runtime.Holder.Side))
         {
-            if (node is not BaseFoe foe) continue;
             Vector2 delta = foe.GlobalPosition - runtime.Holder.GlobalPosition;
             float distance = delta.Length();
             if (distance - foe.HitRadius > range) continue;

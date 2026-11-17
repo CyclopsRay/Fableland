@@ -101,8 +101,8 @@ public partial class Pixolotl : CharacterController
             case TemporalState.ShiftRewind:
                 _shiftStepTimer -= actDt;
                 if (_shiftStepTimer <= 0f) RewindOneFrame();
-                if (Input.IsActionJustReleased("skill1") && _shiftJumps > 0) ResolveShift();
-                else if (Input.IsActionJustReleased("skill1")) CancelShift();
+                if (Controls.JustReleased(ControlAction.Skill1) && _shiftJumps > 0) ResolveShift();
+                else if (Controls.JustReleased(ControlAction.Skill1)) CancelShift();
                 break;
             case TemporalState.ShiftRecovery:
                 _recoveryTimer -= actDt;
@@ -272,9 +272,8 @@ public partial class Pixolotl : CharacterController
     private void ApplyArrivalEffect()
     {
         float half = Units.Px(1.5f);
-        foreach (Node node in GetTree().GetNodesInGroup("enemy"))
+        foreach (ICombatTarget foe in CombatTargets.HostileTo(GetTree(), Side))
         {
-            if (node is not BaseFoe foe) continue;
             Vector2 delta = foe.GlobalPosition - GlobalPosition;
             if (Mathf.Abs(delta.X) > half + foe.HitRadius || Mathf.Abs(delta.Y) > half + foe.HitRadius) continue;
             float dealt = foe.TakeHit(new HitInfo(CharacterTable.Pixolotl.ShiftDamage, Vector2.Zero, 0f), GlobalPosition);
@@ -345,7 +344,11 @@ public partial class Pixolotl : CharacterController
         while (_bubblePool.Count < CharacterTable.Pixolotl.BubbleAnglesDeg.Length * 3)
         {
             PixolotlBubble bubble = BubbleScene.Instantiate<PixolotlBubble>();
-            GetParent().AddChild(bubble);
+            // Deferred on purpose. This runs from _Ready; when the body is authored inside a
+            // scene (Arena.tscn's default Pixolotl) that scene is still setting up its
+            // children, and Godot refuses a direct AddChild to it — the pool then held 18
+            // bubbles that never entered the tree and her BA fired nothing (KNOWLEDGE v0.10.11).
+            GetParent().CallDeferred(Node.MethodName.AddChild, bubble);
             bubble.AddToGroup("pixolotl_bubble");
             _bubblePool.Add(bubble);
         }

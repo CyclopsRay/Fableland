@@ -25,7 +25,15 @@ public enum MapEdgeKind
     RealityBridge,
 }
 
-/// <summary>Static definition of one fable world, which supplies one realm's identity per run.</summary>
+/// <summary>
+/// Static definition of one fable world, which supplies one realm's identity per run.
+///
+/// <see cref="Pool"/> is every world a run can draw its five realms from: the eight worlds
+/// whose combat realm is built (tile kit, art, maps — `MapGDD.md` §2). ORDER IS DATA: a seed
+/// shuffles this list, so inserting or reordering changes every seed's realms. Append only.
+/// A save records the pool it was generated from (<c>RunState.WorldPool</c>), so growing the
+/// pool never moves a run that already exists.
+/// </summary>
 public sealed class WorldDef
 {
     public string Name;
@@ -47,9 +55,46 @@ public sealed class WorldDef
         new WorldDef("TheDeserted",      "TD", new Color(0.85f, 0.75f, 0.40f)),
         new WorldDef("Palace of LOOING", "PL", new Color(0.62f, 0.38f, 0.78f)),
         new WorldDef("Banboo Maze",      "BM", new Color(0.20f, 0.48f, 0.28f)),
+        // v0.11.0 — the two worlds whose realms were built in v0.10.9 join the pool. Their
+        // colours are the two hues the first six left free (blue is the rivers' and the
+        // sea's): the Dark Wood's danger red, and the jade of the Forgotten City's canals.
+        new WorldDef("Kingdom of Horror", "KH", new Color(0.78f, 0.20f, 0.24f)),
+        new WorldDef("The Forgotten",     "TF", new Color(0.10f, 0.66f, 0.62f)),
     };
 
     public static readonly Color VoidColor = new(0.05f, 0.05f, 0.07f);
+
+    /// <summary>The pool's abbreviations, in pool order — what a new run records as the
+    /// pool it was generated from.</summary>
+    public static List<string> PoolAbbrs()
+    {
+        var abbrs = new List<string>(Pool.Count);
+        foreach (WorldDef world in Pool) abbrs.Add(world.Abbr);
+        return abbrs;
+    }
+
+    /// <summary>The pool world with this abbreviation (case-insensitive), or null.</summary>
+    public static WorldDef ByAbbr(string abbr)
+    {
+        if (string.IsNullOrWhiteSpace(abbr)) return null;
+        foreach (WorldDef world in Pool)
+            if (string.Equals(world.Abbr, abbr.Trim(), StringComparison.OrdinalIgnoreCase)) return world;
+        return null;
+    }
+
+    /// <summary>The worlds these abbreviations name, in the order given. Unknown ones are
+    /// left out (a save may name a world this build no longer has).</summary>
+    public static List<WorldDef> Resolve(IEnumerable<string> abbrs)
+    {
+        var worlds = new List<WorldDef>();
+        if (abbrs == null) return worlds;
+        foreach (string abbr in abbrs)
+        {
+            WorldDef world = ByAbbr(abbr);
+            if (world != null && !worlds.Contains(world)) worlds.Add(world);
+        }
+        return worlds;
+    }
 }
 
 public sealed class MapNode

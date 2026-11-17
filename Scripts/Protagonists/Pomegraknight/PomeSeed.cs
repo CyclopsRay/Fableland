@@ -23,6 +23,7 @@ public partial class PomeSeed : Area2D
     private float _life = 6f;
     private float _dmgMult = 1f;
     private CharacterController _damageOwner;
+    private CombatSide _side = CombatSide.Player;
 
     /// <summary>Called by the spawner right after AddChild (so it runs after _Ready).</summary>
     public void Init(Vector2 velocity, HashSet<ulong> waveHits, bool burning, float dmgMult = 1f,
@@ -33,6 +34,9 @@ public partial class PomeSeed : Area2D
         _burning = burning;
         _dmgMult = dmgMult;
         _damageOwner = damageOwner;
+        // A seed fights for whoever fired it, and looks for bodies on the other side.
+        _side = damageOwner?.Side ?? CombatSide.Player;
+        CombatTargets.AimMask(this, _side);
         _life = Lifetime;
         if (_burning)
         {
@@ -58,9 +62,9 @@ public partial class PomeSeed : Area2D
 
     private void OnBodyEntered(Node2D body)
     {
-        if (body is BaseFoe e)
+        if (CombatTargets.TryGetHostile(body, _side, out ICombatTarget e))
         {
-            ulong id = e.GetInstanceId();
+            ulong id = e.TargetId;
             float dmg;
             if (_waveHits != null && _waveHits.Contains(id))
             {

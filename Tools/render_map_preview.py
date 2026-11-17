@@ -113,8 +113,12 @@ def load_tiles():
         entry = dict(w=d.get("footprint", {}).get("w", 1), h=d.get("footprint", {}).get("h", 1),
                      fill=bool(d.get("fillFootprint")), sprite=rel, color="#FF00FF",
                      locked=str(d.get("role", "")).lower() == "ground" or bool(d.get("autotileGroup")))
+        if d.get("autotileGroup"):
+            # Group membership alone (a slope block: one sprite that the ground around it
+            # counts as more of the same ground) — `AutotileProbe.SameGroup` asks only this.
+            entry.update(group=d["autotileGroup"])
         if d.get("autotileGroup") and d.get("autotileKind") == "layered_hill_strip" and d.get("artSource"):
-            entry.update(group=d["autotileGroup"], atlas=d["artSource"][len("res://"):],
+            entry.update(atlas=d["artSource"][len("res://"):],
                          variants=int(d.get("autotileVariants", 1)), strip=True)
         tiles[tid] = entry
     return tiles
@@ -240,7 +244,9 @@ def render(doc, tiles, scale=48, markers=False, view=None):
         for t in lt:
             info = tiles.get(t["DefId"])
             if info and info.get("group"):
-                groups[(t["X"], t["Y"])] = info["group"]
+                for dy in range(info["h"]):         # every footprint cell, as LayerOccupancy does
+                    for dx in range(info["w"]):
+                        groups[(t["X"] + dx, t["Y"] + dy)] = info["group"]
         lw, lh = layer.get("GridW", gw), layer.get("GridH", gh)
 
         def same_group(ax, ay, grp):

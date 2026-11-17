@@ -25,9 +25,17 @@ means crossing the ring of fused worlds while the **VOID** closes in from outsid
 ## 2. Zones and realms
 
 The map contains **6 zones**: five outer storybook **realms** plus the central dark zone
-(`XX`). Each run picks five of the six defined worlds, keeping the home world first in a
-deterministic angular order. The five worlds still provide their palette, terrain identity,
-foe pool, capital, and complete node roster; a *realm* is their physical region on this run.
+(`XX`). Each run picks five of the **eight** worlds in the pool (v0.11.0; six before),
+keeping the home world first in a deterministic angular order. The five worlds still provide
+their palette, terrain identity, foe pool, capital, and complete node roster; a *realm* is
+their physical region on this run.
+
+**The pool is every world whose combat realm is built** — a tile kit, its art, a map for
+each altitude band and a boss arena (§2.2). Its order is data: a seed shuffles the list, so
+worlds are only ever **appended** (`WorldDef.Pool`). A run records the pool it was generated
+from (`RunState.WorldPool`, save version 4), so growing the pool changes which realms a *new*
+seed draws and never moves a run that already exists: a save from the six-world days wakes
+up on the same five realms, node for node.
 
 The outer map is one connected island with a roughly circular, organically irregular coastline.
 It has no detached outer islets. A static, regular pentagonal **VOID** sits near its geometric
@@ -44,19 +52,24 @@ by the old zone-6 construction is inside the central VOID, not in the outer isla
 home world is guaranteed to be one of the 5, placed at ring index 0 (top); the other 4
 are random. **Pomegraknight's home is VanillaKindom (pink).** When other starting
 characters unlock, they begin in their own home world. (Pixolotl is currently a
-**non-starter** — recruit-only. Her home world has a name and a combat realm since
-v0.10.9 — **The Forgotten**, §2.2 — but it is not one of the six pool worlds yet. TBD
-registry #24.)
+**non-starter** — recruit-only. Her home world, **The Forgotten**, has been in the pool
+since v0.11.0; whether she becomes a starter there is still TBD registry #24.)
 
-| World            | Abbr | Palette       |
-|------------------|------|---------------|
-| Starland         | SL   | orange        |
-| HollowCastle     | HC   | grey          |
-| VanillaKindom    | VK   | pink          |
-| TheDeserted      | TD   | sandy yellow  |
-| Palace of LOOING | PL   | purple        |
-| Banboo Maze      | BM   | dark green    |
-| **The VOID / dark zone** | **XX** | **black** |
+| World            | Abbr | Palette       | In the pool since |
+|------------------|------|---------------|-------------------|
+| Starland         | SL   | orange        | the start |
+| HollowCastle     | HC   | grey          | the start |
+| VanillaKindom    | VK   | pink          | the start |
+| TheDeserted      | TD   | sandy yellow  | the start |
+| Palace of LOOING | PL   | purple        | the start |
+| Banboo Maze      | BM   | dark green    | the start |
+| Kingdom of Horror | KH  | danger red    | v0.11.0 — PumpKing's home |
+| The Forgotten    | TF   | canal jade    | v0.11.0 — Pixolotl's home |
+| **The VOID / dark zone** | **XX** | **black** | — |
+
+The two newcomers took the two hues the first six left free; blue stays the rivers' and the
+sea's. (Cloud Court, the earlier aerial proposal for the Palace of LOOING, has a kit and a
+map but no world: it is not in the pool. §2.2.)
 
 Each realm receives its world's palette and remains a distinct kingdom, but its boundary is now
 the river system rather than a sea gap. The central VOID and the day clock are **run-wide
@@ -76,7 +89,7 @@ The atlas remains flat: low land is tinted darker and high land lighter, with cl
 at the lowland/plain and plain/highland thresholds. These contours are decoration only — they do
 not block roads or alter movement.
 
-### 2.2 Combat identity per world (v0.10.6, v0.10.9)
+### 2.2 Combat identity per world (v0.10.6, v0.10.9, v0.11.0)
 
 Each world's combat arenas have their own art language, building kit and map shape, so
 crossing a river changes how a fight is fought, not only how it looks. The realm name is what
@@ -91,24 +104,23 @@ the combat layer calls that world's arenas. Art direction and kits:
 | HollowCastle | Dungeon | lit realism | crowded, low, hazardous; lava | brawlers, fire |
 | TheDeserted | Ghost Town | linocut print | two-storey street, mid-range | skirmishers, duellists |
 | Palace of LOOING | Loong's Nest (龙宫) | gongbi: fine line and graded mineral colour | **under the sea**: the whole map is water (low gravity, high resistance), with hidden currents and bubble lifts | precise movers |
-
-Two more realms exist as combat sets and maps but belong to worlds that are **not in the
-pool** — a run never generates them, and their maps are played from the map editor until
-the worlds are added (TBD registry #20, #24):
-
-| World (not in the pool) | Realm in combat | Medium | Arena shape | Favours |
-|-------|-----------------|--------|-------------|---------|
 | Kingdom of Horror — PumpKing's home | Dark Wood | scratchboard | a dark forest of traps, thickets and fog; a castle in some maps | guards, tanks, the patient |
 | The Forgotten — Pixolotl's home | Forgotten City | pixel art | swamp at sea level, a Teotihuacan-style pyramid city above it — taken for a ruin, secretly high technology | whoever goes over, not through |
 
 Starfield, Wulin, Dungeon, Loong's Nest and the Dark Wood follow the owner's briefs; the
 Forgotten City's design was delegated; Ghost Town is a proposal awaiting sign-off. The
 earlier proposal for the Palace of LOOING, *Cloud Court*, is kept as a set and a map with no
-world (style bible §7C). Each realm has one built-in map so far, tagged for every terrain
-label (`*`, v0.10.7) so that all of a realm's combat nodes use it; a node in a realm with no
-matching map still falls back to the legacy arena (§2.1, `MapCreation.gdd` §9). Open
-questions — Cleopastar's home world, whether Gui Lin is the Banboo Maze, what becomes of
-Cloud Court, when the two new worlds join the pool — are listed in the style bible §10.
+world (style bible §7C).
+
+**Every pool world ships a set of maps (v0.11.0):** one authored for each altitude band —
+sea level, low ground, high ground — and a boss arena for its 4-1, besides its showcase map
+(tagged `*`, every band). The band maps and boss arenas are **plain test maps** — the same
+three shapes and one arena in each realm's own kit (`Tools/realm_maps/build_band_maps.py`) —
+so that every kind of node in every realm opens a valid map while the real ones are designed;
+the Dark Wood's boss arena is the real one, PumpKing's castle. `MapContentCheck` fails a
+pool world that lacks any of the four. Zone 6 has no authored maps yet and still opens the
+legacy arena. Open questions — Cleopastar's home world, whether Gui Lin is the Banboo Maze,
+what becomes of Cloud Court — are listed in the style bible §10.
 
 ## 3. The seed
 
@@ -334,6 +346,13 @@ These were resolved to keep the map functional; flag any you want changed:
 - **(v0.10.9) Building a realm is not adding a world.** The Kingdom of Horror and The
   Forgotten have combat sets and maps but are not in the six-world pool: adding a world
   changes what every existing seed generates, and it needs a palette, zone rules and a boss.
+- **(v0.11.0) The pool is the eight worlds whose realm is built** (the owner: "arrange the
+  realm pool"). The Kingdom of Horror and The Forgotten joined, each with a colour of its
+  own, a map per altitude band, and a boss — PumpKing, who stands in as every realm's boss
+  for now (`FOES.gdd` §8.1). The cost named above was paid once: every seed's realms changed
+  for **new** runs. Existing runs did not move — a save now records its pool, and a save
+  from before is given the six worlds of its day (`SaveGameService`, version 4). The pool is
+  append-only from here on.
 - **(v0.9.0) One island, five realms:** a single seeded organic coast contains all outer land.
   A fixed central pentagon occupies roughly 1/30 of its area; five non-crossing, variable-width
   rivers join that VOID to the coast and create exactly five river-isolated realm polygons.

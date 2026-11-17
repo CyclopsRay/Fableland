@@ -85,6 +85,17 @@ full contract and the measured numbers are in `MapCreation.gdd` §2.2a:
   summed, and among the media the strictest cap, drag, buoyancy and sink speed apply.
   Players and foes obey the same rules; only the dive is a player control.
 
+**Slopes (v0.10.11).** Ground can be a ramp (`MapCreation.gdd` §2.2b; the Dark Wood's is
+one cell up in two along). A fighter walks it with the ordinary controls and keeps its feet
+on it at any speed. Climbing costs speed — **8 m/s across for a 10 m/s fighter on a 1:2
+slope** — and descending costs none; a jump from a slope is the standard jump. Things that
+roll run downhill (PumpKing's head, at its 6 m/s roll cap, for as long as the slope lasts).
+
+**Who presses the buttons (v0.10.11).** Every action in the table above reaches a character
+through its control source, not the keyboard: the player's keys by default, a boss's brain
+when the same kit is the BOSS of its realm (`FOES.gdd` §8.4). A kit behaves identically
+either way — same cooldowns, magazine and state gates.
+
 ### A.2.1 Universal basic-attack ammo and reload
 
 Every playable character's BA resource is owned by one shared **AmmoController** on

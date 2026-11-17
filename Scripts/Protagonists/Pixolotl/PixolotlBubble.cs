@@ -107,9 +107,10 @@ public partial class PixolotlBubble : Area2D
     private void OnBodyEntered(Node2D body)
     {
         if (!_active) return;
-        if (body is BaseFoe foe)
+        // NOTE(boss): Player-side until Pixolotl has a BOSS variant (see PumpKingHead).
+        if (CombatTargets.TryGetHostile(body, CombatSide.Player, out ICombatTarget foe))
         {
-            ulong id = foe.GetInstanceId();
+            ulong id = foe.TargetId;
             if (!_hitTargets.Add(id)) return;
             float dealt = foe.TakeHit(new HitInfo(CharacterTable.Pixolotl.BubbleDamage * _damageMultiplier,
                 Vector2.Zero, 0f), GlobalPosition);

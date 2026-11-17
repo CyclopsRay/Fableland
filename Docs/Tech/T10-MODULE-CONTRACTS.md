@@ -10,7 +10,7 @@ How modules talk, so that adding module N+1 never means rewiring modules 1..N.
 |-----------|---------|-------|
 | **C# events** (`event Action<...>`) | Gameplay → Presentation notifications (`HpChanged`, `Died`); anything with multiple listeners | Raiser never cares who listens. **Subscribe in `_Ready`/`_EnterTree`, unsubscribe in `_ExitTree` — always.** A scene node subscribed to an autoload's event and then freed by `ReloadCurrentScene` is a leak *and* a crash (the delegate keeps the dead node alive; invoking it touches a disposed object). This will be our most common bug class once RunState exists — make the pair-check a review habit. |
 | **Godot signals** | Scene-boundary wiring authored in `.tscn` (buttons, Area2D enter/exit) | Fine at the edge; don't build cross-module buses out of them (no compile-time checking). |
-| **Autoload singletons** (`static Instance` set in `_EnterTree`) | True globals only. Current: `DamageNumberManager`, `ShakeCamera2D`, `CharacterController.LocalPlayer`; planned: `RunState`, `AudioManager`, `BalanceOverrides` | Cap the list. Each new one needs a written justification here. A singleton that parents nodes into the live scene must do it via `GetTree().CurrentScene` (survives reloads — existing pattern). |
+| **Autoload singletons** (`static Instance` set in `_EnterTree`) | True globals only. Current: `DamageNumberManager`, `ShakeCamera2D`, `CharacterController.LocalPlayer` (both claimed by the Player-side body only — a Foe-side fighter never touches them, §4a); planned: `RunState`, `AudioManager`, `BalanceOverrides` | Cap the list. Each new one needs a written justification here. A singleton that parents nodes into the live scene must do it via `GetTree().CurrentScene` (survives reloads — existing pattern). |
 | **Direct references** (`[Export]` NodePath / ctor args / `Init(...)`) | Parent→child within one scene; spawner→spawnee config | `Init(...)` is called **after** `AddChild` (KNOWLEDGE caveat); spawnee guards against acting on un-Init'd state for one frame. |
 | **Return values / plain calls** | Within a module | Prefer these. Events are for crossing layers, not for everything. |
 
@@ -72,6 +72,46 @@ implicit in `TakeHit`/`ApplyHazard`; keep this canonical order when extending:
 New effects declare their stage. Lifesteal reads the **post-mitigation** number from
 stage 6 (the GDDs are explicit about post-mitigation — FanChen's Heart, Kashaya).
 Never compute damage twice in two places to "simplify" — one pipeline, tap points.
+
+## 4a. Sides, targets and controls (v0.10.11)
+
+Three small contracts make one kit usable by the player and against the player.
+
+**Sides.** Every fighter is on a `CombatSide` — `Player` or `Foe`. `CharacterController.Side`
+is a virtual property: a protagonist is `Player`; a BOSS class overrides it to `Foe`, and the
+base does the rest from that one fact:
+
+| | Player side | Foe side |
+|---|---|---|
+| Group | `player` | `enemy` (not `foe`: that is the spawn cap and the foe sweeps) |
+| Collision layer | Player (1) | Foes (2) — where the player's projectiles look |
+| `LocalPlayer`, camera, shake camera | claims them | never; the scene's camera is removed in `_EnterTree`, before it can enter the tree |
+| Reads | the keyboard (`PlayerControls`) | a `VirtualPad`, from the first frame |
+| Post-hit i-frames | 0.8 s after a hit that shoves | none; poise scales the shove and the gain-no instead |
+| On 0 HP | `Died` → lives / run end | `Died`, then fades and frees itself (`OnDefeated`) |
+
+**Targets.** Anything an attack can land on is an `ICombatTarget` (`BaseFoe`, and every
+`CharacterController`). Attack code never casts to a class and never names a group:
+
+```csharp
+foreach (ICombatTarget t in CombatTargets.HostileTo(GetTree(), Side)) { … t.TakeHit(hit, origin); }
+if (CombatTargets.TryGetHostile(body, _side, out ICombatTarget t)) { … }   // a projectile that found a body
+CombatTargets.AimMask(this, side);                                          // …and where such a projectile looks
+```
+
+Groups say where to look; the side says whom to hit — `HostileTo` filters on both, so a body
+in the wrong group is still never offered to its own side. A new reaction (a status, a shove)
+is added to the interface once, not at each attack site. A projectile takes its side from
+whoever launched it (PumpKing's head does; the other kits' projectiles are Player-side until
+their protagonist has a BOSS variant, each marked `NOTE(boss)`).
+
+**Controls.** A fighter reads `Controls` (`ICharacterControls`): `Held` / `JustPressed` /
+`JustReleased` per `ControlAction`, an aim point, a facing hint. **No kit touches `Input` or
+the mouse** — grep `Input\.` under `Scripts/Protagonists` and `Scripts/Gameplay/Characters`
+must find nothing (the throwaway `Legacy/Player.cs` aside). A `VirtualPad` is stepped once per
+process frame and once per physics tick by whoever owns it, *before* the body runs
+(`BossBrain` does it with a lower process priority), and a tap is owed to each loop
+separately — the two do not run in step, so a jump tapped between physics ticks is still seen.
 
 ## 5. Error handling & validation
 

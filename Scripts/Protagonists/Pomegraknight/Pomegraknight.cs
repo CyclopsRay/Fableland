@@ -194,9 +194,8 @@ public partial class Pomegraknight : CharacterController
     private void TornadoHit()
     {
         Vector2 origin = GlobalPosition;
-        foreach (Node n in GetTree().GetNodesInGroup("enemy"))
+        foreach (ICombatTarget e in CombatTargets.HostileTo(GetTree(), Side))
         {
-            if (n is not BaseFoe e) continue;
             Vector2 to = e.GlobalPosition - origin;
             if (Mathf.Abs(to.X) > TornadoHalfW || Mathf.Abs(to.Y) > TornadoHalfH) continue;
             Vector2 push = (to.LengthSquared() > 0.01f ? to.Normalized() : Vector2.Up) * TornadoPush;

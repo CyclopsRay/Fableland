@@ -1,0 +1,12 @@
+{
+  "id": "platform.kh_balcony",
+  "displayName": "Castle Balcony",
+  "role": "Platform",
+  "footprint": {
+    "w": 4,
+    "h": 1
+  },
+  "fillFootprint": false,
+  "prompt": "Scratchboard game sprite on transparent ground: a black board with light scratched out of it in fine, tangled, wandering hatch lines; crowded scratches where moonlight falls, bare black in shadow. Moon-blue scratches for everything, yellow only for things that give light, red only for danger. Entangled, chaotic, uneasy. Orthographic side view, no cast shadow, no text. SUBJECT: A stone balcony slab seen from the side: a bright coping on top, scratched masonry, carried on stepped corbels that deepen toward the wall on its right.",
+  "tileSet": "kh"
+}

@@ -8,10 +8,10 @@ public sealed class CleoGlideVolley
 {
     private readonly Dictionary<ulong, int> _hitsByTarget = new();
 
-    public float ConsumeMultiplier(BaseFoe target)
+    public float ConsumeMultiplier(ICombatTarget target)
     {
         if (target == null) return 1f;
-        ulong id = target.GetInstanceId();
+        ulong id = target.TargetId;
         _hitsByTarget.TryGetValue(id, out int priorHits);
         _hitsByTarget[id] = priorHits + 1;
         return priorHits switch { 0 => 1f, 1 => 0.65f, _ => 0.30f };
@@ -93,8 +93,8 @@ public partial class CleoStar : Area2D
     private bool _starVolumeActive;
     private readonly HashSet<Cleopastar> _insideStarVolume = new();
     private string _pullSource;
-    private readonly List<BaseFoe> _pulledFoes = new();
-    private readonly List<BaseFoe> _seenFoes = new();
+    private readonly List<ICombatTarget> _pulledFoes = new();
+    private readonly List<ICombatTarget> _seenFoes = new();
 
     public override void _Ready()
     {
@@ -263,9 +263,11 @@ public partial class CleoStar : Area2D
         if (body == null) return;
         // The broad effect trigger is for foes only. Cleopastar is never a direct
         // projectile collision target; her SoftVolume has exhausted-jump rules.
-        if (body is CharacterController) return; // no player-vs-player effect in this slice
+        // NOTE(boss): a star fights on the Player side until Cleopastar has a BOSS variant;
+        // then it takes its side from whoever launched it, as PumpKing's head does.
+        if (body is CharacterController { Side: CombatSide.Player }) return; // no player-vs-player effect in this slice
 
-        if (body is BaseFoe foe)
+        if (CombatTargets.TryGetHostile(body, CombatSide.Player, out _))
         {
             if (_blackhole) StartBlackholeSequence(stopMotion: false);
             else ExplodeNormal();
@@ -326,9 +328,8 @@ public partial class CleoStar : Area2D
             knockback = Mathf.Lerp(0f, Units.Px(6f), t);
         }
 
-        foreach (Node node in GetTree().GetNodesInGroup("enemy"))
+        foreach (ICombatTarget foe in CombatTargets.HostileTo(GetTree(), CombatSide.Player))
         {
-            if (node is not BaseFoe foe) continue;
             Vector2 to = foe.GlobalPosition - GlobalPosition;
             float distance = to.Length();
             if (distance - foe.HitRadius > NormalRadius) continue;
@@ -367,13 +368,12 @@ public partial class CleoStar : Area2D
 
     private void ApplyBlackholeTick()
     {
-        foreach (Node node in GetTree().GetNodesInGroup("enemy"))
+        foreach (ICombatTarget foe in CombatTargets.HostileTo(GetTree(), CombatSide.Player))
         {
-            if (node is not BaseFoe foe) continue;
             if (foe.GlobalPosition.DistanceTo(GlobalPosition) > PullRadius) continue;
 
             foe.TakeHit(new HitInfo(BlackholeTickDamage * _damageMultiplier, Vector2.Zero, 0.2f), GlobalPosition);
-            if (IsInstanceValid(foe) && foe.CurrentHp < foe.MaxHP * 0.10f)
+            if (CombatTargets.IsAlive(foe) && foe.CurrentHp < foe.MaxHP * 0.10f)
                 foe.Execute();
         }
     }
@@ -381,9 +381,8 @@ public partial class CleoStar : Area2D
     private void UpdatePull()
     {
         _seenFoes.Clear();
-        foreach (Node node in GetTree().GetNodesInGroup("enemy"))
+        foreach (ICombatTarget foe in CombatTargets.HostileTo(GetTree(), CombatSide.Player))
         {
-            if (node is not BaseFoe foe || !IsInstanceValid(foe)) continue;
             Vector2 toCenter = GlobalPosition - foe.GlobalPosition;
             float distance = toCenter.Length();
             if (distance > PullRadius) continue;
@@ -396,10 +395,10 @@ public partial class CleoStar : Area2D
 
         for (int i = _pulledFoes.Count - 1; i >= 0; i--)
         {
-            BaseFoe foe = _pulledFoes[i];
-            if (!IsInstanceValid(foe) || !_seenFoes.Contains(foe))
+            ICombatTarget foe = _pulledFoes[i];
+            if (!CombatTargets.IsAlive(foe) || !_seenFoes.Contains(foe))
             {
-                if (IsInstanceValid(foe)) foe.ClearContinuousExternalVelocity(_pullSource);
+                if (CombatTargets.IsAlive(foe)) foe.ClearContinuousExternalVelocity(_pullSource);
                 _pulledFoes.RemoveAt(i);
             }
         }
@@ -407,8 +406,8 @@ public partial class CleoStar : Area2D
 
     private void ClearPulls()
     {
-        foreach (BaseFoe foe in _pulledFoes)
-            if (IsInstanceValid(foe)) foe.ClearContinuousExternalVelocity(_pullSource);
+        foreach (ICombatTarget foe in _pulledFoes)
+            if (CombatTargets.IsAlive(foe)) foe.ClearContinuousExternalVelocity(_pullSource);
         _pulledFoes.Clear();
         _seenFoes.Clear();
     }

@@ -320,6 +320,27 @@ public static class TileRegistry
                     problems.Add($"{def.Id}: a strip-atlas tile needs Props[\"{TileProps.AutotileVariants}\"]");
             }
 
+            // A slope block (RealmTiles.Slope) is ground with a shaped top. It must say which
+            // terrain it is part of, or the cells beside and under it draw a crest and a flank
+            // against it; and its shape must fill its footprint's width, or blocks do not join.
+            if (def.Category == TileCategory.Ground && def.EffectArea?.Kind == ShapeDef.KindPolygon)
+            {
+                if (string.IsNullOrEmpty(def.AutotileGroup))
+                    problems.Add($"{def.Id}: a shaped Ground tile (a slope) needs the AutotileGroup of the terrain it belongs to");
+                float[] pts = def.EffectArea.Points ?? System.Array.Empty<float>();
+                float minX = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+                for (int i = 0; i + 1 < pts.Length; i += 2)
+                {
+                    minX = System.Math.Min(minX, pts[i]);
+                    maxX = System.Math.Max(maxX, pts[i]);
+                    maxY = System.Math.Max(maxY, pts[i + 1]);
+                }
+                float cellPx = MapGrid.PixelsPerCell;
+                if (pts.Length < 6 || System.Math.Abs(minX) > 0.01f || System.Math.Abs(maxX - def.FootprintW * cellPx) > 0.01f ||
+                    System.Math.Abs(maxY - def.FootprintH * cellPx) > 0.01f)
+                    problems.Add($"{def.Id}: a shaped Ground tile's polygon must span its footprint's full width and reach its bottom");
+            }
+
             if (def.SoftVolumeTuning != null)
             {
                 if (def.Category != TileCategory.SoftVolume)

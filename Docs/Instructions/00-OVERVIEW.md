@@ -61,6 +61,15 @@ Shipped (v0.3.7, branch `prototype-0-playable`):
   and the technical rulebook (`Tech/`) are cross-referenced and decision-logged, ready to
   drive the v0.4.0 build. (Docs only — no new runtime code since v0.3.5.)
 
+Since then (see `Migration.md` §0 for every version): foes, missions, shelters, items, three
+save slots, five protagonists, the map editor and nine realm tile sets have landed. **v0.10.11
+built the boss-fight system** (`FOES.gdd` §8): at a realm's 4-1 its protagonist is the BOSS —
+the same kit, inherited, on the other side, driven by a rule-based brain on an arena made for
+it — and beating it recruits it. PumpKing is the first. **v0.11.0 arranged the realm pool**
+(`MapGDD.md` §2): eight worlds — the Kingdom of Horror and The Forgotten joined — each with a
+map for every altitude band and a boss arena, PumpKing standing in as every realm's boss, and
+a run check that plays real runs across all of it (`40-QA.md`).
+
 Planned landings (the version numbers are already reserved in the GDDs — keep them):
 
 | Version | Milestone | GDD |
@@ -129,7 +138,9 @@ those two shortcuts are how solo projects rot.
   balance, and (later) free marketing (daily-seed challenges). Guard it jealously —
   one stray `GD.Randf()` in a gameplay path silently poisons all three.
 - **Beware the flagged scope bombs.** The GDDs already flag them: boss-as-protagonist
-  (every LV4 boss = a boss kit **plus** a player kit), Pixolotl's day-rewind undo scope,
+  (every LV4 boss = a boss kit **plus** a player kit — since v0.10.11 the boss kit *is* the
+  player kit on the other side, so what remains per boss is a table row, a rule list and an
+  arena), Pixolotl's day-rewind undo scope,
   ?-node event content, plantation. Treat each as a milestone, not a task.
 - **Playable beats complete.** Prototype 0 worked because it cut everything except the
   loop. Apply the same knife to each milestone: v0.5.0 needs *one* mission type fully

@@ -3,7 +3,8 @@
 Everything the debug/QA tooling does, in one place. Cross-referenced from
 `Docs/Instructions/40-QA.md` §1(4) (in-game debug harnesses). Code lives in
 `Scripts/Debug/` (`DebugManager.cs`, `ProtagonistRoster.cs`, `DebugLogEntry.cs`)
-plus per-system knobs noted below. Current as of **v0.6.0**.
+plus per-system knobs noted below. Current as of **v0.11.0** (§10: boss fights; §11: tooling
+that starts a run).
 
 `DebugManager` is a **`CanvasLayer` autoload** — it persists across every scene
 (Menu, Map, Arena, Shelter, Event, RunOver), so all of its controls are reachable
@@ -151,6 +152,53 @@ Turning debug OFF drops any display-only protagonists and the `[DBG]` catalog ro
 on its next refresh; any real held/backpack items stay. Note: wonder items are **id + display name only**
 in v0.6.0 — no passive/skill/cooldown behaviour attaches yet (full system is future work,
 `Docs/Tech/T30-FEATURE-BLUEPRINTS.md` §4 / `Docs/ITEMS.gdd`).
+
+## 10. Boss fights (v0.10.11)
+
+A realm's 4-1 fields that realm's protagonist as a BOSS (`FOES.gdd` §8). Since v0.11.0 a run
+reaches one in every realm — PumpKing stands in wherever a realm's own boss is not built, on
+that realm's boss arena — and his own castle whenever a seed draws the Kingdom of Horror
+(seed `POOL5` does: VK, HC, SL, KH, TF). To go straight to his castle fight without a run,
+three ways in:
+
+- **The boss page.** Key **4** (debug ON) now ends with a **Boss fights** section: one
+  button per `BossTable` row — "Fight BOSS PumpKing". It stages that boss
+  (`GameManager.StagedDebugBossId`) and loads the Arena, which turns into a level-4 Boss
+  mission on the map the run's own selection deals to that boss's world. Use it **from the
+  title screen**: while a run's adventure is set the Arena would stage that node instead, so
+  the button refuses and says so. The staged boss persists (R-restart replays the same fight)
+  until **Clear staged boss**.
+- **The scene.** Open `Scenes/Bosses/PumpKingBossFight.tscn` and press F6: the Arena with its
+  debug knobs preset.
+- **The knobs.** On any Arena root, consulted only when no run exists: `DebugMission`
+  (Collection / Protect / Destroy / Slaughter / Boss), `DebugNodeLevel`, `DebugBossId`
+  (a `BossTable` id), next to `DebugFoeLevel` / `DebugDay` / `DebugCombatMapPath` (§7). Leave
+  the map path empty for a boss and the selection chooses its arena; set `DebugFoeLevel` to
+  see the boss at a later day's bulk and damage.
+
+It is a debug arena like any other: three lives, R to restart, the win/lose banner, and key
+4's protagonist list to fight as anyone. With debug ON the mission line also shows **what the
+boss's brain is doing** — `Defeat BOSS PumpKing   [move:hold perch · act:bowl]` — one rule
+per channel, the readout to tune his rules by.
+
+The headless check for all of this is `Scenes/Bosses/BossFightCheck.tscn` (`40-QA.md`).
+
+## 11. Tooling that starts a run (v0.11.0)
+
+`user://` — your save slots and your own maps — is one folder shared by every checkout, and
+a run checkpoints its slot and deletes it when it ends. Anything scripted that starts a run
+must be kept off the real slots:
+
+- **`Scenes/Run/RunWalkCheck.tscn`** (headless, `40-QA.md`) plays real runs across all eight
+  worlds. It redirects the slot folder to a scratch directory and deals shipped maps only.
+  With `-- --saves="<folder>"` it also loads **copies** of real slot files and reports
+  whether each wakes up on its own map.
+- **`FABLELAND_SAVE_DIR=<folder>`** (environment variable, read once at start-up) redirects
+  the slot folder for a whole launch — for a windowed capture script, which cannot reach
+  `SaveGameService.DirectoryOverride`. Example: `open -g -n -W --env
+  FABLELAND_SAVE_DIR=/tmp/scratch -a Godot --args --path . -s capture.gd`.
+- A capture script that opens arenas itself must let one leave the tree before adding the
+  next: an arena adopts the first node in group `player` it finds (KNOWLEDGE.md, v0.11.0).
 
 ---
 

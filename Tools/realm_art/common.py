@@ -774,7 +774,10 @@ def export_set(realm_dir, set_id, brief, items, sheet_path=None, sheet_bg=(40, 4
             sheet.append((tid, img, variants * 4, 4))
         else:
             path = save_sprite(img, realm_dir, cat, stem, walk_top=extra.get("walk"))
-            write_manifest(path, tid, name, role, w, h, prompt, extra={"tileSet": set_id})
+            # A prop can belong to a terrain group without being an atlas: a slope block is
+            # one sprite, but the earth beside and under it must count it as more earth.
+            write_manifest(path, tid, name, role, w, h, prompt, autotile_group=extra.get("group"),
+                           extra={"tileSet": set_id})
             sheet.append((tid, img, w, h))
         print(f"  {tid:34s} {img.shape[1]}x{img.shape[0]}  -> {path.relative_to(REPO)}")
     if sheet_path:

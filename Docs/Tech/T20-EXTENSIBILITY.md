@@ -16,6 +16,8 @@ ItemRegistry["pomes_bravery"] → ItemDef  (tags, CDs, passive mods, skill, conv
 MissionRegistry["collection"] → MissionDef (factory for the strategy object)
 EventRegistry["weird_well"]   → EventDef  (?-node event script)
 WorldRegistry["VK"]           → WorldDef  (palette, terrain/coast identity, foe pool, name)
+BossTable["boss_pumpking"]    → BossDef   (scene, protagonist recruited, world, HP/damage/poise/
+                                           magazine/cooldown row, reaction time)   — v0.10.11
 ```
 
 Rules:
@@ -41,6 +43,12 @@ from data:
 - **Inheritance budget: depth ≤ 2** (`BaseFoe → CrabFoe` ✓). Anything deeper — or any
   urge for `BurningCrabFoe` — means the varying part should be data or a component
   (a status, a modifier source, a skill object).
+- **The one licensed third level: a BOSS** (`CharacterController → PumpKing →
+  BossPumpKing`, v0.10.11). It exists because the design says a boss *is* its protagonist
+  (`FOES.gdd` §8.1). It stays cheap by rule: the boss class may hold only its side, its rule
+  list and what it reads from its `BossTable` row. Anything a boss does differently in the
+  *kit* is a `protected virtual` on the protagonist with the protagonist's value as the
+  default (`PumpKing.AmmoDefinition`), never a copy of a method.
 
 ## 3. Pipelines & hooks (the extension sockets)
 

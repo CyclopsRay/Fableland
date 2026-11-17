@@ -563,6 +563,262 @@ def fence(seed):
     return img
 
 
+# ------------------------------------------------------------ the castle slope
+
+
+def _earth_strip(variants=4):
+    """The earth material strip `earth_atlas` cuts its cells from, rebuilt with the same
+    seeds: one row, `variants` cells wide, periodic in x and repeating every cell in y. The
+    slope block is cut from it so its body is the same paint as the ground it stands in."""
+    Wn = variants * CELL
+    base = C.new(CELL, Wn)
+    base[..., :3] = NIGHT
+    base[..., 3] = 1.0
+    xx, yy = C.strip(variants)
+    light = 0.16 + 0.26 * C.fbm(xx / 64.0, yy / 64.0, 3, octaves=3, period=(Wn // 64, CELL // 64))
+    lines = hatch(CELL, Wn, light, 5, angle=24.0, spacing=8.0, cross=False, period=(Wn // 32, CELL // 32))
+    C.over(base, BLUE_D, lines * 0.9)
+    big = C.new(CELL * 3, Wn * 3)
+    rng = np.random.default_rng(11)
+    for i in range(4 * variants):
+        p0 = np.array([rng.uniform(0, Wn), rng.uniform(0, CELL)])
+        d = np.array([rng.uniform(-1, 1), rng.uniform(-0.5, 0.5)])
+        ln = rng.uniform(70, 190)
+        p3 = p0 + d / np.linalg.norm(d) * ln
+        pts = C.bezier(p0, p0 + rng.uniform(-50, 50, 2), p3 + rng.uniform(-50, 50, 2), p3, n=14)
+        for ox in (0, Wn, 2 * Wn):
+            for oy in (0, CELL, 2 * CELL):
+                C.ink_stroke(big, pts + np.array([ox, oy]), np.linspace(rng.uniform(1.4, 3.0), 0.6, len(pts)),
+                             C.mix(BLUE_D, BLUE, 0.45), 0.70, dry=0.3, seed=100 + i, soft=0.8)
+    mid = big[CELL:2 * CELL, Wn:2 * Wn]
+    C.over(base, mid[..., :3], mid[..., 3])
+    return base
+
+
+def slope(seed):
+    """`ground.kh_slope` — a block of rooted earth whose top is a ramp, rising to the right
+    one cell in two. Two cells square: the ramp crosses the upper row and the lower row is
+    solid, so the scratched grass line can sit a little under the walking line (as it does
+    on level earth) without dipping out of the sprite at the low end. Blocks step up and to
+    the right into one unbroken slope; Flip H makes it rise to the left."""
+    W = H = 2 * CELL
+    strip = _earth_strip(4)
+    img = np.concatenate([strip[:, :W], strip[:, :W]], axis=0).copy()        # the body: two rows of the same earth
+    xx, yy = C.grid(H, W)
+    walk = CELL - xx * (CELL / W)                                             # the collider's ramp: (0, CELL) -> (W, 0)
+    lip = C.fbm(xx / 32.0, yy * 0 + 3.3, seed, octaves=3, period=(W // 32, 0)) # same at both ends, so blocks join
+    top = walk + 13.0 + (lip - 0.5) * 12.0                                    # 13 px under it, like `carve_top`
+    img[..., 3] *= C.smoothstep(top - 1.2, top + 1.2, yy)
+    d = yy - top
+    a = img[..., 3]
+    C.over(img, BLUE_L, np.exp(-((d - 2.0) / 1.6) ** 2) * a * 0.95)           # the line you stand on
+    lit = np.clip(1.0 - d / 30.0, 0.0, 1.0) * a
+    C.over(img, BLUE, hatch(H, W, lit * 0.9, seed + 4, angle=58.0, spacing=5.0, cross=True, period=(W // 32, 0)) * a)
+    rng = np.random.default_rng(seed)
+    crest = top[0, :]
+    for _ in range(34):                                                       # grass, scratched up the slope's normal
+        mx = rng.uniform(8, W - 8)
+        my = float(crest[int(mx)]) + 2.0
+        ln = rng.uniform(6, 15)
+        tip = (mx + rng.uniform(-4, 4) - ln * 0.40, my - ln)
+        if tip[1] < 3.0 or tip[0] < 3.0:
+            continue                                                          # a blade must not be cut by the sheet
+        scratch(img, [(mx, my), tip], [1.3, 0.3], BLUE_L, 0.9, int(rng.integers(1 << 30)))
+    return img
+
+
+# ----------------------------------------------------------------- the castle
+
+
+def _masonry(img, mask, seed, bw=64.0, bh=32.0, lit=1.0):
+    """Castle stone inside `mask`: the black board, each block's top and moon-side edge
+    scratched out of it, its face hatched a little — the same marks as `stone_atlas`."""
+    H, W = mask.shape
+    xx, yy = C.grid(H, W)
+    C.over(img, NIGHT, mask)
+    row = np.floor(yy / bh)
+    fx = (xx + (row % 2) * bw * 0.5) % bw
+    fy = yy - row * bh
+    face = 0.10 + 0.30 * C.fbm(np.floor((xx + (row % 2) * bw * 0.5) / bw) * 7.3 + 0.5, row * 3.1 + 0.5, seed, octaves=1)
+    inside = (fx > 4) & (fx < bw - 3) & (fy > 4) & (fy < bh - 3)
+    C.over(img, BLUE_D, hatch(H, W, face, seed + 2, angle=40.0, spacing=6.5, cross=False) * inside * mask)
+    wob = (C.vnoise(xx / 5.0, yy / 5.0, seed + 4) - 0.5) * 1.6
+    C.over(img, BLUE_L, np.exp(-((fy - 3.0 + wob) / 1.2) ** 2) * 0.85 * lit * mask)
+    C.over(img, BLUE, np.exp(-((fx - 3.0 + wob) / 1.2) ** 2) * 0.70 * lit * mask)
+    return img
+
+
+def _moon_edge(img, mask, amount=0.9):
+    """Scratch the moon's side (up and to the left) of a black cut-out."""
+    edge = np.clip(mask - C.shift(mask, 3, 2), 0.0, 1.0)
+    return C.over(img, BLUE_L, edge * amount)
+
+
+def balcony(wc, seed):
+    """`platform.kh_balcony` — the stone balcony of PumpKing's castle: a slab whose bright
+    coping is the walking line, carried on corbels that step back toward the wall. The
+    wall is on the RIGHT; Flip H for a wall on the left."""
+    img = C.cells(wc, 1)
+    H, W = img.shape[:2]
+    xx, yy = C.grid(H, W)
+    slab = C.rect_mask(H, W, 0.0, 2.0, W, 40.0)
+    _masonry(img, slab, seed, bw=64.0, bh=19.0)
+    # The slab's face catches the moon: crowded scratches, so the one thing here you can
+    # stand on is also the lightest stone in a wall of stone.
+    face = ((yy > 13.0) & (yy < 37.0)).astype(np.float32) * slab
+    C.over(img, BLUE, hatch(H, W, np.full((H, W), 0.85, np.float32), seed + 1, angle=16.0, spacing=4.5, cross=True) * face * 0.85)
+    C.over(img, NIGHT, ((yy > 2.0) & (yy < 13.0)).astype(np.float32) * slab)
+    C.over(img, BLUE_L, (yy < 7.0).astype(np.float32) * slab * 0.98)            # the line you stand on: a broad coping
+    C.over(img, BLUE_L, (np.abs(yy - 11.0) < 1.2).astype(np.float32) * slab * 0.9)
+    C.over(img, BLUE_L, (np.abs(yy - 38.5) < 1.3).astype(np.float32) * slab * 0.85)  # the slab's lower arris
+    # One corbelled console under the slab, seen from the side: courses of stone stepping
+    # out from the wall, each a little shorter than the one above, so the slab is carried
+    # most of its length and the support is deepest against the wall.
+    courses = 4
+    step_h = 19.0
+    console = np.zeros((H, W), np.float32)
+    for k in range(courses):
+        x0 = W * (0.22 + 0.19 * k)
+        console = np.maximum(console, C.rect_mask(H, W, x0, 40.0 + step_h * k, W, 40.0 + step_h * (k + 1)))
+    _masonry(img, console, seed + 7, bw=52.0, bh=step_h)
+    for k in range(courses):                                                    # each course's moon-side nose and soffit
+        x0 = W * (0.22 + 0.19 * k)
+        y0, y1 = 40.0 + step_h * k, 40.0 + step_h * (k + 1)
+        C.over(img, BLUE_L, ((np.abs(xx - x0 - 1.3) < 1.3) & (yy > y0) & (yy < y1)).astype(np.float32) * 0.9)
+        x1 = W * (0.22 + 0.19 * (k + 1)) if k + 1 < courses else W
+        C.over(img, BLUE, ((np.abs(yy - y1 + 1.2) < 1.1) & (xx > x0) & (xx < x1)).astype(np.float32) * 0.8)
+    return img
+
+
+def balustrade(wc, seed):
+    """`deco.kh_balustrade` — a stone balustrade for a balcony's edge: turned balusters
+    between a foot rail and a hand rail, waist high. Mostly air: whoever stands behind it
+    still reads."""
+    img = C.cells(wc, 1)
+    H, W = img.shape[:2]
+    xx, yy = C.grid(H, W)
+    top_y, foot_y = 58.0, H - 9.0
+    shape = np.maximum(C.rect_mask(H, W, 0.0, top_y, W, top_y + 11.0), C.rect_mask(H, W, 0.0, foot_y, W, H))
+    for x in np.arange(16.0, W, 32.0):                                         # a baluster every quarter cell
+        belly = 5.0 + 4.5 * np.sin(np.clip((yy - top_y - 11.0) / (foot_y - top_y - 11.0), 0, 1) * math.pi) ** 2
+        shape = np.maximum(shape, ((np.abs(xx - x) < belly) & (yy > top_y + 10.0) & (yy < foot_y + 1.0)).astype(np.float32))
+    for x in (5.0, W - 5.0):                                                   # a newel post at each end
+        shape = np.maximum(shape, C.rect_mask(H, W, x - 5.0, top_y - 12.0, x + 5.0, H))
+    C.over(img, NIGHT, shape)
+    C.over(img, BLUE_L, (np.abs(yy - top_y - 1.5) < 1.4).astype(np.float32) * shape * 0.95)   # the hand rail's top
+    C.over(img, BLUE, (np.abs(yy - foot_y - 1.5) < 1.2).astype(np.float32) * shape * 0.85)
+    _moon_edge(img, shape * ((yy > top_y + 10.0) & (yy < foot_y)).astype(np.float32), 0.75)
+    return img
+
+
+def _arch(H, W, cx, spring_y, half, rise, base_y):
+    """A pointed (gothic) arch opening: two arcs meeting at the apex, straight jambs below."""
+    xx, yy = C.grid(H, W)
+    r = (half * half + rise * rise) / (2.0 * half)                             # arcs struck from the far jamb's side
+    left = (np.hypot(xx - (cx + half - r), yy - spring_y) < r)
+    right = (np.hypot(xx - (cx - half + r), yy - spring_y) < r)
+    head = left & right & (yy <= spring_y)
+    jambs = (np.abs(xx - cx) < half) & (yy > spring_y) & (yy < base_y)
+    return (head | jambs).astype(np.float32)
+
+
+def gate(wc, hc, seed):
+    """`deco.kh_gate` — the castle's great door, shut: a pointed arch of scratched voussoirs,
+    two leaves of studded planks, a portcullis' teeth showing under the arch, and a seam of
+    yellow light between the leaves — someone is home, and you are not going in."""
+    img = C.cells(wc, hc)
+    H, W = img.shape[:2]
+    xx, yy = C.grid(H, W)
+    cx = W * 0.5
+    outer = _arch(H, W, cx, H * 0.46, W * 0.46, H * 0.40, H)
+    inner = _arch(H, W, cx, H * 0.46, W * 0.36, H * 0.31, H)
+    frame = np.clip(outer - inner, 0.0, 1.0)
+    _masonry(img, frame, seed, bw=46.0, bh=30.0)
+    _moon_edge(img, outer, 0.9)
+    C.over(img, NIGHT, inner)                                                  # the door itself: black, then scratched
+    plank = (np.abs(((xx - cx) / 26.0) % 1.0 - 0.5) < 0.035).astype(np.float32)
+    C.over(img, BLUE_D, hatch(H, W, np.full((H, W), 0.30, np.float32), seed + 3, angle=88.0, spacing=6.0, cross=False) * inner * 0.9)
+    C.over(img, BLUE, plank * inner * 0.75)
+    for by in (H * 0.56, H * 0.72, H * 0.88):                                  # iron bands, studded
+        band = (np.abs(yy - by) < 5.0).astype(np.float32) * inner
+        C.over(img, NIGHT, band)
+        C.over(img, BLUE_L, (np.abs(yy - by + 4.0) < 1.1).astype(np.float32) * inner * 0.9)
+        for sx in np.arange(cx - W * 0.30, cx + W * 0.31, 26.0):
+            C.over(img, BLUE_L, C.aa(C.sdf_circle(H, W, sx, by, 2.4), 1.2) * inner * 0.95)
+    teeth_y = H * 0.40                                                         # the portcullis, drawn up, its points showing
+    for tx in np.arange(cx - W * 0.30, cx + W * 0.31, 22.0):
+        tooth = C.poly_mask(H, W, [(tx - 6.0, teeth_y - 60.0), (tx + 6.0, teeth_y - 60.0), (tx + 6.0, teeth_y), (tx, teeth_y + 16.0), (tx - 6.0, teeth_y)])
+        C.over(img, NIGHT, tooth * inner)
+        C.over(img, BLUE, np.clip(tooth - C.shift(tooth, 2, 0), 0, 1) * inner * 0.9)
+    seam = np.exp(-((xx - cx) / 1.6) ** 2) * (yy > H * 0.47) * inner           # light between the leaves
+    C.over(img, YEL, seam * 0.95)
+    C.over(img, YEL_L, np.exp(-((xx - cx) / 0.7) ** 2) * (yy > H * 0.47) * inner * 0.9)
+    C.over(img, YEL, np.exp(-((yy - H + 3.0) / 2.0) ** 2) * (np.abs(xx - cx) < W * 0.35) * inner * 0.75)   # …and under them
+    return img
+
+
+def door(wc, hc, seed):
+    """`deco.kh_door` — the door onto the balcony, standing open: a small pointed arch with
+    lamplight in it. It is how PumpKing comes out; nobody else goes in."""
+    img = C.cells(wc, hc)
+    H, W = img.shape[:2]
+    xx, yy = C.grid(H, W)
+    cx = W * 0.5
+    outer = _arch(H, W, cx, H * 0.42, W * 0.44, H * 0.36, H)
+    inner = _arch(H, W, cx, H * 0.42, W * 0.33, H * 0.27, H)
+    C.radial_glow(img, cx, H * 0.62, W * 0.34, YEL, 0.26)
+    frame = np.clip(outer - inner, 0.0, 1.0)
+    _masonry(img, frame, seed, bw=40.0, bh=26.0)
+    _moon_edge(img, outer, 0.9)
+    warm = np.clip(1.0 - np.hypot((xx - cx) / (W * 0.36), (yy - H * 0.70) / (H * 0.50)), 0.0, 1.0)
+    C.over(img, C.mix(RED_D, YEL, np.clip(0.25 + 0.75 * warm, 0, 1)), inner * 0.97)       # lamplight, deepest at the sill
+    C.over(img, YEL_L, C.smoothstep(0.45, 0.95, warm) * inner * 0.85)
+    leaf = ((xx > cx + W * 0.12) & (xx < cx + W * 0.33)).astype(np.float32) * inner       # the open leaf, edge on
+    C.over(img, NIGHT, leaf)
+    C.over(img, BLUE, (np.abs(xx - cx - W * 0.12) < 1.2).astype(np.float32) * inner * 0.9)
+    C.over(img, BLUE_D, hatch(H, W, np.full((H, W), 0.30, np.float32), seed + 5, angle=88.0, spacing=6.0, cross=False) * leaf * 0.9)
+    return img
+
+
+def battlement(wc, seed):
+    """`deco.kh_battlement` — crenellations for a wall top: a merlon to each cell, standing
+    on the canvas bottom, gaps at the canvas edges so the row tiles."""
+    img = C.cells(wc, 1)
+    H, W = img.shape[:2]
+    xx, yy = C.grid(H, W)
+    fx = xx % CELL
+    merlon = ((fx > 16.0) & (fx < CELL - 16.0) & (yy > 22.0)).astype(np.float32)
+    sill = (yy > H - 26.0).astype(np.float32)
+    shape = np.maximum(merlon, sill)
+    _masonry(img, shape, seed, bw=48.0, bh=26.0)
+    cap = ((fx > 16.0) & (fx < CELL - 16.0) & (yy > 22.0) & (yy < 31.0)).astype(np.float32)
+    C.over(img, NIGHT, cap)
+    C.over(img, BLUE_L, ((fx > 16.0) & (fx < CELL - 16.0) & (np.abs(yy - 23.5) < 1.5)).astype(np.float32) * 0.97)
+    C.over(img, BLUE_L, ((np.abs(fx - 17.5) < 1.3) & (yy > 22.0) & (yy < H - 26.0)).astype(np.float32) * 0.85)
+    C.over(img, BLUE, ((np.abs(yy - (H - 25.0)) < 1.2) & ((fx <= 16.0) | (fx >= CELL - 16.0))).astype(np.float32) * 0.85)
+    slit = ((np.abs(fx - CELL * 0.5) < 3.0) & (yy > 44.0) & (yy < 78.0)).astype(np.float32)          # an arrow loop in each:
+    img[..., 3] *= 1.0 - slit                                                                         # a real hole, not paint
+    C.over(img, BLUE, ((np.abs(np.abs(fx - CELL * 0.5) - 4.2) < 1.0) & (yy > 44.0) & (yy < 78.0)).astype(np.float32) * 0.8)
+    return img
+
+
+def pennant(seed):
+    """`deco.kh_pennant` — a red pennant on a pole: the one colour in this wood that means
+    keep away, flying over the man who means it."""
+    img = C.cells(1, 2)
+    H, W = img.shape[:2]
+    px = W * 0.30
+    scratch(img, [(px, H - 2.0), (px + 1.0, 10.0)], [2.2, 1.4], BLUE_L, 0.95, seed)
+    C.over(img, YEL, C.aa(C.sdf_circle(H, W, px + 1.0, 9.0, 3.4), 1.2) * 0.95)             # a gilt finial
+    tail = [(px + 2.0, 18.0), (W - 12.0, 30.0), (W - 34.0, 44.0), (W - 10.0, 60.0), (px + 2.0, 70.0)]
+    flag = C.poly_mask(H, W, tail)
+    C.over(img, RED, flag * 0.97)
+    xx, yy = C.grid(H, W)
+    C.over(img, RED_D, hatch(H, W, np.full((H, W), 0.5, np.float32), seed + 1, angle=14.0, spacing=6.0, cross=False) * flag * 0.9)
+    C.over(img, YEL_L, C.aa(C.sdf_circle(H, W, px + 30.0, 44.0, 7.0), 1.4) * flag * 0.9)   # a pumpkin-yellow roundel
+    return img
+
+
 # -------------------------------------------------------------------- build
 
 
@@ -578,11 +834,18 @@ def build():
     add("ground.kh_stone", "Castle Stone", "Ground", 1, 1, "Ground", "ground_kh_stone", stone_atlas(4),
         "Castle masonry: each block's moonlit edges scratched out of black, faces lightly hatched; bright coping on top, "
         "a row of corbels beneath.", fill=True, group="terrain.kh_stone", variants=4)
+    add("ground.kh_slope", "Rooted Slope", "Ground", 2, 2, "Ground", "ground_kh_slope", slope(131),
+        "A block of the same rooted earth whose top is a ramp rising to the right, one cell in two, with the moonlit "
+        "crest of scratched grass running up it; solid below. Joins end to end into one long slope.",
+        group="terrain.kh_earth")
 
     add("platform.kh_branch", "Gnarled Limb", "Platform", 4, 1, "Platform", "platform_kh_branch", branch(4, 61),
         "A gnarled tree limb to stand on, its back lit by the moon in scratched lines, twigs clawing downward.", walk=8)
     add("platform.kh_plank", "Rotten Hoarding", "Platform", 3, 1, "Platform", "platform_kh_plank", plank(3, 67),
         "A hoarding of rotten planks on two brackets, scratched grain, a bright top edge.", walk=8)
+    add("platform.kh_balcony", "Castle Balcony", "Platform", 4, 1, "Platform", "platform_kh_balcony", balcony(4, 133),
+        "A stone balcony slab seen from the side: a bright coping on top, scratched masonry, carried on stepped corbels "
+        "that deepen toward the wall on its right.", walk=8)
 
     add("softvolume.kh_bramble", "Bramble", "SoftVolume", 3, 2, "SoftVolume", "softvolume_kh_bramble", bramble(3, 2, 71),
         "A thicket of thorn: a knot of barbed scratched canes with red berries. Enterable; it holds whoever enters.")
@@ -607,6 +870,17 @@ def build():
         "A lit gothic window: yellow glass, black tracery.")
     add("deco.kh_fence", "Iron Railings", "Decoration", 3, 1, "Decoration", "deco_kh_fence", fence(105),
         "Leaning iron railings with spear heads, scratched in blue.")
+    add("deco.kh_balustrade", "Balustrade", "Decoration", 4, 1, "Decoration", "deco_kh_balustrade", balustrade(4, 135),
+        "A waist-high stone balustrade: turned balusters between a foot rail and a hand rail, a newel post at each end.")
+    add("deco.kh_gate", "Castle Gate", "Decoration", 4, 5, "Decoration", "deco_kh_gate", gate(4, 5, 137),
+        "A great castle door, shut: a pointed arch of scratched stone, two leaves of studded planks, portcullis teeth "
+        "under the arch, a seam of yellow light between the leaves.")
+    add("deco.kh_door", "Balcony Door", "Decoration", 2, 3, "Decoration", "deco_kh_door", door(2, 3, 139),
+        "A small pointed-arch doorway standing open, yellow lamplight inside, one dark leaf edge-on.")
+    add("deco.kh_battlement", "Battlements", "Decoration", 4, 1, "Decoration", "deco_kh_battlement", battlement(4, 141),
+        "A row of crenellations for a wall top, a merlon with an arrow loop to each cell, scratched masonry. Tiles horizontally.")
+    add("deco.kh_pennant", "Pennant", "Decoration", 1, 2, "Decoration", "deco_kh_pennant", pennant(143),
+        "A red swallow-tailed pennant with a yellow roundel on a pole with a gilt finial.")
     add("deco.kh_fireflies", "Fireflies", "Decoration", 4, 3, "Decoration", "deco_kh_fireflies", fireflies(107),
         "A scatter of fireflies: yellow points, each with a small scratched cross of light.")
     add("deco.kh_moon", "Moon", "Decoration", 4, 4, "Decoration", "deco_kh_moon", moon(111),

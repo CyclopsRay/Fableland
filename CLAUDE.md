@@ -37,7 +37,10 @@ live in `Migration.md` (see §0 for the delivered prototype).
   check statically (brace/paren balance, `.tscn` resource paths resolve, `GetNode` paths
   match scenes). Remember static checks miss type/API-existence errors — do a real build
   when a toolchain is available (`dotnet build Fableland.csproj`; for map/tile work also the
-  headless content check in `Docs/Instructions/40-QA.md` §(2)).
+  headless content check in `Docs/Instructions/40-QA.md` §(2); for bosses, kits, input, hit
+  intake or slopes also the boss check, `res://Scenes/Bosses/BossFightCheck.tscn`; for the
+  world pool, map generation, saves, the run flow or a shipped map also the run check,
+  `res://Scenes/Run/RunWalkCheck.tscn` — it plays real runs and never touches `user://`).
 
 ## Conventions (details in KNOWLEDGE.md / Units.cs)
 - **Units:** 32 px/m; player 2 m, jump 8 m, 1 s ground jump ⇒ g = 2048 px/s², jump 1024 px/s.
@@ -47,9 +50,14 @@ live in `Migration.md` (see §0 for the delivered prototype).
 - **Architecture:** characters subclass `CharacterController`; abilities are `HandleBA` /
   `HandleSkill1/2` / `HandleSkillUlt`; animation is stubbed via `UpdateAnimator` (empty
   `AnimationPlayer` + `// NOTE(animation)` markers).
+- **Sides, targets, controls (v0.10.11):** a fighter is on a `CombatSide`; a BOSS is its
+  protagonist's class on the Foe side (`BossPumpKing : PumpKing`, `Docs/FOES.gdd` §8). Kits
+  read `Controls` and hit `CombatTargets.HostileTo(GetTree(), Side)` / `ICombatTarget`.
 
 ## Don'ts
 - Don't rename/move scripts or scene nodes without updating `.tscn` `ext_resource` paths and
   `GetNode`/`NodePath` references, or exported-property assignments in scenes.
 - Don't shadow inherited members (e.g. a field named `Gravity` on an `Area2D` subclass).
+- Don't read `Input` or the mouse, or cast a target to `BaseFoe`, inside a character kit — a
+  boss brain presses the same buttons, and a boss is not a `BaseFoe`.
 - Don't commit the GitHub PAT into the repo or bake it into a saved git remote.

@@ -48,6 +48,35 @@ internal static class RealmTiles
         string stem, string group) =>
         Fill(set, realmDir, TileCategory.Ground, "Ground", id, name, color, stem, group);
 
+    /// <summary>
+    /// A ramp of a fill material: a block of solid ground <paramref name="run"/> cells wide
+    /// whose top rises to the right by one cell across its width, over
+    /// <paramref name="solidRows"/> rows of solid material (MapCreation.gdd §2.2b). Blocks
+    /// placed one step up and <paramref name="run"/> cells along join into one straight
+    /// slope; a placed tile's Flip H makes it rise to the left.
+    ///
+    /// It is ONE sprite, not an atlas, but it carries the material's
+    /// <see cref="TileDef.AutotileGroup"/>: the cells beside and beneath it then count it as
+    /// more of the same ground and draw no crest or flank against it. The collider is the
+    /// block's real shape (a convex polygon), so a body walks the ramp and a rolling thing
+    /// rolls down it. Art: the walking line runs from the left edge one cell above the
+    /// bottom of the solid rows up to the top-right corner.
+    /// </summary>
+    public static TileDef Slope(string set, string realmDir, string id, string name, int run, int solidRows,
+        string color, string stem, string group)
+    {
+        float cell = MapGrid.PixelsPerCell;
+        float width = run * cell, height = (1 + solidRows) * cell;
+        return new TileDef
+        {
+            Id = id, DisplayName = name, Category = TileCategory.Ground, TileSet = set,
+            FootprintW = run, FootprintH = 1 + solidRows, EditorColor = color,
+            AutotileGroup = group, SpriteSlot = Sprite(realmDir, "Ground", stem),
+            // low left corner of the ramp → its top right → down the right side → along the bottom
+            EffectArea = ShapeDef.Polygon(new[] { 0f, cell, width, 0f, width, height, 0f, height }),
+        };
+    }
+
     /// <summary>One-way platform. EffectArea is left null on purpose: the whole footprint is
     /// the collider and its top edge is the standing surface (KNOWLEDGE v0.6.18), which is
     /// why every platform sprite paints its walkable line on the canvas top.</summary>

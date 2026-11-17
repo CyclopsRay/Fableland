@@ -59,8 +59,8 @@ public static class TileSets
         // world or retired.
         new() { Id = LoongsNest, DisplayName = "Palace of Loong · Loong's Nest", RealmName = "Loong's Nest", WorldAbbr = "PL", CanvasColor = "#0C1230" },
         new() { Id = PalaceOfLoong, DisplayName = "Cloud Court (unassigned)", RealmName = "Cloud Court", WorldAbbr = "CC", CanvasColor = "#2A1B4A", AccentColor = "#D9A441" },
-        // Worlds that are designed but not in the overworld pool yet (10-DESIGN TBD #20, #24):
-        // their kits and maps exist and play from the editor; a run cannot reach them.
+        // The two worlds that joined the overworld pool in v0.11.0. Their accent colours are
+        // kept for the day a world is taken out again; a pool world brings its own colour.
         new() { Id = KingdomOfHorror, DisplayName = "Kingdom of Horror · Dark Wood", RealmName = "Dark Wood", WorldAbbr = "KH", CanvasColor = "#111B3D", AccentColor = "#FFC83D" },
         new() { Id = TheForgotten, DisplayName = "The Forgotten · Forgotten City", RealmName = "Forgotten City", WorldAbbr = "TF", CanvasColor = "#0C0C22", AccentColor = "#FF6FCF" },
     };

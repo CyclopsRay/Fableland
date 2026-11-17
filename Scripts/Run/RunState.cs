@@ -41,6 +41,11 @@ public partial class RunState : Node
 
     // ---- map ----
     public MapGraph Graph;                // node.Devoured is the live devour flag
+    /// <summary>The world pool this run's map was generated from, as abbreviations in pool
+    /// order. Recorded with the seed: together they regenerate the map, whatever the pool has
+    /// become since (v0.11.0).</summary>
+    public IReadOnlyList<string> WorldPool => _worldPool;
+    private List<string> _worldPool = new();
     public string CurrentNodeId;
     public string PreviousNodeId;         // node moved FROM (combat-failure bounce, NODES §2.3)
     public readonly HashSet<string> VisitedNodeIds = new();
@@ -198,7 +203,8 @@ public partial class RunState : Node
         seed = string.IsNullOrWhiteSpace(seed) ? DetRandom.NewSeed() : seed.Trim().ToUpperInvariant();
         Seed = seed;
         Rng = new DetRandom(seed);
-        Graph = MapGenerator.Generate(seed);
+        _worldPool = WorldDef.PoolAbbrs();
+        Graph = MapGenerator.Generate(seed, MapGenerator.PomegraknightHome, WorldDef.Resolve(_worldPool));
         RebuildNodeIndex();
 
         Day = 1;
@@ -281,6 +287,11 @@ public partial class RunState : Node
             IsRevisitCombat = revisitCombat,
             Terrain = node?.Terrain ?? "sea-level",
         };
+        // A realm's 4-1 is held by that realm's protagonist as a BOSS (NODES §4.5); a world
+        // whose own is not built yet fields the stand-in (BossTable.ForWorld — PumpKing, for
+        // now, in every realm).
+        if (kind == NodeKind.Boss && node != null && node.Level == 4)
+            adventure.BossId = BossTable.ForWorld(node.Zone)?.Id ?? "";
         // The overworld selects an authored combat map once and snapshots only its path into
         // the handshake. The arena never reaches back into the map graph or rolls selection.
         if (node?.IsCombat == true)
@@ -921,10 +932,21 @@ public partial class RunState : Node
         return null;
     }
 
-    public void GrantProtagonist(string id)
+    /// <summary>Recruit a protagonist (a beaten LV4 boss, NODES §4.5). Idempotent: one
+    /// already on the roster — every protagonist is, under the prototype roster policy
+    /// below — is not added twice and not counted again. Returns true when it was new.</summary>
+    public bool GrantProtagonist(string id)
     {
+        if (string.IsNullOrWhiteSpace(id) || FindProtagonist(id) != null) return false;
+        if (ProtagonistRoster.GetScene(id) == null)
+        {
+            GD.PushError($"[RunState] cannot recruit '{id}': no such protagonist.");
+            return false;
+        }
         Owned.Add(new ProtagonistState(id));
         ProtagonistsCollected++;
+        DayEndNotes.Add($"{id} joins your roster.");
+        return true;
     }
 
     /// <summary>Grant every currently implemented protagonist exactly once. This is a
@@ -967,6 +989,7 @@ public partial class RunState : Node
         RunSaveData save = _saveTemplate ?? new RunSaveData();
         save.Version = SaveGameService.CurrentVersion;
         save.Seed = Seed ?? "";
+        save.WorldPool = new List<string>(_worldPool);
         save.Day = Day;
         save.InVoid = InVoid;
         save.Stamina = Stamina;
@@ -1051,7 +1074,15 @@ public partial class RunState : Node
 
         Seed = save.Seed.Trim().ToUpperInvariant();
         Rng = new DetRandom(Seed);
-        Graph = MapGenerator.Generate(Seed);
+        // The map is regenerated, not stored: it must come from the pool the run was made
+        // from, or a save from a smaller pool would wake up in different realms.
+        _worldPool = save.WorldPool is { Count: > 0 }
+            ? new List<string>(save.WorldPool)
+            : new List<string>(SaveGameService.WorldPoolBeforeV4);
+        List<WorldDef> worlds = WorldDef.Resolve(_worldPool);
+        if (worlds.Count < _worldPool.Count)
+            GD.PushWarning($"[RunState] the save's world pool ({string.Join(", ", _worldPool)}) names a world this build does not have; the map may differ from the one it was saved on.");
+        Graph = MapGenerator.Generate(Seed, MapGenerator.PomegraknightHome, worlds);
         RebuildNodeIndex();
 
         var devoured = new HashSet<string>(save.Map?.DevouredNodeIds ?? new List<string>(), StringComparer.Ordinal);
