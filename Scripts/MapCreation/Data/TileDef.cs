@@ -82,17 +82,21 @@ public sealed class SoftVolumeTuning
 {
     /// <summary>
     /// Optional 0..1 viscosity index. It caps self-directed speed to this fraction
-    /// of max speed and determines the resistance rate; see SoftVolume and GDD §2.2.
+    /// of max speed — on both axes: a fighter swims in a soft volume — and determines the
+    /// resistance rate; see SoftVolume and GDD §2.2. In a medium with a SinkSpeed it must
+    /// leave a swimming speed above the sink, or nobody can swim up.
     /// </summary>
     public float? StagnationIndex { get; init; }
 
     /// <summary>Optional 0..1 share of gravity a body keeps inside; the rest is buoyancy.
-    /// Null keeps full gravity. Water is well under 1.</summary>
+    /// Null keeps full gravity. Water is well under 1. For a swimming fighter it sets how
+    /// quickly a rise gives way to the drop; for a foe it scales its fall.</summary>
     public float? GravityScale { get; init; }
 
     /// <summary>Optional: the fastest anything sinks in this medium on its own, in metres
-    /// per second — the same for every body. Set it on water; a player holding Down swims
-    /// down at the medium's speed cap instead. Null keeps the plain GravityIndex drift.</summary>
+    /// per second — the same for every body. Set it on water. It is the drop a swimming
+    /// fighter's own speed is added to: up = swimming speed − this, down = swimming speed +
+    /// this. Null keeps the plain GravityIndex drop (a tenth of the body's top speed).</summary>
     public float? SinkSpeed { get; init; }
 
     /// <summary>Optional multiplier on the resistance (null = 1). At 1 a running body
@@ -107,8 +111,8 @@ public sealed class SoftVolumeTuning
     public float FlowX { get; init; }
     public float FlowY { get; init; }
 
-    /// <summary>False for a pure current — it only carries: no drag, and no jump support,
-    /// so it cannot be climbed. True (the default) for a medium a body is in.</summary>
+    /// <summary>False for a pure current — it only carries: no drag, nothing to swim in and
+    /// no jump support, so it cannot be climbed. True (the default) for a medium a body is in.</summary>
     public bool Medium { get; init; } = true;
 }
 

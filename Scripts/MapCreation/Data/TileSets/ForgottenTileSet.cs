@@ -22,7 +22,8 @@ internal static class ForgottenTileSet
 
     /// <summary>Swamp water is waded, not swum: 40% of top speed, and 60% of gravity left —
     /// enough to feel the bottom, not enough to float. It holds on: left alone a body sinks
-    /// at 2 m/s, and it takes a second jump to get out of a pool.</summary>
+    /// at 2 m/s, swims up at 2 m/s, and leaves a pool by a jump from its surface that clears
+    /// the bank by a metre.</summary>
     private const float SwampStagnation = 0.4f;
     private const float SwampGravityScale = 0.6f;
     private const float SwampSinkSpeed = 2f;

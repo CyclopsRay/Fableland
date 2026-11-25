@@ -6,7 +6,7 @@ using System.Collections.Generic;
 /// Banboo Maze (BM) — "Wulin" (武林). Freehand ink painting (写意): calligraphic strokes,
 /// splashed ink, and most of the paper left bare (留白). The kit is built for height: every
 /// bamboo is a <see cref="TileCategory.SoftVolume"/> — never ground or a platform — so a
-/// fighter can dive into a culm, hang there and chain jumps up it, while temple roofs,
+/// fighter can dive into a culm, hang there, swim up it and jump off its tip, while temple roofs,
 /// bracket beams and a stone bridge are thin one-way perches. The landscape is part of the
 /// fight: a waterfall is a current that sweeps whoever enters it downward, so whoever holds
 /// the head of a fall holds the high ground. Vertical, ambush-friendly maps that favour
@@ -19,7 +19,8 @@ internal static class WulinTileSet
     private const string Dir = "BambooMaze";
 
     /// <summary>Bamboo is light cover, not a mire: movement keeps 60% of top speed inside it
-    /// (a cloud keeps 30%, a palm 10%), so it reads as a lane to travel, not a trap.</summary>
+    /// (a cloud keeps 30%, a palm 10%), so it reads as a lane to travel, not a trap — and a
+    /// lane to climb: holding Up inside a culm rises 8.6 m/s.</summary>
     private const float BambooStagnation = 0.6f;
 
     /// <summary>Falling water carries a body down at 14 m/s — under half a jump's launch

@@ -335,14 +335,15 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
 
         if (UseGravity)
         {
-            // a buoyant medium leaves only part of gravity (same contract as the player)
+            // a buoyant medium leaves only part of gravity. Foes are carried passively by a
+            // soft volume; a fighter swims in one instead (SoftVolume.cs)
             if (!IsOnFloor()) IntentVel.Y += Gravity * _softVolumes.GravityScale * dt;
             else if (IntentVel.Y > 0f) IntentVel.Y = 0f;
         }
         // no-gravity foes: IntentVel is fully controlled by the subclass movement/skills.
 
-        // Match the player contract: the volume slows existing velocity over time but
-        // never replaces gravity, an aerial move, or a launched foe with a fixed field.
+        // The passive contract: the volume slows existing velocity over time but never
+        // replaces gravity, an aerial move, or a launched foe with a fixed field.
         IntentVel = _softVolumes.Resist(IntentVel, CurrentMoveSpeed, dt);
 
         Vector2 continuous = Vector2.Zero;

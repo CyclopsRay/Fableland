@@ -112,6 +112,12 @@ must find nothing (the throwaway `Legacy/Player.cs` aside). A `VirtualPad` is st
 process frame and once per physics tick by whoever owns it, *before* the body runs
 (`BossBrain` does it with a lower process priority), and a tap is owed to each loop
 separately — the two do not run in step, so a jump tapped between physics ticks is still seen.
+The rule binds `CharacterController` itself, not only the kits: swimming (v0.11.1) reads
+`ControlAction.MoveUp` / `MoveDown`, so a boss in a soft volume swims on its pad and the
+player's Up and Down leave it alone (`BossFightCheck.ProbeSwimmingTakesSides`).
+`PlayerControls` is the only reader of the InputMap for a fighter, so it is also what makes
+sure every action it names exists: `move_up` is not in `project.godot`, and
+`InputDefaults.Ensure()` — called from its constructor — registers it.
 
 ## 5. Error handling & validation
 

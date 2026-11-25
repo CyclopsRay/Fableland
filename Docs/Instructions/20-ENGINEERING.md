@@ -10,7 +10,8 @@ and the recipes. When the two overlap, KNOWLEDGE.md wins on Godot/C# specifics.
 
 ```
 Scripts/
-├── Foundation/              # Units.cs + GameVersion.cs
+├── Foundation/              # Units.cs + GameVersion.cs + InputDefaults.cs (the one input
+│                            #   action the game registers itself: move_up)
 ├── Gameplay/
 │   ├── Characters/          # CharacterController (a fighter, on either side) + CharacterControls
 │   │                        #   (ControlAction, PlayerControls, VirtualPad)
@@ -59,7 +60,11 @@ assignments; don't shadow inherited members; never commit the PAT.
   launched it. (T10 §4a.)
 - **Controls (v0.10.11):** a kit reads `Controls.Held / JustPressed / JustReleased(ControlAction…)`
   and `Controls.AimPoint(this)` — never `Input`, never `GetGlobalMousePosition()`. That is
-  what lets a boss brain press the same buttons.
+  what lets a boss brain press the same buttons. The base class is under the same rule:
+  swimming's Up and Down are `ControlAction.MoveUp` / `MoveDown` (v0.11.1) — written as
+  `Input` reads they swam the boss on the player's keys, and the boss check has a stage
+  for it. A new button is a `ControlAction`, a name in `PlayerControls`, and — if
+  `project.godot` does not define the action — a line in `InputDefaults`.
 - **Hits:** author per skill as `HitInfo { Damage, Knockback, Stun }`. `Stun < 0` ⇒
   default gain-no window `Units.StunPerDamage · Damage`. Melee/AoE checks are
   **radius-aware** (target circle overlap, not center point — KNOWLEDGE caveat v0.1.5).

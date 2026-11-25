@@ -111,44 +111,66 @@ is adding a registry entry, never editing a switch** (T00 rule 1).
 | `autotileGroup` | string? | reserved: connected-look group for future autotiling (§2.5) |
 | `edges` | `EdgeRule?` | reserved: per-side (top/right/bottom/left) neighbor-compatibility tags for future stamp/edge matching (§2.5); not yet consulted by any runtime/editor code |
 | `effectArea` | shape def? | collision/trigger shape in px relative to anchor (§2.4); null = footprint rect |
-| `softVolumeTuning` | `SoftVolumeTuning?` | optional per-kind traversal data for SoftVolumes: `stagnationIndex`, and since v0.10.9 `gravityScale`, `sinkSpeed`, `drag`, `flowX` / `flowY`, `medium` — water, currents and waterfalls (§2.2a) |
+| `softVolumeTuning` | `SoftVolumeTuning?` | optional per-kind traversal data for SoftVolumes: `stagnationIndex`, and since v0.10.9 `gravityScale`, `sinkSpeed`, `drag`, `flowX` / `flowY`, `medium` — swimming, water, currents and waterfalls (§2.2a) |
 | `props` | dict | per-kind extras, read by key (`TileProps.cs`): `artSource` / `autotileKind` / `autotileVariants` (§2.5), `scene` + `mergeAdjacent` for hazards (§9), `spawnHazard` for triggers, `prompt` (the art brief) |
 
 Beach hazard content includes `hazard.tsunami_trigger`, a 1x1 battlefield marker whose
 runtime scene starts the storm presentation and moving tsunami. The 16x8 tsunami itself
 is not a placed tile; it is spawned by the trigger and sweeps beyond its anchor cell.
 
-### 2.2a Water, currents and waterfalls (v0.10.9)
+### 2.2a Swimming, water, currents and waterfalls (v0.10.9; swimming v0.11.1)
 
-A SoftVolume was a thing you are *in* that slows you (foliage, cloud). Three additions make
-the same category carry terrain that pushes back or takes sides. All of it is per-kind data
-in `softVolumeTuning`; a placed tile needs nothing beyond its position and Flip H.
+A SoftVolume is a thing you are *in*. Since v0.11.1 a fighter **swims** in every one of
+them: Up and Down steer as Left and Right do, and gravity is replaced by the volume's
+**drop** — a constant downward speed added to the fighter's own swimming. So
+
+    velocity = the fighter's own swimming (any held direction) + the drop (+ any carry)
+
+and in the sea, where a 10 m/s fighter swims 5.5 m/s and the drop is 3 m/s: across is 5.5
+with 3 underneath, up is 2.5, down is 8.5, and doing nothing sinks at 3. A jump inside a
+volume is a stroke on top of that, as often as the universal jump cooldown (0.3 s) allows,
+so a player chooses between holding Up and jumping. Up stops pushing once the head is out,
+so a swimmer rests at a surface, and a jump carries it out.
+Foes do not swim: they are carried passively, as every body was before (the full contract
+for both is in `Gameplay.gdd` §A.2). A BOSS is a fighter, not a foe: it swims, from its own
+controller — Up and Down are read through `Controls` like every other button, so the
+player's keys swim the player only.
+
+The same category also carries terrain that pushes back or takes sides. All of it is
+per-kind data in `softVolumeTuning`; a placed tile needs nothing beyond its position and
+Flip H.
 
 | Field | Unit | Default | Meaning |
 |---|---|---|---|
-| `stagnationIndex` | 0..1 | scene: 0.5 | Share of a body's top speed left inside: the speed cap (the swimming speed, in water) |
-| `gravityScale` | 0..1 | 1 | Share of gravity left inside. The rest is buoyancy; the two forces are simply added |
-| `sinkSpeed` | m/s | — | Set it on water: the fastest anything sinks on its own, the same for every body. Without it a medium keeps the plain downward drift foliage has |
-| `drag` | × | 1 | Multiplies the resistance. At 1 a running body out-accelerates it, so a held direction outruns the cap — right for foliage, wrong for water. From about 4 the cap holds |
+| `stagnationIndex` | 0..1 | scene: 0.5 | Share of a body's top speed left inside: the speed cap on both axes (the swimming speed, in water). With a `sinkSpeed` it must leave more than the sink, or nobody can swim up |
+| `gravityScale` | 0..1 | 1 | Share of gravity left inside. The rest is buoyancy; the two forces are simply added. For a swimmer it sets how quickly a rise gives way to the drop; for a foe it scales the fall |
+| `sinkSpeed` | m/s | — | Set it on water: its drop — the fastest anything sinks on its own, the same for every body. Without it a medium's drop is the `GravityIndex` one foliage has: a tenth of the body's top speed |
+| `drag` | × | 1 | Multiplies the resistance. At 1 a body out-accelerates it, so a held direction outruns the cap on either axis — right for foliage, wrong for water. From about 4 the cap holds |
 | `flowX`, `flowY` | m/s | 0 | A carry velocity given to everything inside, on top of its own motion (+x right, +y down). Flip H mirrors `flowX` |
-| `medium` | bool | true | False = a **pure current**: it carries and does nothing else — no cap, no drag, no jump support, no buoyancy |
+| `medium` | bool | true | False = a **pure current**: it carries and does nothing else — no cap, no drag, nothing to swim in, no jump support, no buoyancy |
 
 Three kinds of volume come out of that, and `RealmTiles` has a helper for each:
 
-- **Foliage / cloud** — `Soft(…, stagnation)`. Unchanged since v0.6.18.
+- **Foliage / cloud** — `Soft(…, stagnation)`. A float zone: a fighter left alone drifts
+  down at a tenth of its top speed, and flies through it at close to its running speed on
+  either axis (the resistance is weaker than its acceleration; a low index is felt as
+  sluggishness, not as a lower top speed). A foe falls through it, slowed, as since v0.6.18.
 - **Water** — `Water(…, stagnation, gravityScale, sinkSpeed, drag)`. A buoyant medium that
-  really holds a body. Jumps are refreshed inside it like in any medium, so a jump is a
-  swimming stroke that can be repeated; holding **Down** swims down at the swimming speed
-  instead of sinking at `sinkSpeed` (players only).
+  really holds a body: the cap is the swimming speed on both axes and `sinkSpeed` is the
+  drop, for fighters and foes alike.
 - **Current** — `Current(…, flowX, flowY)`: a current in the sea, a column of bubbles, a
-  waterfall. Because it is not a medium it gives no jump support, so falling water cannot
-  be climbed, and a body in a current alone falls under full gravity.
+  waterfall. Because it is not a medium there is nothing to swim in and no jump support,
+  so falling water cannot be climbed, and a body in a current alone falls under full
+  gravity.
 
 **Overlaps add up.** A body may be inside several volumes — a current inside a sea, kelp in
-water — and `SoftVolumeSet` (one per player and per foe) combines them: every volume's carry
-is added; among the media the lowest stagnation, the highest drag, the lowest gravity scale
+water — and `SoftVolumeSet` (one per player and per foe) combines them: the carries are
+added; among the media the lowest stagnation, the highest drag, the lowest gravity scale
 and the lowest sink speed apply. The strictest of each wins, so kelp growing in the sea is
 never easier to cross than the sea. Leaving an inner volume leaves the outer one in force.
+**An identical carry counts once**: a stream is laid as several tiles, and a body across
+the joint of two of them is in one stream, not two (before v0.11.1 it was pushed twice as
+hard there). Two different streams that cross both carry.
 
 **What the shipped kinds do to a body.** These are measured on the real Pomegraknight (top
 speed 10 m/s, air jump 8.3 m) by the content check, which fails if the tuning stops
@@ -156,17 +178,50 @@ producing what it promises (`MapContentCheckPhysics.cs`, 40-QA.md):
 
 | Kind | Tuning | Measured |
 |---|---|---|
-| `softvolume.ln_water` (sea) | stagnation 0.55 · gravity ×0.35 · sink 3 m/s · drag ×5 | swims 5.5 m/s · sinks 3.0 m/s · dives 5.5 m/s · a jump is a 3.4 m stroke · a crab sinks 3.0 m/s too |
+| `softvolume.ln_water` (sea) | stagnation 0.55 · gravity ×0.35 · sink 3 m/s · drag ×5 | sinks 3.0 m/s · swims 5.5 m/s across while sinking 3.0 · up 2.5 m/s · down 8.5 m/s · up-and-across 5.5 / 2.5 · a jump is a 3.0 m stroke (in open water or off the bed) and at the surface clears the water by 2.1 m · climbing: 2.5 m/s holding Up, 10.0 m/s tapping Jump on its 0.3 s cooldown, 10.7 m/s both · a crab sinks 3.0 m/s too |
 | `softvolume.ln_current` | carry 4 m/s sideways | carried 4.0 m/s; swimming against it leaves 1.5 m/s; out of it the body is still in the sea |
-| `softvolume.ln_bubbles` | carry 7 m/s up | rises 4.0 m/s, and 1.5 m/s even while diving |
+| `softvolume.ln_bubbles` | carry 7 m/s up | lifts 4.0 m/s; swum up 9.5 m/s; no faster across the joint of two stacked tiles |
+| `softvolume.ln_kelp` in the sea | stagnation 0.4, with the sea's sink and drag | up 1.0 m/s · across 4.0 m/s |
 | `softvolume.bm_waterfall` | carry 14 m/s down | falls 14.0 m/s faster than in the open; a jump under it rises 2.7 m |
-| `softvolume.tf_water` (swamp) | stagnation 0.4 · gravity ×0.6 · sink 2 m/s · drag ×4 | wades 4.0 m/s; a jump from the bottom rises 2.7 m, so it takes a second to get out |
+| `softvolume.tf_water` (swamp) | stagnation 0.4 · gravity ×0.6 · sink 2 m/s · drag ×4 | wades 4.0 m/s · up 2.0 m/s · a jump off the bottom rises 2.6 m · a jump at the surface clears the swamp by 1.0 m |
+| `softvolume.bm_bamboo_giant` (a plain volume) | stagnation 0.6 | floats down 1.0 m/s · holding Up climbs 8.6 m/s · a jump inside rises 5.9 m · tapping Jump climbs 19.4 m/s · a jump from its top clears it by 5.1 m · a crab falls through it at 20 m/s |
 
 **Rules the registry checks** (`TileRegistry.Validate`): `gravityScale` within 0..1; `drag`
 above 0 and at most 16; `sinkSpeed` above 0, at most 32 m/s, and only on a medium; a kind
 that sets `sinkSpeed` must be able to hold it — `(1 − stagnationIndex) × drag ≥
 gravityScale`, or gravity outruns the resistance and nothing caps the sink; a kind that is
 not a medium must carry, or it does nothing.
+
+**Every medium must be climbable** (content check, `CheckEveryMediumCanBeSwumUp`): each
+medium in the registry is asked what a standard fighter holding Up for three seconds does
+in it, and one that rises slower than 0.5 m/s fails — it is a pit with no way out. The
+probe swims the shipped overlap too (kelp in the sea: at stagnation 0.3 its 3 m/s of
+swimming exactly cancelled the sea's 3 m/s sink, so kelp is 0.4), and has a fighter get out
+of each shipped Forgotten City canal the way a player would — swim up to the bank, jump —
+because a pool with no way out is the same defect at map scale. **A pool's bank must be
+within a surface jump of its water: flush with the surface, or lower above it than that
+jump clears — 1.0 m for swamp water, 2.1 m for the sea.** Cells are 2 m, so on the grid
+that means flush. The pools are listed in the check (`ShippedPools`: the showcase map's west
+canal and the low-ground band map's), and a shipped map that holds swamp water and is not
+listed fails, so a new pool cannot ship unswum. The low-ground canal was authored for
+v0.11.0's water with its banks 2 m over the surface — "a second jump to leave"; in v0.11.1
+it is flush (its pit is one row shallower than the other realms').
+
+**"Standard fighter" is 10 m/s.** The swimming speed is a share of a fighter's own top speed
+and the drop is absolute, so the same question has other answers for slower kits. From the
+model (`PredictSwimSpeed`; the 10 and 8 m/s rows in the sea agree with what the checks
+measure on Pomegraknight and on BOSS PumpKing):
+
+| Top speed | Sea, holding Up | Swamp | Kelp in the sea | Bamboo | A stroke in the sea |
+|---|---|---|---|---|---|
+| 10 m/s — Pomegraknight, Pixolotl | 2.5 m/s up | 2.0 up | 1.0 up | 8.6 up | 3.0 m |
+| 8 m/s — PumpKing | 1.4 up | 1.2 up | 0.2 up | 6.8 up | 2.9 m |
+| 6.5 m/s — Sifu Pangda | 0.6 up | 0.6 up | **sinks 0.4** | 5.4 up | 2.9 m |
+| 4.8 m/s — PumpKing at three pumps | **sinks 0.4** | **sinks 0.1** | **sinks 1.1** | 3.9 up | 2.9 m |
+
+Nobody is trapped — a jump stroke is about 2.9 m for every one of them, so tapping Jump
+climbs — but holding Up is not a way up for the slowest. Whether that is the price of being
+slow or a defect is open (TBD #27); the check asks only the standard fighter.
 
 **Why water needs `drag` and `sinkSpeed` rather than a lower stagnation index.** The
 resistance is a deceleration, `g × (1 − stagnation) × drag`, applied toward the cap. A
@@ -950,6 +1005,42 @@ the closeview blur shader is dropped (closeview is real scenery now, §1, not a 
   first water was "half speed, floaty"; a character in it ran at 95% and jumped higher than
   in air. The check now puts the real character in each shipped kind and fails on the
   difference.
+- **(v0.11.1) A fighter swims in every soft volume.** The owner's rule: inside a soft
+  volume the player moves freely, as if in space, and gravity stays as a drop — velocity is
+  the fighter's own swimming plus the drop, so in the sea (5.5 and 3) across is 5.5 with 3
+  underneath, up is 2.5 and down is 8.5. It replaces v0.10.9's dive, where Down *replaced*
+  the sink. Asked "water only, or every soft volume", the owner chose every one: foliage,
+  cloud and bamboo are float zones too, with the drop `GravityIndex` always described (a
+  tenth of top speed).
+- **(v0.11.1) Jumping inside a volume stays, on its cooldown.** A first cut removed it —
+  a jump needed a floor or the surface — because tapping Space out-climbs swimming. The
+  owner restored it: a player chooses between holding Up and jumping, and the jump's
+  cooldown is its limit. That is the universal `JumpCooldown`, 0.3 s, and with it tapping
+  is the faster way up: 10 m/s against 2.5 in the sea, 19.4 against 8.6 in a bamboo.
+  Calculated with the model, not measured: a cooldown of about 0.7 s inside volumes would
+  make tapping equal to holding Up in both. TBD #35.
+- **(v0.11.1) A swimmer rests at a surface.** Up stops pushing once the head is out, or
+  the body would be lifted clear and dropped back every few ticks. A jump from there
+  carries it out, and the volume still taxes it (2.1 m clear of the sea, 1.0 m of the
+  swamp, 5.1 m of a bamboo).
+- **(v0.11.1) Foes stay passive, and so does a kit volume.** Foes have no vertical control,
+  and a foe hanging in a tree would stall a fight; Cleopastar's star has jump rules of its
+  own. Both keep the v0.6.18 rule (`SoftVolume.Swimmable` off for the star). Open: TBD #34.
+- **(v0.11.1) `move_up` is registered in code.** `project.godot` is re-saved by every
+  editor that opens a checkout and is seldom committed, so the action arrives with the code
+  that reads it (`InputDefaults.cs`, called by `PlayerControls`); an entry of the same name
+  in `project.godot` wins.
+- **(v0.11.1) Swimming takes sides.** These five decisions were made as "v0.10.10", in a
+  worktree cut from v0.10.9, before fighters had sides; they reached this line on top of
+  v0.11.0, where a BOSS is a protagonist's class on a brain's pad. So Up and Down are read
+  through `Controls`, a boss swims from its own pad, and "foes stay passive" means
+  `BaseFoe` — not the Foe side. The alternative, a passive boss, would have given one kit
+  two movement rules depending on who wears it, against FOES §8 ("the kit the player will
+  recruit"). What his brain should do with it is not designed (TBD #34).
+- **(v0.11.1) The low-ground canal is flush with its banks.** v0.11.0 authored it for the
+  old water — banks 2 m over the surface, left by "a second jump". The pool rule above came
+  with swimming, and that map broke it. Its pit was raised one row rather than its banks
+  lowered, so the steps stay three rows — one clean jump — under the rim.
 - **Sparse tile storage, anchor-only for multi-cell.** Maps are mostly air; dense
   `List<List<>>` caused the old trim bugs and serializes bloated.
 - **GUID file identity, no `_index.json`.** Name-derived filenames caused the

@@ -5,10 +5,11 @@ using System.Collections.Generic;
 /// <summary>
 /// Palace of LOOING (PL) — "Loong's Nest" (龙宫). The dragon king's palace under the sea,
 /// in 工笔重彩: fine even ink lines enclosing graded azurite, purple and cyan. The whole map
-/// is water — a buoyant, resisting medium — so nobody falls and nobody runs: every position
-/// is reached on purpose. Hidden currents carry a fighter toward the urchin beds, and
-/// columns of bubbles lift them; kelp groves slow and hide. It favours whoever can place
-/// themselves precisely.
+/// is water — a buoyant, resisting medium — so nobody falls and nobody runs: a fighter
+/// swims where it steers, with the sea always pulling it down, and every position is
+/// reached on purpose. Hidden currents carry a fighter toward the urchin beds, and columns
+/// of bubbles lift them; kelp groves slow and hide. It favours whoever can place
+/// themselves precisely, and whoever is higher.
 ///
 /// Water is laid as big <c>softvolume.ln_water</c> tiles on a Farview layer with Collision
 /// on (MapCreation.gdd §3), so it fills the map without taking the battlefield's cells.
@@ -25,20 +26,24 @@ internal static class LoongsNestTileSet
     /// <summary>Buoyancy and gravity are simply added: 35% of gravity is left.</summary>
     private const float WaterGravityScale = 0.35f;
     /// <summary>What that buoyancy comes to: left alone, a body sinks at 3 m/s (a cell and a
-    /// half per second). Holding Down swims down at swimming speed.</summary>
+    /// half per second). It is added to a fighter's own swimming: up 2.5 m/s, down 8.5.</summary>
     private const float WaterSinkSpeed = 3f;
     /// <summary>Five times foliage's resistance: the speed cap holds against a held
-    /// direction, a jump becomes a 3.4 m swimming stroke (8.3 m in air), and knockback dies
-    /// quickly. The content check measures all of these on a real character.</summary>
+    /// direction, a jump is a 3 m stroke (8.3 m in air), one from the surface clears the
+    /// water by 2.1 m, and knockback dies quickly. The content check measures all of
+    /// these on a real character.</summary>
     private const float WaterDrag = 5f;
     /// <summary>A current carries at 4 m/s: swimming against it leaves 1.5 m/s of headway,
     /// so it takes you where it goes unless you leave it sideways.</summary>
     private const float CurrentCarry = 4f;
-    /// <summary>Bubbles lift at 7 m/s: more than a body sinks or dives, so a column is an
-    /// elevator you cannot refuse.</summary>
+    /// <summary>Bubbles lift at 7 m/s: more than a body sinks, so a column lifts whoever
+    /// lets it (4 m/s) and is the fast way up for a swimmer (9.5 m/s holding Up). Swimming
+    /// down against it still gets down, at 1.5 m/s.</summary>
     private const float BubbleLift = 7f;
-    /// <summary>Kelp is the realm's thicket: 30% of top speed inside it.</summary>
-    private const float KelpStagnation = 0.3f;
+    /// <summary>Kelp is the realm's thicket: 40% of top speed inside it. That must stay above
+    /// the sea's sink (3 m/s of a 10 m/s fighter's 4), or nobody can swim up through kelp:
+    /// at 30% the rise was exactly zero. The content check swims this pair.</summary>
+    private const float KelpStagnation = 0.4f;
 
     public static IEnumerable<TileDef> Defs()
     {

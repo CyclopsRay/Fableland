@@ -141,8 +141,8 @@ def wulin_bamboo_sea():
     INTENT: a vertical arena where height and concealment beat reach — an assassin's map —
     and where the landscape itself is a weapon. Two and a half screens wide, four tall.
     Everything that reaches upward is bamboo or pine, and all of it is soft volume: a
-    fighter dives into a culm, hangs in the leaves, chains jumps straight up it and drops
-    out on a target. Solid footing is only the forest floor, ink-rock ledges and islets, the
+    fighter dives into a culm, hangs in the leaves, goes straight up it (hold Up, or chain
+    jumps), jumps off its tip and drops out on a target. Solid footing is only the forest floor, ink-rock ledges and islets, the
     one-way roofs and bracket beams of a five-tier pagoda that zig-zag up the middle, and a
     stone bridge thrown from the west islet to the pagoda's crown.
 
@@ -289,7 +289,8 @@ def dungeon_hollow_gaol():
     INTENT: crowded, dark and hostile — every step is a decision. A sealed box barely two
     screens wide and two and a half tall, cut into three low storeys around a central
     shaft. Nothing is far from anything: ceilings are five cells high, perches are short,
-    and the routes between storeys are chains and cobwebs you have to commit to. The floor
+    and the routes between storeys are chains and cobwebs you climb into (hold Up, or
+    chain jumps) and have to commit to. The floor
     is two lava pools and a spike bed with strips of safe stone between; the catwalks over
     the lava are the fastest crossings and the worst places to be hit. Close-quarters
     fighters thrive, and a fire-loving one most of all.
@@ -496,8 +497,8 @@ def cloud_court_heavens():
     and three tall, almost all of it air. The terrace floor at the bottom is safe and
     useless — everything worth having hangs above it — and solid footing is a handful of
     small terrace islands and thin lotus pads, bridges and one roof. What fills the space
-    is cloud: every auspicious cloud is a soft volume that refreshes a jump, so the
-    battle is carried cloud to cloud in three dimensions. Whoever is at home in the air
+    is cloud: every auspicious cloud is a soft volume a fighter flies through and jumps
+    from the top of, so the battle is carried cloud to cloud in three dimensions. Whoever is at home in the air
     rules here, and frost pearls sit on the best perches to stop anyone settling.
     """
     # World tag "CC": the Palace of LOOING itself is under the sea now (Loong's Nest, below).
@@ -584,9 +585,10 @@ def loongs_nest_sunken_court():
     """Palace of LOOING — "The Sunken Court".
 
     INTENT: a fight in three dimensions where nothing is an accident. The whole map is
-    water: nobody falls, nobody runs, and a jump is a swim stroke that can be taken again
-    and again — so every position is reached on purpose, and whoever can put themselves
-    exactly where they mean to (a dash of fixed length, a teleport, a hook) owns the map.
+    water: nobody falls, nobody runs, a swimmer goes where it steers with the sea always
+    pulling it down (up 2.5 m/s held, down 8.5), and a jump is a 3 m stroke on its cooldown
+    — so every position is reached on purpose, and whoever can put themselves exactly
+    where they mean to (a dash of fixed length, a teleport, a hook) owns the map.
 
     The sea is not still. A current under the west ceiling carries a swimmer toward the
     hall; another, along the floor east of the hall, drags whoever sinks into it across a
@@ -893,7 +895,7 @@ def forgotten_canals_of_the_sun():
     INTENT: the map climbs out of the swamp into the city, and gets more dangerous and more
     rewarding as it does. Three screens wide, two and a half tall. The west is low ground:
     mud banks and two canals of swamp water — a medium you wade through at four tenths of
-    your speed, and that takes a second jump to leave — with cattails on the bank. Anyone caught down there is slow. Over it runs a
+    your speed, and leave by swimming to its surface and jumping — with cattails on the bank. Anyone caught down there is slow. Over it runs a
     stair of floating slabs for whoever would rather not get wet.
 
     The east is the pyramid: three terraces and a temple, two rows to each step by way of

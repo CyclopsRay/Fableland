@@ -256,6 +256,8 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 	// and what they add up to: resistance, buoyancy, carry.
 	private readonly SoftVolumeSet _softVolumes = new();
 	private const string SoftVolumeFlowSource = "softvolume.flow";
+	// Where the top of this body's own collision shape is, relative to its origin: its head.
+	private Vector2 _crownOffset = new(0f, -Units.PlayerHeightPx * 0.5f);
 	private Vector2 _intentVel;        // self-directed velocity (input/gravity/jump/field)
 	private Vector2 _externalVel;      // impulses (knockback/wind/…); decays over time
 	private Vector2 _spawnPoint;
@@ -292,6 +294,14 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		FirePoint = GetNodeOrNull<Node2D>("FirePoint");
 		CameraShake = GetNodeOrNull<ShakeCamera2D>("Camera2D");
 		_spawnPoint = GlobalPosition;
+
+		foreach (Node child in GetChildren())
+		{
+			if (child is not CollisionShape2D { Shape: not null } body) continue;
+			Rect2 box = body.Shape.GetRect();
+			_crownOffset = body.Position + new Vector2(box.GetCenter().X, box.Position.Y);
+			break;
+		}
 
 		CurrentHP = MaxHP;
 		LivesRemaining = MaxLives;
@@ -572,11 +582,29 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		if (_softVolumes.Flow != Vector2.Zero && !_dead) SetContinuousExternalVelocity(SoftVolumeFlowSource, _softVolumes.Flow);
 		else ClearContinuousExternalVelocity(SoftVolumeFlowSource);
 
-		// Vertical intent: gravity accumulates (momentum); jump sets it. A buoyant medium
-		// (water) leaves only part of gravity: buoyancy and gravity are simply added.
+		// Inside a soft volume a fighter swims: Up and Down steer as Left and Right do, and
+		// the volume's slow drop stands in for gravity (SoftVolumeSet.SwimVertical).
+		// NOTE(animation): `swimming` and `rise` are the state a swim / float clip would read.
+		bool controllable = !Frozen && !Trapped;
+		bool swimming = _softVolumes.Swims && !_dead;
+		float swimSpeed = MoveSpeed * MoveMultiplier;
+		float rise = 0f;   // −1 swims up, +1 swims down
+		if (swimming && controllable)
+		{
+			// Through Controls, like every other button: a BOSS is this class on a brain's
+			// pad, and the player's Up / Down must swim the player only (KNOWLEDGE v0.10.11).
+			if (Controls.Held(ControlAction.MoveDown)) rise += 1f;
+			// Up pushes only while the head is under. At the surface a swimmer settles with
+			// its head there; a jump carries it out.
+			if (Controls.Held(ControlAction.MoveUp) && _softVolumes.Covers(Crown)) rise -= 1f;
+		}
+
+		// Vertical intent: gravity accumulates (momentum); jump sets it. A passive body in a
+		// buoyant medium keeps only part of gravity: buoyancy and gravity are simply added.
 		if (!IsOnFloor())
 		{
-			_intentVel.Y += Gravity * _softVolumes.GravityScale * dt;
+			if (swimming) _intentVel.Y = SwimVertical(rise, swimSpeed, dt);
+			else _intentVel.Y += Gravity * _softVolumes.GravityScale * dt;
 
 			// Coyote time: leaving a surface doesn't cost a jump for CoyoteTime
 			// seconds (so you can still edge-jump), but if that window elapses
@@ -593,18 +621,19 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		else
 		{
 			if (_intentVel.Y > 0f) _intentVel.Y = 0f;
+			if (swimming && rise < 0f) _intentVel.Y = SwimVertical(rise, swimSpeed, dt);   // swim up off the bottom
 			if (ShouldRefreshJumpsFromFloor())
 				RefreshJumps();   // ordinary ground/platform support refreshes jumps
 		}
 
 		// A SoftVolume is not a physical floor, but its fable traversal contract grants
-		// jump support while the body is inside (cloud/tree jump chains). Refresh before
-		// reading jump input so a spent charge can be used on this same physics tick.
+		// jump support while the body is inside: a jump there is a stroke, as often as the
+		// universal JumpCooldown allows, on top of the swimming (cloud/tree jump chains).
+		// Refresh before reading jump input so a charge can be used on this same physics tick.
 		if (_softVolumes.InMedium && !_dead) RefreshJumps();
 
 		float inputDir = 0f;
-		bool diving = false;
-		if (!Frozen && !Trapped)
+		if (controllable)
 		{
 			if (Controls.Held(ControlAction.MoveLeft)) inputDir -= 1f;
 			if (Controls.Held(ControlAction.MoveRight)) inputDir += 1f;
@@ -623,10 +652,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 				}
 			}
 
-			bool downHeld = Controls.Held(ControlAction.MoveDown);
-			UpdateDropThrough(downHeld, dt);
-			// Water holds a body's sink to a slow drift; holding Down swims down instead.
-			diving = downHeld && _softVolumes.Buoyant;
+			UpdateDropThrough(Controls.Held(ControlAction.MoveDown), dt);
 		}
 
 		// Horizontal intent with momentum: accelerate toward the target, friction to stop.
@@ -636,11 +662,11 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 												 : (IsOnFloor() ? GroundFriction : AirFriction);
 		_intentVel.X = Mathf.MoveToward(_intentVel.X, target, rate * dt);
 
-		if (!_dead)
-			_intentVel = _softVolumes.Resist(_intentVel, MoveSpeed * MoveMultiplier, dt, diving);
+		if (swimming) _intentVel = _softVolumes.Swim(_intentVel, swimSpeed, dt);
+		else if (!_dead) _intentVel = _softVolumes.Resist(_intentVel, swimSpeed, dt);
 
-		// External velocity (knockback/wind/…) decays independently. SoftVolumes only
-		// add drag; they never replace the player's own jump/gravity velocity.
+		// External velocity (knockback/wind/…) decays independently; a SoftVolume only
+		// damps it harder.
 		float damping = ExternalDamping * _softVolumes.ExternalDampingMult;
 		_externalVel = _externalVel.MoveToward(Vector2.Zero, damping * dt);
 
@@ -721,7 +747,14 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		}
 	}
 
-	// ── SoftVolume resistance ─────────────────────────────────────────────
+	// ── SoftVolumes: swimming ─────────────────────────────────────────────
+	/// <summary>The top of this body's head, in world space.</summary>
+	private Vector2 Crown => GlobalPosition + _crownOffset;
+
+	private float SwimVertical(float rise, float swimSpeed, float dt) =>
+		_softVolumes.SwimVertical(_intentVel.Y, rise, swimSpeed * _speedPenaltyMult, swimSpeed,
+			AirAccel, AirFriction, Gravity, dt);
+
 	public void EnterSoftVolume(SoftVolume v)
 	{
 		_softVolumes.Enter(v);

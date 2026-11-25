@@ -137,6 +137,28 @@ Dark Wood: bramble 0.15, fog 0.45, canopy 0.5. These are first values — measur
 content check's physics probe, not yet balanced in a fight (TBD #27). Tune them by the
 probe's printed `physics` lines, not by the indices: a resistance weaker than a body's own
 acceleration (1900 px/s² in the air, 3200 on the ground) is not a cap.
+v0.11.1 (the swimming work, written as v0.10.10): a fighter swims in every soft volume, so each medium has two numbers that add:
+its **swimming speed** (`StagnationIndex` × top speed, enforced only where `Drag` makes the
+cap firm — water) and its **drop** (`SinkSpeed` in water; elsewhere `SoftVolume.GravityIndex`
+× top speed, one scene default of 0.1 → 1 m/s). Up = swim − drop, down = swim + drop. Sea:
+5.5 and 3 → up 2.5, down 8.5. Swamp: 4 and 2 → up 2, down 6. Kelp raised 0.3 → **0.4**: in
+the sea its 3 m/s of swimming exactly cancelled the 3 m/s sink. Plain volumes (Drag 1) are
+flown through at close to running speed — bamboo 8.6 m/s up — and a low index is felt as
+sluggishness: net acceleration ≈ 1900 − 2048 × (1 − index) px/s² (palm 0.1 → 57, cobweb
+0.12 → 98, bramble 0.15 → 159). A medium whose swimming speed is not above its drop fails
+the content check. A jump inside a volume is a stroke on the universal `JumpCooldown`
+(0.3 s, `CharacterController`): 3.0 m in the sea, 5.9 m in a bamboo. Climbing, measured:
+sea 2.5 m/s holding Up · 10.0 tapping Jump · 10.7 both; bamboo 8.6 holding Up · 19.4
+tapping. Calculated with the model: tapping alone equals holding Up at a cooldown of about
+0.75 s in the sea and 0.65 s in a bamboo. Surface jumps: 2.1 m clear of the sea, 1.0 m of
+the swamp, 5.1 m of a bamboo. TBD #27, #34, #35.
+Every number in that paragraph is a 10 m/s fighter's (Pomegraknight, Pixolotl). The swimming
+speed scales with a kit's own top speed and the drop does not, so from the model
+(`SoftVolumeSet.PredictSwimSpeed`), holding Up — sea / swamp / kelp in the sea / bamboo:
+PumpKing 8 m/s: 1.4 / 1.2 / 0.2 / 6.8 up (the boss check measures the 1.4, and 7.4 down);
+Sifu Pangda 6.5 m/s: 0.6 / 0.6 / **sinks 0.4** / 5.4; PumpKing at three pumps, 4.8 m/s:
+**sinks 0.4 / sinks 0.1 / sinks 1.1** / 3.9. A stroke in the sea is 2.9–3.0 m for all four.
+The content check's "can be swum up in" asks the 10 m/s fighter only (TBD #27).
 v0.10.11: `Scripts/Data/BossTable.cs` — one row per boss (`FOES.gdd` §8.2): scene,
 protagonist recruited, world, `BaseHp`, `DamageScale`, poise (`KnockbackTaken`, `StunTaken`),
 `CooldownScale`, its own magazine, a held item, `DecisionSeconds`. BOSS PumpKing: 600 HP,

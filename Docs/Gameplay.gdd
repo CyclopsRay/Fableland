@@ -41,7 +41,7 @@ patrol turnaround exceeds this width — patrolling gulls wall-turn in practice.
 | Move | `A`/`D` or `←`/`→` | Left/right movement |
 | Jump | `Space` | Jump (character-specific max jumps) |
 | Drop through platform | `S`/`Down` | Drop through one-way platforms |
-| SoftVolume traversal | normal movement + `Space` | A SoftVolume is enterable; it does not add swim/climb controls or a standable top |
+| Swim (inside a SoftVolume) | `W`/`S` or `↑`/`↓`, with `A`/`D` | A fighter swims in every soft volume — foliage, cloud, bamboo, water. Up and Down steer as Left and Right do. `Space` still jumps inside one — a stroke, as often as the 0.3 s jump cooldown allows — so there are two ways up |
 | Skill 1 (Shift) | `Left Shift` | Character-specific Shift ability |
 | Skill 2 (E) | `E` | Character-specific E ability |
 | Ultimate (Q) | `Q` | Character-specific Ult (if unlocked) |
@@ -50,40 +50,82 @@ patrol turnaround exceeds this width — patrolling gulls wall-turn in practice.
 | Pick up item | Walk over | Wonder items on the ground are auto-picked up |
 | Melee / BA | `J` or `LMB` | Character-specific basic attack |
 
-**SoftVolume traversal (v0.6.18).** A SoftVolume (cloud, bush, tree, water) is an
-`Area2D` field, not a one-way platform: a character falls directly into it and never
-needs to press Down to enter. Inside it, the normal input, gravity, and jump launch
-all continue, and active membership refreshes jump charges before input is read. The
-volume never replaces a jump launch with a low fixed velocity. Instead it applies a gradual
-resistance delta-v each physics tick toward the `StagnationIndex × maxSpeed` cap plus
-its small `GravityIndex × maxSpeed` downward drift. The default resistance is derived
-from `Units.Gravity × (1 - StagnationIndex)`, so a jump visibly reaches a lower apex
-without being cancelled on its first frame. External knockback/wind retains its
-separate, stronger in-volume damping contract.
+**SoftVolume traversal — a fighter swims (v0.11.1).** A SoftVolume (cloud, bush, tree,
+bamboo, water) is an `Area2D` field, not a one-way platform: a character falls directly
+into it and never needs to press Down to enter. Inside it a fighter moves freely, as if in
+space, and the volume's gravity stays as a slow drop:
+
+- **Up and Down steer exactly as Left and Right do** — the same acceleration toward the
+  same speed, met by the same resistance toward the `StagnationIndex × maxSpeed` cap.
+- **Gravity is replaced by the drop**, a constant downward speed added to the fighter's own
+  swimming: `GravityIndex × maxSpeed` in foliage and cloud (1 m/s for a 10 m/s fighter),
+  the absolute `SinkSpeed` in water. With nothing held a fighter floats down at the drop
+  instead of falling; swimming up is its own speed minus the drop, swimming down its own
+  speed plus the drop, and swimming across keeps the drop underneath it.
+- **Up pushes only while the head is under.** At the surface a swimmer rests with its head
+  there (within 0.2 m in water).
+- **A jump inside a volume is a stroke.** Membership keeps the jump charges full, so Space
+  launches wherever the fighter is, as often as the universal `JumpCooldown` (0.3 s)
+  allows, on top of the swimming; the volume shortens it (3 m in the sea, 5.9 m in a
+  bamboo, 8.3 m in air). So there are two ways up and a player chooses — hold Up, or tap
+  Space — and they add. Measured: in the sea 2.5 m/s holding Up, 10 m/s tapping Space,
+  10.7 m/s both; in a bamboo 8.6 and 19.4. *(With a 0.3 s cooldown tapping is the faster
+  way; how long the cooldown should be inside a volume is open — TBD registry #35.)*
+- The resistance is a gradual delta-v each tick, `Units.Gravity × (1 − StagnationIndex) ×
+  Drag`, never a replacement velocity. At `Drag` 1 (foliage, cloud) it is weaker than a
+  fighter's own acceleration, so a held direction outruns the cap on either axis — a tall
+  bamboo is climbed at 8.6 m/s — and the index shows as sluggishness: a palm (0.1) or a
+  cobweb (0.12) takes seconds to get moving in. External knockback/wind keeps its
+  separate, stronger in-volume damping.
+
+**Foes do not swim.** A foe — and Cleopastar inside her own star, a kit volume marked not
+`Swimmable` — is carried passively, as every body was from v0.6.18 to v0.11.0: gravity and
+jumps continue and the volume only resists them. A crab falls through a bamboo, slowed,
+and sinks in the sea at its `SinkSpeed`. *(Whether foes should float in foliage too is
+open — TBD registry #34.)*
+
+**A BOSS does.** A boss is not a foe in this sense: it is a fighter, a protagonist's class
+on the other side (`FOES.gdd` §8), so it swims exactly as the player does — steered by its
+own controller, never by the player's keys (Up and Down are read like every other button:
+"Who presses the buttons", below). In the sea BOSS PumpKing floats down at the drop,
+3.0 m/s, while the player holds Up or Down beside him, and swims 1.4 m/s up and 7.4 m/s
+down on his own pad (0.55 × his 8 m/s, less and plus the drop — the boss check measures
+all of it). His brain has no rule that holds Up or Down yet: in a volume he walks, jumps
+and floats. *(Open with #34.)*
+
+`move_up` (`W` / `↑`) is registered by the game itself (`Scripts/Foundation/InputDefaults.cs`,
+called by the player's controls before their first read), not in `project.godot`; an action
+of that name added under Project Settings → Input Map overrides the keys.
 
 For Map Creation tiles, `StagnationIndex` is per kind: all cloud silhouettes use **0.3**,
 the palm tree uses **0.1**, and an unconfigured SoftVolume retains the reusable scene's **0.5**
 fallback. Lower values are more viscous: they impose a lower speed cap and a stronger gradual
 resistance. `GravityIndex` (0.1) and `ExternalDampingMult` (3) remain shared scene defaults.
 
-**Water, currents and waterfalls (v0.10.9).** Three more settings on the same volume — the
-full contract and the measured numbers are in `MapCreation.gdd` §2.2a:
+**Water, currents and waterfalls (v0.10.9; swimming v0.11.1).** Three more settings on
+the same volume — the full contract and the measured numbers are in `MapCreation.gdd` §2.2a:
 
-- **Water** is a medium with buoyancy: `GravityScale` is the share of gravity left inside
-  (buoyancy and gravity are simply added), `SinkSpeed` the fastest a body sinks on its own,
-  and `Drag` makes the resistance strong enough that the speed cap is really the swimming
-  speed. In the sea a 10 m/s fighter swims at 5.5 m/s, sinks at 3 m/s and a jump is a 3.4 m
-  stroke; jumps refresh inside it as in any SoftVolume, so strokes repeat.
-- **Holding Down in water swims down** at the swimming speed instead of sinking slowly. It
-  is the same `move_down` that drops through a one-way platform, and it does nothing in
-  foliage or in air. *(Added in v0.10.9 without being specified — TBD registry #27.)*
+- **Water** is a medium with buoyancy. `SinkSpeed` is its drop, the same for every body;
+  `Drag` makes the resistance strong enough that the cap is really the swimming speed; and
+  `GravityScale`, the share of gravity left inside (buoyancy and gravity are simply added),
+  sets how quickly a rise gives way to the drop, and scales a foe's fall. In the sea a
+  10 m/s fighter swims 5.5 m/s across while sinking 3 m/s, up at 2.5 m/s (5.5 − 3) and
+  down at 8.5 m/s (5.5 + 3). A jump is a 3 m stroke anywhere in the water, and at the
+  surface it clears the water by 2.1 m. **The swimming speed is a share of the fighter's
+  own top speed; the drop is not** — so a slower fighter rises more slowly, or not at all:
+  PumpKing (8 m/s) 1.4 m/s in the sea (measured), Sifu Pangda (6.5 m/s) 0.6 m/s, and a
+  PumpKing slowed to 4.8 m/s by three pumps sinks 0.4 m/s while holding Up (both from the
+  model). A jump stroke is about 2.9 m for all of them, so tapping Space always climbs.
+  *(Open — TBD registry #27.)*
 - **A current** (`IsMedium` off) only carries: its `Flow` velocity is added to whatever is
-  inside, through the same continuous-velocity channel wind uses, and it gives no drag and
-  no jump support. A sideways current, a column of bubbles and a waterfall are all this; a
-  waterfall cannot be climbed, and a jump under one is beaten down.
+  inside, through the same continuous-velocity channel wind uses, and it gives no drag,
+  nothing to swim in and no jump support. A sideways current, a column of bubbles and a
+  waterfall are all this; a waterfall cannot be climbed, and a jump under one is beaten
+  down. A swimmer's own speed adds to it: up a bubble column at 9.5 m/s, against a 4 m/s
+  current at 1.5.
 - **Overlapping volumes add up** (`SoftVolumeSet`, one per player and per foe): carries are
-  summed, and among the media the strictest cap, drag, buoyancy and sink speed apply.
-  Players and foes obey the same rules; only the dive is a player control.
+  summed — an identical carry once, because one stream is laid as several tiles — and
+  among the media the strictest cap, drag, buoyancy and sink speed apply.
 
 **Slopes (v0.10.11).** Ground can be a ramp (`MapCreation.gdd` §2.2b; the Dark Wood's is
 one cell up in two along). A fighter walks it with the ordinary controls and keeps its feet
@@ -94,7 +136,8 @@ roll run downhill (PumpKing's head, at its 6 m/s roll cap, for as long as the sl
 **Who presses the buttons (v0.10.11).** Every action in the table above reaches a character
 through its control source, not the keyboard: the player's keys by default, a boss's brain
 when the same kit is the BOSS of its realm (`FOES.gdd` §8.4). A kit behaves identically
-either way — same cooldowns, magazine and state gates.
+either way — same cooldowns, magazine and state gates. Swimming is one of those actions
+(v0.11.1): the player's Up and Down swim the player and nobody else.
 
 ### A.2.1 Universal basic-attack ammo and reload
 

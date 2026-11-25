@@ -45,6 +45,7 @@ public partial class MapContentCheck : Node
             CheckNudgedPlacement();
             CheckRealmCoverage();
             CheckSoftVolumeParity();
+            CheckEveryMediumCanBeSwumUp();
             await ProbeSoftVolumePhysics();   // runs physics frames; everything above is immediate
         }
         catch (Exception e)

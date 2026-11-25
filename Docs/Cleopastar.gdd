@@ -98,6 +98,8 @@ automatically ends at the 60 m maximum. It can hit enemies during this phase.
   jump while inside it with no normal jump charges remaining, it triggers its Normal
   explosion, vanishes, and provides that jump launch.
 - Gliding and Blackhole stars do not provide this SoftVolume jump support
+- The star is a kit volume, not terrain: it keeps this passive rule (`Swimmable` off). Map
+  soft volumes are swum in since v0.11.1; her star is not.
 
 * **Lifetime:** 16 seconds from launch
 

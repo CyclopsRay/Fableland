@@ -9,6 +9,77 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.11.1** — **A fighter swims in every soft volume.** *(This is the 0.10.10 work: written
+  in another session's worktree from 0.10.9, never committed on its own, and merged here
+  onto 0.11.0. What the merge had to change is at the end of the entry.)* The owner's rule:
+  inside a soft volume the player moves freely, as if in space, and gravity stays as a drop
+  — velocity is the fighter's own swimming plus the drop. **Up / Down (`W` / `S`, `↑` / `↓`)
+  now steer exactly as Left / Right do** inside any soft volume — sea, swamp, bamboo, pine,
+  cloud, vines, chains, fog — and gravity there is replaced by the volume's drop: its
+  `SinkSpeed` in water, a tenth of top speed elsewhere. Measured on the real character: in
+  the sea 5.5 m/s across while sinking 3, **up 2.5 m/s, down 8.5 m/s**; in the swamp up
+  2 m/s; in a bamboo a fighter floats down at 1 m/s and climbs at 8.6. **Jumping inside a
+  volume stays**: Space is a stroke wherever the fighter is (3 m in the sea, 5.9 m in a
+  bamboo), as often as the universal 0.3 s jump cooldown allows, on top of the swimming —
+  so a player chooses between holding Up and jumping. With that cooldown tapping is the
+  faster way up: 10 m/s against 2.5 in the sea, 19.4 against 8.6 in a bamboo (10.7 with
+  both in the sea). From a surface a jump clears the sea by 2.1 m, the swamp by 1.0 m, a
+  bamboo's top by 5.1 m. Up stops pushing once the head is out, so a swimmer rests with its
+  head at the surface. This replaces v0.10.9's dive (Down *replaced* the sink). **Foes do
+  not swim** — they fall through foliage, slowed, and sink in water, as before — and
+  Cleopastar's star keeps its own rule (`SoftVolume.Swimmable` off). `move_up` is
+  registered by the game (`InputDefaults.cs`), not in `project.godot`. **Fixed:** a stream
+  laid as several tiles (a bubble column, a waterfall) pushed twice as hard where a body
+  crossed a joint — 11 m/s in a 4 m/s column; an identical carry now counts once.
+  **Retuned:** kelp 0.3 → 0.4 (in the sea its swimming speed exactly cancelled the sink, so
+  nobody could swim up through it). Engine: `SoftVolumeSet.SwimVertical` / `Swim` /
+  `Covers` / `PredictSwimSpeed`; the passive rule (`Resist`) is unchanged to the digit. The
+  content check asks every medium in the registry whether it can be swum up in, and the
+  probe measures swimming on both axes, a jump inside a volume and that its cooldown holds
+  there, tapping Jump against holding Up, resting at and leaving a surface, the joint of
+  two stacked tiles, a foe, kelp in the sea, and getting out of the shipped canals.
+  **What merging it onto 0.11.0 changed.** (1) *Swimming takes sides.* The work read
+  `Input` for Up and Down inside `CharacterController`; since 0.10.11 a BOSS is that class
+  on a brain's pad, so as written the player's W and S swam the boss — and the three-way
+  merge was clean at those lines. Both reads go through `Controls`
+  (`ControlAction.MoveUp` / `MoveDown`); `PlayerControls`, the one reader of the InputMap,
+  now registers `move_up` itself and lost its guard for a missing action. So **a boss
+  swims too, on its own pad** — BOSS PumpKing 1.4 m/s up and 7.4 down in the sea — and
+  "foes do not swim" means `BaseFoe`. No rule of his brain uses it: in a volume he walks,
+  jumps and floats (TBD #34). The boss check has a stage for it — one sea, the player and
+  a boss in it; each side's Up and Down must swim that side and leave the other sinking at
+  the drop. (2) *A 0.11.0 map broke a swimming rule.* The Forgotten City low-ground canal
+  was authored for the old water, its banks 2 m over the surface, left by "a second jump";
+  a jump at the surface of swamp water clears 1 m. Tapping Jump still got out (0.75 s,
+  measured); swimming to the bank and jumping did not. The canal is now flush with its
+  banks — `Maps/forgotten_low_ground.json` regenerated, its pit one row shallower — and
+  the probe swims out of every listed pool and refuses a shipped map with swamp water that
+  is not listed (`ShippedPools`). (3) *Bookkeeping.* The swimming work's TBD #28 and #29
+  collided with 0.11.0's and are **#34 and #35**; its "v0.10.10" tags read v0.11.1 in the
+  docs and code, the first version of this line that swims. Nothing was taken from its
+  `project.godot`: that diff is an editor re-save (feature list, section order, event
+  fields) and the feature needs none of it. Not done, by decision or for lack of one: the
+  numbers are measured, not balanced (TBD #27, #35) — 48 m of sea is 19 s up and 6 s down
+  by holding a direction, and foliage practically holds a fighter (drop 1 m/s); **they are
+  a 10 m/s fighter's** — by the model PumpKing (8 m/s) rises 1.4 m/s in the sea and 0.2
+  through kelp there, Sifu Pangda (6.5) 0.6 and sinks in that kelp, and a PumpKing slowed
+  to 4.8 m/s by three pumps sinks while holding Up; a jump stroke still climbs for all of
+  them, and the "can be swum up in" check asks only the 10 m/s fighter; a boss's legs do
+  not swim; whether foes should float; no real fight was played, and routes in the older
+  maps were not re-walked.
+  (Verification: `dotnet build`, 0 errors/warnings; the map content check, 1062
+  checks; the boss check, 109 (13 of them the new stage); the run check, 891 — logs clean but for the two
+  expected zone-6 lines and sixteen `Command or Control autoremapping` lines that
+  `project.godot` already printed at every start before this change. Seven mutation runs
+  for the merge, each failing a check by name, sources restored and rebuilt after each:
+  both swim reads put back on `Input` — four boss-check lines, while the content check
+  stayed green, which is why the stage exists — each read alone, swimming made
+  Player-side only, `move_up` no longer registered (again invisible to the content check,
+  whose probe registers what it presses), the 0.11.0 canal put back, and its pool left
+  off the list. Both map generators re-run: the 40 maps they write are byte-identical but
+  for the canal's, which was looked at in the offline preview only. The swimming work's
+  own fifteen mutation runs were made next door on 0.10.9 and were not repeated here.
+  The real `saves/` and `maps/` folders in `user://` were compared before and after: untouched.)
 - **0.11.0** — **The realm pool is arranged: eight worlds, a map for every altitude band and
   a boss in each.** *(Committed together with 0.10.11, below, which had not been committed on
   its own.)* **How many worlds there are:** six were in the overworld pool (SL, HC, VK, TD,
@@ -50,9 +121,9 @@
   seven boss arenas are test maps, not designs (TBD #32) — outside the Dark Wood there is no
   slope, so his head has no hill to run; the other seven realms' own bosses do not exist
   (TBD #2); zone 6 still opens the legacy arena (TBD #33); whether PumpKing and Pixolotl
-  become starters in their worlds is open (TBD #20, #24); the swimming work in the sibling
-  worktree (0.10.10) is still unmerged and still needs its `Input` reads routed through
-  `Controls`; no person has played any of this.
+  become starters in their worlds is open (TBD #20, #24); the swimming work (0.10.10) was
+  still in its own worktree when this was committed — it is merged in **0.11.1**, above, with
+  its `Input` reads routed through `Controls`; no person has played any of this.
   (Verification: `dotnet build`, 0 errors/warnings; the run check, 891 checks in 41 s; the
   boss check, 96; the map content check, 939 — each twice on the final code, logs clean but
   for the two expected zone-6 lines; twelve mutation runs for this change, every one failing
@@ -64,7 +135,8 @@
   inside real runs — The Forgotten on day 11, bar reading 720 / 720, and the Kingdom of
   Horror on day 36, 1800 / 1800.)
 - **0.10.11** — **Boss fights: PumpKing, on his castle's balcony, bowling his head down a
-  slope.** *(0.10.10 is taken by work not yet merged — see the end of this entry.)*
+  slope.** *(0.10.10 was taken by the swimming work, then uncommitted in another worktree;
+  it reached this line as 0.11.1 — see the end of this entry.)*
   At a realm's 4-1 its protagonist is the BOSS, and beating it recruits it. **A boss is the
   protagonist's own class on the other side** — `BossPumpKing : PumpKing` — so it fights with
   the kit the player will recruit; what differs (HP, damage, poise, magazine, cooldowns, a
@@ -118,11 +190,12 @@
   balcony reached, Soul Form flown to the limb — and its frames reviewed, which is where a
   balcony the same tone as the wall behind it and a balustrade hiding the boss's legs were
   found and fixed; Menu, Arena and the boss scene booting headless with no new errors.)
-  **0.10.10** is an uncommitted change in another session's worktree
-  (`game-map-editor-ui-b1ced6`: a fighter swims in every soft volume). It touches
-  `CharacterController._PhysicsProcess` too, reading `Input` directly for Up and Down; when
-  the two meet, those reads go through `Controls` (`ControlAction.MoveUp` / `MoveDown`) or the
-  player's keys will swim the boss — `KNOWLEDGE.md` has the caveat.
+  **0.10.10** was, at the time, an uncommitted change in another session's worktree
+  (`game-map-editor-ui-b1ced6`: a fighter swims in every soft volume). It touched
+  `CharacterController._PhysicsProcess` too, reading `Input` directly for Up and Down; the
+  note left here said that when the two met those reads had to go through `Controls`
+  (`ControlAction.MoveUp` / `MoveDown`) or the player's keys would swim the boss. They met in
+  **0.11.1**, which did exactly that and has a check for it — `KNOWLEDGE.md` has the caveat.
 - **0.10.9** — **Three new realms, Wulin repainted as ink painting, and water.**
   *Wulin (Banboo Maze)* is repainted as freehand ink (写意): calligraphic strokes that swell
   and taper, splashed wet ink, and most of the sheet left bare (留白), in black, white, cyan
@@ -497,6 +570,7 @@ skeleton to grow into. It is intentionally simpler than the full architecture in
 | Blush → self-ignite + Fire Tornado charge | `Left Shift` |
 | Pome Seed Eruption (3 waves of gravity seeds) | `E` |
 | Drop through platform (hold = fall further) | `S` / `Down` |
+| Swim inside a soft volume (bamboo, cloud, water…) | `W` / `S` (or `↑` / `↓`) with `A` / `D`; `Space` is a jump stroke there, on the jump cooldown |
 | Restart after win/lose | `R` |
 
 Affected-range lines are drawn on-screen: the yellow **BA cone** (brightens on each

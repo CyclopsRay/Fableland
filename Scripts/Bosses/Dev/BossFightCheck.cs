@@ -18,7 +18,9 @@ using Fableland.Run;
 /// 3. Physics, on a stage built from plain colliders: PumpKing's head bounces, rolls and
 ///    stops on the flat and runs a slope at its roll cap; a fighter walking a slope keeps its
 ///    feet on it; a boss is hit by the player's side and hits the player's side, and only
-///    those; and each of the boss's rules does its own job in the one situation it is for
+///    those; in a sea each side swims on its own controller only — the player's Up / Down
+///    leave a boss sinking, and his pad's leave the player sinking (v0.11.1); and each of
+///    the boss's rules does its own job in the one situation it is for
 ///    (back to his perch on foot and by jumping, facing the player, setting his head off
 ///    beside them, calling it back when it has rolled past).
 /// 4. The fight — the real Arena scene, staged the way debug mode stages it, on the map the
@@ -55,6 +57,7 @@ public partial class BossFightCheck : Node
             await ProbeHeadOnASlope();
             await ProbeWalkingASlope();
             await ProbeSides();
+            await ProbeSwimmingTakesSides();
             await ProbeHisRules();
             await ProbeTheFight();
         }
@@ -66,8 +69,8 @@ public partial class BossFightCheck : Node
         {
             Engine.PhysicsTicksPerSecond = ticksPerSecond;
             Engine.TimeScale = timeScale;
-            foreach (StringName action in new StringName[] { "move_left", "move_right", "move_down", "jump", "attack" })
-                Input.ActionRelease(action);
+            foreach (StringName action in new StringName[] { "move_left", "move_right", InputDefaults.MoveUp, "move_down", "jump", "attack" })
+                if (InputMap.HasAction(action)) Input.ActionRelease(action);
         }
 
         foreach (string problem in _problems) GD.Print("FAIL  " + problem);
@@ -96,6 +99,9 @@ public partial class BossFightCheck : Node
     }
 
     private static string M(float px) => (px / Units.PixelsPerMeter).ToString("0.0");
+
+    /// <summary>"2.5 m/s up" / "3.0 m/s down", for a vertical speed in px/s (down positive).</summary>
+    private static string Vertical(float down) => $"{M(Mathf.Abs(down))} m/s {(down < 0f ? "up" : "down")}";
 
     // ---------------------------------------------------------------- 1. logic
 
@@ -483,7 +489,118 @@ public partial class BossFightCheck : Node
         Expect(CharacterController.LocalPlayer == null, "sides: LocalPlayer must clear when the player's body leaves");
     }
 
-    // ---------------------------------------------------------------- 3e. his rules, one at a time
+    // ---------------------------------------------------------------- 3e. swimming takes sides
+
+    private const string SeaTile = "softvolume.ln_water";
+
+    /// <summary>A body of the shipped sea, built by the factory the arena and the Playtest
+    /// build theirs with — the game's own volume scene, collision mask included.</summary>
+    private SoftVolume AddSea(Node2D stage, Rect2 rect)
+    {
+        if (!MapCreation.Data.TileRegistry.TryGet(SeaTile, out MapCreation.Data.TileDef def)) return null;
+        var box = new MapCreation.Runtime.MapCollisionSpec(
+            new RectangleShape2D { Size = rect.Size }, rect.Size * 0.5f, new Rect2(Vector2.Zero, rect.Size));
+        SoftVolume sea = MapCreation.Runtime.MapCollision.CreateSoftVolume(def, false, rect.Position, new[] { box }, "BossFightCheck");
+        if (sea != null) stage.AddChild(sea);
+        return sea;
+    }
+
+    /// <summary>How fast two bodies moved downward over the same `ticks`, in px/s, after
+    /// `settle` ticks for whatever was just pressed to take hold.</summary>
+    private async Task<(float A, float B)> Sinking(Node2D a, Node2D b, int settle = 20, int ticks = 20)
+    {
+        await Ticks(settle);
+        float fromA = a.GlobalPosition.Y, fromB = b.GlobalPosition.Y;
+        await Ticks(ticks);
+        return ((a.GlobalPosition.Y - fromA) / (ticks * Tick), (b.GlobalPosition.Y - fromB) / (ticks * Tick));
+    }
+
+    /// <summary>
+    /// A fighter swims in every soft volume — Up and Down steer it there (v0.11.1, the
+    /// v0.10.10 work) — and a BOSS is a fighter. So swimming has to take sides like every
+    /// other button: it is read from the body's own <see cref="CharacterController.Controls"/>.
+    /// The swimming work was written before sides existed and read the keyboard, which is
+    /// exactly how the player's W and S would have swum the boss.
+    ///
+    /// One sea, the player and a boss side by side in it, his brain asleep so that nothing
+    /// is pressed that this probe does not press. Each side's Up and Down must swim that
+    /// side — at the speeds the sea's tuning promises — and leave the other sinking at the
+    /// sea's drop, as a fighter does when nothing is held.
+    /// </summary>
+    private async Task ProbeSwimmingTakesSides()
+    {
+        BossDef def = BossTable.PumpKing;
+        Node2D stage = BuildStage(0f, 4000f);
+        const float depth = 1700f;
+        SoftVolume sea = AddSea(stage, new Rect2(400f, FloorY - depth, 3200f, depth));
+        Expect(sea is { IsMedium: true, Swimmable: true } && sea.SinkSpeed > 0f,
+            $"swimming: the shipped sea ('{SeaTile}') did not build as a medium with a drop that fighters swim in");
+        if (sea == null) { await Strike(stage); return; }
+
+        float middle = FloorY - depth * 0.5f;
+        CharacterController player = Spawn<CharacterController>(stage, PlayerScene, new Vector2(1200f, middle));
+        CharacterController boss = Spawn<CharacterController>(stage, def.ScenePath, new Vector2(2600f, middle));
+        ((IBossFighter)boss).BeginFight(def, 1, new BossArena(new[] { boss.GlobalPosition }, 0));
+        BossBrain brain = boss.GetNode<BossBrain>("BossBrain");
+        brain.Sleep();                       // before its first decision: he throws nothing, holds nothing
+        VirtualPad pad = brain.Pad;          // …and stays on this pad, which the sleeping brain still steps
+        Expect(ReferenceEquals(boss.Controls, pad) && player.Controls is PlayerControls,
+            "swimming: the boss must read its brain's pad and the player the keyboard");
+
+        // The game registers move_up itself (InputDefaults); this check never does, so a
+        // player's controls that stopped registering it fail here, by name.
+        var unknown = new List<string>();
+        foreach (ControlAction action in Enum.GetValues<ControlAction>())
+            if (!InputMap.HasAction(PlayerControls.ActionName(action))) unknown.Add($"{action} ('{PlayerControls.ActionName(action)}')");
+        Expect(unknown.Count == 0,
+            $"swimming: the player's controls read {string.Join(", ", unknown)}, which the InputMap does not have — the game registers move_up itself (InputDefaults.Ensure)");
+
+        float drop = sea.SinkSpeed;
+        float playerSwim = sea.StagnationIndex * player.MoveSpeed, bossSwim = sea.StagnationIndex * boss.MoveSpeed;
+        float near = Units.Px(0.3f);
+        bool Is(float measured, float expected) => Mathf.Abs(measured - expected) <= near;
+
+        // Nothing held: both float down at the sea's drop — a boss is in the water as the player is.
+        (float playerIdle, float bossIdle) = await Sinking(player, boss);
+        Expect(Is(playerIdle, drop), $"swimming: left alone in the sea the player moves {Vertical(playerIdle)}; it must float down at the sea's drop, {M(drop)} m/s");
+        Expect(Is(bossIdle, drop), $"swimming: left alone in the sea a boss moves {Vertical(bossIdle)}; a fighter on either side floats down at the sea's drop, {M(drop)} m/s");
+
+        // The PLAYER's Up, then Down: the player swims, the boss must go on sinking.
+        if (unknown.Count == 0) Input.ActionPress(InputDefaults.MoveUp);
+        (float playerUp, float bossUnderPlayersUp) = await Sinking(player, boss);
+        if (unknown.Count == 0) Input.ActionRelease(InputDefaults.MoveUp);
+        Expect(Is(playerUp, drop - playerSwim), $"swimming: holding Up in the sea the player moves {Vertical(playerUp)}; its swimming speed less the drop is {Vertical(drop - playerSwim)}");
+        Expect(Is(bossUnderPlayersUp, drop),
+            $"swimming: the boss swam when the PLAYER's Up key was held — he moves {Vertical(bossUnderPlayersUp)} where a body left alone sinks {M(drop)} m/s (a fighter reads Controls, never Input)");
+
+        Input.ActionPress("move_down");
+        (float playerDown, float bossUnderPlayersDown) = await Sinking(player, boss);
+        Input.ActionRelease("move_down");
+        Expect(Is(playerDown, drop + playerSwim), $"swimming: holding Down in the sea the player moves {Vertical(playerDown)}; its swimming speed plus the drop is {Vertical(drop + playerSwim)}");
+        Expect(Is(bossUnderPlayersDown, drop),
+            $"swimming: the boss dived when the PLAYER's Down key was held — he moves {Vertical(bossUnderPlayersDown)} where a body left alone sinks {M(drop)} m/s (a fighter reads Controls, never Input)");
+
+        // The boss's own pad, Up then Down: he swims, and now the player must go on sinking.
+        pad.Hold(ControlAction.MoveUp);
+        (float playerUnderHisUp, float bossUp) = await Sinking(player, boss);
+        pad.Hold(ControlAction.MoveUp, false);
+        Expect(Is(bossUp, drop - bossSwim),
+            $"swimming: a boss whose pad holds Up must swim up — he moves {Vertical(bossUp)}; his swimming speed less the drop is {Vertical(drop - bossSwim)}");
+        Expect(Is(playerUnderHisUp, drop), $"swimming: the player swam when the BOSS's pad held Up — it moves {Vertical(playerUnderHisUp)} where a body left alone sinks {M(drop)} m/s");
+
+        pad.Hold(ControlAction.MoveDown);
+        (float playerUnderHisDown, float bossDown) = await Sinking(player, boss);
+        pad.Hold(ControlAction.MoveDown, false);
+        Expect(Is(bossDown, drop + bossSwim),
+            $"swimming: a boss whose pad holds Down must swim down — he moves {Vertical(bossDown)}; his swimming speed plus the drop is {Vertical(drop + bossSwim)}");
+        Expect(Is(playerUnderHisDown, drop), $"swimming: the player dived when the BOSS's pad held Down — it moves {Vertical(playerUnderHisDown)} where a body left alone sinks {M(drop)} m/s");
+
+        GD.Print($"  boss     swimming       in the sea (drop {M(drop)} m/s) the player's Up / Down swim the player {M(-playerUp)} m/s up / {M(playerDown)} down and leave a boss sinking {M(bossUnderPlayersUp)} / {M(bossUnderPlayersDown)} · " +
+                 $"his own pad swims him {M(-bossUp)} m/s up / {M(bossDown)} down and leaves the player sinking {M(playerUnderHisUp)} / {M(playerUnderHisDown)}");
+        await Strike(stage);
+    }
+
+    // ---------------------------------------------------------------- 3f. his rules, one at a time
 
     private static BossRule Rule(Node boss, string name)
     {

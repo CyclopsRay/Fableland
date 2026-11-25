@@ -29,24 +29,36 @@ Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
 1. thin one-way **platform** — land/cross/drop-through (a `StaticBody2D` with
    `one_way_collision = true` on its shape).
 2. **SoftVolume** (`Scripts/Gameplay/World/SoftVolume.cs`) — enterable "go-inside" volume (tree/bush/…);
-   Area2D field with **no** standable top. Inside, normal gravity/input/jumps continue;
-   velocity is gradually pulled toward StagnationIndex (the scene fallback is 0.5·maxSpeed;
-   map clouds use 0.3 and palms 0.1) plus a small
-   GravityIndex drift (0.1·maxSpeed), rather than being overwritten. Active membership refreshes
-   player jump charges even though it is not a physical floor. Applies to players AND foes.
-   Since v0.10.9 the same volume is also **water** (`GravityScale` = share of gravity left,
-   `SinkSpeed` = absolute sink cap, `Drag` = resistance multiplier; Down swims down) and a
-   **current** (`IsMedium` off + `Flow`: carries only — a current, bubbles, a waterfall). A
-   body can be in several at once: both body types keep a `SoftVolumeSet` and resolve
-   resistance, buoyancy and carry through it, never through a single remembered volume.
-   Tuning table, rules and measured numbers: `Docs/MapCreation.gdd` §2.2a.
+   Area2D field with **no** standable top. Two rules, by body (v0.11.1):
+   - **A fighter swims** in every map volume: Up (`move_up`, W/↑) and Down steer exactly as
+     Left/Right do — read, like them, through `Controls` (`ControlAction.MoveUp` /
+     `MoveDown`), so a BOSS swims from its brain's pad and never from the player's keys —
+     and gravity is replaced by the volume's **drop** — `GravityIndex`·maxSpeed
+     (0.1 → 1 m/s) in foliage/cloud, the absolute `SinkSpeed` in water. Velocity = own
+     swimming + drop: in the sea (5.5 and 3 m/s) up is 2.5, down 8.5. Up pushes only while
+     the head is under (`.Covers`), so a swimmer rests at a surface. A jump inside is a
+     stroke on top of the swimming, as often as `JumpCooldown` allows — the owner's call:
+     a player chooses between holding Up and jumping. `SoftVolumeSet.SwimVertical`, `.Swim`.
+   - **A foe (`BaseFoe`) is passive**, and so is a fighter in a kit volume with `Swimmable`
+     off (Cleopastar's star): gravity/input/jumps continue and velocity is gradually pulled
+     toward StagnationIndex·maxSpeed (scene fallback 0.5; map clouds 0.3, palms 0.1) plus
+     the GravityIndex drift — the v0.6.18 contract, `SoftVolumeSet.Resist`.
+   Membership keeps a fighter's jump charges full either way. The same volume is also
+   **water** (`GravityScale` = share of gravity left, `SinkSpeed` = absolute drop, `Drag` =
+   resistance multiplier) and a **current** (`IsMedium` off + `Flow`: carries only — a
+   current, bubbles, a waterfall; an identical carry counts once). A body can be in several
+   at once: both body types keep a `SoftVolumeSet` and resolve everything through it, never
+   through a single remembered volume. Tuning table, rules and measured numbers:
+   `Docs/MapCreation.gdd` §2.2a.
 
 **Movement / combat model** (`CharacterController`, `Enemy`, `HitInfo`):
 - Velocity = **`intentVel`** (self-directed: input, gravity, jump, then any SoftVolume resistance) +
   **`externalVel`** (impulses — knockback/wind — that decay via `ExternalDamping`). This is what
   gives external forces "room" to coexist with player control.
 - Horizontal intent has **momentum** (accelerate toward `MoveSpeed` via Ground/Air Accel; stop via
-  Ground/Air Friction). Vertical intent integrates gravity (has momentum) and jump sets it.
+  Ground/Air Friction). Vertical intent integrates gravity (has momentum) and jump sets it —
+  except inside a soft volume, where a fighter's vertical intent is steered like the
+  horizontal one and settles on the volume's drop instead of accumulating gravity.
 - Knockback = **`AddImpulse(deltaV)`** (a delta-v; force-over-time = per-tick impulses, e.g. tornado).
 - Hits are authored per skill via **`HitInfo { Damage, Knockback (delta-v), Stun }`**. `Stun < 0`
   means the default **gain-no** window `Units.StunPerDamage · Damage` (0.005·dmg); during it the
@@ -65,14 +77,17 @@ kit be worn by the player or fought as a BOSS:
   group in attack code; a projectile takes the side of whoever launched it.
 - Kits read **`Controls`** (`Held` / `JustPressed` / `JustReleased(ControlAction.…)`,
   `AimPoint(this)`) — never `Input`, never `GetGlobalMousePosition()`. The player's is
-  `PlayerControls`; a boss brain fills a `VirtualPad`.
+  `PlayerControls`; a boss brain fills a `VirtualPad`. The base class obeys it too:
+  swimming's Up and Down are `ControlAction.MoveUp` / `MoveDown` (v0.11.1).
 
 **Slopes** (v0.10.11) — ground can be a ramp (`RealmTiles.Slope`, `MapCreation.gdd` §2.2b).
 Bodies stay on one because `FloorSnapLength` is `Units.FloorSnapPx` (12 px) for fighters and
 walking foes. A 1:2 slope costs a fighter a fifth of its speed uphill, nothing downhill.
 
 **Jumps** — per-character `MaxJumps` (jumps before touching down again; Pomegraknight = 1),
-refreshed on touching ground / platform / active SoftVolume. A universal `JumpCooldown` (0.3 s) is the
+refreshed on touching ground / platform / active SoftVolume. Inside a soft volume the charges
+stay full, so a jump there is a stroke whose only limit is the cooldown (measured: tapping
+climbs 10 m/s in the sea, 19 m/s in a bamboo). A universal `JumpCooldown` (0.3 s) is the
 minimum gap between jumps; override per character only when explicitly specified. **Coyote
 time** (`CoyoteTime`, 0.2 s): leaving a surface doesn't cost a jump for that long (edge jumps
 still work), but if it elapses with no manual jump, one jump charge is forfeited once — see the
@@ -113,6 +128,18 @@ save keeps it (`RunState.WorldPool`, save version 4). A pool world must have a r
 a city colour and land tint no other world is close to, a map authored for each altitude band,
 a boss arena, and a boss (its own row in `BossTable`, else the stand-in — PumpKing).
 
+**Input** — actions live in `project.godot`, except `move_up` (W/↑, swim up), which
+`Scripts/Foundation/InputDefaults.cs` registers when the project does not define it. The call
+is in `PlayerControls`' constructor: that is the one class that asks the InputMap for a
+fighter's buttons (a kit reads `Controls`, never `Input` — the rule above), and every
+`CharacterController` touches it when it is constructed. `project.godot` is re-saved by every
+editor that opens a checkout and is usually left uncommitted, so an action added there can
+reach a checkout without the code that reads it, or the code without it (reading a missing
+action logs an error every frame). An entry named `move_up` in `project.godot` wins, so it
+can still be rebound there. A test that presses it before any fighter exists must call
+`InputDefaults.Ensure()` first (the content check's probe does); the boss check deliberately
+does not, so it fails by name if the game stops registering the action.
+
 **Versioning** — bump patch (+0.0.1) every commit; keep `Scripts/Foundation/GameVersion.cs`, the
 repo-root `VERSION` file, and the HUD `VersionLabel` (`Scenes/Hud.tscn`) in sync. Shown
 top-left in-game.
@@ -122,7 +149,7 @@ toolchain (`dotnet` 9 on the PATH; Godot 4.7 .NET at
 `/Applications/Godot_mono.app/Contents/MacOS/Godot`), so build for real:
 `dotnet build Fableland.csproj`, and for map/tile work the headless content check
 (`Docs/Instructions/40-QA.md` §(2)); for bosses, kits with a BOSS variant, input, hit intake,
-sides or slopes, also the boss check (`res://Scenes/Bosses/BossFightCheck.tscn`, same §); for
+sides, slopes or swimming, also the boss check (`res://Scenes/Bosses/BossFightCheck.tscn`, same §); for
 the world pool, map generation, saves, the run flow or a shipped map, also the run check
 (`res://Scenes/Run/RunWalkCheck.tscn`, same § — it plays real runs, in a scratch save folder). A host with no toolchain falls back to static checks
 (brace/paren balance, `.tscn` resource paths, `GetNode` paths), which do NOT catch
@@ -133,6 +160,120 @@ the Anaconda `python3` first on the PATH has a broken numpy (missing MKL) and di
 ---
 
 ## Caveats / gotchas (grow this on every bug fix)
+
+### A clean merge is not an agreeing one — swimming, written before fighters had sides, would have let the player's W and S swim the boss (v0.11.1, merge of the swimming work; caught before it shipped)
+- **Symptom (never shipped):** the swimming work (written as v0.10.10 beside v0.10.11's boss
+  fights, both cut from v0.10.9) read `Input.IsActionPressed("move_down")` and
+  `InputDefaults.MoveUp` inside `CharacterController._PhysicsProcess`. A BOSS is that same
+  class on a brain's `VirtualPad`. Merged as written the build is green, the content check
+  and the boss check both pass — and in a sea the boss rises 1.4 m/s whenever the player
+  holds W, dives at 7.4 m/s on S, and ignores his own pad's Up and Down. Git reported no
+  conflict at those lines: v0.11.0 had never touched them, because they did not exist.
+- **Rule:** (1) every button a fighter reads goes through `Controls`, in the base class as
+  in the kits — swimming is `ControlAction.MoveUp` / `MoveDown`. (2) A mechanic a
+  controller drives gets a stage with **both sides in it at once, each on its own
+  controller, asserting the other is unmoved**: `BossFightCheck.ProbeSwimmingTakesSides`
+  holds the player's keys, then the boss's pad, and expects each to swim only its own body
+  at the speeds the sea's tuning promises. It was broken five ways and failed by name each
+  time: both reads back on `Input`, each alone, swimming made Player-side only (the other
+  wrong merge — "a boss is a foe, foes do not swim"), and `move_up` no longer registered.
+  (3) **A check that registers what it presses hides a game that does not.** The content
+  check's probe calls `InputDefaults.Ensure()` so that it can press `move_up`; with the
+  game's own registration removed it still passed while the game logged an error every
+  tick. The boss check never registers the action — it asserts that the game did.
+- **Why:** a three-way merge says two edits did not touch the same lines, not that they
+  agree. One side changed a rule ("fighters read Controls"); the other added a new reader
+  written under the old one, and new lines conflict with nothing. The feature's own probe
+  was green for the reason the bug existed: it drives the player, and for the player
+  `Input` and `Controls` are the same thing.
+
+### Each line kept its own promise and broke the other's — a canal authored for the old water had banks no surface jump clears (v0.11.1, merge; fixed)
+- **Symptom:** v0.11.0's Forgotten City low-ground map lays a canal across its pit with the
+  banks one row (2 m) above the water — fine for v0.11.0's water, left by "a second jump".
+  The swimming work's rule is that a pool is left the way a player tries first: swim up to
+  the bank, jump — and a jump at the surface of swamp water clears it by 1.0 m. Merged, a
+  fighter at that bank comes up a metre short and falls back in. (Not a pit: tapping Jump
+  twice still got out in 0.75 s, measured, because the second launch starts half out of
+  the water.) Neither line's checks saw it: the swimming probe swam the one canal that
+  existed when it was written, and v0.11.0's checks never ask a body to leave a pool.
+- **Rule:** the canal is flush with its banks now (`build_band_maps.py`: that pit is one
+  row shallower), and the probe's pools are data — `ShippedPools` — **with a shipped map
+  that holds swamp water and is not listed failing by name**, so the next pool cannot ship
+  unswum. When two lines meet, run each side's checks against the other side's *content*:
+  find the list a check walks and extend it before believing its green.
+- **Why:** a check written against "the shipped map" checks one map; content added on
+  another branch is outside it by construction. And a rule written into a GDD binds the
+  maps that were authored before anyone had written it.
+
+### One stream laid as several tiles pushed twice as hard at every joint (v0.11.1 fix; shipped in v0.10.9)
+- **Symptom (found while writing a probe stage, then measured):** a bubble column is a
+  stack of `softvolume.ln_bubbles` tiles and a waterfall a stack of `bm_waterfall`; each
+  placed tile is its own `SoftVolume`. `SoftVolumeSet` summed the `Flow` of every volume a
+  body overlaps — and a body across the joint of two tiles overlaps both. Riding up a
+  column whose lift is 4 m/s, the body did **11 m/s** for the ticks it straddled a joint
+  (2 × 7 up, less the 3 m/s sink); by the same sum a waterfall carried 28 m/s there instead
+  of 14. v0.10.9's probe measured each carrier inside a single tile, so it never saw a joint.
+- **Rule:** an identical carry counts once (`SoftVolumeSet.AlreadyCarrying`): tiles of one
+  kind and flip have bit-identical `Flow`, so equality identifies "the same stream"; two
+  different streams that cross still add. The probe now rides a body across a joint and
+  compares the fastest single tick with the speed inside one tile. **When a thing is
+  authored as repeated tiles, test it across a seam, not inside one tile.**
+- **Why:** the per-tile volume is an authoring unit, not a physical one. Summing is right
+  for different things and wrong for pieces of one thing; media never had the problem
+  because they combine strictest-first, where two equal volumes are idempotent.
+
+### A repeatable impulse is a speed — report the rate, not the single press (v0.11.1, swimming)
+- **Symptom (found by arithmetic when the owner asked about swimming up; it had shipped):**
+  in water a jump was documented as "a 3.4 m stroke, repeatable" — jumps refresh inside any
+  medium and the cooldown is 0.3 s. Nobody divided: 3 m every 0.32 s is **about 10 m/s**
+  upward by tapping Space, in a sea whose swimming speed is 5.5 and where running on land
+  is 10. The probe asserted the height of one stroke and was green, and the number the
+  owner was shown ("3.4 m") hid what the mechanic does.
+- **Rule:** for anything a player can repeat, measure and report the **rate** (effect per
+  press ÷ the shortest gap between presses), next to every sustained way of doing the same
+  thing. The probe taps Jump every other tick, counts the launches against what the
+  cooldown allows, and prints `sea climb  holding Up 2.5 m/s · tapping Jump 10.0 m/s · both
+  10.7 m/s`. Whether that ratio is right is the owner's decision — a first cut of the
+  swimming work removed jumping inside volumes for this reason and the owner put it back, wanting both
+  ways; the cooldown is the knob (TBD #35) — but it must be decided on the rate.
+- **Why:** a per-press number reads as small; a player's thumb turns it into a velocity.
+
+### A detector tuned on the healthy signal missed the failure it was written for (v0.11.1, probe; caught by its own mutation run)
+- **Symptom:** the probe proves the jump cooldown holds inside a volume by tapping Jump
+  every other tick and counting launches. It counted a launch as "upward speed rose by
+  40% of a jump's launch speed in one tick" — true of every launch in a working game,
+  where a stroke has faded before the next. With the cooldown removed (the mutation the
+  assertion exists for) the body re-launched every two ticks, its speed never fell far,
+  and the counter reported **1 launch** where there were 25. The run still failed, on a
+  different assertion, by luck.
+- **Rule:** build a detector from what *cannot* happen otherwise, not from what the event
+  looks like when all is well: with no direction held nothing but a launch adds upward
+  speed in a volume, so any gain counts. And **run the mutation an assertion is for, and
+  read which line failed** — a red run is not proof that the right check caught it. The
+  mutation runner requires each failure to name its mechanism for this reason.
+- **Why:** a threshold calibrated on normal behaviour encodes the very assumption the
+  check is supposed to test.
+
+### Swimming: three ways the obvious rule goes wrong (v0.11.1, caught before it shipped)
+- **Thrust must never brake, and a launch must coast under gravity.** Vertical steering is
+  "accelerate toward ±speed + drop". Written as a plain `MoveToward`, holding Up *slows* a
+  jump launch (the launch is faster than the target). Written as "no gravity while a
+  direction is held", holding Up lets a launch **out-rise the open air** wherever the
+  resistance is weaker than gravity (all foliage) — the v0.10.9 water bug again. So:
+  thrust only ever adds speed toward its target; a body already faster than its own
+  swimming is left to the settle (gravity toward the drop) and the resistance.
+  `SoftVolumeSet.SelfTest` holds a launch with Up held against the same launch in the open.
+- **Overlap arithmetic can make a trap.** Media combine strictest-first, so kelp (0.3) in
+  the sea swam at 3 m/s against the sea's 3 m/s sink: up was exactly **0**. A medium whose
+  swimming speed is not above its drop cannot be left upward. Every registered medium is
+  asked the model (`CheckEveryMediumCanBeSwumUp`), and the probe swims the shipped overlap.
+- **Membership is binary, so "push until out" hovers the whole body on top.** A body is
+  "in" a volume while any part overlaps. If Up pushes as long as the body is in, it rises
+  until only its feet touch, falls back, is pushed again — standing on the sea, buzzing. So
+  Up pushes only while the **head** is under (`SoftVolumeSet.Covers(Crown)`), which rests
+  the head at the surface (within 0.2 m in water). Anything else keyed to that line has to
+  allow for the head bobbing across it. `Covers` is geometry on the volume's own shapes:
+  its `Area2D` is on collision layer 0, so a physics point query cannot find it.
 
 ### Anything a seed is fed is part of the save — growing the world pool would have moved every saved run (v0.11.0, world pool)
 - **Symptom (caught before it shipped):** a save stores the seed, not the map, and
@@ -343,11 +484,16 @@ the Anaconda `python3` first on the PATH has a broken numpy (missing MKL) and di
 - **Rule:** before bumping, look at `VERSION` in every worktree (`git worktree list`), dirty
   ones included — uncommitted work has a number too. Take the next free one; a skipped
   number is harmless. This branch is **v0.10.11**.
-- **When the two meet:** the swimming work reads `Input.IsActionPressed("move_down")` and
-  `InputDefaults.MoveUp` directly inside `CharacterController._PhysicsProcess`. Route both
-  through `Controls` (`ControlAction.MoveDown`, and `ControlAction.MoveUp`, which exists for
-  this and is guarded for checkouts whose InputMap lacks `move_up`) — otherwise the player's
-  W and S keys swim the boss.
+- **When the two meet** (written in v0.10.11): the swimming work reads
+  `Input.IsActionPressed("move_down")` and `InputDefaults.MoveUp` directly inside
+  `CharacterController._PhysicsProcess`. Route both through `Controls`
+  (`ControlAction.MoveDown`, and `ControlAction.MoveUp`, which exists for this) — otherwise
+  the player's W and S keys swim the boss.
+- **They met in v0.11.1.** The swimming work never became a v0.10.10 of its own: it was
+  merged onto v0.11.0 and is **v0.11.1**, which is the tag its rules and caveats carry in
+  this file and in the GDDs. Both reads go through `Controls`; the guard on `MoveUp` is gone
+  because `PlayerControls` now registers the action itself; and the boss check has a stage
+  for exactly this sentence (see the first caveat above).
 
 ### A slope's crest sits under its ramp, so a one-row slope tile loses it at every joint (v0.10.11, realm art)
 - **Symptom (caught on paper):** the Dark Wood's earth draws its walking line 13 px under the

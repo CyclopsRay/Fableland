@@ -133,6 +133,9 @@ public partial class CleoStar : Area2D
             CollisionMask = 0,
             StagnationIndex = 0.1f,
             GravityIndex = 0.1f,
+            // A kit volume, not terrain: it keeps the passive contract (slow her, keep her
+            // jumps) instead of becoming something she swims in, as map volumes are.
+            Swimmable = false,
         };
         _starVolume.SetCollisionMaskValue(Units.LayerPlayer, true);
         _starVolumeShape = new CollisionShape2D

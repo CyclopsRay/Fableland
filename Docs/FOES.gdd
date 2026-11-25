@@ -424,6 +424,18 @@ A boss map takes its boss's side.
   flattering: only the Dark Wood has a slope block (TBD #30), so nowhere else does his head
   have a hill to run. Undersea (Loong's Nest) the whole arena is water. The run check stages
   him on each and he gets a head away at a standing player on all eight.
+- **A boss in a soft volume (v0.11.1).** A fighter swims in every soft volume
+  (`Gameplay.gdd` §A.2) and a boss is a fighter, so he can: on his own pad BOSS PumpKing
+  swims 1.4 m/s up and 7.4 m/s down in the sea, and the player's Up and Down do nothing to
+  him (the boss check measures both). **No rule of his uses it.** "Hold perch" walks and
+  jumps; in water he sinks to the bed at 3 m/s as he did before, jumps in 2.9 m strokes and
+  leaves in Soul Form — and in foliage or cloud he now floats down at a tenth of his top
+  speed (0.8 m/s, from the model; not measured on him) where he used to fall through. Three
+  boss arenas hold soft volumes: the undersea one (all water), the beach's (two clouds) and
+  his castle (one bramble); the boss check and the run check pass on them, and nothing in
+  them sends him through a volume on purpose. Teaching his legs to swim is undesigned, and
+  has a catch: pumped to three he is slowed to 4.8 m/s, and at that speed holding Up in the
+  sea still sinks (0.4 m/s, from the model — `MapCreation.gdd` §2.2a). TBD #34.
 - **PumpKing's Castle** (`Maps/horror_pumpkings_castle.json`, `RealmStyleBible.md` §7A). From
   the left: a strip of wood where the player arrives; one unbroken 1:2 slope, 36 m along and
   18 m up; the forecourt, the gate (shut — nobody goes in) and the balcony he comes out onto,

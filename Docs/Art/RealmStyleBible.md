@@ -290,15 +290,16 @@ The inscription is written, not typeset: no calligraphic Chinese font ships with
 **Arena grammar — vertical; everything tall is soft volume; the land takes sides.** Maps
 are a couple of screens wide and several tall. **Every bamboo and every pine is a
 SoftVolume — never ground, never a platform.** A fighter dives into a culm, hangs in the
-leaves (soft volumes refresh jumps), chains jumps straight up it and drops out on a target.
-Bamboo is light cover, not a mire: stagnation **0.6** (a cloud is 0.3, a palm 0.1); a pine
-is 0.5. Solid footing is only the forest floor, ink-rock ledges and islets, the thin
+leaves (left alone it floats down at 1 m/s), goes straight up it by holding Up (8.6 m/s)
+or by chaining jumps (19 m/s on the jump cooldown), rests with its head at the tip, jumps
+off it (5 m clear) and drops out on a target with Down. Bamboo is light cover, not a mire: stagnation **0.6** (a cloud is 0.3, a palm 0.1); a
+pine is 0.5. Solid footing is only the forest floor, ink-rock ledges and islets, the thin
 one-way roofs and bracket beams of temples, and a stone bridge.
 
 **The waterfall** is the realm's piece of tactical terrain. It is a *current*, not a medium
 (§2.8, `MapCreation.gdd` §2.2a): everything inside it is carried down at **14 m/s** on top
-of its own fall, a jump taken under it rises **2.7 m instead of 8.3**, and because it gives
-no jump support it cannot be climbed. Whoever holds its head can knock an enemy into it and
+of its own fall, a jump taken under it rises **2.7 m instead of 8.3**, and because it is
+not a medium — nothing to swim in, no jump support — it cannot be climbed. Whoever holds its head can knock an enemy into it and
 be rid of them; anyone crossing it gives up their height; and it is the fastest way down.
 Lay it as a column of `softvolume.bm_waterfall` from a cliff lip to the floor, and put
 `deco.bm_spray` in the foreground where it lands.
@@ -352,8 +353,9 @@ in the frame is fire.* *Forbidden:* outlines, flat fills, any cheerful hue.
 
 **Arena grammar — close quarters with nowhere safe.** Maps are small sealed boxes cut into
 low storeys (ceilings about five cells). Perches are short. **The routes between storeys
-are things you climb into** — hanging chains (stagnation 0.55) and cobwebs (0.12, the one
-thing in the realm that really holds you) — so changing level is a commitment. Floors are
+are things you climb into** — hanging chains (stagnation 0.55: hold Up and climb at about
+8.5 m/s) and cobwebs (0.12, the one thing in the realm that really holds you: it takes
+seconds to get moving in one) — so changing level is a commitment. Floors are
 lava pools and spike beds with strips of safe stone between; catwalks over lava are the
 fastest crossings and the worst place to be hit.
 
@@ -442,20 +444,24 @@ a real character that comes to (measured by the content check, 40-QA.md):
 
 | In the sea | A fighter that runs 10 m/s |
 |---|---|
-| Swimming speed | **5.5 m/s** — and the water enforces it against a held direction |
+| Swimming speed | **5.5 m/s** in whatever direction is held — and the water enforces it |
 | Left alone | sinks at **3 m/s**, whatever the body (a crab sinks as fast) |
-| Holding Down | swims down at 5.5 m/s |
-| A jump | a swimming **stroke of 3.4 m** (an air jump is 8.3 m), and it can be taken again and again |
+| The two are added | across: 5.5 m/s with 3 m/s underneath · **up 2.5 m/s** · **down 8.5 m/s** |
+| A jump | a **3 m stroke** anywhere in the water (an air jump is 8.3 m), as often as the 0.3 s jump cooldown allows; from the surface it clears the water by **2.1 m** |
+| Climbing | holding Up **2.5 m/s** · tapping Jump **10 m/s** · both 10.7 m/s |
 | A current | carries at **4 m/s** — swimming against it leaves 1.5 m/s |
-| A bubble column | lifts at 4 m/s, and still at 1.5 m/s against a dive |
+| A bubble column | lifts at 4 m/s; swum up, **9.5 m/s** |
 
-So ordinary movement is slow, floating and pushed about, and the map belongs to whoever can
-put themselves exactly where they mean to: a dash of fixed length, a teleport, a hook. The
-sea is not still — **hidden currents** drag whoever drifts into them toward the urchin beds,
-and **bubble columns** are lifts nobody can refuse. Kelp is the cover (it is slower still,
-3 m/s). Solid footing is palace floors, glazed eaves and giant clams. The sea has a
-surface: above it is air, where gravity is whole again, so whoever leaps out falls back in
-and a map needs no ceiling.
+So a swimmer moves freely, as if in space, with the sea always pulling it down — and the
+map belongs to whoever can put themselves exactly where they mean to: a dash of fixed
+length, a teleport, a hook. **Height costs effort**: going down is 8.5 m/s held; going up
+is 2.5 m/s held, or 10 m/s for whoever keeps tapping Jump. The sea is not still — **hidden
+currents** drag whoever drifts into them toward the urchin beds, and **bubble columns** are
+the lifts: a column carries a swimmer up at 4 m/s for nothing, 9.5 m/s holding Up
+(swimming down against one still gets down, at 1.5 m/s). Kelp is the cover (it is slower still: 4 m/s across, 1 m/s up). Solid footing is
+palace floors, glazed eaves and giant clams. The sea has a surface: a swimmer holding Up
+rests with its head at it; above it is air, where gravity is whole again, so whoever leaps
+out falls back in and a map needs no ceiling.
 
 The sea is laid as big `softvolume.ln_water` tiles on a **Farview layer with Collision on**
 (parallax 1.0), so it fills the map without taking a single battlefield cell; currents,
@@ -468,7 +474,7 @@ bubbles and kelp go on the battlefield, inside it (`MapCreation.gdd` §3, §2.2a
 | `softvolume.ln_water` | SoftVolume (water) | 8×6 | Stagnation 0.55 · gravity ×0.35 · sinks 3 m/s · drag ×5. Any layer role |
 | `softvolume.ln_current` | SoftVolume (current) | 4×2 | Carries 4 m/s in the direction it faces (Flip H reverses it). Drawn faint on purpose |
 | `softvolume.ln_bubbles` | SoftVolume (current) | 2×4 | Lifts 7 m/s. Stacks vertically |
-| `softvolume.ln_kelp` | SoftVolume | 2×6 | Stagnation 0.3: cover |
+| `softvolume.ln_kelp` | SoftVolume | 2×6 | Stagnation 0.4: cover. It must stay above the sea's 3 m/s sink, or nobody can swim up through it |
 | `hazard.ln_urchin` | Hazard (damage) | 2×1 | Sea urchins on the floor a current drags you across |
 | `deco.ln_column` · `ln_lantern` · `ln_coral` · `ln_fish` | Decoration | 1×5 · 1×2 · 3×3 · 3×2 | Palace columns, night pearls, coral trees, a shoal |
 | `deco.ln_palace_far` · `ln_ridge_far` · `ln_rays` | Decoration | 10×6 · 16×5 · 4×10 | Far palace on its mound, looping seabed ridges, shafts of light |
@@ -494,7 +500,8 @@ Palette: **blue, red, yellow.** Feeling: **entangled, chaotic, horror.**
 
 **Arena grammar — traps and thickets.** The wood is ladders of gnarled limbs (one-way
 branches) with bare canopy above (soft volume) and **bramble** on the floor: stagnation
-0.15, the stickiest thing in the game, so a missed jump is paid for. Open ground is worse:
+0.15, the stickiest thing in the game, so a missed jump is paid for — you hang in it, and
+it takes seconds to get moving in any direction. Open ground is worse:
 ground fog (0.45) hides what lies in it, bear traps sit in the gaps, and will-o'-the-wisps
 hang on the jump lines. Whoever looks before they move wins: guards, tanks, anyone who can
 make the enemy come to them.
@@ -556,7 +563,8 @@ only bright colour, wherever the technology shows.
 
 **Arena grammar — the kit follows the land.** Sea level is **swamp**: canals of water you
 wade in rather than swim (stagnation 0.4, gravity ×0.6, sinks 2 m/s, drag ×4 — on a real
-character 4 m/s, and a jump from the bottom rises 2.7 m, so it takes a second to get out),
+character 4 m/s across and 2 m/s up, a jump off the bottom rises 2.6 m, and getting out is
+a swim to the surface and a jump that clears the bank by a metre),
 cattails on the banks, mud. Whoever is down there is slow. As a map climbs it becomes
 **pyramid**: terraces of stone, floating slabs, bridges of light — and the city's security
 still works up there (beams, obsidian), so a summit is taken by going over, never by
@@ -567,7 +575,7 @@ walking up to it. Low-ground maps should be mostly swamp, high-ground maps mostl
 | `ground.tf_stone` · `tf_mud` | Ground | 1×1 | Violet masonry with neon glyphs; swamp bank |
 | `platform.tf_slab` · `tf_light` | Platform | 3×1 · 4×1 | A floating slab; a bridge of light |
 | `softvolume.tf_water` | SoftVolume (water) | 4×2 | Swamp water: see above. Any layer role |
-| `softvolume.tf_reeds` · `tf_vines` | SoftVolume | 2×3 · 1×4 | Cattails (0.5); hanging vines that stack into a lane (0.5) |
+| `softvolume.tf_reeds` · `tf_vines` | SoftVolume | 2×3 · 1×4 | Cattails (0.5); hanging vines that stack into a lane you climb by holding Up (0.5) |
 | `hazard.tf_laser` | Hazard (fire) | 1×3 | Security beam |
 | `hazard.tf_obsidian` | Hazard (damage) | 2×1 | Obsidian blades |
 | `deco.tf_serpent` · `tf_stele` · `tf_sign` · `tf_axolotl` · `tf_tree` | Decoration | 2×3 · 1×3 · 2×2 · 2×1 · 4×6 | Serpent head with a working lens, neon stele, glyph sign, an axolotl, an ahuehuete |
@@ -598,8 +606,9 @@ lotus. *Forbidden:* unenclosed colour, non-gold outlines, gradients across a cel
 **Arena grammar — aerial.** Maps are almost all air. A terrace floor at the bottom is safe
 and useless: everything worth having hangs above it. Solid footing is a handful of small
 terrace islands and thin lotus pads, bridges and roofs; what fills the space is **cloud**,
-every one a soft volume (stagnation 0.3). The fight is carried cloud to cloud in three
-dimensions. Frost pearls sit on the best perches to stop anyone settling — the realm's
+every one a soft volume (stagnation 0.3). A fighter flies through a cloud on either axis,
+floats in it when it lets go, and leaves by a jump from its top. The fight is carried cloud
+to cloud in three dimensions. Frost pearls sit on the best perches to stop anyone settling — the realm's
 hazard is cold, which gives `FreezeHazard` a home.
 
 | Tile | Role | Size | Notes |
@@ -647,6 +656,18 @@ check for you:
   30 m of Soul Form, so under about 20 m apart with the climb).
 - **Jump budget.** A ground jump rises 4 cells and covers about 5; one-way ledges 3 rows up
   are a clean jump, 4 is not (use an intermediate, or a soft volume).
+- **A soft volume is a lift, and its top is a springboard.** Holding Up climbs it, and so
+  does chaining jumps inside it; a jump from its top clears it by about 5 m, so the next
+  footing may sit 2 rows above the top. Never give a medium a swimming speed at or below
+  its drop — nobody could swim up out of it (the content check refuses the kind, and
+  swims the shipped overlap: kelp in the sea).
+- **A pool's bank is flush with its water.** A fighter leaves a pool by swimming up to the
+  bank and jumping, and that jump clears swamp water by 1 m and the sea by 2.1 m — less
+  than a cell or barely one — so lay the water's top row level with the bank's walking
+  line. The low-ground test canal was authored before swimming, with banks a row above
+  its water; it was the one shipped pool that broke this, and the content check now swims
+  out of every pool it is told about and refuses a map with swamp water it was not told
+  about (`ShippedPools`, `MapContentCheckPhysics.cs`).
 - **Mark it for every goal.** One `spawn.character`, respawns, enemy nests, and `goal.level`
   markers — the built-in maps serve all four goals and every hardship level.
 - **Far layers are composed in start-screen rows.** The game draws a layer at
@@ -684,7 +705,7 @@ wall is built of, its ledge, a soft volume, a hazard, props, a sky recipe) and f
 | Map | Shape | The realm's own touch |
 |---|---|---|
 | `<realm>_sea_level` (48 × 22) | a flat field, three ledges, each one clean jump | one soft volume, one hazard |
-| `<realm>_low_ground` (48 × 28) | a basin: you spawn on the west rim, the fight is in the pit, two 3-row steps down | what the realm keeps in its low places — palms (Beach), stardust (Starfield), mist and bamboo (Wulin), a lava pool under a catwalk (Dungeon), dust (Ghost Town), kelp and a bubble lift (Loong's Nest), fog and bramble (Dark Wood), a canal bank to bank (Forgotten City) |
+| `<realm>_low_ground` (48 × 28) | a basin: you spawn on the west rim, the fight is in the pit, two 3-row steps down | what the realm keeps in its low places — palms (Beach), stardust (Starfield), mist and bamboo (Wulin), a lava pool under a catwalk (Dungeon), dust (Ghost Town), kelp and a bubble lift (Loong's Nest), fog and bramble (Dark Wood), a canal bank to bank (Forgotten City — flush with its banks since v0.11.1, which makes its pit one row shallower: the pool rule above) |
 | `<realm>_high_ground` (48 × 28) | a mesa: three terraces of three rows and a summit, ledges up the east side | the Dark Wood's is climbed from the west by its **slope** |
 | `<realm>_boss_arena` (48 × 28) | a floor, a tower 12 m high on the east side, a ledge 18 m west of it: two perches | none yet — the Dark Wood's boss arena is the real one, PumpKing's castle |
 
@@ -745,12 +766,19 @@ Recorded here rather than silently chosen (`00-OVERVIEW.md` §5):
    new run. It was kept off existing runs — a save records the pool it was made from
    (`MapGDD` §2). Their map colours are danger red and canal jade. What is still open is
    whether PumpKing and Pixolotl become *starters* there (TBD #20, #24).
-7. **Water numbers are measured, not balanced.** Swimming 5.5 m/s, sinking 3 m/s, a 3.4 m
-   stroke, a 4 m/s current, a 14 m/s waterfall (§4, §7) are what the content check measures
-   on a real character; whether they are *fun* needs a fight. They are six constants in
-   `LoongsNestTileSet.cs`, four in `ForgottenTileSet.cs` and one in `WulinTileSet.cs`.
-   **Holding Down to swim down** was added without being asked for: without it the only way
-   down through 48 m of sea is to wait 16 seconds.
+7. **Swim numbers are measured, not balanced.** In the sea a fighter swims 5.5 m/s and the
+   drop is 3 m/s, so up is 2.5 and down 8.5: 48 m of sea takes 19 s to climb and 6 s to
+   descend by holding a direction, and holding a height means holding Up a little over
+   half the time. Tapping Jump climbs 10 m/s on the universal 0.3 s cooldown — four times
+   what holding Up does. A jump at the surface clears the water by 2.1 m (the swamp by
+   1.0 m). A 4 m/s current, bubbles
+   that lift 4 m/s (9.5 swum), a 14 m/s waterfall (§4, §7). In foliage and cloud the drop
+   is 1 m/s, so a fighter practically hangs, and comes down from a jump inside a bush by
+   holding Down. All of it is what the content check measures on a real character; whether
+   it is *fun* needs a fight. The numbers are six constants in `LoongsNestTileSet.cs`, four
+   in `ForgottenTileSet.cs`, one in `WulinTileSet.cs`, and `SoftVolume.GravityIndex` (one
+   default, 0.1) for the drop of every plain volume. Open with it: whether foes should
+   float too, and how long the jump cooldown should be inside a volume (TBD #27, #34, #35).
 8. **Destroyable trees** (the Dark Wood brief) are not built; `deco.kh_tree` is scenery.
 
 ## Decisions log
@@ -783,6 +811,11 @@ Recorded here rather than silently chosen (`00-OVERVIEW.md` §5):
   favours whoever can place themselves exactly. A realm's physics is part of its medium.
 - **Hidden currents are drawn faint, not left out (v0.10.9).** Invisible forces are unfair;
   a few pale streaks reward the player who looks.
+- **Soft volumes are swum in (v0.11.1).** Every soft volume is a float zone for a fighter:
+  held Up climbs a bamboo, a chain, a vine, a cloud, the sea. A kit's "things you climb
+  into" now means holding a direction or chaining jumps — both work, and they add — and a
+  swimmer rests with its head at a volume's top. A realm that wants a volume to hold someone gives it a low index — slow to get
+  moving in — never a swimming speed below its drop.
 - **Realms share a language, not a checklist (v0.10.9).** The Dark Wood's kit has a castle;
   its maps do not all have to.
 - **A sprite's canvas is not a window (v0.10.9, §2.7).** Found in the engine, not on the

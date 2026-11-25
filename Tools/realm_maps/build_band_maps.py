@@ -214,8 +214,9 @@ def markers(f, respawns, nests, goals):
 
 
 # ---- what each realm keeps in its low ground -------------------------------------------
-# Called with the pit's span (columns x0..x1 inclusive, sixteen cells) and the row its
-# floor's surface is. The bed's markers stand on columns x0, x0+4, x1-4 and x1; a pit's
+# Called with the pit's span (columns x0..x1 inclusive, sixteen cells) and the row the
+# basin's bed is - the pit floor's surface, except in the Forgotten City, whose canal is
+# silted one row higher (low_ground). The bed's markers stand on columns x0, x0+4, x1-4 and x1; a pit's
 # furniture keeps off those, and off the ledge over the middle (row bed-3, columns
 # x0+6..x0+9).
 
@@ -307,15 +308,22 @@ def low_ground(realm):
     back = m.farview("Scenery", (1.0, 1.0), grid=(W, h))
     dress(back, realm, [(4, rim), (38, rim), (43, rim)])
     x0, x1 = 16, 31                                       # the pit's floor
+    pit = bed                                             # the row that floor's surface is
     if realm["world"] == "TF":
         # The Forgotten City's low ground is swamp: a canal you wade in, bank to bank. Water
         # is laid on a layer of its own so it takes no battlefield cell (RealmStyleBible 8).
+        # Its surface is FLUSH with the steps, which are its banks: a fighter leaves a pool
+        # by swimming up to the bank and jumping, and a jump at the surface of swamp water
+        # clears it by 1 m - half a cell (MapCreation.gdd 2.2a). The water tile is two rows
+        # deep, so this pit's floor is silted up one row higher than the other realms'.
+        # (Until v0.11.1 the water lay one row lower and its banks stood 2 m over it.)
+        pit = step + 2
         canal = m.farview("Canal", (1.0, 1.0), grid=(W, h), collision=True)
         for x in range(x0, x1, 4):
-            canal.put("softvolume.tf_water", x, bed - 2)
+            canal.put("softvolume.tf_water", x, step)
 
     f = m.field()
-    f.fill(realm["floor"], 0, bed, W - 1, h - 1)
+    f.fill(realm["floor"], 0, pit, W - 1, h - 1)
     f.fill(realm["mass"], 0, 0, 1, rim - 1)
     f.fill(realm["mass"], W - 2, 0, W - 1, rim - 1)
     f.fill(realm["floor"], 0, rim, 12, bed - 1)           # west rim
@@ -328,8 +336,8 @@ def low_ground(realm):
         ledge(f, realm, x0 + 6, step)                     # a ledge over the middle, level with the steps
     markers(f,
             respawns=((5, rim - 1), (42, rim - 1), (14, step - 1)),
-            nests=((x0, bed - 1), (x1, bed - 1), (37, rim - 1), (W - 15, step - 1), (11, rim - 1)),
-            goals=((7, rim - 1), (x0 + 4, bed - 1), (x1 - 4, bed - 1), (x0 + 7, step - 1), (40, rim - 1), (13, step - 1)))
+            nests=((x0, pit - 1), (x1, pit - 1), (37, rim - 1), (W - 15, step - 1), (11, rim - 1)),
+            goals=((7, rim - 1), (x0 + 4, pit - 1), (x1 - 4, pit - 1), (x0 + 7, step - 1), (40, rim - 1), (13, step - 1)))
     return m.finish()
 
 

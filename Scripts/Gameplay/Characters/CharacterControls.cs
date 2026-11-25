@@ -46,23 +46,24 @@ public sealed class PlayerControls : ICharacterControls
 {
     public static readonly PlayerControls Instance = new();
 
-    // Indexed by ControlAction. "move_up" is not in every checkout's project.godot, and
-    // asking the InputMap for an action it does not have logs an error every frame.
+    // Indexed by ControlAction. Every one of these is defined in project.godot except
+    // "move_up" (swim up, v0.11.1), which the game registers itself: see InputDefaults.
     private static readonly StringName[] Names =
     {
-        "move_left", "move_right", "move_up", "move_down", "jump", "attack", "skill1", "skill2", "ult",
+        "move_left", "move_right", InputDefaults.MoveUp, "move_down", "jump", "attack", "skill1", "skill2", "ult",
     };
 
-    private PlayerControls() { }
+    // This is the one class that asks the InputMap for a fighter's actions, so it is the
+    // one that makes sure they are all there before the first read: asking for an action
+    // the InputMap does not have logs an error every frame. Every CharacterController
+    // touches Instance when it is constructed, a BOSS included.
+    private PlayerControls() => InputDefaults.Ensure();
 
     public static StringName ActionName(ControlAction action) => Names[(int)action];
 
-    private static bool Known(ControlAction action) =>
-        action != ControlAction.MoveUp || InputMap.HasAction(Names[(int)ControlAction.MoveUp]);
-
-    public bool Held(ControlAction action) => Known(action) && Input.IsActionPressed(Names[(int)action]);
-    public bool JustPressed(ControlAction action) => Known(action) && Input.IsActionJustPressed(Names[(int)action]);
-    public bool JustReleased(ControlAction action) => Known(action) && Input.IsActionJustReleased(Names[(int)action]);
+    public bool Held(ControlAction action) => Input.IsActionPressed(Names[(int)action]);
+    public bool JustPressed(ControlAction action) => Input.IsActionJustPressed(Names[(int)action]);
+    public bool JustReleased(ControlAction action) => Input.IsActionJustReleased(Names[(int)action]);
 
     public Vector2 AimPoint(Node2D body) => body.GetGlobalMousePosition();
     public float FacingHint => 0f;
