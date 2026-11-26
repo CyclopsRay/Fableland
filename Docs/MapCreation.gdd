@@ -461,13 +461,21 @@ one `TileSets.All` entry, one tile-set file, one line in that list.
 | `ln` | Palace of LOOING | Loong's Nest | 17 tiles |
 | `kh` | Kingdom of Horror *(in the pool since v0.11.0)* | Dark Wood | 25 tiles (the castle and the slope in v0.10.11) |
 | `tf` | The Forgotten *(in the pool since v0.11.0)* | Forgotten City | 18 tiles |
-| `pl` | *(none — its map is tagged `CC`)* | Cloud Court | 16 tiles |
+| `pl` | Palace of LOOING — *its sky district* (v0.11.3, provisional) | Cloud Court | 16 tiles |
 
 A set's world is the pool world whose abbreviation it carries (`TileSets.Info.WorldAbbr`).
-A set may belong to no pool world (`pl`, Cloud Court): its maps then never match a run's
-node and are played from the editor; the content check prints a note for such a map instead
-of failing it, and the browser gives its realm chip the set's own accent colour
-(`Info.AccentColor`) in place of a world colour.
+**A world may have more than one set** — the Palace of LOOING has two realms, Loong's Nest
+under the sea and Cloud Court above the clouds (`MapGDD.md` §2.2). Order in `TileSets.All` is
+data there: the first set listed for a world is its **primary realm**
+(`TileSets.ForWorldAbbr`), which is what a new, empty map of that world opens on. Which of a
+world's realms a *map* belongs to is never looked up by world: `MapRealm.Of` answers from what
+the map is built from (the set most of its tiles come from; for a map with none yet, the set
+whose canvas colour it still has; else the primary realm). The browser's realm chip and badge
+and the editor's palette ask it, and the palette titles a second realm's groups by realm name
+("Cloud Court · Ground", not a second "PL · Ground"). Both realms of a world wear that
+world's colour. A set whose world is not in the pool would bring its own
+(`Info.AccentColor`) — but its maps could never be dealt, and since the no-orphan check (§9)
+a shipped map like that fails the content check instead of being noted.
 
 **Every pool world ships a set of maps (v0.11.0)** besides its showcase: one authored for
 each altitude band and a boss arena — `<realm>_sea_level` / `_low_ground` / `_high_ground` /
@@ -720,7 +728,8 @@ edited, as a wall of cards (rebuilt in v0.10.7).
   Under it the **realm strip**, the realm selector: one chip per realm (All realms, Beach,
   Starfield, Wulin, Dungeon, Ghost Town, Loong's Nest, Cloud Court, Dark Wood, Forgotten
   City, plus "No realm" while anything is untagged), each in its world's overworld colour —
-  or its set's accent colour when no pool world owns it (§2.6) — with the number of maps it
+  Loong's Nest and Cloud Court, two realms of one world, share the Palace's, and a map goes
+  under the one it is built from (`MapRealm.Of`, §2.6) — with the number of maps it
   would show;
   the running count sits at the right end of the row. Then the filter row: Level, Goal
   (the four ordinary goals and Boss),
@@ -849,6 +858,33 @@ edited, as a wall of cards (rebuilt in v0.10.7).
   A run is dealt the player's own finished maps as well as the shipped ones; a headless check
   that plays a run turns that off (`CombatMapCatalog.UserMapsEnabled`), so what it is dealt
   does not depend on one developer's `user://maps`.
+- **Zone 6 (v0.11.3, provisional — `MapGDD.md` §7).** The VOID has no maps of its own,
+  so a zone-6 node (`WorldIndex == -1`) is dealt by a second rule,
+  `CombatMapCatalog.SelectForVoid`: a map of one of the **run's five worlds**
+  (`MapGraph.Worlds`), the world drawn first and then one of its maps, from a stream of its
+  own — `DetRandom(seed + ":void-map:" + nodeId)` — so the choice repeats and consumes nothing
+  another pass reads. `VoidCandidatesFor(world, mission)` is the rule it draws with and the
+  content check audits: the mission's goal decides (the LV6 core is dealt `boss` maps, and
+  `claim` maps only where a world has none; no other mission is dealt a boss arena), while
+  `terrain` and `hardshipLevels` are **not** consulted — zone 6 has no altitude, and no map
+  is authored for LV5 or LV6. The handshake carries `AdventureContext.VoidTouched`, and
+  `GameManager.ApplyVoidTreatment` (called from the map-building path) then drains the map:
+  `VoidTreatment` puts one shared shader material — luminance kept, 22% of the colour, shaded
+  toward violet — on the backdrop and on every piece of the map's art
+  (`MapVisualBuilder.Restyle`), and on nothing else. Hazard art is exempt (its node carries
+  the group `MapVisualBuilder.HazardArtGroup`); fighters, foes, the `Hazards` node and the HUD
+  are never touched. A material, not a tint: `Modulate` cannot take colour out, and
+  `Background.Color` / `World.Modulate` belong to the storm (`ArenaEnvironmentController`).
+  The legacy arena is left for a node nothing matches and for `Arena.tscn` run directly.
+- **No orphan map (v0.11.3).** `MapContentCheck` also asks the question the other way
+  round: every shipped map must be dealt to at least one kind of node a run can produce — an
+  outer node (pool world × LV1–3 × ordinary mission × band, or the LV4 boss × band) or a
+  zone-6 node wearing a pool world (LV5 × ordinary mission, the LV6 core). It uses the two
+  rules above, so it cannot disagree with the run. A map tagged for a world outside the pool
+  fails by name; so would a set of tags nothing rolls. It prints `reach`, which also names any
+  map dealt *only* in zone 6 — today one, `seashore_5.json` (Crownwave Colosseum): it is
+  tagged LV4 without the `boss` goal, every outer LV4 node is a boss fight, and since v0.11.0
+  VanillaKindom has a boss arena, so no outer node is dealt it.
 - **A boss arena (v0.10.11).** A map whose `goals` include `boss` is built for one boss
   (`FOES.gdd` §8.5). A Boss mission is dealt its world's `boss` maps first and falls back to
   the world's `claim` maps only when there are none — one rule, `CombatMapCatalog.CandidatesFor`,
@@ -861,8 +897,9 @@ edited, as a wall of cards (rebuilt in v0.10.7).
   `destroy`, `slaughter`, `boss`), and `terrain`
   (default `sea-level`) are conjunctive filters. A literal terrain `*` matches all three
   altitude bands for a realm/level-authored map; a realm that ships a single map must use it,
-  or two nodes in three fall back to the legacy Arena (the beach set and the five realm maps
-  all do). The editor's Map info dialog offers it as **Any terrain**. Values within
+  or two nodes in three fall back to the legacy Arena (the beach set and the realm showcases
+  all do — except Cloud Court's, narrowed to `high-ground` on purpose: it is a district of a
+  world whose other maps cover every band). The editor's Map info dialog offers it as **Any terrain**. Values within
   `worlds`/`goals` are ORed.
   `claim` is the map-data name for the runtime `Collection` mission. Canonical terrain values are
   `sea-level`, `high-ground`, and `low-ground`; each outer-world node receives one from its

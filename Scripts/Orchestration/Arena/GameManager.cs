@@ -359,8 +359,22 @@ public partial class GameManager : Node2D
             }
         }
 
+        ApplyVoidTreatment(build, backdrop);
         DebugManager.Instance?.LogMission("Combat map: " + document.Name + " (" + document.Id + ")");
         return true;
+    }
+
+    /// <summary>
+    /// Zone 6 wears a world it has swallowed (MapGDD §7): the handshake says so
+    /// (<see cref="AdventureContext.VoidTouched"/>), and the map just built — a map of one of
+    /// the run's worlds — is drawn drained and dark. Its art and the backdrop only: fighters,
+    /// foes, hazards and telegraphs are not touched (<see cref="VoidTreatment"/>).
+    /// </summary>
+    private void ApplyVoidTreatment(CombatMapBuild build, ColorRect backdrop)
+    {
+        if (RunState.Instance?.CurrentAdventure is not { VoidTouched: true }) return;
+        int drained = VoidTreatment.Apply(build.ParallaxLayers, backdrop);
+        DebugManager.Instance?.LogMission("Zone 6: the map is VOID-touched (" + drained + " pieces of art drained)");
     }
 
     private static void ClearChildren(Node parent)

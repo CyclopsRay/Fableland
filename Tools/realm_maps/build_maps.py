@@ -491,7 +491,11 @@ def ghost_town_main_street():
 
 
 def cloud_court_heavens():
-    """Palace of LOOING — "The Cloud Court".
+    """Palace of LOOING, its sky district — "The Cloud Court".
+
+    The dragon's palace is under the sea (Loong's Nest, below); its court is above the
+    clouds. A Palace node on HIGH GROUND may be dealt this map beside the world's other
+    high-ground maps (style bible 7C; provisional, TBD #26).
 
     INTENT: an aerial arena, where the ground is the wrong place to be. Three screens wide
     and three tall, almost all of it air. The terrace floor at the bottom is safe and
@@ -501,9 +505,11 @@ def cloud_court_heavens():
     from the top of, so the battle is carried cloud to cloud in three dimensions. Whoever is at home in the air
     rules here, and frost pearls sit on the best perches to stop anyone settling.
     """
-    # World tag "CC": the Palace of LOOING itself is under the sea now (Loong's Nest, below).
-    # Cloud Court keeps its map, playable from the editor, until it is given a world.
-    m = Map("cloud_court_heavens_pl", "Cloud Court · The Heavens", "CC", 56, 30, "#2A1B4A")
+    # World "PL", terrain "high-ground": the one showcase that is narrowed to a band, because
+    # the band is the fiction — you climb out of the sea to reach the court. (It used to carry
+    # a world code no world owned, "CC", and no run could open it.) The tile set stays `pl`;
+    # a world may have more than one realm set (`TileSets.All`).
+    m = Map("cloud_court_heavens_pl", "Cloud Court · The Heavens", "PL", 56, 30, "#2A1B4A", terrain="high-ground")
     FLOOR = 27
     m.spawn(10, FLOOR)
     GROUND_LINE = 7.1

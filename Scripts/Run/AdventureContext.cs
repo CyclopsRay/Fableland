@@ -17,6 +17,11 @@ public sealed class AdventureContext
     public bool IsRevisitCombat;   // re-attempt of a previously-failed combat node (NODES §1.3)
     public string Terrain;         // combat-map selection terrain from the entered node's altitude label
     public string CombatMapPath;   // absolute selected authored map path; empty => legacy Arena fallback
+    /// <summary>True when this fight is in zone 6 on a map borrowed from one of the run's
+    /// worlds (MapGDD §7): <see cref="CombatMapPath"/> is that world's map, and the arena
+    /// draws it as the VOID has left it — drained and dark (<c>VoidTreatment</c>). False in
+    /// the outer worlds, and in zone 6 when nothing matched and the legacy arena opens.</summary>
+    public bool VoidTouched;
     /// <summary><c>BossTable</c> id of the boss holding this node, when the node is a realm's
     /// 4-1 — every realm names one, its own boss or the stand-in (<c>BossTable.ForWorld</c>).
     /// Empty (the LV6 core) ⇒ the arena fields the placeholder (FOES §8.1).</summary>

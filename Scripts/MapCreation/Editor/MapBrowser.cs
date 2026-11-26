@@ -715,7 +715,9 @@ public partial class MapBrowser : Control
                 }
 
                 if (entry.RealmSet != null) continue;       // the first recognised world names the realm
-                string set = TileSets.ForWorldAbbr(abbr);
+                // …and, where that world has two (the Palace: Loong's Nest, Cloud Court),
+                // what the map is built from says which.
+                string set = MapRealm.Of(doc, abbr);
                 if (set == null || !TileSets.TryGet(set, out TileSets.Info info)) continue;
                 entry.RealmSet = set;
                 entry.RealmName = info.RealmName;

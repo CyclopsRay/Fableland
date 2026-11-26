@@ -12,6 +12,12 @@ using System.Collections.Generic;
 ///
 /// Adding a realm = one entry here, one file under `Data/TileSets/`, one line in
 /// <see cref="TileRegistry"/>'s set list. Nothing else switches on a set id (T00 rule 1).
+///
+/// A world may have more than one set: the Palace of LOOING has Loong's Nest, under the
+/// sea, and Cloud Court, its sky district. ORDER IS DATA there: the first set listed for a
+/// world is its primary realm (<see cref="ForWorldAbbr"/>) — what a new, empty map of that
+/// world opens on. Which of a world's realms a map belongs to is <see cref="MapRealm.Of"/>'s
+/// answer, never a lookup by world alone.
 /// </summary>
 public static class TileSets
 {
@@ -53,12 +59,13 @@ public static class TileSets
         new() { Id = BambooMaze, DisplayName = "Banboo Maze · Wulin", RealmName = "Wulin", WorldAbbr = "BM", CanvasColor = "#E4E9E8" },
         new() { Id = HollowCastle, DisplayName = "HollowCastle · Dungeon", RealmName = "Dungeon", WorldAbbr = "HC", CanvasColor = "#0E0D12" },
         new() { Id = TheDeserted, DisplayName = "The Deserted · Ghost Town", RealmName = "Ghost Town", WorldAbbr = "TD", CanvasColor = "#F1E3C4" },
-        // The Palace of LOOING is under the sea (v0.10.9, the design owner's direction). Cloud
-        // Court — the earlier, aerial proposal for it — keeps its kit and map in the editor
-        // under a world tag of its own ("CC", not in the overworld pool) until it is given a
-        // world or retired.
+        // The Palace of LOOING is under the sea (v0.10.9, the design owner's direction), and
+        // its court is above the clouds: Cloud Court — the earlier, aerial proposal for the
+        // world — is its sky district, dealt on the Palace's high ground (provisional, TBD
+        // #26; until then it sat under a world code no world owned, "CC", and no run could
+        // open it). Loong's Nest is listed first: it is the world's primary realm.
         new() { Id = LoongsNest, DisplayName = "Palace of Loong · Loong's Nest", RealmName = "Loong's Nest", WorldAbbr = "PL", CanvasColor = "#0C1230" },
-        new() { Id = PalaceOfLoong, DisplayName = "Cloud Court (unassigned)", RealmName = "Cloud Court", WorldAbbr = "CC", CanvasColor = "#2A1B4A", AccentColor = "#D9A441" },
+        new() { Id = PalaceOfLoong, DisplayName = "Palace of Loong · Cloud Court", RealmName = "Cloud Court", WorldAbbr = "PL", CanvasColor = "#2A1B4A", AccentColor = "#D9A441" },
         // The two worlds that joined the overworld pool in v0.11.0. Their accent colours are
         // kept for the day a world is taken out again; a pool world brings its own colour.
         new() { Id = KingdomOfHorror, DisplayName = "Kingdom of Horror · Dark Wood", RealmName = "Dark Wood", WorldAbbr = "KH", CanvasColor = "#111B3D", AccentColor = "#FFC83D" },
@@ -79,18 +86,38 @@ public static class TileSets
         return false;
     }
 
-    /// <summary>The tile set whose world abbreviation matches <paramref name="worldAbbr"/>
-    /// (case-insensitive), or null. Used to open the palette on the realm a map is tagged for.</summary>
+    /// <summary>The PRIMARY tile set of the world with this abbreviation (case-insensitive) —
+    /// the first one listed for it — or null. A world can have further sets
+    /// (<see cref="AllForWorldAbbr"/>); to ask which one a map belongs to, use
+    /// <see cref="MapRealm.Of"/>.</summary>
     public static string ForWorldAbbr(string worldAbbr)
     {
-        if (string.IsNullOrWhiteSpace(worldAbbr)) return null;
+        List<Info> sets = AllForWorldAbbr(worldAbbr);
+        return sets.Count > 0 ? sets[0].Id : null;
+    }
+
+    /// <summary>Every tile set of the world with this abbreviation (case-insensitive), in
+    /// palette order: its primary realm first, then its districts. Empty when none.</summary>
+    public static List<Info> AllForWorldAbbr(string worldAbbr)
+    {
+        var sets = new List<Info>();
+        if (string.IsNullOrWhiteSpace(worldAbbr)) return sets;
         string wanted = worldAbbr.Trim();
         foreach (var candidate in All)
         {
             if (candidate.WorldAbbr != null &&
                 string.Equals(candidate.WorldAbbr, wanted, StringComparison.OrdinalIgnoreCase))
-                return candidate.Id;
+                sets.Add(candidate);
         }
-        return null;
+        return sets;
+    }
+
+    /// <summary>A short prefix that tells this set's palette groups from every other set's:
+    /// the world abbreviation ("SL") for a world's primary realm, the realm's own name
+    /// ("Cloud Court") for a district — two sets of one world must not both read "PL".</summary>
+    public static string GroupPrefix(Info info)
+    {
+        if (info == null || string.IsNullOrEmpty(info.WorldAbbr)) return null;
+        return ForWorldAbbr(info.WorldAbbr) == info.Id ? info.WorldAbbr : info.RealmName;
     }
 }

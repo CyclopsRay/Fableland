@@ -68,8 +68,9 @@ since v0.11.0; whether she becomes a starter there is still TBD registry #24.)
 | **The VOID / dark zone** | **XX** | **black** | — |
 
 The two newcomers took the two hues the first six left free; blue stays the rivers' and the
-sea's. (Cloud Court, the earlier aerial proposal for the Palace of LOOING, has a kit and a
-map but no world: it is not in the pool. §2.2.)
+sea's. (Cloud Court, the earlier aerial proposal for the Palace of LOOING, is not a ninth
+world: it is the Palace's sky district — a second realm of the same world, met on its high
+ground. §2.2.)
 
 Each realm receives its world's palette and remains a distinct kingdom, but its boundary is now
 the river system rather than a sea gap. The central VOID and the day clock are **run-wide
@@ -82,8 +83,8 @@ Every combat node also carries one terrain label used only to select an authored
 it does not change the node's two-axis difficulty. The single outer island samples one
 deterministic altitude field and classifies nodes as **`low-ground`**, **`sea-level`**, or
 **`high-ground`**. A given seed may naturally contain only one or two labels. Function nodes
-inherit the altitude at their road position; the central VOID uses neutral sea-level until it has
-dedicated combat maps.
+inherit the altitude at their road position. The central VOID has no altitude: its nodes carry
+a neutral sea-level label that nothing reads — a zone-6 fight is dealt a map of any band (§7).
 
 The atlas remains flat: low land is tinted darker and high land lighter, with clear contour lines
 at the lowland/plain and plain/highland thresholds. These contours are decoration only — they do
@@ -104,13 +105,21 @@ the combat layer calls that world's arenas. Art direction and kits:
 | HollowCastle | Dungeon | lit realism | crowded, low, hazardous; lava | brawlers, fire |
 | TheDeserted | Ghost Town | linocut print | two-storey street, mid-range | skirmishers, duellists |
 | Palace of LOOING | Loong's Nest (龙宫) | gongbi: fine line and graded mineral colour | **under the sea**: the whole map is water (low gravity, high resistance), with hidden currents and bubble lifts | precise movers |
+| Palace of LOOING — *its sky district, high ground only* | Cloud Court | cloisonné enamel | **above the clouds**: almost all air; clouds are soft volumes, footing is scarce | air mobility |
 | Kingdom of Horror — PumpKing's home | Dark Wood | scratchboard | a dark forest of traps, thickets and fog; a castle in some maps | guards, tanks, the patient |
 | The Forgotten — Pixolotl's home | Forgotten City | pixel art | swamp at sea level, a Teotihuacan-style pyramid city above it — taken for a ruin, secretly high technology | whoever goes over, not through |
 
 Starfield, Wulin, Dungeon, Loong's Nest and the Dark Wood follow the owner's briefs; the
-Forgotten City's design was delegated; Ghost Town is a proposal awaiting sign-off. The
-earlier proposal for the Palace of LOOING, *Cloud Court*, is kept as a set and a map with no
-world (style bible §7C).
+Forgotten City's design was delegated; Ghost Town is a proposal awaiting sign-off.
+
+**One world, two realms — Cloud Court (v0.11.3, provisional; TBD #26).** The dragon's
+palace is under the sea; its court is above the clouds. *Cloud Court*, the earlier proposal
+for the Palace of LOOING, is that world's **sky district**: a Palace node on **high ground**
+may be dealt the Cloud Court map as well as the world's other high-ground maps, and no node
+on sea level or low ground ever is. It is not a ninth world — the pool, every seed and every
+save are exactly as they were — and it keeps its own tile set and medium (style bible §7C).
+From v0.10.9 until this it carried a world code no world owned (`CC`), so no run could open
+it.
 
 **Every pool world ships a set of maps (v0.11.0):** one authored for each altitude band —
 sea level, low ground, high ground — and a boss arena for its 4-1, besides its showcase map
@@ -118,9 +127,10 @@ sea level, low ground, high ground — and a boss arena for its 4-1, besides its
 three shapes and one arena in each realm's own kit (`Tools/realm_maps/build_band_maps.py`) —
 so that every kind of node in every realm opens a valid map while the real ones are designed;
 the Dark Wood's boss arena is the real one, PumpKing's castle. `MapContentCheck` fails a
-pool world that lacks any of the four. Zone 6 has no authored maps yet and still opens the
-legacy arena. Open questions — Cleopastar's home world, whether Gui Lin is the Banboo Maze,
-what becomes of Cloud Court — are listed in the style bible §10.
+pool world that lacks any of the four — and fails any shipped map that no node a run can
+produce is ever dealt (**no orphan map**). Zone 6 has no maps of its own yet: it is dealt
+the maps of the run's five worlds (§7). Open questions — Cleopastar's home world, whether
+Gui Lin is the Banboo Maze — are listed in the style bible §10.
 
 ## 3. The seed
 
@@ -252,6 +262,29 @@ lv5 ring → lake → river ring → lv6 core.
   lv6 through it).
 - **Level 6:** the core (`XX-6-1`), a single edge to the river. The final confrontation.
 
+**What a zone-6 fight is fought on — the VOID wears the worlds it has swallowed (v0.11.3,
+provisional; TBD #33).** The VOID has no combat maps of its own yet. Until it does,
+each zone-6 combat node is dealt an authored map from one of **this run's five worlds**:
+- **Which.** Chosen once per node from the run seed — the world first (so each of the five is
+  as likely as another, however many maps it ships), then one of that world's maps. The draw
+  has a stream of its own (`seed:void-map:nodeId`), so it is the same every time the node is
+  entered and takes nothing from the streams that build the overworld, roll missions or run
+  the arena: no existing seed generates anything different.
+- **Matched to the mission, nothing else.** An LV5 node gets a map that serves its mission; the
+  core gets a **boss arena** (and only the core does). Altitude band and hardship level are
+  not consulted — the VOID has no altitude, and no map is authored for LV5 or LV6: a swallowed
+  world brings everything it had.
+- **How it looks.** The map is drawn *VOID-touched*: its art and backdrop drained almost to
+  grey and darkened toward violet, with no new art. Fighters, foes, projectiles, pickups,
+  hazard sprites, telegraphs and the HUD keep their full colour.
+- **What does not change.** Foe levels (7 and 8), timers, rewards, and the core's boss — still
+  the stand-in crab (`FOES.gdd` §8.1), staged on one of the arena's perches.
+- The legacy arena opens only when nothing matches (it cannot with the shipped maps — the
+  content check walks every world × mission) and when `Arena.tscn` is run directly.
+- **Saves.** Nothing new is saved: the map is derived from the seed and the node, as it is in
+  the outer worlds. A save taken inside a zone-6 fight resumes that node as before — a fresh
+  encounter — now on the map this rule deals it, where an older build opened the legacy arena.
+
 ## 8. Time, stamina, and the VOID
 
 - **Stamina:** 5 per day; traversing one edge = **1 step**.
@@ -353,6 +386,16 @@ These were resolved to keep the map functional; flag any you want changed:
   for **new** runs. Existing runs did not move — a save now records its pool, and a save
   from before is given the six worlds of its day (`SaveGameService`, version 4). The pool is
   append-only from here on.
+- **(v0.11.3, PROVISIONAL — decided on the owner's standing instruction to decide now
+  and discuss rework later) Cloud Court is the sky district of the Palace of LOOING**, dealt
+  on that world's high ground beside its other high-ground maps (§2.2). Chosen over a ninth
+  world (which would move every seed) and over deleting a finished set. Rework would be a
+  retag in `build_maps.py`: nothing else is keyed on it. TBD #26.
+- **(v0.11.3, PROVISIONAL — same instruction) Zone 6 wears the worlds it has
+  swallowed** (§7): until the VOID has maps of its own, its nodes are dealt maps of the run's
+  five worlds, by mission, drawn drained. Chosen over leaving LV5 and the final fight on the
+  legacy test arena. Rework: give the VOID its own maps (tag them `XX`) and point
+  `CombatMapCatalog.SelectForVoid` at them. TBD #33.
 - **(v0.9.0) One island, five realms:** a single seeded organic coast contains all outer land.
   A fixed central pentagon occupies roughly 1/30 of its area; five non-crossing, variable-width
   rivers join that VOID to the coast and create exactly five river-isolated realm polygons.

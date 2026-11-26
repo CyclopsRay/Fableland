@@ -31,7 +31,7 @@ Each realm therefore fixes three things together, and they must stay together:
 | Palace of LOOING (PL) | **Loong's Nest** 龙宫 | Gongbi (工笔重彩): even ink line, graded mineral colour | `#0C1230` | the whole map is water — buoyant, resisting; hidden currents, bubble lifts | precise movers | `ln` — §7 | `loongs_nest_sunken_court` |
 | Kingdom of Horror (KH) — *in the pool since v0.11.0* | **Dark Wood** | Scratchboard | `#111B3D` | traps, thickets and fog; a castle in some maps | guards, tanks, the patient | `kh` — §7A | `horror_hanging_wood`; boss arena `horror_pumpkings_castle` |
 | The Forgotten (TF) — *in the pool since v0.11.0* | **Forgotten City** | Pixel art | `#0C0C22` | swamp at the bottom, pyramid above it | whoever goes over, not through | `tf` — §7B | `forgotten_canals_of_the_sun` |
-| *(unassigned — tagged CC)* | **Cloud Court** | Cloisonné enamel | `#2A1B4A` | aerial; cloud soft volumes, scarce footing | air mobility | `pl` — §7C | `cloud_court_heavens` |
+| Palace of LOOING (PL) — *its sky district, on high ground* | **Cloud Court** | Cloisonné enamel | `#2A1B4A` | aerial; cloud soft volumes, scarce footing | air mobility | `pl` — §7C | `cloud_court_heavens` (high ground only) |
 
 Starfield, Wulin, Dungeon, Loong's Nest and the Dark Wood follow the design owner's briefs;
 the Forgotten City's direction was handed to this document ("your design"). Ghost Town and
@@ -39,8 +39,9 @@ Cloud Court are this document's proposals — see §10 for what is still the own
 The **Map** column names each realm's showcase. Since v0.11.0 every pool world also ships a
 plain map for each altitude band and a boss arena — `<realm>_sea_level`, `_low_ground`,
 `_high_ground`, `_boss_arena` (§8) — and the Dark Wood and the Forgotten City are in the
-overworld pool. Cloud Court lost its world to Loong's Nest: its map is played from the map
-editor.
+overworld pool. Cloud Court lost its world to Loong's Nest in v0.10.9 and has it back as a
+district: the Palace of LOOING has two realms, and Cloud Court is dealt on its high ground
+(§7C; provisional).
 Reference views (rendered from the built-in maps):
 `Docs/Art/References/Realms/{starfield,wulin,dungeon,ghost_town,loongs_nest,dark_wood,forgotten_city,cloud_court}.png`,
 and `pumpkings_castle.png` — the whole of the Dark Wood's boss arena (§7A).
@@ -581,15 +582,24 @@ walking up to it. Low-ground maps should be mostly swamp, high-ground maps mostl
 | `deco.tf_serpent` · `tf_stele` · `tf_sign` · `tf_axolotl` · `tf_tree` | Decoration | 2×3 · 1×3 · 2×2 · 2×1 · 4×6 | Serpent head with a working lens, neon stele, glyph sign, an axolotl, an ahuehuete |
 | `deco.tf_pyramid_far` · `tf_city_far` · `tf_jungle` · `tf_stars` | Decoration | 12×8 · 16×6 · 16×4 · 8×4 | Far pyramid, a looping skyline nobody outside believes in, jungle, stars |
 
-## 7C. Cloud Court — unassigned (CC)
+## 7C. Cloud Court — the Palace of LOOING's sky district (PL, high ground)
 
-> The dragon emperor's palace above the clouds. The ground is the wrong place to be.
+> The dragon emperor's court above the clouds. The ground is the wrong place to be.
 
-*Status (v0.10.9):* this was v0.10.6's proposal for the Palace of LOOING, before the brief
-for that world arrived — the palace is under the sea (§7). The kit and the map are kept,
-complete and playable, tagged for a world code that no world owns yet (`CC`), so the
-overworld never deals it. Whether it becomes another world's realm, a sky district of the
-Palace, or is deleted is the owner's call (§10).
+*Status (v0.11.3, **provisional** — §10.4, TBD #26):* the dragon's palace is under the
+sea (§7); its court is above the clouds. Cloud Court is the **sky district of the Palace of
+LOOING**: a second realm of the same world, not a ninth world. Its map is tagged `PL`,
+terrain `high-ground`, so a Palace node on high ground may be dealt it beside that world's
+other high-ground maps (one in three, with today's maps), and a node at sea level or below
+never is — you climb out of the sea to reach the court. The kit keeps its own tile set
+(`pl`) and its own medium; the Palace is the one world with two (`TileSets.All`, and
+`MapRealm.Of` for which of the two a map belongs to). Two media in one world is deliberate:
+§0's rule is a medium per *realm*, and the change of medium is how the player knows they
+have left the water.
+
+*History:* this was v0.10.6's proposal for the Palace of LOOING, before the brief for that
+world arrived. From v0.10.9 it kept its kit and map under a world code no world owned
+(`CC`), so the overworld never dealt it.
 
 **Medium — cloisonné enamel (景泰蓝).** Every shape is a cell of flat, saturated jewel
 enamel bounded by a raised gold wire. *There is no line that is not gold and no colour that
@@ -696,7 +706,9 @@ Each realm has one **showcase** map (`build_maps.py`), tagged for **every** terr
 (`"*"`, the map kit's default since v0.10.7): a combat node carries `low-ground` /
 `sea-level` / `high-ground` (`MapGDD` §2.1) and map selection otherwise needs an exact match
 — tagged `sea-level`, as these maps first shipped, a realm's art was missing from two nodes
-in three, which opened the legacy arena instead.
+in three, which opened the legacy arena instead. The one exception is Cloud Court's
+showcase, tagged `high-ground`: it is a district of a world whose other maps already serve
+every band, and the band is its fiction (§7C).
 
 **The band maps and boss arenas (v0.11.0)** are the terrain variants, in their plainest
 form — `Tools/realm_maps/build_band_maps.py`, one data row per realm (ground, the solid a
@@ -742,7 +754,8 @@ line in `TileSets`. Written here so the *medium* is reserved before anyone draws
 Recorded here rather than silently chosen (`00-OVERVIEW.md` §5):
 
 1. **Realm ↔ world mapping.** This build maps Starfield→Starland (SL), Wulin→Banboo Maze
-   (BM), Dungeon→HollowCastle (HC), Loong's Nest→Palace of LOOING (PL). The mapping lives
+   (BM), Dungeon→HollowCastle (HC), Loong's Nest→Palace of LOOING (PL) — and Cloud Court→the
+   Palace as well, its second realm (item 4). The mapping lives
    in three places only: each map's `Worlds` tag, `TileSets.All`, and this table.
 2. **Cleopastar's home.** `Cleopastar.gdd` says *Palace of LOOING*; the brief describes the
    Egyptian, long-range realm as *Starfield*, which fits her kit and palette (gold, purple,
@@ -753,9 +766,15 @@ Recorded here rather than silently chosen (`00-OVERVIEW.md` §5):
 4. **Ghost Town and Cloud Court are proposals.** Their kits and maps are complete and
    playable, but the directions were not in the brief. Replacing a medium means replacing
    one painter module; the kit ids and maps can stay.
-   **Cloud Court has no world** since Loong's Nest took the Palace of LOOING (§7C): keep it
+   ~~**Cloud Court has no world** since Loong's Nest took the Palace of LOOING (§7C): keep it
    for a future sky world, make it a district of the Palace (retag its map `PL`), or delete
-   the set, the painter and the map. It costs nothing while it waits.
+   the set, the painter and the map.~~ **Decided provisionally, v0.11.3** — on the
+   owner's standing instruction to decide now and discuss rework later: **a district of the
+   Palace**, dealt on its high ground (§7C). "It costs nothing while it waits" was wrong: a
+   finished map no run could open was being built, checked and screenshotted every release.
+   Still the owner's call: whether a sky district belongs in an undersea world at all,
+   whether it should be rarer or commoner than one high-ground node in three, and whether
+   it wants a boss arena of its own. Undoing it is one line in `build_maps.py`.
 5. **Terrain variants** (§8) — *v0.11.0: every realm has a plain map per band and a boss
    arena, generated; designing the real ones is TBD #32* — and **hazard numbers** — `LavaHazard.tscn` (30 fire stacks per
    tick, no knockback) and `SpikeHazard.tscn` (12 damage per 0.5 s) are first-pass values,
@@ -828,3 +847,15 @@ Recorded here rather than silently chosen (`00-OVERVIEW.md` §5):
 - **What you can stand on is the lightest thing in its wall (v0.10.11).** The balcony was
   first painted in the wall's own tone and vanished into the castle front behind it; its
   face is now crowded scratches under a broad coping, and the front is tinted darker.
+- **A world may have two realms (v0.11.3, PROVISIONAL).** Cloud Court is the Palace of
+  LOOING's sky district, met on its high ground (§7C). A medium still belongs to a realm,
+  not to a world; where one world has two, the altitude band is the border between them.
+  Decided on the owner's standing instruction to decide now and discuss rework later.
+- **The VOID has no medium of its own yet — it drains the one it swallowed (v0.11.3,
+  PROVISIONAL, same instruction).** A zone-6 fight is fought on a map of one of the run's
+  worlds (`MapGDD` §7), drawn with its colour taken out (22% kept) and darkened toward
+  violet: one shader on the map's art and backdrop, no new art. What fights and what warns —
+  fighters, foes, hazard sprites, telegraphs — keeps its full colour, so §2.6 holds more
+  strongly there than anywhere. Light realms come out as dusk, dark ones nearly black with
+  their walking lines still the lightest thing. It is a stand-in for a real VOID kit, and a
+  cheap one on purpose (TBD #33).

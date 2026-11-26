@@ -40,6 +40,62 @@ public static class CombatMapCatalog
     }
 
     /// <summary>
+    /// What a zone-6 node is dealt (MapGDD §7). The VOID has no maps of its own yet, so it
+    /// wears a world it has swallowed: an authored map of one of THIS RUN's worlds, matched to
+    /// the node's mission (<see cref="VoidCandidatesFor"/>). The world is drawn first, so each
+    /// of the five is as likely as another however many maps it ships; a world with nothing
+    /// for the mission passes the turn to the next. Null ⇒ nothing matched, and the caller
+    /// falls back to the legacy arena.
+    ///
+    /// The draw comes from a stream of its own, named from the seed and the node
+    /// (<c>seed:void-map:nodeId</c>): entering the node again deals the same map, and the
+    /// choice takes nothing from any stream the overworld, the outer worlds' selection or the
+    /// arena read (KNOWLEDGE: determinism). <see cref="CombatMapSelection.World"/> says which
+    /// world was worn.
+    /// </summary>
+    public static CombatMapSelection SelectForVoid(string seed, string nodeId, IReadOnlyList<string> runWorlds,
+        MissionType mission)
+    {
+        if (runWorlds == null || runWorlds.Count == 0) return null;
+        var worlds = new List<string>();
+        foreach (string world in runWorlds)
+            if (!string.IsNullOrWhiteSpace(world) && !worlds.Contains(world)) worlds.Add(world);
+        worlds.Sort(StringComparer.Ordinal);            // the answer depends on WHICH worlds, not on their order
+
+        var rng = new DetRandom((seed ?? "debug") + ":void-map:" + (nodeId ?? "debug"));
+        rng.Shuffle(worlds);
+        foreach (string world in worlds)
+        {
+            List<CombatMapSelection> candidates = VoidCandidatesFor(world, mission, UserMapsEnabled);
+            if (candidates.Count == 0) continue;
+            CombatMapSelection dealt = candidates[rng.Range(0, candidates.Count - 1)];
+            dealt.World = world;
+            return dealt;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Every map of <paramref name="world"/> a zone-6 node with this mission could be dealt,
+    /// in stable id order — the rule <see cref="SelectForVoid"/> draws with and the content
+    /// check audits. Any altitude band (the VOID has none) and any hardship level (its nodes
+    /// are LV5 and LV6, levels no map is authored for): a swallowed world brings everything it
+    /// had. The mission still decides — the LV6 core is dealt the world's boss arenas, and its
+    /// ordinary maps only where it has none, exactly as <see cref="CandidatesFor"/> rules in
+    /// the outer worlds; no other mission is dealt a boss arena.
+    /// </summary>
+    public static List<CombatMapSelection> VoidCandidatesFor(string world, MissionType mission,
+        bool includeUserMaps = true)
+    {
+        string user = includeUserMaps ? ProjectSettings.GlobalizePath(UserDirectory) : null;
+        string builtIn = ProjectSettings.GlobalizePath(BuiltInDirectory);
+        List<CombatMapSelection> candidates = CandidatesIn(user, builtIn, world, null, GoalFor(mission), null);
+        if (candidates.Count == 0 && mission == MissionType.Boss)
+            candidates = CandidatesIn(user, builtIn, world, null, CombatMapGoals.Claim, null);
+        return candidates;
+    }
+
+    /// <summary>
     /// What a node with this mission is dealt from — the rule <see cref="Select"/> draws
     /// with, and the one the content check audits, so the two cannot disagree. A Boss
     /// mission is dealt its world's boss arena (goal <c>boss</c>) when one exists; a world
@@ -64,14 +120,18 @@ public static class CombatMapCatalog
     public static List<CombatMapSelection> Candidates(string world, int hardship, string goal,
         string terrain, bool includeUserMaps = true)
     {
+        // An outer node always has a band; a missing one matches "*" maps only, as it always
+        // did — "any band" (null, below) is zone 6's rule and nobody else's.
         return CandidatesIn(includeUserMaps ? ProjectSettings.GlobalizePath(UserDirectory) : null,
-            ProjectSettings.GlobalizePath(BuiltInDirectory), world, hardship, goal, terrain);
+            ProjectSettings.GlobalizePath(BuiltInDirectory), world, hardship, goal, terrain ?? "");
     }
 
     /// <summary>The selection rule over two explicit folders (the user's first, so its copies
-    /// win). <see cref="SelfTest"/> points it at scratch folders.</summary>
+    /// win). <see cref="SelfTest"/> points it at scratch folders. A null
+    /// <paramref name="hardship"/> or <paramref name="terrain"/> does not filter on it — zone 6,
+    /// which has neither a level any map is authored for nor an altitude.</summary>
     private static List<CombatMapSelection> CandidatesIn(string userDirectory, string builtInDirectory,
-        string world, int hardship, string goal, string terrain)
+        string world, int? hardship, string goal, string terrain)
     {
         var candidates = new List<CombatMapSelection>();
         var seenIds = new HashSet<string>();
@@ -79,7 +139,7 @@ public static class CombatMapCatalog
         LoadDirectory(builtInDirectory, true, candidates, seenIds);
 
         string goalKey = Normalize(goal);
-        string terrainKey = Normalize(terrain);
+        string terrainKey = terrain == null ? null : Normalize(terrain);
         candidates.RemoveAll(c => !Matches(c.Document, world, hardship, goalKey, terrainKey));
         candidates.Sort((a, b) => string.CompareOrdinal(a.Document.Id, b.Document.Id));
         return candidates;
@@ -138,7 +198,7 @@ public static class CombatMapCatalog
         }
     }
 
-    private static bool Matches(MapDocument doc, string world, int hardship, string goal, string terrain)
+    private static bool Matches(MapDocument doc, string world, int? hardship, string goal, string terrain)
     {
         if (doc == null) return false;
         if (doc.Worlds is { Count: > 0 })
@@ -150,8 +210,9 @@ public static class CombatMapCatalog
             }
             if (!worldMatch) return false;
         }
-        if (doc.HardshipLevels is { Count: > 0 } && !doc.HardshipLevels.Contains(hardship)) return false;
+        if (hardship.HasValue && doc.HardshipLevels is { Count: > 0 } && !doc.HardshipLevels.Contains(hardship.Value)) return false;
         if (doc.Goals is { Count: > 0 } && !doc.Goals.Contains(goal)) return false;
+        if (terrain == null) return true;               // zone 6: any band
         // A wildcard terrain lets a deliberately broad combat map serve every altitude band.
         // This is useful for a themed realm set whose level progression is the authored
         // distinction, while preserving exact terrain matching for specialized maps.
@@ -234,6 +295,35 @@ public static class CombatMapCatalog
             MapJson.Save(everywhere, Path.Combine(mine, "arena.json"));
             Check(Dealt(CombatMapTerrain.High) == "arena@mine" && Dealt(CombatMapTerrain.Lowground) == "arena@mine",
                 "a '*' map serves every altitude band");
+
+            // Zone 6 wears a world (MapGDD §7): any band and any level of THAT world, the
+            // mission still deciding — and a boss arena for the core alone.
+            string swallowed = Path.Combine(root, "swallowed");
+            Directory.CreateDirectory(swallowed);
+            void Ship(string id, string world, string terrain, string goal, params int[] levels)
+            {
+                MapDocument doc = Playable(id, id);
+                doc.Worlds = new List<string> { world };
+                doc.Terrain = terrain;
+                doc.Goals = new List<string> { goal };
+                doc.HardshipLevels = new List<int>(levels);
+                MapJson.Save(doc, Path.Combine(swallowed, id + ".json"));
+            }
+            string Worn(string world, string goal)
+            {
+                var ids = new List<string>();
+                foreach (CombatMapSelection c in CandidatesIn(null, swallowed, world, null, goal, null)) ids.Add(c.Document.Id);
+                return string.Join(",", ids);
+            }
+            Ship("a-high-lv2", "VK", CombatMapTerrain.High, CombatMapGoals.Claim, 2);
+            Ship("b-low", "VK", CombatMapTerrain.Lowground, CombatMapGoals.Claim);
+            Ship("c-throne", "VK", "*", CombatMapGoals.Boss, 4);
+            Ship("d-elsewhere", "HC", "*", CombatMapGoals.Claim);
+            Check(Worn("VK", CombatMapGoals.Claim) == "a-high-lv2,b-low", "zone 6 is dealt a world's maps of any band and any level — and only that world's, and no boss arena");
+            Check(Worn("VK", CombatMapGoals.Boss) == "c-throne", "zone 6's core is dealt the world's boss arena");
+            Check(Worn("VK", CombatMapGoals.Protect) == "", "zone 6 still matches the mission");
+            int outerLv5 = CandidatesIn(null, swallowed, "VK", 5, CombatMapGoals.Claim, CombatMapTerrain.SeaLevel).Count;
+            Check(outerLv5 == 0, "the outer rule is unchanged: it still filters on band and level");
         }
         catch (Exception e)
         {
@@ -253,4 +343,7 @@ public sealed class CombatMapSelection
 {
     public string AbsolutePath;
     public MapDocument Document;
+    /// <summary>The world zone 6 wore to be dealt this map (<see cref="CombatMapCatalog.SelectForVoid"/>);
+    /// null for a node of an outer world, which is dealt its own.</summary>
+    public string World;
 }

@@ -20,7 +20,8 @@ using Fableland.Run;
 /// arena path AND the editor Playtest, and requires art, colliders, hazards and markers to
 /// land on the same shifted spots in both. It asks the run's own map selection
 /// (<see cref="CombatMapCatalog"/>) whether every kind of combat node in every world would
-/// be dealt a shipped map. Last come water, currents and waterfalls
+/// be dealt a shipped map — and, the other way round, whether every shipped map is dealt to
+/// some node a run can produce (no orphan map). Last come water, currents and waterfalls
 /// (<c>MapContentCheckPhysics.cs</c>): both builders must make the same soft volumes, and a
 /// real character is run through each shipped water kind to measure what it does to a body.
 ///
@@ -44,6 +45,7 @@ public partial class MapContentCheck : Node
             CheckBuiltInMaps();
             CheckNudgedPlacement();
             CheckRealmCoverage();
+            CheckEveryMapIsDealt();
             CheckSoftVolumeParity();
             CheckEveryMediumCanBeSwumUp();
             await ProbeSoftVolumePhysics();   // runs physics frames; everything above is immediate
@@ -86,6 +88,7 @@ public partial class MapContentCheck : Node
         Absorb("TileVisualResolver", TileVisualResolver.SelfTest());
         Absorb("AutotileProbe", AutotileProbe.SelfTest());
         Absorb("MapReadiness", MapReadiness.SelfTest());
+        Absorb("MapRealm", MapRealm.SelfTest());
         Absorb("MapThumbnailFraming", MapThumbnailFraming.SelfTest());
         Absorb("CombatMapCatalog", CombatMapCatalog.SelfTest());
         Absorb("TileManifestLoader", TileManifestLoader.SelfTest());
@@ -144,8 +147,8 @@ public partial class MapContentCheck : Node
             // shipped map that fails it would be silently skipped by CombatMapCatalog.
             List<string> unfinished = MapReadiness.Problems(doc);
             Expect(unfinished.Count == 0, $"{name}: not playable — {string.Join(", ", unfinished)}");
-            CheckWorlds(name, doc);
             CheckTileSetPurity(name, doc);
+            CheckRealmBelongsToItsWorld(name, doc);
 
             var world = new Node2D();
             var hazards = new Node2D();
@@ -347,7 +350,8 @@ public partial class MapContentCheck : Node
     /// the answer does not depend on this machine's <c>user://maps</c>) for candidates. A kind
     /// with none sends the player to the legacy arena, which is how a realm whose only map was
     /// tagged for one altitude band stayed invisible on two nodes in three (v0.10.7).
-    /// The VOID's own nodes (zone "XX", LV5–6) have no authored maps yet and are not walked.
+    /// Zone 6's nodes (zone "XX", LV5–6) wear a pool world's maps and are walked by
+    /// <see cref="CheckEveryMapIsDealt"/>.
     ///
     /// Since v0.11.0 every pool world must also ship its own set: a map authored FOR each
     /// altitude band (not only a "*" map that happens to serve it) and a boss arena for its
@@ -398,21 +402,120 @@ public partial class MapContentCheck : Node
         }
     }
 
-    /// <summary>A map tagged for a world outside the overworld pool can never be selected
-    /// by a run (`CombatMapCatalog`). That is legitimate for a realm still being written into
-    /// the story, so it is reported, not failed.</summary>
-    private static void CheckWorlds(string name, MapDocument doc)
+    /// <summary>The shipped map both Cloud Court decisions are about (style bible §7C).</summary>
+    private const string CloudCourtMapId = "cloud_court_heavens_pl";
+
+    /// <summary>
+    /// No orphan map: every shipped map must be dealt to at least one kind of node a run can
+    /// actually produce — an outer-world node (a pool world × LV1–3 × an ordinary mission × a
+    /// band, or its LV4 boss × a band) or a zone-6 node wearing a pool world (LV5 × an
+    /// ordinary mission, the LV6 core; MapGDD §7). It asks the two rules the run itself draws
+    /// with (<see cref="CombatMapCatalog.CandidatesFor"/>, <see cref="CombatMapCatalog.VoidCandidatesFor"/>),
+    /// shipped maps only. A map no node is dealt is built, tested and never seen: Cloud Court
+    /// sat there from v0.10.9, tagged for a world code no world owned, and was reported as a
+    /// note. It fails now.
+    ///
+    /// The same walk answers for zone 6: whichever pool world it wears, each mission its
+    /// nodes can roll must find a shipped map, and its core a boss arena.
+    /// </summary>
+    private void CheckEveryMapIsDealt()
+    {
+        string[] terrains = { CombatMapTerrain.Lowground, CombatMapTerrain.SeaLevel, CombatMapTerrain.High };
+        MissionType[] ordinary = { MissionType.Collection, MissionType.Protect, MissionType.Destroy, MissionType.Slaughter };
+
+        var outerKinds = new Dictionary<string, int>();              // map id → kinds of outer-world node dealt it
+        var outerPlaces = new Dictionary<string, SortedSet<string>>(); // map id → "world band" it is dealt on
+        var voidKinds = new Dictionary<string, int>();               // map id → kinds of zone-6 node dealt it
+
+        foreach (WorldDef world in WorldDef.Pool)
+        {
+            for (int level = 1; level <= 4; level++)
+            {
+                foreach (MissionType mission in level == 4 ? new[] { MissionType.Boss } : ordinary)
+                {
+                    foreach (string terrain in terrains)
+                    {
+                        foreach (CombatMapSelection map in CombatMapCatalog.CandidatesFor(world.Abbr, level, mission, terrain, includeUserMaps: false))
+                        {
+                            string id = map.Document.Id;
+                            outerKinds[id] = outerKinds.GetValueOrDefault(id) + 1;
+                            if (!outerPlaces.TryGetValue(id, out SortedSet<string> places)) outerPlaces[id] = places = new SortedSet<string>(StringComparer.Ordinal);
+                            places.Add(world.Abbr + " " + terrain);
+                        }
+                    }
+                }
+            }
+
+            // Zone 6 wearing this world: its LV5 nodes roll the ordinary missions, its core is the boss.
+            var unserved = new List<string>();
+            foreach (MissionType mission in ordinary)
+            {
+                List<CombatMapSelection> dealt = CombatMapCatalog.VoidCandidatesFor(world.Abbr, mission, includeUserMaps: false);
+                foreach (CombatMapSelection map in dealt) voidKinds[map.Document.Id] = voidKinds.GetValueOrDefault(map.Document.Id) + 1;
+                if (dealt.Count == 0) unserved.Add("an LV5 " + mission);
+            }
+            List<CombatMapSelection> core = CombatMapCatalog.VoidCandidatesFor(world.Abbr, MissionType.Boss, includeUserMaps: false);
+            foreach (CombatMapSelection map in core) voidKinds[map.Document.Id] = voidKinds.GetValueOrDefault(map.Document.Id) + 1;
+            if (core.Count == 0) unserved.Add("the LV6 core");
+            Expect(unserved.Count == 0,
+                $"{world.Abbr} ({world.Name}): zone 6 wearing this world has no shipped map for {string.Join(", ", unserved)} and would open the legacy arena");
+            Expect(core.TrueForAll(map => map.Document.Goals != null && map.Document.Goals.Contains(CombatMapGoals.Boss)),
+                $"{world.Abbr} ({world.Name}): zone 6's core would be dealt an ordinary map of this world, not its boss arena");
+        }
+
+        string dir = ProjectSettings.GlobalizePath("res://Maps");
+        if (!Directory.Exists(dir)) return;
+        string[] paths = Directory.GetFiles(dir, "*.json", SearchOption.TopDirectoryOnly);
+        Array.Sort(paths, StringComparer.Ordinal);
+        int maps = 0, orphans = 0;
+        var voidOnly = new List<string>();
+        foreach (string path in paths)
+        {
+            MapDocument doc = MapJson.Load(path, out _);
+            if (doc == null) continue;                               // reported by CheckBuiltInMaps
+            maps++;
+            string name = Path.GetFileName(path);
+            int outer = outerKinds.GetValueOrDefault(doc.Id), inVoid = voidKinds.GetValueOrDefault(doc.Id);
+            Expect(outer + inVoid > 0, $"{name}: orphan map — no node a run can produce is ever dealt it ({WhyNeverDealt(doc)})");
+            if (outer + inVoid == 0) orphans++;
+            else if (outer == 0) voidOnly.Add(name);
+        }
+
+        // Cloud Court is the Palace's sky district: dealt on the Palace's high ground, and
+        // nowhere else in the outer worlds (style bible §7C; provisional, TBD #26).
+        string court = outerPlaces.TryGetValue(CloudCourtMapId, out SortedSet<string> where) ? string.Join(", ", where) : "nowhere";
+        Expect(court == "PL " + CombatMapTerrain.High,
+            $"Cloud Court ('{CloudCourtMapId}') must be dealt on the Palace of LOOING's high ground and nowhere else in the outer worlds; it is dealt on: {court}");
+
+        GD.Print($"  reach    {maps} shipped maps: {maps - orphans - voidOnly.Count} are dealt in an outer world · {voidOnly.Count} only where zone 6 wears its world{(voidOnly.Count > 0 ? " (" + string.Join(", ", voidOnly) + ")" : "")} · {orphans} never · Cloud Court on {court}, {outerKinds.GetValueOrDefault(CloudCourtMapId)} kinds of node");
+    }
+
+    /// <summary>Why selection can never reach a map, in the map's own terms.</summary>
+    private static string WhyNeverDealt(MapDocument doc)
     {
         foreach (string tag in doc.Worlds ?? new List<string>())
         {
-            bool known = false;
-            foreach (WorldDef world in WorldDef.Pool)
-            {
-                if (string.Equals(world.Abbr, tag, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(world.Name, tag, StringComparison.OrdinalIgnoreCase)) { known = true; break; }
-            }
-            if (!known) GD.Print($"  note: {name} is tagged for world '{tag}', which is not in the overworld pool yet — playable from the editor only.");
+            bool known = WorldDef.ByAbbr(tag) != null ||
+                         WorldDef.Pool.Exists(world => string.Equals(world.Name, tag?.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (!known) return $"it is tagged for world '{tag}', which is not in the overworld pool";
         }
+        string levels = doc.HardshipLevels is { Count: > 0 } ? string.Join("/", doc.HardshipLevels) : "any";
+        return $"worlds {string.Join("/", doc.Worlds ?? new List<string>())}, levels {levels}, goals {string.Join("/", doc.Goals ?? new List<string>())}, terrain {doc.Terrain}: nothing the overworld rolls matches all four";
+    }
+
+    /// <summary>A map's art must be a realm of a world the map is tagged for — a map built
+    /// from the Wulin set and tagged HC would be dealt in the wrong world. A world may have
+    /// two realms (the Palace: Loong's Nest and Cloud Court), so this asks the SET for its
+    /// world, never the world for "its" set.</summary>
+    private void CheckRealmBelongsToItsWorld(string name, MapDocument doc)
+    {
+        string built = MapRealm.BuiltFrom(doc);
+        if (built == null || doc.Worlds is not { Count: > 0 } || !TileSets.TryGet(built, out TileSets.Info realm)) return;
+        WorldDef world = WorldDef.ByAbbr(realm.WorldAbbr);
+        bool tagged = doc.Worlds.Exists(tag =>
+            string.Equals(tag?.Trim(), realm.WorldAbbr, StringComparison.OrdinalIgnoreCase) ||
+            (world != null && string.Equals(tag?.Trim(), world.Name, StringComparison.OrdinalIgnoreCase)));
+        Expect(tagged, $"{name}: built from the {realm.RealmName} set (world {realm.WorldAbbr}) but tagged for {string.Join("/", doc.Worlds)}");
     }
 
     /// <summary>Each realm has its own art language; a map that mixes realm sets is almost

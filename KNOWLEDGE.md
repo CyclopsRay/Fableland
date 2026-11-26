@@ -187,6 +187,99 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Coverage has two directions — every node had a map, and two maps had no node (v0.11.3, no-orphan check)
+- **Symptom:** `MapContentCheck` has asked since v0.10.7 whether every kind of combat node is
+  served by a shipped map. Nothing asked the reverse. Cloud Court's map was tagged for a
+  world code no world owned (`CC`) from v0.10.9: the check printed a `note:` and exited 0, and
+  no run could open a finished, tested, screenshotted map. A second one nobody had noticed:
+  Crownwave Colosseum (`seashore_5`) is tagged LV4 without the `boss` goal; every outer LV4
+  node is a boss fight, a Boss mission prefers `boss` maps, and v0.11.0 gave VanillaKindom a
+  boss arena — which quietly took every node the Colosseum had.
+- **Rule:** selection is checked both ways, with the run's own rules
+  (`CombatMapCatalog.CandidatesFor` / `VoidCandidatesFor`): every node finds a map, and every
+  shipped map is found by some node a run can produce (`CheckEveryMapIsDealt`, the `reach`
+  line). A map that cannot be dealt **fails**; a note is not a check. When you add a better
+  candidate for a kind of node, look at what it displaces.
+- **Why:** filters are conjunctive and candidates compete, so a map becomes unreachable
+  without any line of its own changing — by a tag nothing rolls, or by a newcomer that is
+  always preferred. Only the reverse walk sees it.
+
+### A world got a second realm, and "the world's tile set" would have answered with the first (v0.11.3, Cloud Court; caught before it shipped)
+- **Symptom (never shipped):** retagging Cloud Court's map `CC` → `PL` made two tile sets
+  share one world. `TileSets.ForWorldAbbr("PL")` returns the first — Loong's Nest — so the
+  map browser would have filed the Cloud Court map under Loong's Nest (chips reading 6 and
+  0, the wrong badge), the editor would have opened it on the wrong palette, and the palette
+  would have shown two groups both titled "PL · Ground". Nothing fails: each still shows
+  *something*.
+- **Rule:** a world may have several realm sets. Order in `TileSets.All` is data: the first
+  set of a world is its primary realm (`ForWorldAbbr`), what a new empty map opens on. Which
+  realm a **map** belongs to is `MapRealm.Of(doc, worldAbbr)` — what it is built from, then
+  its canvas colour, then the primary — never a lookup by world. To go the other way, ask
+  the set for its world (`Info.WorldAbbr`); the content check does
+  (`CheckRealmBelongsToItsWorld`). `MapRealm.SelfTest` pins the Palace's two.
+- **Why:** a table that happened to be one-to-one was being read in both directions. Adding
+  a row made one direction ambiguous, and an ambiguous lookup returns an answer, not an error.
+
+### A shader that does not compile fails no node count — and the headless renderer does parse shaders (v0.11.3, VOID treatment; found by a mutation that survived)
+- **Symptom:** the zone-6 walk asserted that the backdrop and every piece of map art carry
+  the VOID material and nothing else does. With the shader's body replaced by nonsense the
+  run check stayed green, 1327 of 1327. The log had `ERROR: Shader compilation failed.` (from
+  `servers/rendering/dummy/storage/material_storage.cpp`) six times; no exit code reads a log.
+- **Rule:** "which nodes carry the material" and "the material draws" are two facts — check
+  both. The headless (dummy) renderer runs the shader compiler, and a shader that fails
+  declares no uniforms, so `Shader.GetShaderUniformList()` is a compile test a headless check
+  can run: `VoidTreatment.ShaderCompiles()`. Give a code-built shader at least one uniform for
+  that reason. How it *looks* still needs a real window: a GDScript `SceneTree` script outside
+  the project, `open -g -n -W -a Godot_mono.app --env HOME=<scratch> --env
+  FABLELAND_SAVE_DIR=<scratch> --args --path "$PWD" -s /abs/script.gd`, starting a run and
+  calling `RunState.BeginAdventure` (C# autoload methods are callable from GDScript by their
+  C# names). Have the script refuse to run unless `OS.get_user_data_dir()` is under the
+  scratch folder.
+- **Why:** I assumed a headless run could not see a shader at all and wrote that into the QA
+  doc; the mutation's log said otherwise. v0.10.11's rule again — a mutation that survives
+  is information — and v0.11.0's: a claim is one a run printed.
+
+### A tint cannot drain, and the arena's backdrop colour and world tint already have an owner (v0.11.3, VOID treatment; designed around)
+- **Hazard (avoided):** the obvious way to restyle a whole map is `World.Modulate` plus a new
+  `Background.Color`. `Modulate` only multiplies: it darkens and tints, it cannot take colour
+  out. And both properties belong to `ArenaEnvironmentController`, which lerps them during a
+  storm and afterwards restores the values it captured in its own `_Ready` — which runs
+  *before* `GameManager._Ready` builds the map (children are ready first), so its "normal"
+  backdrop is the legacy scene's colour, not the authored map's canvas.
+- **Rule:** a whole-map look is a shared material on the art, put on by
+  `MapVisualBuilder.Restyle` (it skips hazard art — group `HazardArtGroup`, added before a
+  looping layer duplicates the node) and on the backdrop rect; `VoidTreatment` is the one
+  user. Read `COLOR` in the shader, never re-sample `TEXTURE`: region rects, the
+  filter-clip flag, flips and layer tints are already in it.
+- **Latent, not fixed here:** if a tsunami is ever wired to an authored map in the arena (no
+  shipped map has a trigger, and `CombatMapRuntime` wires none), the storm will "restore"
+  the backdrop to the legacy colour. Capture the normal presentation after the map is built.
+
+### "The same answer twice" proves nothing for a pure function, and one pinned seed is not a pin (v0.11.3, reference)
+- The zone-6 selection check asks for a node's map twice. Asked the same way twice it could
+  not fail. The second call hands the run's worlds over **reversed**: removing the sort that
+  makes the answer depend on *which* worlds, not their order, then fails 59 lines. Vary what
+  is allowed to vary — order, call count, a fresh object — or the check is a tautology.
+- A deliberate extra draw from the missions' stream moved the signature of seven of the
+  eight seeds pinned on the pool of eight and five of the six older ones; seed `DEBUG` came
+  out the same in both tables (the shifted rolls landed in the same bands). Pin several.
+- Record a pin **before** the change (v0.11.0's rule): `RunWalkCheck.OnThePoolOfEight` was
+  filled from a run at `d94b4c5` with nothing else edited — add the table empty, run, copy
+  what the failure lines print.
+
+### A local Edit Copy keeps the tags it was made with — the dev Mac deals its own Cloud Court (v0.11.3, hand-off)
+- **Symptom (found by reading the folder; no check can hit it — they turn user maps off):**
+  this Mac's `user://maps` holds finished copies of nine shipped maps, among them
+  `cloud_court_heavens_pl.json` from 15 November, tagged `PL` / terrain `*`. A finished copy
+  with a shipped map's id replaces it (MapCreation.gdd §9), so on this machine Cloud Court is
+  dealt on **every** band of the Palace — and was while the shipped file said `CC` — and the
+  other eight copies hide whatever those shipped maps have become since.
+- **Rule:** when a shipped map's selection tags or content change, the hand-off says so and
+  names any copy in `user://maps` with the same id. To see what ships: delete the copy (the
+  map browser's Delete), or run against a scratch `HOME` (v0.10.7).
+- **Why:** v0.10.7's worktree caveat in another place — what the owner runs is the
+  repository *plus* a folder no commit touches.
+
 ### Hit-stop holds a body, so "the tick after the hit" is no longer when a shove shows (v0.11.2, hit feedback)
 - **Symptom:** with hit-stop in, the boss check failed one line of 109: `sides: two 300 px/s
   shoves moved the boss at 0 px/s`. The probe hit the boss twice and read `Velocity.X` one

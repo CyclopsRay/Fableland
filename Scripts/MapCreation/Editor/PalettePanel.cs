@@ -116,11 +116,12 @@ public sealed class PalettePanel
     }
 
     /// <summary>"Ground" for shared tiles, "SL · Ground" for a realm's — the prefix keeps
-    /// groups distinguishable when the selector is on "All realms".</summary>
+    /// groups distinguishable when the selector is on "All realms". A world's second realm
+    /// goes by its own name ("Cloud Court · Ground"): two sets must not both read "PL".</summary>
     private static string GroupTitle(TileDef def)
     {
-        if (TileSets.TryGet(def.TileSet, out var info) && !string.IsNullOrEmpty(info.WorldAbbr))
-            return info.WorldAbbr + " · " + def.Category;
+        if (TileSets.TryGet(def.TileSet, out var info) && TileSets.GroupPrefix(info) is { Length: > 0 } prefix)
+            return prefix + " · " + def.Category;
         return def.Category.ToString();
     }
 
@@ -171,7 +172,9 @@ public sealed class PalettePanel
     }
 
     /// <summary>The tile set of the first world this map is tagged for (`MapDocument.Worlds`
-    /// holds names or abbreviations), or null when it is untagged / unknown.</summary>
+    /// holds names or abbreviations), or null when it is untagged / unknown. A world with two
+    /// realms (the Palace: Loong's Nest and Cloud Court) opens on the one the map is built
+    /// from (<see cref="MapRealm.Of"/>).</summary>
     private static string TileSetForDocument(MapDocument doc)
     {
         if (doc?.Worlds == null) return null;
@@ -183,7 +186,7 @@ public sealed class PalettePanel
             {
                 if (string.Equals(def.Name, abbr, StringComparison.OrdinalIgnoreCase)) { abbr = def.Abbr; break; }
             }
-            string set = TileSets.ForWorldAbbr(abbr);
+            string set = MapRealm.Of(doc, abbr);
             if (set != null) return set;
         }
         return null;

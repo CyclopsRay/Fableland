@@ -9,6 +9,99 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.11.3** — **Every shipped combat map can be reached by a run.** Two gaps were known
+  after 0.11.1; a third turned up while closing them. Both decisions below are
+  **provisional** — made on the owner's standing instruction to decide now and discuss
+  rework later, and logged as such (`MapGDD.md` §10, style bible Decisions log, TBD #26 and
+  #33). (1) **Cloud Court is the sky district of the Palace of LOOING.** The dragon's palace
+  is under the sea (Loong's Nest); its court is above the clouds. A Palace node on **high
+  ground** may be dealt `cloud_court_heavens` beside that world's two other high-ground
+  candidates — one node in three, with today's maps — and a node on sea level or low ground
+  never is. It is not a ninth world: the pool, every seed and every save are as they were.
+  The map's tags changed in its generator (`build_maps.py`: world `CC` → `PL`, terrain `*` →
+  `high-ground`) and it was regenerated; the other 40 generated maps came out
+  byte-identical. The kit keeps its tile set (`pl`) and its medium, so the Palace is the one
+  world with **two realm sets**: `TileSets.All` lists both under `PL`, the first being the
+  world's primary realm, and `MapRealm.Of` says which of the two a map belongs to (what it
+  is built from; for an empty map its canvas colour; else the primary). The map browser's
+  chip and badge, the palette a map opens on and the palette's group titles ask it — before
+  that, a `PL`-tagged Cloud Court map was filed under Loong's Nest. (2) **Zone 6 wears the
+  worlds it has swallowed.** Until the VOID has maps of its own, each of its five LV5 nodes
+  is dealt an authored map of one of **this run's five worlds**, matched to the node's
+  mission, and the LV6 core one of their boss arenas — `CombatMapCatalog.SelectForVoid`. The
+  world is drawn first (each of the five as likely as another, however many maps it ships),
+  then the map, from a stream of its own (`seed:void-map:nodeId`): the same map every time
+  the node is entered, and nothing taken from the streams that build the overworld, roll
+  missions or run the arena. Band and hardship level are not consulted (the VOID has no
+  altitude, and no map is authored for LV5 or LV6). The handshake carries
+  `AdventureContext.VoidTouched`, and the arena draws the map **VOID-touched**: one shader —
+  the project's first — keeps a picture's light and 22% of its colour and shades it toward
+  violet, on the backdrop and every piece of the map's art and on nothing else. Fighters,
+  foes, projectiles, pickups, hazard sprites, telegraphs and the HUD keep their colour. No
+  new art. The legacy arena is left for a node nothing matches (none can, with the shipped
+  maps) and for `Arena.tscn` run directly. Unchanged in zone 6: foe levels 7 and 8, timers,
+  rewards, and the core's boss — still the stand-in crab, now staged on a perch of a boss
+  arena. (3) **Found: Crownwave Colosseum (`seashore_5`) has been dealt by no node since
+  0.11.0.** It is tagged LV4 without the `boss` goal; every outer LV4 node is a boss fight,
+  and 0.11.0 gave VanillaKindom a boss arena, which is preferred. Zone 6 ignores the level
+  tag, so a run reaches it there now, and only there — whether it should be retagged is the
+  owner's (TBD #26's row says so). **Tried when this was merged, and reverted:** `boss`
+  added to its goals, so that VanillaKindom's LV4 boss fight could be dealt it beside the
+  beach boss arena. The content check passed with it (1171 checks; `reach` then counted all
+  45 maps as dealt in an outer world), and so did the feedback and boss checks; the run
+  check failed, 1 of 1337: `maps: seashore_5.json (Boss): a boss arena needs two perches
+  (Level Goal markers); it has 1`. The map ships as it was — it needs a second perch
+  authored within about 20 m of the first before it can serve a boss.
+  **Checks.** *No orphan map* (content check): every shipped
+  map must be dealt to some node a run can produce, asked through the run's own two
+  selection rules; a map tagged for a world outside the pool **fails** — it used to be a
+  printed note, which is how Cloud Court stayed unreachable for two versions. The run check
+  pins what the pool of eight generates for eight seeds (recorded on 0.11.1, before any of
+  this); asks what zone 6 is dealt for twelve seeds — the same map twice, the second time
+  with the run's worlds listed in reverse, always a map of one of that run's five worlds for
+  the node's mission; enters Cloud Court through a real run's own high-ground Palace node
+  with nothing written onto it (seed `COURT3`, `PL-2-6`); walks all five LV5 nodes and the
+  core of seed `WALKVOID` — each on an authored map of a run world, VOID-touched, its first
+  foe out of the map's own nests, played to its goal, the core to victory; stands the crab
+  on a perch of each of the eight boss arenas; and asks the engine whether the shader
+  compiles. **Saves.** The format is unchanged — version 4, no new field — and a save made
+  before this loads and plays. Which map a node opens is not saved; it is worked out from
+  the seed and the node on entry, as it always was. So two things differ for a run already
+  in progress: a save taken *inside* a zone-6 fight resumes that node (a fresh encounter, as
+  before) on the authored map this build deals it, where the older build opened the legacy
+  arena; and in the Palace of LOOING an uncompleted high-ground node may open a different
+  map than it did yesterday, because it now draws one of three where it drew one of two —
+  the same goes for a save taken inside such a fight. Nothing else moves. Not done, by
+  decision or for lack of one: the VOID has no kit, medium or maps of its own (TBD #33) and
+  its look is a drained picture and nothing more; the treatment was looked at in the real
+  renderer on four arenas of one seed (Dungeon, Ghost Town twice, Beach) — not on all eight
+  realms, not on Loong's Nest's sea, not on Cloud Court; the stand-in crab stands on perches
+  built for PumpKing and nobody fought it there; no zone-6 fight was played by hand; and a
+  local Edit Copy still beats a shipped map's tags — this Mac's `user://maps` has a copy of
+  Cloud Court from 15 November tagged `PL` / every band, so here it is dealt on all three
+  bands until that copy is deleted.
+  (Verification: `dotnet build`, 0 errors/warnings; the map content check, 1170 checks, up
+  from 1062; the boss check, 109, unchanged; the run check, 1328, up from 891 — logs clean
+  but for the sixteen `Command or Control autoremapping` lines `project.godot` prints at
+  every start; the two zone-6 `using legacy Arena` warnings are gone. Ten mutation runs,
+  sources restored and rebuilt after each, the working tree compared byte for byte
+  afterwards. Nine failed a check by name: Cloud Court put back on world `CC` (`orphan map`),
+  tagged for every band, zone 6 honouring a hardship level, zone 6 drawing from the whole
+  pool, its choice depending on the order of the worlds, a draw for it taken from the
+  missions' stream at map generation (seven of the eight pinned seeds moved, and five of
+  the six older ones — seed `DEBUG` moved in neither table), zone 6 dealt nothing as before,
+  the treatment draining hazard sprites, the arena never applying it. The tenth — the
+  shader replaced by nonsense — **survived**, 1327 of 1327: the walk counted which nodes
+  carry the material, not whether it draws. The headless renderer does parse shaders, so the
+  walk now asks (`VoidTreatment.ShaderCompiles()`), and the same breakage fails by name.
+  Both map generators re-run: only `cloud_court_heavens.json` differs, by its three header
+  lines. Every Godot run after the first import used a scratch `HOME`; the real `saves/` and
+  `maps/` folders in `user://` were compared before and after: untouched.)
+  (Merged onto 0.11.2 — written from 0.11.1 — with no conflict; `GameManager.cs` and
+  `40-QA.md` were touched by both and merged by git, each side's part read back. On the
+  merged tree: `dotnet build`, 0 errors/warnings; feedback check 249, content check 1170,
+  boss check 109, run check 1328. Twelve open questions from 0.11.2's hit feedback were
+  registered as TBD #36–#47 in `10-DESIGN.md` §6.)
 - **0.11.2** — **Hit feedback has a foundation: a cue bus, hit-stop, and a feel director.**
   Design, the tier table, every rule and the full cue vocabulary: `Docs/Feedback.gdd`;
   research behind the numbers: `Docs/Research/R2-vfx-feel-research.md`. **Nobody has watched

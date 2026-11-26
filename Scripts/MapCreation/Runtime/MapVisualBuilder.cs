@@ -28,6 +28,10 @@ public static class MapVisualBuilder
     /// HUD (a separate CanvasLayer).</summary>
     public const int CloseviewZIndex = 20;
 
+    /// <summary>Group on every hazard tile's art node. A hazard's sprite is its warning, so
+    /// anything that restyles a map's art as a whole (<see cref="Restyle"/>) leaves it alone.</summary>
+    public const string HazardArtGroup = "map_hazard_art";
+
     private static readonly Dictionary<string, Rect2> UsedRectCache = new();
 
     /// <summary>Adds one <see cref="MapParallaxLayer"/> per map layer under
@@ -59,10 +63,41 @@ public static class MapVisualBuilder
                 // Rule zones are generation markers and spawn/goal tiles are gameplay markers:
                 // both are editor-only quads with nothing to show in play.
                 if (def.Category == TileCategory.Rule || IsRuntimeMarker(def.Category)) continue;
-                node.AddVisual(CreateTileVisual(tile, def, occupancy, layer.GridW, layer.GridH));
+                Node2D visual = CreateTileVisual(tile, def, occupancy, layer.GridW, layer.GridH);
+                // Marked before it is added: a looping layer duplicates it, group and all.
+                if (def.Category == TileCategory.Hazard) visual.AddToGroup(HazardArtGroup);
+                node.AddVisual(visual);
             }
         }
         return layers;
+    }
+
+    /// <summary>
+    /// Gives every piece of a built map's art one material — scenery, ground, platforms, soft
+    /// volumes, on every layer, far and near — and leaves hazard art as it was painted
+    /// (<see cref="HazardArtGroup"/>). Returns how many pieces it restyled. Used for zone 6's
+    /// VOID treatment; the material is shared, so the pieces still batch.
+    /// </summary>
+    public static int Restyle(IEnumerable<MapParallaxLayer> layers, Material material)
+    {
+        int restyled = 0;
+        if (layers == null) return restyled;
+        foreach (MapParallaxLayer layer in layers)
+            if (layer != null && GodotObject.IsInstanceValid(layer)) restyled += RestyleUnder(layer, material);
+        return restyled;
+    }
+
+    private static int RestyleUnder(Node node, Material material)
+    {
+        if (node.IsInGroup(HazardArtGroup)) return 0;
+        int restyled = 0;
+        if (node is Sprite2D or Polygon2D)
+        {
+            ((CanvasItem)node).Material = material;
+            restyled++;
+        }
+        foreach (Node child in node.GetChildren()) restyled += RestyleUnder(child, material);
+        return restyled;
     }
 
     public static bool IsRuntimeMarker(TileCategory category) =>

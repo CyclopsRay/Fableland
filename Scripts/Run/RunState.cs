@@ -296,9 +296,15 @@ public partial class RunState : Node
         // the handshake. The arena never reaches back into the map graph or rolls selection.
         if (node?.IsCombat == true)
         {
-            var selected = CombatMapCatalog.Select(Seed, node.Id, node.Zone, node.Level,
-                adventure.Mission, adventure.Terrain);
+            // Zone 6 has no maps of its own yet: it wears one of the worlds this run crossed
+            // (MapGDD §7) — a map of one of the run's five, by the node's mission, drawn from a
+            // stream of its own. An outer node is dealt its own world's, by level and band.
+            bool inVoid = node.WorldIndex == -1;
+            var selected = inVoid
+                ? CombatMapCatalog.SelectForVoid(Seed, node.Id, Graph?.Worlds.ConvertAll(world => world.Abbr), adventure.Mission)
+                : CombatMapCatalog.Select(Seed, node.Id, node.Zone, node.Level, adventure.Mission, adventure.Terrain);
             adventure.CombatMapPath = selected?.AbsolutePath ?? "";
+            adventure.VoidTouched = inVoid && selected != null;
             if (selected == null)
                 GD.PushWarning($"[RunState] no combat map matched {node.Zone} LV{node.Level} {adventure.Mission} {adventure.Terrain}; using legacy Arena.");
         }
