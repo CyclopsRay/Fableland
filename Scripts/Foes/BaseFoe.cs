@@ -1,4 +1,5 @@
 using Godot;
+using Fableland.Data;
 using Fableland.Debug;
 using System.Collections.Generic;
 
@@ -20,8 +21,13 @@ using System.Collections.Generic;
 /// <b>Init(level) is called AFTER AddChild</b> (Godot runs _Ready synchronously during
 /// AddChild). Base stats come from InitFoe in _Ready; level multipliers apply once in
 /// Init. _PhysicsProcess guards against running before Init (KNOWLEDGE caveat).
+///
+/// Feedback (<c>Docs/Feedback.gdd</c>): a foe raises its own cues on <see cref="CueBus"/>
+/// (spawn, aggro, evolve, telegraph, jump, land, death, statuses, one <see cref="HitCue"/>
+/// per hit taken), holds still for hit-stop and owns one hit-flash channel. It never names
+/// an effect, a sound or a shake.
 /// </summary>
-public partial class BaseFoe : CharacterBody2D, ICombatTarget
+public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
 {
     // ── Base stats (set by subclass InitFoe, then scaled once by Init(level)) ──────
     protected float BaseHP = 70f;
@@ -86,8 +92,19 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
     // Every volume this foe overlaps, and what they add up to (same contract as the player).
     private readonly SoftVolumeSet _softVolumes = new();
     private const string SoftVolumeFlowSource = "softvolume.flow";
-    public void EnterSoftVolume(SoftVolume v) => _softVolumes.Enter(v);
-    public void ExitSoftVolume(SoftVolume v) => _softVolumes.Exit(v);
+    public void EnterSoftVolume(SoftVolume v)
+    {
+        bool wasInside = _softVolumes.InMedium;
+        _softVolumes.Enter(v);
+        if (!wasInside && _softVolumes.InMedium) SoftVolume.RaiseCrossing(this, v, entered: true);
+    }
+
+    public void ExitSoftVolume(SoftVolume v)
+    {
+        bool wasInside = _softVolumes.InMedium;
+        _softVolumes.Exit(v);
+        if (wasInside && !_softVolumes.InMedium) SoftVolume.RaiseCrossing(this, v, entered: false);
+    }
 
     // ── Hazard-driven statuses, identical semantics to CharacterController ──────────
     private readonly DecayingDebuff _fire = new();
@@ -115,11 +132,17 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
 
     // ── Visuals ─────────────────────────────────────────────────────────────────────
     protected Sprite2D Sprite;
-    private float _flashTimer;
-    private float _blinkTimer;
     private float _evolveFlashTimer;
     private bool _telegraphActive;
     private Color _telegraphTint = Colors.White;
+
+    // ── Feedback (Docs/Feedback.gdd): hit-stop, merged hurt ticks, status loops, hit flash ──
+    private HitStopClock _hitStop;
+    private readonly HurtTickMeter _hurtTicks = new();
+    private readonly BodyFlash _flash = new();
+    private FeedbackState _statusLoops;
+    private string _feedbackId;
+    private bool _wasOnFloor;
 
     // ── Runtime state ────────────────────────────────────────────────────────────────
     private bool _initialized;
@@ -161,8 +184,22 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
     protected bool Skill2Ready => FoeStats.HasSkill2(CurrentLevel) && _skill2Cd <= 0f;
     protected void StartSkill1Cooldown(float cd) => _skill1Cd = cd;
     protected void StartSkill2Cooldown(float cd) => _skill2Cd = cd;
-    protected void SetTelegraphTint(Color tint) { _telegraphActive = true; _telegraphTint = tint; }
-    protected void ClearTelegraphTint() => _telegraphActive = false;
+
+    /// <summary>Show the "I am about to attack" tint and start the <c>telegraph</c> loop.
+    /// Give it the tell's length and the attack's real reach and direction when it has them,
+    /// so whatever is drawn for it comes from the numbers the attack itself uses.</summary>
+    protected void SetTelegraphTint(Color tint, float seconds = 0f, float reach = 0f, Vector2 direction = default)
+    {
+        if (!_telegraphActive) CueBus.Start(this, "telegraph", size: reach, magnitude: seconds, direction: direction);
+        _telegraphActive = true;
+        _telegraphTint = tint;
+    }
+
+    protected void ClearTelegraphTint()
+    {
+        if (_telegraphActive) CueBus.Stop(this, "telegraph");
+        _telegraphActive = false;
+    }
 
     /// <summary>Refresh a named continuous velocity contribution from a world field.
     /// Unlike impulse knockback, this does not decay; the field owns clearing its key.</summary>
@@ -224,7 +261,20 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
         if (!_initialized || _dead) return;      // guard un-Init'd first frame (caveat)
         float dt = (float)delta;
 
-        if (!_spawnCaptured) { SpawnOrigin = GlobalPosition; _spawnCaptured = true; OnSpawnPlaced(); }
+        if (!_spawnCaptured)
+        {
+            SpawnOrigin = GlobalPosition;
+            _spawnCaptured = true;
+            OnSpawnPlaced();
+            CueBus.Emit(this, "spawn", variant: CurrentLevel, tag: SpawnedByDeath ? "born" : null);
+        }
+
+        // Hit-stop, counted in world time. A held foe keeps every clock running — timers,
+        // statuses, sight, evolution — and holds what moves it: behaviour, skills (a dash
+        // keeps its full length) and integration, so it resumes with the velocity it had.
+        bool held = _hitStop.Tick(dt);
+        _flash.Tick(dt);
+        _hurtTicks.Tick(dt);
 
         TickTimers(dt);
         var player = GetTree().GetFirstNodeInGroup("player") as CharacterController;
@@ -233,22 +283,37 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
         if (UpdateStatus(dt)) return;
         // 2. sight timer / FSM
         UpdateSight(dt, player);
-        // 3. state behaviour (movement intent) + passive contact damage
-        if (!Stunned && !Trapped)
+        if (!held)
         {
-            if (State == FoeState.Aggro && player != null) UpdateAggro(dt, player);
-            else UpdatePatrol(dt);
-            if (HasContactDamage && player != null) TryContactDamage(player);
+            // 3. state behaviour (movement intent) + passive contact damage
+            if (!Stunned && !Trapped)
+            {
+                if (State == FoeState.Aggro && player != null) UpdateAggro(dt, player);
+                else UpdatePatrol(dt);
+                if (HasContactDamage && player != null) TryContactDamage(player);
+            }
+            else IntentVel.X = 0f;                    // gain-no/root: no self-directed horizontal move
+            // 4. skill gates (ongoing telegraph/dash must progress even while stunned)
+            UpdateSkills(dt, player);
+            // 5. movement integration
+            Integrate(dt);
         }
-        else IntentVel.X = 0f;                    // gain-no/root: no self-directed horizontal move
-        // 4. skill gates (ongoing telegraph/dash must progress even while stunned)
-        UpdateSkills(dt, player);
-        // 5. movement integration
-        Integrate(dt);
+        else Velocity = Vector2.Zero;   // held: not moving; IntentVel / ExternalVel are kept
         // 6. evolution timer
         UpdateEvolution(dt);
 
+        _statusLoops = StatusLoops.Sync(this, _statusLoops, StatusState());
         UpdateVisuals(dt);
+    }
+
+    public override void _ExitTree() => StopLoops();
+
+    /// <summary>End every loop this foe started on the cue bus (death, or leaving the tree).</summary>
+    private void StopLoops()
+    {
+        _statusLoops = StatusLoops.Sync(this, _statusLoops, FeedbackState.None);
+        ClearTelegraphTint();
+        _flash.Clear();
     }
 
     private void TickTimers(float dt)
@@ -267,6 +332,7 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
         {
             _burnTimer -= dt;
             float d = BurnDamagePerSecond * dt * DefenseMultiplier;
+            _hurtTicks.Add(this, HurtSource.Burn, d);
             _hp -= d; _burnAccum += d; _burnPopTimer -= dt;
             if (_burnPopTimer <= 0f && _burnAccum >= 1f)
             {
@@ -276,9 +342,9 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
         }
 
         float fireDmg = _fire.Tick(dt) * DefenseMultiplier;
-        if (fireDmg > 0f) { _hp -= fireDmg; PopNumber(fireDmg); }
+        if (fireDmg > 0f) { _hp -= fireDmg; PopNumber(fireDmg); _hurtTicks.Add(this, HurtSource.OnFire, fireDmg); }
         float frozenDmg = _frozenDebuff.Tick(dt) * DefenseMultiplier;
-        if (frozenDmg > 0f) { _hp -= frozenDmg; PopNumber(frozenDmg); }
+        if (frozenDmg > 0f) { _hp -= frozenDmg; PopNumber(frozenDmg); _hurtTicks.Add(this, HurtSource.Frozen, frozenDmg); }
 
         if (_fire.Active) _dealtDmgBonuses["OnFire"] = 0.2f; else _dealtDmgBonuses.Remove("OnFire");
         if (_frozenDebuff.Active) _defenseBonuses["Frozen"] = 30f; else _defenseBonuses.Remove("Frozen");
@@ -297,12 +363,21 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
         _sightTimer = SightInterval;
 
         bool seen = player != null && CanSeePlayer(player);
-        if (seen) { State = FoeState.Aggro; _missCount = 0; }   // hit → aggro, reset misses
+        if (seen) { EnterAggro(); _missCount = 0; }             // hit → aggro, reset misses
         else if (State == FoeState.Aggro)                        // misses counted only while AGGRO
         {
             _missCount++;
             if (_missCount >= 3) { State = FoeState.Patrol; _missCount = 0; }
         }
+    }
+
+    /// <summary>Turn on the player. Raises <c>aggro</c> once, on the change — not on every
+    /// sight check that confirms it.</summary>
+    private void EnterAggro()
+    {
+        if (State == FoeState.Aggro) return;
+        State = FoeState.Aggro;
+        CueBus.Emit(this, "aggro", direction: new Vector2(FacingDir, 0f));
     }
 
     /// <summary>Sight-shape test — subclass implements (crab rect / gull cone).</summary>
@@ -320,8 +395,25 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
         {
             _contactTimer = ContactCooldown;
             Vector2 dir = new Vector2(Mathf.Sign(to.X == 0f ? 1f : to.X), -0.4f).Normalized();
-            player.TakeHit(new HitInfo(EffectiveDamage(BaseDamage), dir * ContactKnockback, ContactStun));
+            Strike(player, new HitInfo(EffectiveDamage(BaseDamage), dir * ContactKnockback, ContactStun)
+                .From(this, "contact"));
         }
+    }
+
+    /// <summary>Land one of this foe's own blows: the hit, from where the foe stands, and —
+    /// for a blow of its body, not a projectile — the foe's share of hit-stop for it.
+    /// Returns the damage dealt.</summary>
+    protected float Strike(CharacterController target, HitInfo hit)
+    {
+        if (target == null) return 0f;
+        float dealt = target.TakeHit(hit, GlobalPosition);
+        if (dealt > 0f && !hit.Ranged)
+        {
+            float score = FeedbackTable.ImpactScore(dealt, target.Side == CombatSide.Player, target.MaxHP);
+            ApplyHitStop(FeedbackTable.AttackerStop(FeedbackTable.Resolve(hit.Weight, score), score,
+                target.IsDefeated, FeedbackSettings.HitStop));
+        }
+        return dealt;
     }
 
     private void Integrate(float dt)
@@ -349,7 +441,20 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
         Vector2 continuous = Vector2.Zero;
         foreach (Vector2 value in _continuousExternalVelocity.Values) continuous += value;
         Velocity = IntentVel + ExternalVel + continuous;
+        float fallSpeed = Velocity.Y;
+        // Leaving the floor on its own upward intent is a jump (knockback is ExternalVel).
+        bool leaping = UseGravity && _wasOnFloor && IntentVel.Y <= -FeedbackTable.FoeJumpCueMinSpeed;
         MoveAndSlide();
+
+        bool onFloor = IsOnFloor();
+        if (UseGravity)
+        {
+            if (leaping && !onFloor)
+                CueBus.Emit(this, "jump", variant: 1, magnitude: -IntentVel.Y, direction: Vector2.Up, at: Feet);
+            else if (onFloor && !_wasOnFloor && fallSpeed >= FeedbackTable.LandCueMinSpeed)
+                CueBus.Emit(this, "land", magnitude: fallSpeed, direction: Vector2.Down, at: Feet);
+        }
+        _wasOnFloor = onFloor;
 
         if (IsOnFloor() && ExternalVel.Y > 0f) ExternalVel.Y = 0f;
         if (IsOnWall()) ExternalVel.X = 0f;
@@ -384,6 +489,7 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
         AtkMult = s.AtkMult;
 
         _evolveFlashTimer = 0.5f;   // brief tint tell (art deferred, FOES §5)
+        CueBus.Emit(this, "evolve", variant: CurrentLevel);
         OnEvolve();
     }
 
@@ -414,24 +520,32 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
         float dealt = hit.Damage * DefenseMultiplier * IncomingDamageMult(sourcePos);
         DebugManager.Instance?.LogPlayerDmgDealt(dealt, GetType().Name);
         _hp -= dealt;
-        AddImpulse(hit.Knockback);
+        Vector2 knockback = Trapped ? Vector2.Zero : hit.Knockback;
+        AddImpulse(knockback);
         float stun = hit.ResolveStun();
         if (stun > 0f) _stunTimer = Mathf.Max(_stunTimer, stun);
 
-        _flashTimer = 0.12f;
-        _blinkTimer = 0.24f;
         PopNumber(dealt);
-        ShakeCamera2D.Instance?.AddTrauma(0.35f);
 
         // Getting hit alerts a sight-capable foe: force aggro + reset the miss counter.
-        if (FoeStats.HasAggro(CurrentLevel)) { State = FoeState.Aggro; _missCount = 0; }
+        if (FoeStats.HasAggro(CurrentLevel)) { EnterAggro(); _missCount = 0; }
 
         // Single-player prototype: any damage a foe takes came from the player, so credit
         // "damage dealt" ult charge here for every source without threading a dealer ref.
         var player = CharacterController.LocalPlayer;
         player?.GainUltCharge(dealt * player.UltChargeDealtRate);
 
-        if (_hp <= 0f) Die();
+        // Feedback (T10 §4 stage 6): resolve how heavy the hit was, hold this foe for it, and
+        // raise ONE cue — flash, shake and the rest are a listener's business. A foe that
+        // dies is freed this frame, so it is not held.
+        bool killed = _hp <= 0f;
+        float score = FeedbackTable.ImpactScore(dealt, false, MaxHP);
+        HitWeight weight = FeedbackTable.Resolve(hit.Weight, score);
+        float held = killed ? 0f
+            : ApplyHitStop(FeedbackTable.VictimStop(weight, score, false, FeedbackSettings.HitStop));
+        CueBus.EmitHit(new HitCue(this, hit, weight, dealt, knockback, sourcePos, killed, held));
+
+        if (killed) Die();
         return dealt;
     }
 
@@ -443,7 +557,14 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
     public void ApplyHazard(float damage, Vector2 knockback)
     {
         if (_dead || Invincible) return;
-        if (damage > 0f) { float d = damage * DefenseMultiplier; DebugManager.Instance?.LogHazardDmg(d, GetType().Name); _hp -= d; PopNumber(d); }
+        if (damage > 0f)
+        {
+            float d = damage * DefenseMultiplier;
+            DebugManager.Instance?.LogHazardDmg(d, GetType().Name);
+            _hp -= d;
+            PopNumber(d);
+            _hurtTicks.Add(this, HurtSource.Hazard, d);   // a tick stops nobody
+        }
         if (knockback != Vector2.Zero) AddImpulse(knockback);
         if (_hp <= 0f) Die();
     }
@@ -484,6 +605,9 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
     {
         if (_dead) return;
         _dead = true;
+        _hitStop.Clear();
+        StopLoops();
+        CueBus.Emit(this, "death", variant: CurrentLevel);
         OnDeath();
         QueueFree();
     }
@@ -498,27 +622,17 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
     // ── Visuals ────────────────────────────────────────────────────────────────────
     private void UpdateVisuals(float dt)
     {
+        // Sprite.Modulate is this class's one tint channel: the evolution tell over the
+        // resting tint (telegraph, frozen, burning). The hit flash is a separate channel
+        // (FlashTint), and a foe no longer blinks when hit — blinking means "cannot be hit",
+        // and a foe has no such window (Docs/Feedback.gdd §5).
         Color resting = RestingTint();
         if (_evolveFlashTimer > 0f)
         {
             _evolveFlashTimer -= dt;
-            Sprite.Modulate = new Color(0.6f, 1f, 0.6f);
-            if (_evolveFlashTimer <= 0f) Sprite.Modulate = resting;
-        }
-        else if (_flashTimer > 0f)
-        {
-            _flashTimer -= dt;
-            Sprite.Modulate = new Color(1f, 0.6f, 0.6f);
-            if (_flashTimer <= 0f) Sprite.Modulate = resting;
+            Sprite.Modulate = _evolveFlashTimer > 0f ? new Color(0.6f, 1f, 0.6f) : resting;
         }
         else Sprite.Modulate = resting;
-
-        if (_blinkTimer > 0f)
-        {
-            _blinkTimer -= dt;
-            Sprite.Visible = Mathf.PosMod(_blinkTimer, 0.08f) < 0.04f;
-            if (_blinkTimer <= 0f) Sprite.Visible = true;
-        }
 
         if (ShowDebugSight) QueueRedraw();
     }
@@ -533,6 +647,61 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget
 
     private void PopNumber(float amount) =>
         DamageNumberManager.Instance?.Pop(GlobalPosition + new Vector2(0f, -28f), amount, false);
+
+    // ── Feedback: identity, hit-stop, flash (Docs/Feedback.gdd §2, §4, §5) ───────────
+
+    /// <summary>The content id this foe's cues are raised under — snake_case. Defaults to
+    /// the class name; each foe states its own ("crab", "seagull").</summary>
+    public virtual string FeedbackId => _feedbackId ??= FeedbackIds.FromTypeName(GetType().Name);
+
+    /// <summary>What this body's cues fall back to: <c>foe</c>; a mission object that only
+    /// takes hits overrides it to <c>objective</c>.</summary>
+    public virtual string FeedbackClass => CueOwners.Foe;
+
+    public Vector2 FeedbackCenter => GlobalPosition;
+    public float FeedbackRadius => HitRadius;
+    /// <summary>Where this foe's feet are, in world space.</summary>
+    public Vector2 Feet => GlobalPosition + new Vector2(0f, FootOffset * Scale.Y);
+
+    /// <summary>True while hit-stop holds this foe.</summary>
+    public bool InHitStop => _hitStop.Active;
+
+    public FeedbackState FeedbackState
+    {
+        get
+        {
+            if (_dead) return FeedbackState.Dead;
+            FeedbackState state = StatusState();
+            if (_hp <= MaxHP * FeedbackTable.LowHpRatio) state |= FeedbackState.LowHp;
+            if (UseGravity && !IsOnFloor()) state |= FeedbackState.Airborne;
+            if (_softVolumes.InMedium) state |= FeedbackState.Submerged;
+            if (Invincible) state |= FeedbackState.Invulnerable;
+            return state;
+        }
+    }
+
+    private FeedbackState StatusState()
+    {
+        FeedbackState state = FeedbackState.None;
+        if (_burnTimer > 0f) state |= FeedbackState.Burning;
+        if (_fire.Active) state |= FeedbackState.OnFire;
+        if (_frozenDebuff.Active) state |= FeedbackState.Frozen;
+        if (_trappedTimer > 0f) state |= FeedbackState.Trapped;
+        if (_stunTimer > 0f) state |= FeedbackState.Stunned;
+        return state;
+    }
+
+    /// <summary>Hold this foe still for a moment — hit-stop. GAMEPLAY: only the foe itself
+    /// (its hit intake, its own blows) may call it, never a cue listener. Returns the seconds
+    /// it is held from now (0 if it is free). Rules: <see cref="HitStopClock"/>.</summary>
+    public float ApplyHitStop(float seconds) => _dead ? 0f : _hitStop.Request(seconds);
+
+    /// <summary>Show the whole foe in one colour for a moment. It does not touch
+    /// <c>Sprite.Modulate</c> (the telegraph, status and evolution tints) or <c>Visible</c>.</summary>
+    public void FlashTint(Color tint, float seconds)
+    {
+        if (!_dead) _flash.Flash(this, tint, seconds);
+    }
 
     // ── Debug sight drawing (mirrors CharacterController.ShowDebugRanges style) ──────
     public override void _Draw()

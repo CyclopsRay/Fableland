@@ -1,6 +1,7 @@
 using Godot;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Fableland.Data;
 using Fableland.Run;
 
 /// <summary>
@@ -21,9 +22,20 @@ using Fableland.Run;
 ///
 /// Debug: BA cone, E launch cone, and Fire Tornado box are drawn as range lines
 /// (toggle with ShowDebugRanges).
+///
+/// FEEDBACK — THE REFERENCE KIT (<c>Docs/Feedback.gdd</c> §6, 20-ENGINEERING §4): every
+/// moment of this kit raises a cue with the numbers the attack itself uses, and every hit
+/// names itself. Copy this file's pattern when wiring another kit:
+///   ba.swing #1–3 (size = the cone's reach, tag "burning")      hits: From(this, "ba", stage)
+///   s1.cast                                                      Blush
+///   s1.tornado  loop (extents = the box) + s1.tornado.tick       hits: FromRanged(this, "s1.tornado")
+///   s2.cast, then s2.wave #1–3 (magnitude = seeds in the fan)    seeds: FromRanged(owner, "s2.seed")
+///   s2.seed.expire, at a seed that died on terrain               (raised by PomeSeed)
 /// </summary>
 public partial class Pomegraknight : CharacterController
 {
+    public override string FeedbackId => "pomegraknight";
+
     [ExportGroup("BA — Melee Combo")]
     [Export] public float SlashRange = 130f;       // ~4m at 32px/m
     [Export] public float SlashHalfAngle = 40f;    // full 80 cone
@@ -89,6 +101,8 @@ public partial class Pomegraknight : CharacterController
     private float _tornadoCharge;
     private float _tornadoActive;
     private float _tornadoTickTimer;
+    private int _tornadoTicks;
+    private int _eruptionWave;
 
     private float _eCd;
     private float _eTelegraph;
@@ -147,9 +161,14 @@ public partial class Pomegraknight : CharacterController
         float dmg = ComboDamage[_comboStage % ComboDamage.Length] * mult;
         int stage = (_comboStage % 3) + 1;             // captured before _comboStage++ below
 
+        // The swing, whether or not it lands: the cone's real reach, which way, which stage.
+        CueBus.Emit(this, "ba.swing", variant: stage, size: SlashRange, magnitude: dmg,
+            direction: FacingDirection, tag: IsBurning ? "burning" : null);
+
         // NOTE(animation): with call-method tracks, move this MeleeCone call onto
         // the Slash clip's damage-event frame instead of firing it immediately here.
-        MeleeCone(SlashRange, SlashHalfAngle, dmg, SlashKnockback, applyBurn: false, 0f);
+        MeleeCone(SlashRange, SlashHalfAngle, dmg, SlashKnockback, applyBurn: false, 0f,
+            cueAction: "ba", cueVariant: stage);
         PlayAnim($"slash{stage}" + (IsBurning ? "_burning" : ""), restart: true);
 
         ApplyMovePenalty(SwingPenaltyMult, SwingPenaltyDur);
@@ -169,13 +188,32 @@ public partial class Pomegraknight : CharacterController
         _tornadoCharge = TornadoChargeWindow;
         _blushCd = BlushCooldown;
         PlayAnim("ignite", restart: true);
+        CueBus.Emit(this, "s1.cast", magnitude: BlushDuration);
     }
 
     private void ActivateTornado()
     {
+        // A re-cast while one is spinning restarts it; the loop is only started once.
+        if (_tornadoActive <= 0f)
+            CueBus.Start(this, "s1.tornado", size: TornadoHalfW, magnitude: TornadoDuration,
+                extents: new Vector2(TornadoHalfW, TornadoHalfH));
         _tornadoActive = TornadoDuration;
         _tornadoTickTimer = 0f;            // tick on the next frame
+        _tornadoTicks = 0;
         SetDefenseSource("FireTornado", TornadoDefense);
+    }
+
+    private void EndTornado()
+    {
+        ClearDefenseSource("FireTornado");
+        CueBus.Stop(this, "s1.tornado");
+    }
+
+    public override void _ExitTree()
+    {
+        // Switched out (Tab) or the scene ended mid-spin: a loop is always stopped by name.
+        if (_tornadoActive > 0f) CueBus.Stop(this, "s1.tornado");
+        base._ExitTree();
     }
 
     private void UpdateTornado(float dt)
@@ -188,18 +226,24 @@ public partial class Pomegraknight : CharacterController
             _tornadoTickTimer = TornadoTick;
             TornadoHit();
         }
-        if (_tornadoActive <= 0f) ClearDefenseSource("FireTornado");
+        if (_tornadoActive <= 0f) EndTornado();
     }
 
     private void TornadoHit()
     {
         Vector2 origin = GlobalPosition;
+        _tornadoTicks++;
+        CueBus.Emit(this, "s1.tornado.tick", variant: _tornadoTicks, size: TornadoHalfW,
+            magnitude: TornadoDamage, extents: new Vector2(TornadoHalfW, TornadoHalfH));
         foreach (ICombatTarget e in CombatTargets.HostileTo(GetTree(), Side))
         {
             Vector2 to = e.GlobalPosition - origin;
             if (Mathf.Abs(to.X) > TornadoHalfW || Mathf.Abs(to.Y) > TornadoHalfH) continue;
             Vector2 push = (to.LengthSquared() > 0.01f ? to.Normalized() : Vector2.Up) * TornadoPush;
-            float dealt = e.TakeHit(new HitInfo(TornadoDamage * DamageDealtMultiplier, push), origin);
+            // A field's tick: ranged, so the victim is held and she never is. Named Light —
+            // a tick stays a light hit however far a buff pushes its damage.
+            float dealt = e.TakeHit(new HitInfo(TornadoDamage * DamageDealtMultiplier, push)
+                .FromRanged(this, "s1.tornado", _tornadoTicks, HitWeight.Light), origin);
             ReportDamageDealt(dealt);
             e.SetBurning(2f);
         }
@@ -214,6 +258,9 @@ public partial class Pomegraknight : CharacterController
         // Erupt is a 1s idle-frame hold — Unity's erupt clip was empty (showed
         // the default sprite), so this is a faithful port, not a placeholder.
         PlayAnim("erupt", restart: true);
+        _eruptionWave = 0;
+        CueBus.Emit(this, "s2.cast", magnitude: _seedsPerWave.Length, direction: Vector2.Up,
+            tag: IsBurning ? "burning" : null);
         _ = FireEruption();
     }
 
@@ -239,6 +286,11 @@ public partial class Pomegraknight : CharacterController
         Vector2 origin = FirePoint != null ? FirePoint.GlobalPosition
                                            : GlobalPosition + new Vector2(0f, -20f);
         Node container = GetParent();
+
+        // One cue for the whole fan — never one per seed (T40 §2).
+        _eruptionWave++;
+        CueBus.Emit(this, "s2.wave", variant: _eruptionWave, magnitude: count,
+            direction: Vector2.Up, tag: burning ? "burning" : null, at: origin);
 
         for (int i = 0; i < count; i++)
         {

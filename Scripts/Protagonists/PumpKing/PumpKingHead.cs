@@ -43,6 +43,7 @@ public partial class PumpKingHead : CharacterBody2D
 
     private Vector2 _velocity;
     private Node2D _owner;
+    private string _cueOwner = "pumpking";   // whose style the head's cues and hits take
     private float _dmgMult = 1f;
     private Action _onResolved;
     private CombatSide _side = CombatSide.Player;
@@ -81,6 +82,7 @@ public partial class PumpKingHead : CharacterBody2D
         // PumpKing threw it (the scene's authored mask), the Player layer when the BOSS did.
         _side = side;
         CombatTargets.AimMask(this, side);
+        if (owner is IFeedbackBody thrower) _cueOwner = thrower.FeedbackId;
         _dmgMult = dmgMult;
         _explosionRadius = explosionRadius;
         _explosionDamage = explosionDamage;
@@ -206,7 +208,8 @@ public partial class PumpKingHead : CharacterBody2D
     private bool TryStrike(KinematicCollision2D col)
     {
         if (!CombatTargets.TryGetHostile(col.GetCollider(), _side, out ICombatTarget target)) return false;
-        target.TakeHit(new HitInfo(ContactDamage * _dmgMult, Vector2.Zero), GlobalPosition);
+        target.TakeHit(new HitInfo(ContactDamage * _dmgMult, Vector2.Zero)
+            .FromRanged(_cueOwner, "ba.head", _owner), GlobalPosition);
         Explode();
         return true;
     }
@@ -226,6 +229,11 @@ public partial class PumpKingHead : CharacterBody2D
         // detonate (BA, once PumpKing is back and Rolling — see ExitSoul) deals area
         // damage even when autonomous.
         bool dealsAreaDamage = !_autonomous || manual;
+        // One cue for the blast, with its real radius; a head that only pops (no area
+        // damage) says so. What it shakes or sounds like is a listener's table row.
+        CueBus.EmitAt(_cueOwner, "ba.explode", GlobalPosition, null, _side, size: _explosionRadius,
+            magnitude: dealsAreaDamage ? _explosionDamage : 0f, tag: dealsAreaDamage ? null : "dud",
+            ownerClass: CueOwners.Projectile);
         if (dealsAreaDamage) DealExplosion();
         _onResolved?.Invoke();
 
@@ -253,8 +261,8 @@ public partial class PumpKingHead : CharacterBody2D
             if (distance - foe.HitRadius > _explosionRadius) continue;
 
             Vector2 knock = (distance > 0.01f ? to / distance : Vector2.Right) * _explosionKnockback;
-            foe.TakeHit(new HitInfo(_explosionDamage, knock), GlobalPosition);
+            foe.TakeHit(new HitInfo(_explosionDamage, knock).FromRanged(_cueOwner, "ba.explode", _owner),
+                GlobalPosition);
         }
-        ShakeCamera2D.Instance?.AddTrauma(0.35f);
     }
 }

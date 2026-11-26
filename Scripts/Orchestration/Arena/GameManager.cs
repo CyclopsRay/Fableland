@@ -142,6 +142,10 @@ public partial class GameManager : Node2D
     private float _graceTimer;           // universal pre-combat grace: no foes, timer frozen, countdown shown
     private bool _ended;   // debug-only local end-of-match latch (banner + restart)
 
+    // Flow cues (Docs/Feedback.gdd §6): what the arena tells the cue bus about itself.
+    private string _mapWorld = "";       // the world the authored map was built for; "" if unknown
+    private int _countdownShown = -1;    // the last whole second the countdown raised a tick for
+
     public override void _Ready()
     {
         // Keep running while the tree is paused so the debug restart flow works after win/lose.
@@ -227,7 +231,36 @@ public partial class GameManager : Node2D
         DebugManager.Instance?.LogMission($"Mission start: {MissionName(_missionType)} LV{_nodeLevel} foeLV{FoeLevel} day{day} node{nodeId}");
         SetupPlayer(rs);
         SetupHud();
+        RaiseArenaEntered();
     }
+
+    /// <summary>
+    /// <c>flow</c>/<c>arena.enter</c>: the arena is built. Tag = the world the map was authored
+    /// for ("" on the legacy arena or a map that names none), magnitude = how light the
+    /// backdrop is (0 black – 1 white; −1 if there is none) so presentation can keep its marks
+    /// readable against it, size = the battlefield's width in px.
+    /// </summary>
+    private void RaiseArenaEntered()
+    {
+        var backdrop = GetNodeOrNull<ColorRect>("Background");
+        float luminance = backdrop != null ? backdrop.Color.Luminance : -1f;
+        CueBus.EmitAt(CueOwners.Flow, "arena.enter", PlayerPosition, null, CombatSide.Player,
+            variant: _nodeLevel, size: _authoredMapWidth, magnitude: luminance, tag: _mapWorld);
+    }
+
+    /// <summary>The mission type as a cue tag: lower-case, constant strings.</summary>
+    private static string MissionTag(MissionType t) => t switch
+    {
+        MissionType.Collection => "collection",
+        MissionType.Protect => "protect",
+        MissionType.Destroy => "destroy",
+        MissionType.Slaughter => "slaughter",
+        MissionType.Boss => "boss",
+        _ => "",
+    };
+
+    private void RaiseFlow(string action, string tag = null, int variant = 0) =>
+        CueBus.EmitAt(CueOwners.Flow, action, PlayerPosition, null, CombatSide.Player, variant: variant, tag: tag);
 
     public override void _ExitTree()
     {
@@ -272,6 +305,9 @@ public partial class GameManager : Node2D
         _authoredLevelGoalSpawns.AddRange(build.LevelGoalSpawns);
         _authoredRespawnSpawns.AddRange(build.RespawnSpawns);
         _authoredFoeSpawnRules = document.FoeSpawnRules;
+        // The arena is never told which world it is in (T00); the map says whose art it wears.
+        _mapWorld = document.Worlds != null && document.Worlds.Count > 0 ? document.Worlds[0] ?? ""
+            : document.World ?? "";
 
         if (build.CharacterSpawns.Count == 0)
             GD.PushWarning("[GameManager] authored map '" + document.Name + "' has no Character Spawn; keeping the scene fallback.");
@@ -455,7 +491,7 @@ public partial class GameManager : Node2D
         _player.HpChanged -= OnPlayerHpChanged;
         _player.Died -= OnPlayerDied;
 
-        _player = ReplacePlayerNode(_player, scene);
+        _player = ReplacePlayerNode(_player, scene, switched: true);
 
         SetupPlayer(RunState.Instance);   // re-subscribes signals, re-wires HUD, hydrates/lives
         _player.ResetDebugCombatState();  // debug body starts immediately testable; state stays non-persistent
@@ -517,7 +553,7 @@ public partial class GameManager : Node2D
         _player.Died -= OnPlayerDied;
 
         _battlePartyIndex = nextIndex;
-        _player = ReplacePlayerNode(_player, scene);
+        _player = ReplacePlayerNode(_player, scene, switched: true);
 
         // Re-wire everything for the new body: signals, HUD, hydration from the new protagonist's
         // run state. SetupPlayer reads the captured party's local cursor.
@@ -562,8 +598,11 @@ public partial class GameManager : Node2D
     /// at the same world position. Caller owns unsubscribing any signals on <paramref name="old"/>
     /// first. Preserves velocity so a mid-air switch continues the trajectory (NODES §3.3).
     /// </summary>
-    private CharacterController ReplacePlayerNode(CharacterController old, PackedScene scene)
+    private CharacterController ReplacePlayerNode(CharacterController old, PackedScene scene, bool switched = false)
     {
+        // A swap during a fight is a switch (`switch.out` / `switch.in`); replacing the
+        // scene's placeholder before the fight is just the fighter's `spawn`.
+        if (switched) old.NotifySwitchedOut();
         Vector2 pos = old.GlobalPosition;
         Node parent = old.GetParent();
         var oldCamera = old.GetNodeOrNull<Camera2D>("Camera2D");
@@ -577,6 +616,7 @@ public partial class GameManager : Node2D
         // _Ready already latched _spawnPoint at the scene-file origin (it runs inside AddChild,
         // before the line above) — re-anchor it or a debug-lives Respawn() teleports to (0,0).
         np.SetSpawnPoint(pos);
+        if (switched) np.NotifySwitchedIn();
 
         // Camera2D currentness is not inherited through a body replacement. Explicitly
         // retire the outgoing camera and make the incoming character's camera current
@@ -656,6 +696,13 @@ public partial class GameManager : Node2D
         // separate from mission HUD so its text cannot be overwritten this frame.
         if (_graceTimer > 0f)
         {
+            // One tick per whole second shown (3, 2, 1), raised before the number changes.
+            int shown = Mathf.CeilToInt(_graceTimer);
+            if (shown != _countdownShown)
+            {
+                _countdownShown = shown;
+                RaiseFlow("countdown.tick", variant: shown);
+            }
             _graceTimer = Mathf.Max(0f, _graceTimer - dt);
             _hud.SetProgress(_graceTimer > 0.01f
                 ? $"Get ready... {Mathf.CeilToInt(_graceTimer)}"
@@ -666,6 +713,8 @@ public partial class GameManager : Node2D
             // Grace just ended — release all deferred waves, then let the mission resume.
             _graceTimer = -1f;
             Spawner?.OpenSpawnGate();
+            RaiseFlow("countdown.go");
+            RaiseFlow("mission.start", MissionTag(_missionType), _nodeLevel);
         }
 
         Spawner?.Tick(dt);
@@ -758,6 +807,8 @@ public partial class GameManager : Node2D
         _goalResolved = true;
         Spawner.Enabled = false;   // FOES §11: the cap only gates the periodic spawner anyway
         _mission.OnResolved();     // e.g. a boss still standing after a debug skip stands down
+        RaiseFlow(_mission.Status == MissionStatus.Succeeded ? "mission.success" : "mission.fail",
+            MissionTag(_missionType), _nodeLevel);
 
         // Resolution is a terminal combat state: both sides stop taking damage while
         // the reward/Finish Day flow is visible. The controller-level gate covers
@@ -782,6 +833,7 @@ public partial class GameManager : Node2D
                 // A fatal boss timer is a real boss kill. TwistedReality may consume itself to
                 // return the run to its last completed day; every other timer loss is terminal.
                 if (RunState.Instance.TryRecoverFromBossFailure()) return;
+                RaiseFlow("run.over", "boss_timer");
                 RunState.Instance.EndRun(RunEndKind.BossTimer);
                 return;
             }
@@ -796,6 +848,7 @@ public partial class GameManager : Node2D
 
             if (success && _mission.IsFinalBoss)
             {
+                RaiseFlow("run.over", "victory");
                 RunState.Instance.EndRun(RunEndKind.Victory);
                 return;
             }
@@ -892,12 +945,14 @@ public partial class GameManager : Node2D
 
     private async void OnPlayerDied()
     {
+        RaiseFlow("player.down");
         if (_hasRun)
         {
             WriteBackHp();   // CurrentHP is already 0 here, so this writes back ~0
             if (RunState.Instance.CurrentAdventure?.Kind == NodeKind.Boss
                 && RunState.Instance.TryRecoverFromBossFailure()) return;
             // Permadeath — no lives, no respawn in a run (NODES §2.2).
+            RaiseFlow("run.over", "death");
             RunState.Instance.EndRun(RunEndKind.Death);
             return;
         }
@@ -906,6 +961,7 @@ public partial class GameManager : Node2D
         _hud.SetLives(_player.LivesRemaining);
         if (_player.LivesRemaining <= 0)
         {
+            RaiseFlow("run.over", "death");
             EndGameDebug("GAME OVER\nPress R to try again");
             return;
         }

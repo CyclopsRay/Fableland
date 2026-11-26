@@ -35,6 +35,8 @@ using Fableland.Run;
 /// </summary>
 public partial class PumpKing : CharacterController
 {
+    public override string FeedbackId => "pumpking";
+
     public enum PKState { Normal, Rolling, Soul }
     public PKState CurrentState { get; private set; } = PKState.Normal;
 
@@ -330,7 +332,14 @@ public partial class PumpKing : CharacterController
     // ── Soul free-flight ─────────────────────────────────────────────────────
     public override void _PhysicsProcess(double delta)
     {
-        if (CurrentState == PKState.Soul) { SoulFlight((float)delta); return; }
+        if (CurrentState == PKState.Soul)
+        {
+            // Soul Form flies on its own and never reaches the base tick, so it counts its
+            // hit-stop down here: a stopped soul holds like any other body (Feedback.gdd §4).
+            if (HoldForHitStop((float)delta)) return;
+            SoulFlight((float)delta);
+            return;
+        }
         base._PhysicsProcess(delta);
     }
 

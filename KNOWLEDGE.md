@@ -115,6 +115,29 @@ an aggregatable **defense** pool (`_defenseBonuses`, same dictionary-by-source p
 is 0, so no status = no mitigation), applied to everything taken: hits, hazard ticks, and
 Burn/Fire/Frozen's own self-damage.
 
+**Feedback** (v0.11.2; `Docs/Feedback.gdd`, `Docs/Tech/T10` §4b) — how a moment is told:
+- **Gameplay raises a cue and forgets it** — `CueBus.Emit(this, "ba.swing", variant: stage,
+  size: reach, …)`, `CueBus.Start` … `Stop` for anything that lasts — keyed by two constant
+  strings, *owner* (a snake_case content id: `FeedbackId`, or a system: `world`, `hazard`,
+  `flow`) and *action*. It never names an effect, a sound or a shake and never calls a
+  director; `FeelDirector` (and the VFX and audio directors after it) listen and look the
+  cue up in their own `CueTable` — owner → class → `any`.
+- **An attack names its hits**: `new HitInfo(dmg, knock).From(this, "ba", stage)`, or
+  `.FromRanged(owner, "s2.seed")` for a projectile, a field or a tick. Damage math never
+  reads that metadata. Each hit intake raises exactly one `HitCue` per hit that landed.
+- **Hit-stop is gameplay** (`HitStopClock`, numbers in `Scripts/Data/FeedbackTable.cs`): a
+  held body does not move and its animation keeps its frame; **every clock keeps running
+  and abilities are still read**. The victim is held by its intake; a melee attacker once
+  per swing (`MeleeCone` / `SwingStop`, `BaseFoe.Strike`); a ranged hit never holds its
+  owner; ticks hold nobody. Stops take the max, re-arm after 0.10 s, and are budgeted.
+  Never `Engine.TimeScale`, never `GetActDelta` / `LocalTimeRate`. A kit that moves the body
+  itself guards with `HitStopHeld` (after the base tick) or `HoldForHitStop` (instead of it).
+- **One owner per visual property of a body**: `Sprite.Modulate` / `SelfModulate` = status,
+  telegraph and evolution tints; `Sprite.Visible` = the i-frame blink; root `Modulate.a` =
+  the defeat fade; the hit flash = a material lent to the sprites while it runs
+  (`IFeedbackBody.FlashTint`). Recipe for wiring a kit: `20-ENGINEERING.md` §4;
+  Pomegraknight is the reference.
+
 **ATK → damage-dealt multiplier is `(100+ATK)/100`** (base ATK is 0, so 0 ATK = 1× damage).
 ATK is a flat additive stat, same as DEF. Both are permanently increased via shelter Blessing
 actions (Sharpen Weapon: +10 ATK; Sharpen Armor: +10 DEF). Unlike the temporary Frozen DEF
@@ -151,15 +174,118 @@ toolchain (`dotnet` 9 on the PATH; Godot 4.7 .NET at
 (`Docs/Instructions/40-QA.md` §(2)); for bosses, kits with a BOSS variant, input, hit intake,
 sides, slopes or swimming, also the boss check (`res://Scenes/Bosses/BossFightCheck.tscn`, same §); for
 the world pool, map generation, saves, the run flow or a shipped map, also the run check
-(`res://Scenes/Run/RunWalkCheck.tscn`, same § — it plays real runs, in a scratch save folder). A host with no toolchain falls back to static checks
+(`res://Scenes/Run/RunWalkCheck.tscn`, same § — it plays real runs, in a scratch save folder); for
+the cue bus, hit-stop, a hit intake, a kit's cues, a body's tints or the feel director, also the
+feedback check (`res://Scenes/Feedback/FeedbackCheck.tscn`, same §). A host with no toolchain falls back to static checks
 (brace/paren balance, `.tscn` resource paths, `GetNode` paths), which do NOT catch
 API-existence or type errors — say so, and log anything a later compile surfaces below.
 Python tools (`Tools/`) need Pillow + numpy: use `/opt/homebrew/bin/python3` on the dev Mac —
 the Anaconda `python3` first on the PATH has a broken numpy (missing MKL) and dies on import.
+It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11.2).
 
 ---
 
 ## Caveats / gotchas (grow this on every bug fix)
+
+### Hit-stop holds a body, so "the tick after the hit" is no longer when a shove shows (v0.11.2, hit feedback)
+- **Symptom:** with hit-stop in, the boss check failed one line of 109: `sides: two 300 px/s
+  shoves moved the boss at 0 px/s`. The probe hit the boss twice and read `Velocity.X` one
+  tick later. Nothing was wrong with poise: the boss was held by the stop those hits earned
+  (52 ms, 4 ticks), and its knockback starts when the stop lets go.
+- **Rule:** a hit's knockback is added to the external-velocity channel at once and *moves*
+  the body only after its stop. A test (or a kit) that needs the shove waits for
+  `!body.InHitStop` first; a held body reports `Velocity` zero on purpose. The probe now
+  waits out the stop and asserts the same bound as before — the expectation moved in time,
+  it was not loosened.
+- **Why:** position hold is what hit-stop *is*. Everything that reads "what happened right
+  after a hit" from positions or `Velocity` shifts by 2–11 ticks; clocks do not (every timer
+  keeps running through a stop), which is why nothing else in three checks moved.
+
+### A projectile that frees itself on contact can be entered twice in one physics frame — 24 seeds had 25 endings (v0.11.2, found by the feedback check)
+- **Symptom:** the check counted every Pome seed's end — a hit or an expiry on terrain — and
+  got 7 + 18 = 25 for 24 seeds. `PomeSeed.OnBodyEntered` called `QueueFree()` and returned;
+  a seed that reached a target standing on the floor got `body_entered` for the target *and*
+  for the floor in the same physics frame, and resolved twice. Before cues existed the second
+  resolution was invisible unless both bodies were foes — then one seed hit two of them.
+- **Rule:** `QueueFree` is deferred to the end of the frame; signals are not. A projectile
+  that ends on first contact latches a `_resolved` flag as the first line of its handler.
+- **Why:** an Area2D reports every overlap that began in the step, one signal each. "It
+  freed itself" is not true until the frame is over.
+
+### A foe acts on its first tick and faces a random way — a probe that cleared its log after spawning one had already lost what it was waiting for (v0.11.2, feedback check)
+- **Symptom:** "a level-6 crab beside the player raises `jump`" failed every run, and "a
+  seagull's dash starts its telegraph loop" failed two runs in three. Both probes spawned the
+  foe, waited a few ticks for it to settle, cleared the cue log, poked the foe, and waited.
+  The crab had seen the player on its first sight check and jumped on its second tick; the
+  gull, when it happened to face the player, had started its telegraph before the log was
+  cleared. Each then sat on a 5–10 s cooldown while the probe waited for a cue already gone.
+- **Rule:** clear, *then* spawn. And stage what a foe must do rather than hope it notices:
+  a hit turns it on the player whichever way it faces (the gull probe hits it only if the
+  telegraph has not already begun). This is the v0.10.11 "a crab walks left or right at
+  random" caveat again, one layer up — the unseeded `BaseFoe.Rng` decides the first second.
+- **Why:** sight timers start at zero, so a foe's first decision is made on the tick it is
+  placed. "Wait for it to settle" is exactly when that happens.
+
+### Never launch Godot from the Anaconda python: an x86_64 parent starts it under Rosetta, and the checks hang (v0.11.2, tooling)
+- **Symptom:** a script running the feedback check forty times (one deliberate breakage per
+  run) stalled on the first: Godot printed its banner and then sat at 0 % CPU until the
+  timeout. The same command typed in the shell took 17 s. The unmutated check hung the same
+  way, with output piped or sent to a file, with a clean environment, even through `zsh -c`.
+- **Cause:** `python3` on the PATH is Anaconda's, an **x86_64** binary on an arm64 Mac. A
+  universal binary launched by a translated process is started in the parent's architecture,
+  so Godot ran under Rosetta and never got its (arm64) .NET runtime going.
+- **Rule:** drive headless Godot from the shell or from `/opt/homebrew/bin/python3` (arm64;
+  `python3 -c "import platform; print(platform.machine())"` tells you which you have), or
+  prefix the command with `arch -arm64`. `dotnet build` is unaffected.
+- **Also:** a script that edits sources and restores them in a `finally` must be stopped
+  with SIGINT *sent to the python process* — `pgrep -f script.py` also matches the shell
+  wrapping it — or the file under test is left broken. After any interrupted run, check
+  that every pattern the script replaces is back before building.
+
+### `Modulate` can only darken, so a hit flash is a shader — and headless Godot cannot show it to you (v0.11.2, hit feedback — designed around)
+- **Symptom (avoided):** the old hit feedback was `Modulate = (1, 0.6, 0.6)` — a pink tint,
+  because `Modulate` multiplies and cannot whiten a sprite. A real flash needs a
+  `canvas_item` shader (`COLOR.rgb = mix(COLOR.rgb, flash_color.rgb, flash_amount)`), and no
+  headless run can tell whether a shader draws what it should: the dummy renderer draws
+  nothing.
+- **Rule:** a visual that cannot be verified here must not be able to break what can. The
+  flash material is put on a body's sprites **only for the frames a flash lasts** and taken
+  off again (`BodyFlash`); at rest every body is drawn exactly as its scene authored it, so a
+  wrong shader can spoil two to five frames, never the game. The check proves the channel
+  (applied, strength, colour, restored, `Modulate` / `Visible` untouched), not the picture.
+- **Also:** one `ShaderMaterial` per body, not one shared — a shared one flashes everybody.
+  Its first use compiles the shader mid-fight; pre-warming it belongs with the VFX work.
+
+### A hit-stop counted in the base `_PhysicsProcess` never ends for a kit that skips it (v0.11.2, hit feedback — designed around)
+- **Symptom (avoided):** PumpKing's `_PhysicsProcess` returns before the base call while he
+  is in Soul Form. A stop counted down in the base tick would hold a soul's animation
+  forever and never its flight; Sifu Pangda, who calls the base and *then* moves himself
+  (dive, dash, palm lunge), would have kept moving through every stop.
+- **Rule:** the stop is counted by `HoldForHitStop(worldDelta)`, which the base calls first
+  thing. A kit that moves the body **instead of** the base tick calls it itself and returns
+  when it says true; a kit that moves the body **after** the base tick reads `HitStopHeld`.
+  Never both — the stop would run out twice as fast. `FeedbackCheck.ProbeKitPhysics` has a
+  stage for each; a new kit with its own physics gets one.
+- **Why world delta, in the physics loop:** counted in the body's own time a held body never
+  wakes; counted in `_Process` its length depends on the frame rate, and the checks (which
+  run at 8×) stop being exact to the tick.
+
+### A limit that counts real time needs real-time waits in a sped-up check (v0.11.2, feedback check — designed around)
+- The flash limiter counts wall-clock seconds, because that is what an eye sees: six full
+  flashes per 0.1 s moment, three large ones per second. At 8× a probe's "wait 30 ticks" is
+  62 ms of real time — still inside the last flashing moment — so the next probe's flash
+  would be tinted by the limiter and read as a bug in the flash. The check waits with
+  `RealSeconds(…)` between flashing moments. Anything else that is paced for the player
+  rather than for the simulation gets the same treatment.
+
+### Noted, not changed: a dashing seagull usually lands its contact hit, and its i-frames eat the dash (v0.11.2, found by the feedback check)
+- The probe expected a dashing gull's hit on the player to be `seagull/s2.dash` (50 base
+  damage) and got `seagull/contact` (20). Each tick `BaseFoe` tests contact damage (range
+  44 px) *before* skills, and the dash tests 48 px: a gull closing at 16 px a tick is inside
+  both on the same tick most of the time (by arithmetic about three times in four — not
+  measured), contact lands first, and its knockback starts the player's 0.8 s of i-frames,
+  which refuse the dash. Whether a dash should suppress
+  contact is a FOES balance decision — it is in the Feedback GDD's decisions log, unfixed.
 
 ### A clean merge is not an agreeing one — swimming, written before fighters had sides, would have let the player's W and S swim the boss (v0.11.1, merge of the swimming work; caught before it shipped)
 - **Symptom (never shipped):** the swimming work (written as v0.10.10 beside v0.10.11's boss

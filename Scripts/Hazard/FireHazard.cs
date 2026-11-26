@@ -9,6 +9,7 @@ public partial class FireHazard : Hazard
     [Export] public float FireStack = 20f;
     [Export] public float Knockback = 64f;   // ~2 m/s — a slight shove, not a launch
 
+    protected override string DefaultCueKind => "fire";
     protected override Color TintFill => new Color(1f, 0.4f, 0.1f, 0.55f);
     protected override Color TintEdge => new Color(1f, 0.65f, 0.2f, 0.95f);
 

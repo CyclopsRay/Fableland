@@ -24,6 +24,10 @@ public partial class PomeSeed : Area2D
     private float _dmgMult = 1f;
     private CharacterController _damageOwner;
     private CombatSide _side = CombatSide.Player;
+    // The owner's content id, kept as a string: a seed outlives a Tab switch, and its hit
+    // and its last cue still belong to whoever fired it.
+    private string _cueOwner = "pomegraknight";
+    private bool _resolved;   // a seed ends once: QueueFree is deferred, body_entered is not
 
     /// <summary>Called by the spawner right after AddChild (so it runs after _Ready).</summary>
     public void Init(Vector2 velocity, HashSet<ulong> waveHits, bool burning, float dmgMult = 1f,
@@ -36,6 +40,7 @@ public partial class PomeSeed : Area2D
         _damageOwner = damageOwner;
         // A seed fights for whoever fired it, and looks for bodies on the other side.
         _side = damageOwner?.Side ?? CombatSide.Player;
+        if (damageOwner != null) _cueOwner = damageOwner.FeedbackId;
         CombatTargets.AimMask(this, _side);
         _life = Lifetime;
         if (_burning)
@@ -62,6 +67,11 @@ public partial class PomeSeed : Area2D
 
     private void OnBodyEntered(Node2D body)
     {
+        // Two bodies can be entered in one physics frame (a foe standing on the floor, the
+        // floor and a wall): the seed is still alive for the second signal. First one wins.
+        if (_resolved) return;
+        _resolved = true;
+
         if (CombatTargets.TryGetHostile(body, _side, out ICombatTarget e))
         {
             ulong id = e.TargetId;
@@ -77,7 +87,9 @@ public partial class PomeSeed : Area2D
             }
 
             Vector2 knock = (_velocity.LengthSquared() > 0.01f ? _velocity.Normalized() : Vector2.Down) * 80f;
-            float dealt = e.TakeHit(new HitInfo(dmg * _dmgMult, knock, 0.1f), GlobalPosition);   // small gain-no for seeds
+            // A projectile's hit: the victim is held for it, the owner never is.
+            float dealt = e.TakeHit(new HitInfo(dmg * _dmgMult, knock, 0.1f)   // small gain-no for seeds
+                .FromRanged(_cueOwner, "s2.seed", _damageOwner), GlobalPosition);
             _damageOwner?.ReportDamageDealt(dealt);
             if (_burning) e.SetBurning(BurnDuration);
             QueueFree();
@@ -85,7 +97,11 @@ public partial class PomeSeed : Area2D
         }
 
         // Ground / Platform (or another terrain body) resolves the projectile without
-        // applying its enemy hit or Burning effect.
+        // applying its enemy hit or Burning effect. The seed is about to free itself, so the
+        // cue carries a position and no source.
+        CueBus.EmitAt(_cueOwner, "s2.seed.expire", GlobalPosition, null, _side,
+            direction: _velocity.LengthSquared() > 0.01f ? _velocity.Normalized() : Vector2.Down,
+            tag: _burning ? "burning" : null, ownerClass: CueOwners.Projectile);
         QueueFree();
     }
 }

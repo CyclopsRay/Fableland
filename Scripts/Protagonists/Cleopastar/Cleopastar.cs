@@ -8,6 +8,8 @@ using System.Collections.Generic;
 /// </summary>
 public partial class Cleopastar : CharacterController
 {
+    public override string FeedbackId => "cleopastar";
+
     [ExportGroup("Star Shot (BA)")]
     [Export] public PackedScene CleoStarScene;
     [Export] public float StarSpeed = Units.Px(12f);

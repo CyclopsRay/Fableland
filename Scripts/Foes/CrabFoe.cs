@@ -12,6 +12,8 @@ public partial class CrabFoe : BaseFoe
     // more crabs without a self-referential .tscn (which Godot would reject as cyclic).
     public PackedScene BabyCrabScene;
 
+    public override string FeedbackId => "crab";
+
     protected override void InitFoe()
     {
         // FOES §3 base stats (verbatim).

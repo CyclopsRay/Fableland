@@ -9,6 +9,63 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.11.2** — **Hit feedback has a foundation: a cue bus, hit-stop, and a feel director.**
+  Design, the tier table, every rule and the full cue vocabulary: `Docs/Feedback.gdd`;
+  research behind the numbers: `Docs/Research/R2-vfx-feel-research.md`. **Nobody has watched
+  it yet** — every number was reasoned from the research and from pixels at 32 px/m and
+  proved by a headless check, which proves mechanisms, not looks; the verify-by-eye pass
+  (`50-ART-AUDIO.md` §6) is owed.
+  **What a player should notice:** a hit that lands makes both fighters hold still for a
+  few frames (a 15-damage slash: the victim 44 ms, Pomegraknight 31 ms; a 30-damage one
+  68 ms; the player being hit at least 50 ms), the victim flashes as a white silhouette — ink
+  on a pale arena — instead of going pink, the camera is kicked along the blow, and shake is
+  now small for small hits and capped by the weight of the hit instead of a flat 0.35 each;
+  heavy hits roll the view a hair and punch the zoom 2–4 %; a boss falling and the player
+  going down are beats of their own. Foes no longer blink when struck.
+  **The contract** (T10 §4b): gameplay raises cues on `CueBus` — `Emit`, `Start` / `Stop`,
+  one `HitCue` per hit from the two hit intakes — keyed by two constant strings (owner,
+  action), and never names an effect, a sound or a director. Directors are presentation
+  autoloads that listen and look cues up in their own `CueTable` (owner → class → `any`);
+  `FeelDirector` is the first, VFX and audio are next on the same bus with no gameplay edits.
+  `HitInfo` gained feedback metadata damage math never reads (`.From(this, "ba", stage)`,
+  `.FromRanged(owner, "s2.seed")`); both body classes are `IFeedbackBody` with a snake_case
+  `FeedbackId`. **Hit-stop is gameplay** (it moves bodies in time): per body, never
+  `Engine.TimeScale`; it holds motion and animation while **every clock keeps running and
+  abilities are still read**, so no DPS, cooldown or check timing moved; victims are held by
+  the intake, a melee attacker once per swing, a ranged hit never holds its owner, ticks hold
+  nobody; stops take the max, re-arm after 0.10 s and are budgeted so a stream of hits holds
+  a body about 15 % of the time at most; `FeedbackSettings.HitStop` scales it and 0 switches
+  it off. Sifu Pangda's dive and PumpKing's Soul Form hold with the body; PumpKing's head
+  and Cleopastar's star are exempt.
+  **Cues raised** (Feedback.gdd §6): spawn, jump, land, death, respawn, heal, `hurt.tick`
+  (hazard and DoT damage merged to one per kind per 0.35 s), ult.ready, switch.in / out, five
+  status loops, a foe's aggro / evolve / telegraph loop, soft-volume enter / exit (once per
+  sea, not per tile), hazard ticks by kind, and the arena's flow — arena.enter, the
+  countdown, mission.start / success / fail, boss.intro / defeated, player.down, run.over.
+  **Pomegraknight is wired in full as the reference kit**; the other four still hit as
+  `any` (victims are held by damage, attackers are not) and Pixolotl and Sifu Pangda still
+  shake the camera by hand until they are wired (`20-ENGINEERING.md` §4 has the recipe).
+  The inline feedback is gone from the intakes, PumpKing's head and the hazards.
+  **Photosensitivity limits hold whatever the settings** (WCAG 2.3.1 / Xbox XAG 118): no
+  full-screen flash, no saturated red, six bodies flashing at once at most, three large
+  flashes a second at most. Comfort settings exist (`FeedbackSettings`: shake, zoom punch,
+  flash, hit-stop) but nothing writes or saves them yet.
+  **Verified:** `dotnet build` clean; a new headless check,
+  `res://Scenes/Feedback/FeedbackCheck.tscn` (249 checks, ~20 s, `40-QA.md`), on real
+  bodies and through the real Arena, mutation-tested (44 deliberate breakages, each failing
+  by name — three of them only after the check was tightened); raising 14 000 cues with the
+  director acting on each allocates 0 bytes. The three existing checks stay green (content 1062, boss
+  109, run 891) with hit-stop on; **one boss-check line changed**: its poise probe read a
+  boss's velocity the tick after a hit, and now waits out the stop first — same bound.
+  **Fixed on the way:** a Pome seed that touched two bodies in one physics frame resolved
+  twice (`QueueFree` is deferred; the check counted 25 endings for 24 seeds). **Noted, not
+  changed:** a dashing seagull usually lands its contact hit a tick before its dash hit and
+  the i-frames eat the dash. **Deferred:** world slow-motion, the boss-kill freeze, holding a
+  killed foe on its flash frame, sprite shake and squash, particles, audio, rumble, pooled
+  damage numbers, the options screen. **Provisional, not confirmed by the owner:**
+  Cleopastar's effect style follows Starland and Sifu Pangda's the Banboo Maze. Eight
+  caveats in `KNOWLEDGE.md` (v0.11.2), among them: never launch Godot from the Anaconda
+  python — an x86_64 parent starts it under Rosetta and the checks hang.
 - **0.11.1** — **A fighter swims in every soft volume.** *(This is the 0.10.10 work: written
   in another session's worktree from 0.10.9, never committed on its own, and merged here
   onto 0.11.0. What the merge had to change is at the end of the entry.)* The owner's rule:

@@ -11,6 +11,8 @@ using Fableland.Run;
 /// </summary>
 public partial class SifuPangda : CharacterController
 {
+    public override string FeedbackId => "sifu_pangda";
+
     private enum PangdaState
     {
         Normal,
@@ -126,6 +128,10 @@ public partial class SifuPangda : CharacterController
     public override void _PhysicsProcess(double delta)
     {
         base._PhysicsProcess(delta);
+        // The lunge, the dive and the dash move the body themselves; hit-stop holds them with
+        // it, so a stopped palm keeps its full lunge (Feedback.gdd §4). The base counted the
+        // stop for this tick already.
+        if (HitStopHeld) return;
         float dt = GetActDelta((float)delta);
 
         if (_state == PangdaState.FuhuPalmRecovery && _fuhuLungeTimer > 0f)

@@ -22,6 +22,11 @@ using Fableland.Run;
 /// post-swing move-speed penalty, a melee cone helper, and a debug-draw hook that
 /// subclasses use to visualize skill ranges.
 ///
+/// Feedback (<c>Docs/Feedback.gdd</c>): the body raises its own cues on <see cref="CueBus"/>
+/// (spawn, jump, land, death, statuses, one <see cref="HitCue"/> per hit taken), holds still
+/// for hit-stop, and owns one hit-flash channel — it never names an effect, a sound or a
+/// shake, and never calls a director.
+///
 /// ── ADDING A CHARACTER ────────────────────────────────────────────────
 ///   1. Subclass CharacterController.
 ///   2. Override InitCharacter() for stats / immunities.
@@ -30,7 +35,7 @@ using Fableland.Run;
 ///   5. (Later) override UpdateAnimator() once real animations exist.
 /// ──────────────────────────────────────────────────────────────────────
 /// </summary>
-public partial class CharacterController : CharacterBody2D, ICombatTarget
+public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeedbackBody
 {
 	[ExportGroup("Stats")]
 	[Export] public float MaxHP = 200f;
@@ -212,7 +217,18 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 	// protagonist is byte-for-byte unaffected. Set by BossTable rows today.
 	private readonly Dictionary<string, float> _knockbackTakenScales = new();
 	private readonly Dictionary<string, float> _stunTakenScales = new();
-	private float _hitFlashTimer;      // Foe-side hit feedback (a player body blinks instead)
+	// ── Feedback (Docs/Feedback.gdd): hit-stop, merged hurt ticks, status loops, hit flash ──
+	private HitStopClock _hitStop;
+	private readonly HurtTickMeter _hurtTicks = new();
+	private readonly BodyFlash _flash = new();
+	private FeedbackState _statusLoops;    // which status loops are started on the cue bus
+	private string _feedbackId;
+	private bool _spawnCueRaised;
+	private bool _jumpBuffered;            // Jump pressed while the body was held by a stop
+	private int _jumpOrdinal;              // which jump of this airtime the next one is
+	private bool _wasOnFloor;
+	// Where the bottom of this body's collision shape is, relative to its origin: its feet.
+	private Vector2 _feetOffset = new(0f, Units.PlayerHeightPx * 0.5f);
 	// Continuous environmental movement contributions (e.g. Cleopastar Blackholes).
 	// Unlike _externalVel impulses, these are source-keyed target velocities and do not
 	// decay. The owning field refreshes/clears its own key every physics tick.
@@ -285,7 +301,13 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		if (Controls is PlayerControls) Controls = new VirtualPad();
 	}
 
-	public override void _ExitTree() { if (LocalPlayer == this) LocalPlayer = null; }
+	public override void _ExitTree()
+	{
+		// Leaving mid-status (a Tab switch, a scene change): end the loops this body started.
+		_statusLoops = StatusLoops.Sync(this, _statusLoops, FeedbackState.None);
+		_flash.Clear();
+		if (LocalPlayer == this) LocalPlayer = null;
+	}
 
 	public override void _Ready()
 	{
@@ -300,6 +322,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 			if (child is not CollisionShape2D { Shape: not null } body) continue;
 			Rect2 box = body.Shape.GetRect();
 			_crownOffset = body.Position + new Vector2(box.GetCenter().X, box.Position.Y);
+			_feetOffset = body.Position + new Vector2(box.GetCenter().X, box.End.Y);
 			break;
 		}
 
@@ -489,20 +512,30 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 	public override void _Process(double delta)
 	{
 		float dt = GetActDelta((float)delta);
+		// What is only shown runs in world time, whatever the body's own clock is doing.
+		_flash.Tick((float)delta);
+		_hurtTicks.Tick((float)delta);
 		if (_dead) { if (ShowDebugRanges) QueueRedraw(); return; }
 		CombatInactivitySeconds += (float)delta;
 
+		// Every clock keeps running through a hit-stop — cooldowns, ammo, statuses, the
+		// gain-no window — and abilities are still read, so a press during a stop is never
+		// lost and no timing in a fight depends on how often it was stopped. A stop holds
+		// motion (_PhysicsProcess) and the animation (below), nothing else.
 		UpdateTimers(dt);
 		Ammo?.Tick(dt);
 		UpdateStatus(dt);
+		if (!_dead) _statusLoops = StatusLoops.Sync(this, _statusLoops, StatusState());
 		if (!Frozen) HandleAbilities();
 
 		// Gain-no canon: the animation itself freezes on the current frame during
 		// a stun window (knockback/gravity still move the body). Idempotent, so
 		// it also auto-restores the instant the stun timer clears — and Die()
 		// zeroes _stunTimer, so the death animation is never left frozen.
-		if (Anim != null) Anim.SpeedScale = _stunTimer > 0f ? 0f : LocalTime.ClampRate(LocalTimeRate);
-		if (_stunTimer <= 0f) UpdateAnimator(dt);   // animation frozen during gain-no
+		// A hit-stop holds the frame the same way.
+		bool holdFrame = _stunTimer > 0f || _hitStop.Active;
+		if (Anim != null) Anim.SpeedScale = holdFrame ? 0f : LocalTime.ClampRate(LocalTimeRate);
+		if (!holdFrame) UpdateAnimator(dt);   // animation frozen during gain-no and hit-stop
 
 		if (ShowDebugRanges) QueueRedraw();
 	}
@@ -522,13 +555,6 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		}
 		if (_stunTimer > 0f) _stunTimer -= dt;
 		if (_trappedTimer > 0f) _trappedTimer -= dt;
-		if (_hitFlashTimer > 0f)
-		{
-			// The whole body flashes (a multi-part kit's extra sprites included): the root's
-			// Modulate is otherwise only used by the Foe-side defeat fade.
-			_hitFlashTimer -= dt;
-			Modulate = _hitFlashTimer > 0f ? new Color(1f, 0.6f, 0.6f) : Colors.White;
-		}
 	}
 
 	private void UpdateStatus(float dt)
@@ -536,14 +562,14 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		if (IsBurning)
 		{
 			_burnTimer -= dt;
-			if (!BurnImmune) ApplyDotDamage(BurnDotPerSecond * dt);
+			if (!BurnImmune) ApplyDotDamage(BurnDotPerSecond * dt, HurtSource.Burn);
 			if (_burnTimer <= 0f) IsBurning = false;
 		}
 
 		float fireDmg = _fire.Tick(dt);
-		if (fireDmg > 0f) ApplyDotDamage(fireDmg);
+		if (fireDmg > 0f) ApplyDotDamage(fireDmg, HurtSource.OnFire);
 		float frozenDmg = _frozenDebuff.Tick(dt);
-		if (frozenDmg > 0f) ApplyDotDamage(frozenDmg);
+		if (frozenDmg > 0f) ApplyDotDamage(frozenDmg, HurtSource.Frozen);
 
 		if (_fire.Active) _dealtDmgBonuses["OnFire"] = 0.2f;
 		else _dealtDmgBonuses.Remove("OnFire");
@@ -563,6 +589,22 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 
 	public override void _PhysicsProcess(double delta)
 	{
+		// The first tick finds the body where its spawner put it (_Ready ran before that).
+		if (!_spawnCueRaised)
+		{
+			_spawnCueRaised = true;
+			CueBus.Emit(this, "spawn");
+		}
+
+		// Hit-stop: the body holds exactly where it is and keeps both velocity channels, so
+		// it resumes with the motion it had (plus any knockback the hit added). Jump is an
+		// edge read here, in the physics loop — remember a press that falls inside a stop.
+		if (HoldForHitStop((float)delta))
+		{
+			if (Controls.JustPressed(ControlAction.Jump)) _jumpBuffered = true;
+			return;
+		}
+
 		if (LocksPhysicalMotion)
 		{
 			// Do not integrate gravity, momentum, knockback, or continuous fields while a
@@ -638,22 +680,30 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 			if (Controls.Held(ControlAction.MoveLeft)) inputDir -= 1f;
 			if (Controls.Held(ControlAction.MoveRight)) inputDir += 1f;
 
-			if (Controls.JustPressed(ControlAction.Jump) && _jumpCdTimer <= 0f)
+			if ((Controls.JustPressed(ControlAction.Jump) || _jumpBuffered) && _jumpCdTimer <= 0f)
 			{
 				bool spentNormalJump = _jumpsRemaining > 0;
 				// A character-specific support (Cleopastar's normal star) is asked
 				// only when every ordinary jump charge has been spent.
 				if (spentNormalJump || TryUseExhaustedJumpSupport())
 				{
+					// Off the ground (or its coyote grace) it is a ground jump; inside a soft
+					// volume a stroke; anything else is an air jump.
+					bool fromGround = IsOnFloor() || (!_jumpedSinceGrounded && !_coyoteConsumed);
 					_intentVel.Y = JumpVelocity;
 					if (spentNormalJump) _jumpsRemaining--;
 					_jumpCdTimer = JumpCooldown;
 					_jumpedSinceGrounded = true;
+					_jumpOrdinal++;
+					CueBus.Emit(this, "jump", variant: _jumpOrdinal, magnitude: -JumpVelocity,
+						direction: Vector2.Up, tag: _softVolumes.InMedium ? "swim" : fromGround ? null : "air",
+						at: Feet);
 				}
 			}
 
 			UpdateDropThrough(Controls.Held(ControlAction.MoveDown), dt);
 		}
+		_jumpBuffered = false;   // a press held over a stop is good for the tick after it only
 
 		// Horizontal intent with momentum: accelerate toward the target, friction to stop.
 		// OnFire/Frozen only scale MoveSpeed — accel/friction are untouched.
@@ -673,8 +723,14 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		// Intent/external velocity is stored in local-time units. Godot integrates its
 		// Velocity over the world physics tick, so output must be rate-scaled as well.
 		Velocity = LocalMotionVelocity * motionRate;
+		float fallSpeed = Velocity.Y;
 		MoveAndSlide();
 		ReconcileCollisions();
+
+		bool onFloor = IsOnFloor();
+		if (onFloor && !_wasOnFloor && fallSpeed >= FeedbackTable.LandCueMinSpeed && !_dead)
+			CueBus.Emit(this, "land", magnitude: fallSpeed, direction: Vector2.Down, at: Feet);
+		_wasOnFloor = onFloor;
 
 		if (inputDir > 0.01f) { Facing = 1f; Sprite.FlipH = false; }
 		else if (inputDir < -0.01f) { Facing = -1f; Sprite.FlipH = true; }
@@ -698,6 +754,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		_airborneTimer = 0f;
 		_coyoteConsumed = false;
 		_jumpedSinceGrounded = false;
+		_jumpOrdinal = 0;
 	}
 
 	/// <summary>Most solid floors restore jump charges. A character may opt out for a
@@ -757,14 +814,19 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 
 	public void EnterSoftVolume(SoftVolume v)
 	{
+		bool wasInside = _softVolumes.InMedium;
 		_softVolumes.Enter(v);
+		// One cue for going into "a medium", not one per tile of it.
+		if (!wasInside && _softVolumes.InMedium) SoftVolume.RaiseCrossing(this, v, entered: true);
 		// Cancel any in-progress platform drop so we don't leave the mask off.
 		if (_dropping) { _dropping = false; SetCollisionMaskValue(Units.LayerPlatform, true); }
 	}
 
 	public void ExitSoftVolume(SoftVolume v)
 	{
+		bool wasInside = _softVolumes.InMedium;
 		_softVolumes.Exit(v);
+		if (wasInside && !_softVolumes.InMedium) SoftVolume.RaiseCrossing(this, v, entered: false);
 	}
 
 	// ── Ability hooks ─────────────────────────────────────────────────────
@@ -848,15 +910,21 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 	/// Unity animation-event trigger; when animations land, call this from the
 	/// AnimationPlayer "call method" track instead.
 	/// </summary>
+	/// <para>Feedback: every hit carries <c>From(this, cueAction, cueVariant)</c>, and the
+	/// swing holds its attacker ONCE — for the heaviest hit it landed, never per victim
+	/// (<c>Docs/Feedback.gdd</c> §4).</para>
 	protected int MeleeCone(float range, float halfAngleDeg, float damage,
 							float knockbackSpeed, bool applyBurn, float burnDuration,
-							float stun = -1f)
+							float stun = -1f, string cueAction = null, int cueVariant = 0,
+							HitWeight weight = HitWeight.Auto)
 	{
 		int hits = 0;
 		Vector2 origin = GlobalPosition;
 		Vector2 aim = new Vector2(Facing, 0f);
 		float halfRad = Mathf.DegToRad(halfAngleDeg);
 		float scaledDamage = damage * DamageDealtMultiplier;
+		HitInfo blow = new HitInfo(scaledDamage, Vector2.Zero, stun).From(this, cueAction, cueVariant, weight);
+		var swing = new SwingStop();
 
 		foreach (ICombatTarget e in CombatTargets.HostileTo(GetTree(), Side))
 		{
@@ -874,8 +942,9 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 				if (to.Normalized().Dot(aim) < Mathf.Cos(halfRad + angTol)) continue;
 			}
 
-			Vector2 knock = new Vector2(Facing, -0.35f).Normalized() * knockbackSpeed;
-			float dealt = e.TakeHit(new HitInfo(scaledDamage, knock, stun), origin);   // origin feeds crab Soft Shell
+			blow.Knockback = new Vector2(Facing, -0.35f).Normalized() * knockbackSpeed;
+			float dealt = e.TakeHit(blow, origin);   // origin feeds crab Soft Shell
+			swing.Landed(e, dealt, weight);
 			if (applyBurn) e.SetBurning(burnDuration);
 			if (dealt > 0f)
 			{
@@ -884,7 +953,41 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 			}
 			hits++;
 		}
+		ApplyHitStop(swing.AttackerStop());
 		return hits;
+	}
+
+	/// <summary>
+	/// What one swing of a body's own attack landed, for the attacker's share of hit-stop:
+	/// feed it every victim the swing hit, then hold the attacker once for
+	/// <see cref="AttackerStop"/>. A kit with its own melee shape (a box, a dash) uses this
+	/// exactly as <see cref="MeleeCone"/> does. Projectiles, fields and ticks do not: a
+	/// ranged hit never holds its owner.
+	/// </summary>
+	protected struct SwingStop
+	{
+		private HitWeight _weight;
+		private float _score;
+		private bool _killed;
+
+		/// <summary>Note a victim this swing hit and the damage <c>TakeHit</c> returned.</summary>
+		public void Landed(ICombatTarget victim, float dealt, HitWeight named = HitWeight.Auto)
+		{
+			if (victim == null || dealt <= 0f) return;   // a hit with no damage holds nobody
+			float score = FeedbackTable.ImpactScore(dealt, victim.Side == CombatSide.Player, victim.MaxHP);
+			HitWeight weight = FeedbackTable.Resolve(named, score);
+			if (weight > _weight || (weight == _weight && score > _score))
+			{
+				_weight = weight;
+				_score = score;
+			}
+			if (victim.CurrentHp <= 0f) _killed = true;
+		}
+
+		/// <summary>Seconds to hold the attacker for this swing (0 if it landed nothing).</summary>
+		public readonly float AttackerStop() => _weight == HitWeight.Auto
+			? 0f
+			: FeedbackTable.AttackerStop(_weight, _score, _killed, FeedbackSettings.HitStop);
 	}
 
 	/// <summary>Report a non-melee hit dealt by this protagonist. Projectile and persistent-skill
@@ -945,28 +1048,38 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		else DebugManager.Instance?.LogPlayerDmgDealt(dealt, GetType().Name);
 		CurrentHP = Mathf.Max(0f, CurrentHP - toHp);
 		NotifyHpChanged();
-		PopNumber(playerSide ? toHp : dealt, heal: false);
+		float shown = playerSide ? toHp : dealt;
+		PopNumber(shown, heal: false);
 		GainUltCharge(toHp * UltChargeReceivedRate);
 
-		Vector2 knockback = hit.Knockback * ScaleOf(_knockbackTakenScales);
+		Vector2 knockback = Trapped ? Vector2.Zero : hit.Knockback * ScaleOf(_knockbackTakenScales);
 		AddImpulse(knockback);
 		float stun = hit.ResolveStun() * ScaleOf(_stunTakenScales);
 		if (stun > 0f) _stunTimer = Mathf.Max(_stunTimer, stun);
 
 		if (playerSide)
 		{
-			ShakeCamera(hit.Knockback != Vector2.Zero ? 0.5f : 0.3f);
 			if (hit.Knockback != Vector2.Zero) _invulnTimer = 0.8f;
 		}
 		else
 		{
-			_hitFlashTimer = 0.12f;
-			ShakeCamera2D.Instance?.AddTrauma(0.35f);
 			// Single-player prototype: damage a Foe-side body takes came from the player.
 			CharacterController player = LocalPlayer;
 			player?.GainUltCharge(dealt * player.UltChargeDealtRate);
 		}
-		if (CurrentHP <= 0f) Die();
+
+		// Feedback (T10 §4 stage 6): resolve how heavy the hit was, hold this body for it,
+		// and raise ONE cue. Shake, flash and everything else seen or heard is a listener's
+		// business; nothing below reads anything back. A body that dies is not held — it has
+		// its own exit.
+		bool killed = CurrentHP <= 0f;
+		float score = FeedbackTable.ImpactScore(dealt, playerSide, MaxHP);
+		HitWeight weight = FeedbackTable.Resolve(hit.Weight, score);
+		float held = killed ? 0f
+			: ApplyHitStop(FeedbackTable.VictimStop(weight, score, playerSide, FeedbackSettings.HitStop));
+		CueBus.EmitHit(new HitCue(this, hit, weight, shown, knockback, sourcePos, killed, held));
+
+		if (killed) Die();
 		return dealt;
 	}
 
@@ -1011,12 +1124,9 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 			NotifyHpChanged();
 			PopNumber(dealt, heal: false);
 			GainUltCharge(dealt * UltChargeReceivedRate);
+			_hurtTicks.Add(this, HurtSource.Hazard, damage * DefenseMultiplier);   // a tick stops nobody
 		}
-		if (knockback != Vector2.Zero)
-		{
-			AddImpulse(knockback);
-			ShakeCamera(0.22f);
-		}
+		if (knockback != Vector2.Zero) AddImpulse(knockback);
 		if (CurrentHP <= 0f) Die();
 	}
 
@@ -1121,11 +1231,12 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		_externalVel += impulse;
 	}
 
-	private void ApplyDotDamage(float amount)
+	private void ApplyDotDamage(float amount, HurtSource source)
 	{
 		if (_dead || Invincible) return;
 		if (amount > 0f) MarkCombatActivity();
 		float dealt = amount * DefenseMultiplier;
+		_hurtTicks.Add(this, source, dealt);
 		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogDotDmg(dealt, IsBurning ? "Burn" : _fire.Active ? "OnFire" : "Frozen");
 		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
@@ -1141,8 +1252,10 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 	public void GainUltCharge(float amount)
 	{
 		if (_dead || amount <= 0f) return;
+		bool wasReady = UltCharge >= MaxUltCharge;
 		UltCharge = Mathf.Min(MaxUltCharge, UltCharge + amount);
 		UltChargeChanged?.Invoke(UltCharge, MaxUltCharge);
+		if (!wasReady && UltCharge >= MaxUltCharge) CueBus.Emit(this, "ult.ready");
 	}
 
 	/// <summary>Restore HP (green damage number). No source uses it yet, but the
@@ -1154,12 +1267,17 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		CurrentHP = Mathf.Min(MaxHP, CurrentHP + amount);
 		NotifyHpChanged();
 		PopNumber(amount, heal: true);
+		CueBus.Emit(this, "heal", magnitude: amount);
 	}
 
 	private void PopNumber(float amount, bool heal) =>
 		DamageNumberManager.Instance?.Pop(
 			GlobalPosition + new Vector2(0f, -Units.PlayerHeightPx * 0.5f), amount, heal);
 
+	/// <summary>NOTE(feedback): the pre-cue way a kit shook the camera itself. The base no
+	/// longer uses it — hits shake through <see cref="CueBus"/> and the feel director — and
+	/// each remaining call (Pixolotl, Sifu Pangda) goes when that kit is given its cues
+	/// (<c>Docs/Instructions/20-ENGINEERING.md</c> §4, "give an attack its feedback").</summary>
 	protected void ShakeCamera(float amount) => CameraShake?.AddTrauma(amount);
 
 	private void Die()
@@ -1179,8 +1297,13 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		_frozenDurationExtensions.Clear();
 		_continuousExternalVelocity.Clear();
 		TempHP = 0f;
-		_hitFlashTimer = 0f;
-		Modulate = Colors.White;
+		_hitStop.Clear();
+		_hurtTicks.Clear();
+		_jumpBuffered = false;
+		// The flash of the blow that killed is left to run out: it is the last thing the
+		// body shows before its exit.
+		_statusLoops = StatusLoops.Sync(this, _statusLoops, FeedbackState.None);
+		CueBus.Emit(this, "death");
 		Died?.Invoke();
 		if (Side == CombatSide.Foe) OnDefeated();
 	}
@@ -1235,8 +1358,107 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget
 		Sprite.Modulate = Colors.White;
 		Sprite.SelfModulate = _baseTint;
 		Sprite.Visible = true;
+		_hitStop.Clear();
+		_flash.Clear();
+		_wasOnFloor = false;
 		NotifyHpChanged();
+		CueBus.Emit(this, "respawn");
 	}
+
+	// ── Feedback: identity, hit-stop, flash (Docs/Feedback.gdd §2, §4, §5) ───────────
+
+	/// <summary>The content id this body's cues are raised under — snake_case, the key a
+	/// director's table uses for its look and sound. Defaults to the class name; a kit states
+	/// its own (a BOSS variant inherits its protagonist's: same kit, same style).</summary>
+	public virtual string FeedbackId => _feedbackId ??= FeedbackIds.FromTypeName(GetType().Name);
+
+	/// <summary>What this body's cues fall back to: a protagonist on the player's side is a
+	/// <c>fighter</c>, the same class on the Foe side a <c>boss</c>.</summary>
+	public virtual string FeedbackClass => Side == CombatSide.Player ? CueOwners.Fighter : CueOwners.Boss;
+
+	public Vector2 FeedbackCenter => GlobalPosition;
+	public float FeedbackRadius => HitRadius;
+	/// <summary>Where this body's feet are, in world space (dust, landings).</summary>
+	public Vector2 Feet => GlobalPosition + _feetOffset;
+
+	/// <summary>True while hit-stop holds this body: it does not move and its animation
+	/// keeps its frame; every clock and every button still runs.</summary>
+	public bool InHitStop => _hitStop.Active;
+
+	/// <summary>What the body is under right now — computed on request, never cached.</summary>
+	public FeedbackState FeedbackState
+	{
+		get
+		{
+			if (_dead) return FeedbackState.Dead;
+			FeedbackState state = StatusState();
+			if (Shield > 0f || TempHP > 0f) state |= FeedbackState.Shielded;
+			if (CurrentHP <= MaxHP * FeedbackTable.LowHpRatio) state |= FeedbackState.LowHp;
+			if (!IsOnFloor()) state |= FeedbackState.Airborne;
+			if (_softVolumes.InMedium) state |= FeedbackState.Submerged;
+			if (Invincible || _invulnTimer > 0f) state |= FeedbackState.Invulnerable;
+			return state;
+		}
+	}
+
+	/// <summary>The statuses that run as loops on the cue bus (<see cref="StatusLoops"/>).</summary>
+	private FeedbackState StatusState()
+	{
+		FeedbackState state = FeedbackState.None;
+		if (IsBurning) state |= FeedbackState.Burning;
+		if (_fire.Active) state |= FeedbackState.OnFire;
+		if (_frozenDebuff.Active) state |= FeedbackState.Frozen;
+		if (_trappedTimer > 0f) state |= FeedbackState.Trapped;
+		if (_stunTimer > 0f) state |= FeedbackState.Stunned;
+		return state;
+	}
+
+	/// <summary>
+	/// Hold this body still for a moment — hit-stop. GAMEPLAY, not presentation: only the
+	/// body itself (its hit intake, its own melee helper) may call it, never a cue listener.
+	/// Stops take the max, a body just out of one is not stopped again at once, and a stream
+	/// of them is budgeted (<see cref="HitStopClock"/>). Returns the seconds the body is held
+	/// from now (0 if it is free).
+	/// </summary>
+	public float ApplyHitStop(float seconds) => _dead ? 0f : _hitStop.Request(seconds);
+
+	/// <summary>
+	/// Counts the hit-stop down by one physics tick of WORLD time and says whether the body
+	/// must hold still for it. The base calls it first thing in <c>_PhysicsProcess</c>. A kit
+	/// that moves the body WITHOUT going through the base that tick (PumpKing's Soul Form)
+	/// calls it itself and returns when it says true; a kit that moves the body AFTER calling
+	/// the base (Sifu Pangda's dive and dash) reads <see cref="HitStopHeld"/> instead — never
+	/// both, or the stop runs out twice as fast.
+	/// </summary>
+	protected bool HoldForHitStop(float worldDelta)
+	{
+		if (!_hitStop.Tick(worldDelta)) return false;
+		// Clocks keep running while the body holds: the jump cooldown is one of them.
+		if (_jumpCdTimer > 0f) _jumpCdTimer -= GetActDelta(worldDelta);
+		// It is not moving, and says so to whoever reads its Velocity; the two channels it
+		// resumes from (_intentVel, _externalVel) are untouched.
+		Velocity = Vector2.Zero;
+		return true;
+	}
+
+	/// <summary>Whether this physics tick was held by hit-stop (set by <see cref="HoldForHitStop"/>).</summary>
+	protected bool HitStopHeld => _hitStop.Held;
+
+	/// <summary>Show the whole body in one colour for a moment and hand it back as it was.
+	/// It writes neither <c>Modulate</c>, <c>SelfModulate</c> nor <c>Visible</c>: those stay
+	/// with the status tints, the i-frame blink and the defeat fade.</summary>
+	public void FlashTint(Color tint, float seconds) => _flash.Flash(this, tint, seconds);
+
+	/// <summary>The arena swapped this body in for another (Tab): it arrives as
+	/// <c>switch.in</c>, not as a fresh <c>spawn</c>.</summary>
+	public void NotifySwitchedIn()
+	{
+		_spawnCueRaised = true;
+		CueBus.Emit(this, "switch.in");
+	}
+
+	/// <summary>The arena is about to swap this body out.</summary>
+	public void NotifySwitchedOut() => CueBus.Emit(this, "switch.out");
 
 	// ── Debug range drawing ───────────────────────────────────────────────
 	public override void _Draw()

@@ -149,7 +149,36 @@ replace instance in place (slot preserved). Enforce `Eternal`×`Convertible` exc
 in the loader with a validation error.
 
 **New hazard** — subclass `Hazard`, set `BoxSize`/`TickInterval`, override the deliver
-payload. One-shots opt into `TakeHit` explicitly.
+payload (`Deliver` raises the hazard's `tick` cue for you) and `DefaultCueKind`; a scene that
+reuses a script names itself with `CueKind` ("lava", "spike"). One-shots opt into `TakeHit`
+explicitly, as a ranged hit: `.FromRanged(CueOwners.Hazard, "tsunami")`.
+
+**Give an attack its feedback (v0.11.2)** — `Docs/Feedback.gdd`; copy
+`Pomegraknight.cs`, the reference kit. Gameplay never shakes, tints or plays anything:
+
+1. **Name the hit.** A blow of the body: `new HitInfo(dmg, knock).From(this, "ba", stage)`.
+   A projectile, a field or a tick: `.FromRanged(owner, "s2.seed")` — or
+   `.FromRanged(_cueOwner, "s2.seed", ownerBody)` from a projectile that keeps its owner's
+   `FeedbackId` as a string, because it may outlive the body. Name a weight
+   (`HitWeight.Light`) only when the hit must stay in a tier whatever buffs do to it (ticks).
+2. **Hold the attacker, once per swing — melee only.** `MeleeCone(..., cueAction: "ba",
+   cueVariant: stage)` does it. A kit with its own shape uses the same helper:
+   `var swing = new SwingStop();` → `swing.Landed(target, dealt)` per victim →
+   `ApplyHitStop(swing.AttackerStop());` after the loop. A foe's own blow goes through
+   `BaseFoe.Strike`. Never for a ranged hit.
+3. **Raise the cues**, on the line where the moment happens, with the attack's own numbers:
+   `CueBus.Emit(this, "ba.swing", variant: stage, size: reach, direction: FacingDirection,
+   tag: IsBurning ? "burning" : null)`. Something that lasts is `CueBus.Start` …
+   `CueBus.Stop` (and `Stop` in `_ExitTree` if it may still be running). A volley is **one**
+   cue with a count. Constant strings only — never build one.
+4. **A kit that moves the body itself** holds for hit-stop: after `base._PhysicsProcess`,
+   `if (HitStopHeld) return;`; if it bypasses the base tick, `if (HoldForHitStop(delta))
+   return;` instead.
+5. **Override `FeedbackId`** with the kit's snake_case content id.
+6. **Remove what the kit did by hand** — `ShakeCamera(...)`, a tint, a blink — and give the
+   feel director a row in `FeelTable.ByCue` only if the moment needs a beat of its own.
+7. Add the cues to `Docs/Feedback.gdd` §6 and a probe to `FeedbackCheck`; break the wiring
+   once and watch it fail by name.
 
 **New mission type (v0.5.0+)** — a `Mission` strategy object the arena GameManager
 hosts: `Setup(nodeLevel)`, `Tick`, `IsComplete/IsFailed`, `GrantReward`. Mission choice

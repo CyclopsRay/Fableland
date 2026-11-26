@@ -122,10 +122,13 @@ public partial class TsunamiHazard : Area2D
         float v0 = Mathf.Sqrt(2f * damping * Units.Px(15f));
         Vector2 impulse = dir * v0;
 
+        // A wave is a field: its hit is felt by the victim and names the hazard, not a body.
         if (body is CharacterController cc)
-            cc.TakeHit(new HitInfo(cc.MaxHP * DamagePercentMaxHP, impulse, NoControlDuration));
+            cc.TakeHit(new HitInfo(cc.MaxHP * DamagePercentMaxHP, impulse, NoControlDuration)
+                .FromRanged(CueOwners.Hazard, "tsunami"), GlobalPosition);
         else if (body is BaseFoe en)
-            en.TakeHit(new HitInfo(en.MaxHP * DamagePercentMaxHP, impulse, NoControlDuration), GlobalPosition);
+            en.TakeHit(new HitInfo(en.MaxHP * DamagePercentMaxHP, impulse, NoControlDuration)
+                .FromRanged(CueOwners.Hazard, "tsunami"), GlobalPosition);
     }
 
     public override void _Draw()

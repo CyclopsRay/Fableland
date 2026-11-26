@@ -8,6 +8,7 @@ public partial class FreezeHazard : Hazard
 {
     [Export] public float FrozenStack = 20f;
 
+    protected override string DefaultCueKind => "freeze";
     protected override Color TintFill => new Color(0.35f, 0.75f, 1f, 0.55f);
     protected override Color TintEdge => new Color(0.6f, 0.9f, 1f, 0.95f);
 

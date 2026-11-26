@@ -9,6 +9,8 @@ public partial class SeagullFoe : BaseFoe
 {
     [Export] public PackedScene PoopScene;
 
+    public override string FeedbackId => "seagull";
+
     // Mirrors CharacterController.GroundAccel's export default (3200). Used only as a
     // fallback when no player instance is available to query the live value from.
     private const float PlayerGroundAccelDefault = 3200f;
@@ -123,7 +125,7 @@ public partial class SeagullFoe : BaseFoe
             {
                 _dashHit = true;   // pierces: one hit per dash, does not stop
                 Vector2 kb = _dashDir * 200f;   // knockback in dash direction
-                player.TakeHit(new HitInfo(EffectiveDamage(DashBaseDamage), kb, 0.2f));
+                Strike(player, new HitInfo(EffectiveDamage(DashBaseDamage), kb, 0.2f).From(this, "s2.dash"));
             }
             if (_dashTimer <= 0f) _dash = DashPhase.None;
             return;
@@ -144,7 +146,7 @@ public partial class SeagullFoe : BaseFoe
             // (passes through platforms/soft-volumes; blocked only by ground per collision mask).
             Vector2 toPlayer = player.GlobalPosition - GlobalPosition;
             _dashDir = toPlayer.LengthSquared() > 0.01f ? toPlayer.Normalized() : new Vector2(FacingDir, 0f);
-            SetTelegraphTint(new Color(1f, 0.3f, 0.3f));   // red tell
+            SetTelegraphTint(new Color(1f, 0.3f, 0.3f), DashTelegraph, DashSpeed * DashDuration, _dashDir);   // red tell
             return;
         }
 

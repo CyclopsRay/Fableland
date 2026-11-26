@@ -41,6 +41,8 @@ public sealed class BossMission : Mission
     private bool _addWaveSpawned;
     private float _timer;
     private bool _timedOut;
+    private Vector2 _bossPosition;           // where the boss last stood — where it fell
+    private string _bossCueId = "";          // the boss's content id, the tag of its flow cues
 
     public override void Setup(GameManager arena, int nodeLevel, DetRandom rng)
     {
@@ -60,8 +62,15 @@ public sealed class BossMission : Mission
 
     private void StageBoss()
     {
-        if (_def != null && TryStageBossFighter()) return;
-        StagePlaceholder();
+        if (!(_def != null && TryStageBossFighter())) StagePlaceholder();
+
+        // flow/boss.intro: the boss is on the field. Tag = which boss.
+        Node2D boss = _boss != null ? _boss : _placeholder;
+        if (boss == null) return;
+        _bossPosition = boss.GlobalPosition;
+        _bossCueId = (boss as IFeedbackBody)?.FeedbackId ?? "";
+        CueBus.EmitAt(CueOwners.Flow, "boss.intro", _bossPosition, boss, CombatSide.Foe,
+            variant: _nodeLevel, tag: _bossCueId);
     }
 
     /// <summary>
@@ -139,11 +148,23 @@ public sealed class BossMission : Mission
         }
 
         bool alive = BossAlive;
-        if (alive) _bossWasAlive = true;
+        if (alive)
+        {
+            _bossWasAlive = true;
+            _bossPosition = _boss != null ? _boss.GlobalPosition : _placeholder.GlobalPosition;
+        }
 
         if (!alive)
         {
-            if (_bossWasAlive) Status = MissionStatus.Succeeded;   // boss fell
+            if (_bossWasAlive)
+            {
+                Status = MissionStatus.Succeeded;   // boss fell
+                // flow/boss.defeated: the beat a boss kill gets. A fighter-boss is still
+                // there, fading; the stand-in has already freed itself.
+                Node2D fallen = _boss != null && GodotObject.IsInstanceValid(_boss) ? _boss : null;
+                CueBus.EmitAt(CueOwners.Flow, "boss.defeated", _bossPosition, fallen, CombatSide.Foe,
+                    variant: _nodeLevel, tag: _bossCueId);
+            }
             return;
         }
 

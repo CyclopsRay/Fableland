@@ -1,0 +1,395 @@
+# Fableland — Hit Feedback GDD
+
+How a hit, a jump, a death — any moment worth noticing — is told to the player: the **cue
+bus** gameplay raises, **hit-stop**, and the **feel** layer (camera shake, kick, roll, zoom
+punch, hit flash). It is the foundation the VFX and audio layers plug into: they listen to
+the same bus and never touch gameplay.
+
+Implementation: `Scripts/Gameplay/Combat/{Cue,BodyFeedback,HitInfo}.cs`,
+`Scripts/Data/FeedbackTable.cs`, `Scripts/Foundation/FeedbackSettings.cs`,
+`Scripts/Presentation/Feel/{FeelDirector,FeelTable}.cs`, `Scripts/UI/ShakeCamera2D.cs`.
+First landed in **v0.11.2**. Research behind the numbers:
+`Docs/Research/R2-vfx-feel-research.md` (cited below as **R2**; its §6 lists which sources
+were read and which are from memory).
+
+> **Nobody has watched this yet.** Every number here was reasoned from the research and from
+> pixels at 32 px/m, and verified by a headless check (§10) — which proves the mechanisms,
+> not the look. The first job of whoever plays it is the verify-by-eye pass
+> (`50-ART-AUDIO.md` §6); expect to retune §3 and §5.
+
+---
+
+## 1. Principles
+
+1. **Gameplay raises, presentation listens.** A kit, a foe, a hazard or a mission says *what
+   happened* and with what numbers; it never names a particle, a sound or a shake, and never
+   calls a director. Adding an effect to a moment that already raises a cue touches no
+   gameplay file.
+2. **Hit-stop is per body, never `Engine.TimeScale`.** A global freeze also freezes timers,
+   input and the UI, and Godot's own docs warn against a zero time scale [R2 A1.13, verified
+   against the Godot `Engine` class reference]. Only the two bodies of a hit hold; a
+   projectile's owner never does [R2 A1.2, verified: SmashWiki, *Hitlag*].
+3. **Hit-stop is the only feel element that changes the simulation**, so it is gameplay: it
+   lives in the bodies and its numbers in `Scripts/Data/FeedbackTable.cs`. Everything else
+   observes, and may be dropped (a setting, a budget) without changing a fight.
+4. **Dynamic range is the point.** A graze gets a number and a tint; an ultimate gets
+   everything. Small hits are carried by the kick and the flash, not by shake — shake is
+   seasoning ("Camera shake is like salt" — Squirrel Eiserloh, GDC 2016) [R2 A2.4, verified].
+5. **Shake is trauma², smooth, capped per tier** [R2 A2.1, A2.3, verified: Eiserloh's
+   slides]: smooth noise instead of a new random offset each frame, and a ceiling per tier
+   so a crowd of small hits can never shake like a big one.
+6. **Flash means "hit"; blink means "cannot be hit".** Foes no longer blink when struck —
+   they have no i-frames [R2 A3.4, convention, from memory].
+7. **Safe by default.** The photosensitivity limits in §5.4 hold whatever the settings are
+   [R2 A3.1–A3.3, verified: WCAG 2.3.1 and Xbox Accessibility Guideline 118 — the stricter
+   area figure of the two is used]. Settings are the second line, not the first.
+8. **Effects and hitboxes come from one number.** A cue carries the attack's real reach,
+   box and direction (`50-ART-AUDIO.md` §1).
+9. **No per-event garbage** (`T40` §2): cues are structs keyed by constant strings; raising
+   14 000 of them with the feel director acting on each allocates 0 bytes (measured, §10).
+
+---
+
+## 2. The cue bus
+
+```
+GAMEPLAY      a moment happens ──▶ CueBus.Emit / Start / Stop / EmitHit      (static, no listener known)
+PRESENTATION  FeelDirector  ◀── CueBus.Raised, CueBus.HitLanded              (this document)
+              (next) VfxDirector, AudioDirector ◀── the same four events
+```
+
+| Type | What it is |
+|---|---|
+| `Cue` | A moment: `Owner`, `OwnerClass`, `Action`, `Variant`, `Tag`, `Source`, `Position`, `Direction`, `Size` (reach / radius, px), `Extents` (a box's half-extents, px), `Magnitude`, `Side`. |
+| `HitCue` | A hit that landed — both ends of it: victim (`Victim`, `VictimOwner`, `VictimClass`, `VictimIsPlayer`), attack (`Attacker`, `AttackOwner`, `AttackClass`, `AttackAction`, `AttackVariant`, `Ranged`), and the result (`Weight`, `Damage`, `Knockback`, `Position`, `Direction`, `Killed`, `VictimStop`). |
+| `CueBus` | `Emit(body, action, …)` / `EmitAt(owner, action, position, …)` for one-shots; `Start` / `Stop` (and `StartAt` / `StopAt`) for anything that lasts; `EmitHit` (the two hit intakes only). Events: `Raised`, `HitLanded`, `LoopStarted`, `LoopStopped`. |
+| `IFeedbackBody` | What presentation may know of a body: `FeedbackId`, `FeedbackClass`, `Side`, `FeedbackState`, `FeedbackCenter`, `FeedbackRadius`, `InHitStop`, `FlashTint(colour, seconds)`. Read-only or purely visual. |
+| `CueTable<T>` | A director's table, keyed (owner, action), resolved **owner → class → `any`**. |
+
+**The key is two strings**, so nothing is concatenated per event. `Owner` is whose look and
+sound it is — a content id in snake_case (`pomegraknight`, `crab`) or a system (`world`,
+`hazard`, `flow`). `Action` is what happened, dotted and lower-case (`ba.swing`, `land`).
+A director looks up (owner, action); with no row, (the owner's class, action); with no row,
+(`any`, action). So a new character looks and sounds like *a fighter* before it has a row of
+its own, and one `any/land` row serves every body in the game.
+
+Content ids and classes:
+
+| Body | `FeedbackId` | Class |
+|---|---|---|
+| Pomegraknight · Cleopastar · Pixolotl · PumpKing · Sifu Pangda | `pomegraknight` · `cleopastar` · `pixolotl` · `pumpking` · `sifu_pangda` | `fighter` |
+| BOSS PumpKing (the same kit on the Foe side) | `pumpking` | `boss` |
+| Crab · Seagull · the stand-in boss | `crab` · `seagull` · `boss_crab` | `foe` |
+| Destroy objective · the Protect core | `destroy_objective` · `protect_core` | `objective` |
+| A projectile with no body at hand (a seed whose owner left, PumpKing's head) | its owner's id | `projectile` |
+
+A class overrides `FeedbackId` with a constant; the default is its class name in snake_case.
+
+**Rules for whoever raises a cue**
+
+- Raise it on the line where the moment happens, with that moment's real geometry.
+- Never read anything back; nothing a listener does may change a fight.
+- One-shots are `Emit`; anything that lasts is `Start` … `Stop`, same source, owner and
+  action. A body stops its own loops when it dies and when it leaves the tree.
+- Pass constant strings. A fan of projectiles is one cue with a count, not a cue per seed.
+
+**Rules for whoever listens**
+
+- Subscribe in `_EnterTree`, unsubscribe in `_ExitTree` (`T10` §1) — the bus is static.
+- A `Source` may be freed by the time you act later: `GodotObject.IsInstanceValid` before
+  calling into it; match loops with `ReferenceEquals`.
+- Draw your own randomness; never a run's `DetRandom` stream.
+- A listener that throws is logged and skipped. That is a safety net, not a licence.
+
+---
+
+## 3. How heavy a hit is
+
+A hit is measured by its **impact score D**: the damage it dealt after mitigation — or, on
+the body the player wears, `150 × damage / MaxHP`, so a hit is felt by what it costs. D
+picks the tier; an attack may instead **name** its weight (`HitInfo.Weight`), which holds
+it in that tier whatever buffs do to its damage.
+
+| Tier | `HitWeight` | D | Victim stop | Attacker stop (melee) | Shake add / cap | Kick | Roll | Flash | Zoom punch |
+|---|---|---|---|---|---|---|---|---|---|
+| T0 | `Graze` | < 8 | — | — | — | — | — | tint, 33 ms | — |
+| T1 | `Light` | 8–24 | 33–58 ms | 23–41 ms | +0.15 / 0.30 (2.7 px) | 2 px | — | 33 ms | — |
+| T2 | `Medium` | 25–59 | 60–114 ms | 42–80 ms | +0.25 / 0.50 (7.5 px) | 4 px | — | 50 ms | — |
+| T3 | `Heavy` | 60–149 | 116–180 ms | 81–126 ms | +0.40 / 0.75 (17 px) | 7 px | small | 67 ms | 1.02× |
+| T4 | `Massive` | ≥ 150 | 180 ms | 126 ms | +0.55 / 0.90 (24 px) | 10 px | under 1° | 83 ms | 1.04× |
+| | the hit that **kills** | | the victim is not held | +33 ms, at least 67 ms | +0.10 on both | | | | at least 1.015× |
+
+- **Victim stop** = `clamp(20 ms + 1.6 ms · D, 33 ms, 180 ms)`; a graze holds nobody.
+  Smash-shaped (a constant plus a slope in damage, capped), with smaller numbers: a roguelike
+  repeats a jab thousands of times [R2 A1.1, verified: SmashWiki's hitlag formulas].
+- **Attacker stop** = 0.7 × that — shorter, so landing a blow never feels like losing
+  control. (In Smash both ends stop equally [R2 A1.2]; the shorter attacker stop is our
+  choice.)
+- **The player being hit** is held at least 50 ms and at most 150 ms, and the camera reads
+  one tier up: being hit must be felt more than hitting.
+- Worked examples (`FeedbackTable.SelfTest`): a 15-damage slash is Light — victim 44 ms
+  (3 ticks), attacker 31 ms (2); Pomegraknight's third slash (30) is Medium — 68 ms; a crab's
+  18 on a 200-HP fighter scores 13.5 — Light, held 50 ms.
+
+Shake pixels are `trauma² × 30`. They are small on purpose (principle 4) and smaller than
+the flat 0.35 every hit used to add; retune by eye.
+
+---
+
+## 4. Hit-stop rules
+
+1. **What holds.** A body in hit-stop holds its **motion and its animation**. **Every clock
+   keeps running** — cooldowns, ammo, statuses, the gain-no (stun) window — and **abilities
+   are still read**, so no DPS, cooldown or timing in a fight depends on how often anyone
+   was stopped, and a press during a stop is never lost. Jump, the one edge read in the
+   physics loop, is remembered across a stop and fires on the tick after it.
+2. **Who is held.** The **victim** — by the hit intake (`TakeHit`), from the resolved
+   weight. The **attacker** of a blow of its own body — **once per swing**, for the heaviest
+   hit the swing landed, never per victim (`CharacterController.MeleeCone` / `SwingStop`;
+   `BaseFoe.Strike`). **Projectiles, fields and ticks (`HitInfo.Ranged`) never hold their
+   owner.** Hazard ticks and damage over time hold nobody: they are not hits.
+3. **A body that dies is not held.** A foe frees itself the frame it dies; a fighter has its
+   own exit. (Holding the killing frame — R2's "holds its flash, then bursts" — needs a death
+   delay; §9.)
+4. **Stops take the max, never add.** A request while held can only lengthen the hold.
+5. **Re-arm.** A body that left a stop is not stopped again for 0.10 s.
+6. **Budget.** Every granted second comes out of a 0.18 s budget that refills at 0.15 s per
+   second, so under any sustained stream of hits a body is held about 15 % of the time and
+   no more (without it, a 52 ms stop every 0.15 s would hold a foe a third of the time).
+   One isolated stop of any length always fits; a three-slash combo fits.
+7. **Counted in world time**, in the physics loop (`HitStopClock`): never the held body's own
+   time (it would never wake), never `GetActDelta` / `LocalTimeRate` — Pixolotl overrides
+   that rate and her bubbles and the item runtime read it, so they would freeze with her.
+8. **A held body reports `Velocity` zero** and keeps its two velocity channels; it resumes
+   with the motion it had, plus the knockback the hit added (the shove starts when the stop
+   lets go).
+9. **The setting.** `FeedbackSettings.HitStop` scales every stop; 0 switches it off.
+10. **Kits that move themselves**
+    | Kit | Decision | How |
+    |---|---|---|
+    | Sifu Pangda — palm lunge, Heli dive, Heli dash | **Holds** with the body (a stopped palm keeps its full lunge) | `if (HitStopHeld) return;` after `base._PhysicsProcess` |
+    | PumpKing — Soul Form | **Holds**; the soul counts its own stop, because it never reaches the base tick | `if (HoldForHitStop(delta)) return;` |
+    | PumpKing's head | **Exempt** — a projectile: never held, its hits are ranged, its owner is never held | — |
+    | Cleopastar's star | **Exempt** — a projectile and a platform; her hits from it should be marked ranged when her kit is wired | — |
+    | Pixolotl — rewind | **Untouched** — it runs on her own clock in the process loop | — |
+
+    A kit that moves the body without going through the base tick calls
+    `HoldForHitStop`; one that moves it after the base tick reads `HitStopHeld`; never both.
+
+---
+
+## 5. Feel: what the director does with a hit
+
+`FeelDirector` (a presentation autoload) listens to the bus and reads `FeelTable`.
+
+### 5.1 Camera
+
+- **Shake.** Per-tier trauma with a cap (table in §3). **Every hit that lands in one frame
+  is one camera event**: the heaviest adds its tier's trauma, each further victim a sliver
+  (+0.03, at most five), all under the heaviest tier's cap — a swing through a crowd cannot
+  sum past it, and neither can a stream of hits frame after frame. The offset is read from
+  smooth noise (it reverses about twenty times a second — measured), so it looks the same at
+  any frame rate.
+- **Kick.** A shove along the blow that springs back in about a tenth of a second; on the
+  player it points away from whatever hit them.
+- **Roll.** Under a degree, for Heavy and Massive only. The camera ignores rotation except
+  while a roll is playing.
+- **Zoom punch.** In over 30 ms, held 80 ms, back in 160 ms. Capped at 4 % for a hit,
+  because damage numbers are world-space text and blur under zoom [R2 B9.16, verified].
+- **The tsunami's sustained channel** (`SetSustainedTrauma`) is unchanged and shares the
+  setting.
+
+### 5.2 Named moments
+
+| Cue | Beat |
+|---|---|
+| `flow` / `boss.defeated` | Trauma 1.0, full roll, zoom 1.10× (in 0.10 s, held 0.30 s, back in 0.60 s), one 100 ms flash **on the boss** — never the screen |
+| `flow` / `player.down` | Trauma +0.60 (cap 0.90), zoom 1.06× |
+| `pumpking` / `ba.explode` | Trauma +0.40 (cap 0.75) — the blast shakes even when it catches nobody (not a dud) |
+| `any` / `hurt.tick`, on the player only | A tint, at most one per 0.34 s however many kinds of damage are ticking; a Light shake at most once a second |
+
+### 5.3 The flash
+
+A body flashes through **one channel of its own**: for a few frames its sprites are drawn
+through a tiny shader that pulls them toward one colour and keeps their alpha — a
+silhouette, which `Modulate` (a multiply) cannot do. The material is lent to the sprites
+only while the flash runs. It never writes `Modulate`, `SelfModulate` or `Visible`: those
+stay with the status tints, the telegraph tint, the i-frame blink and the defeat fade.
+
+- **Light or dark, by the arena.** `flow`/`arena.enter` carries how light the backdrop is.
+  At 0.80 or more (Banboo Maze's bare paper, Ghost Town's cream — about 0.9) a body flashes
+  **ink** (`#14171A`); otherwise **white**. A sky-blue canvas (0.76) and an unknown one keep
+  white.
+- **A graze only tints** (35 %). With `FeedbackSettings.Flash` at 0 every flash is that tint:
+  the hit must stay readable.
+
+### 5.4 Photosensitivity limits (hold whatever the settings)
+
+- Flashes that start within 0.1 s of each other are one flashing **moment**. At most **six**
+  bodies flash at full strength in a moment; the rest tint.
+- A moment whose flashing bodies cover more than **2.5 % of the view** is a **large flash**;
+  no more than **three** may start in any second. The fourth is tinted.
+- No flash colour is a saturated red (`R / (R+G+B) < 0.8`), no flash is longer than 100 ms,
+  and there is **no full-screen flash anywhere**.
+- Hazard and DoT pulses are merged to one per kind every 0.35 s, and the player's tint for
+  them fires at most once per 0.34 s across all kinds (under 3 Hz).
+- Not done: a Harding-style test of real footage (XAG 118 asks for one). The 35 % tint is
+  itself a luminance change; on a large body it could still count as a flash.
+
+---
+
+## 6. The cue vocabulary
+
+The work order for VFX and audio. *Italic* = where it is raised.
+
+### 6.1 Hits — `CueBus.HitLanded`
+
+One `HitCue` per hit that landed, from `CharacterController.TakeHit` and `BaseFoe.TakeHit`.
+The attack names in use today:
+
+| `AttackOwner` / `AttackAction` | Variant | Kind | Raised by |
+|---|---|---|---|
+| `pomegraknight` / `ba` | combo stage 1–3 | melee | *Pomegraknight.HandleBA → MeleeCone* |
+| `pomegraknight` / `s1.tornado` | tick 1–5 | ranged, named Light | *Pomegraknight.TornadoHit* |
+| `pomegraknight` / `s2.seed` | — | ranged | *PomeSeed.OnBodyEntered* |
+| `pumpking` / `ba.head` · `ba.explode` | — | ranged | *PumpKingHead.TryStrike · DealExplosion* |
+| *foe id* / `contact` | — | melee | *BaseFoe.TryContactDamage* |
+| `seagull` / `s2.dash` · `s1.poop` | — | melee · ranged | *SeagullFoe.UpdateSkills · PoopProjectile.OnBodyEntered* |
+| `hazard` / `tsunami` | — | ranged | *TsunamiHazard.OnBodyEntered* |
+| `any` / `""` | — | — | every hit of a kit that is not wired yet (Cleopastar, Pixolotl, PumpKing's own, Sifu Pangda) |
+
+### 6.2 Bodies — owner = the body's content id
+
+| Action | Variant | Tag | Size · Magnitude · Direction · Position | Raised by |
+|---|---|---|---|---|
+| `spawn` | foe: its level | foe: `born` if it came out of a death | at the body, on its first tick | *CharacterController._PhysicsProcess · BaseFoe._PhysicsProcess* |
+| `jump` | which jump of this airtime (1, 2…) | — ground · `air` · `swim` (a stroke in a soft volume) | magnitude = launch speed px/s · up · at the feet | *CharacterController._PhysicsProcess · BaseFoe.Integrate* |
+| `land` | — | — | magnitude = impact speed px/s (192 and up) · down · at the feet | *same* |
+| `death` | foe: its level | — | at the body | *CharacterController.Die · BaseFoe.Die · ProtectCore._Process* |
+| `respawn` | — | — | at the respawn point | *CharacterController.Respawn* |
+| `heal` | — | — | magnitude = amount | *CharacterController.Heal* |
+| `hurt.tick` | — | `hazard` · `burn` · `on_fire` · `frozen` | magnitude = damage since the last one (at most one per kind per 0.35 s) | *HurtTickMeter ← ApplyHazard, DoT* |
+| `ult.ready` | — | — | — | *CharacterController.GainUltCharge* |
+| `switch.out` · `switch.in` | — | — | at the body; the incoming body raises no `spawn` | *GameManager.ReplacePlayerNode → NotifySwitchedOut / In* |
+| `aggro` (foes) | — | — | direction = facing | *BaseFoe.EnterAggro* |
+| `evolve` (foes) | the new level | — | — | *BaseFoe.Evolve* |
+| `hurt` (`protect_core`) | — | — | magnitude = damage · direction = from the foe | *ProtectCore._Process* |
+| **loop** `status.burning` · `status.on_fire` · `status.frozen` · `status.trapped` · `status.stunned` | — | — | — | *StatusLoops ← CharacterController._Process · BaseFoe._PhysicsProcess; stopped on death and on leaving the tree* |
+| **loop** `telegraph` (foes) | — | — | size = the attack's reach · magnitude = the tell's seconds · direction | *BaseFoe.SetTelegraphTint / ClearTelegraphTint* |
+
+### 6.3 Pomegraknight — the reference kit
+
+| Action | Variant | Tag | Size · Magnitude · Direction · Position | Raised by |
+|---|---|---|---|---|
+| `ba.swing` | stage 1–3 | `burning` while her passive is on | size = the cone's reach (130 px) · magnitude = damage · direction = facing | *HandleBA* |
+| `s1.cast` | — | — | magnitude = burn seconds | *HandleSkill1* |
+| **loop** `s1.tornado` | — | — | size = half-width · extents = the box's half-extents (128 × 40 px) · magnitude = seconds | *ActivateTornado / EndTornado / _ExitTree* |
+| `s1.tornado.tick` | tick 1–5 | — | size, extents as the loop · magnitude = tick damage | *TornadoHit* |
+| `s2.cast` | — | `burning` | magnitude = waves to come · up | *HandleSkill2* |
+| `s2.wave` | wave 1–3 | `burning` | magnitude = seeds in the fan (6 / 8 / 10) · up · at the fire point | *SpawnSeedWave* — one per wave, never one per seed |
+| `s2.seed.expire` (class `projectile`, no source) | — | `burning` | direction = its travel · where it died on terrain | *PomeSeed.OnBodyEntered* |
+
+Also raised under a kit's id: `pumpking` / `ba.explode` (class `projectile`; size = blast
+radius, magnitude = blast damage, 0 and tag `dud` for a head that only pops) —
+*PumpKingHead.Explode*.
+
+### 6.4 World, hazards, flow
+
+| Owner / Action | Variant | Tag | Size · Magnitude · Direction · Position · Source | Raised by |
+|---|---|---|---|---|
+| `world` / `soft.enter` · `soft.exit` | — | the medium: `water` · `foliage` · `kit` (a character's own volume) · or whatever its builder named it | size = the body's radius · magnitude = its speed px/s · direction = its travel · at the body · source = the body | *SoftVolume.RaiseCrossing ← the body's Enter/ExitSoftVolume* — between open air and "a medium", once per sea, not per tile; a pure current raises nothing |
+| `hazard` / `tick` | — | the hazard: `fire` · `freeze` · `lava` · `spike` · `poop` · `damage` | size, extents = its box · magnitude = damage or status points · at the victim · source = the hazard · side = the victim's | *Hazard.RaiseTickCue ← Deliver* |
+| `flow` / `arena.enter` | node level | the world the map was built for (`""` on the legacy arena or a map that names none) | size = map width px · magnitude = backdrop lightness 0–1 (−1 = none) | *GameManager._Ready* |
+| `flow` / `countdown.tick` · `countdown.go` | seconds left (3, 2, 1) | — | — | *GameManager._Process* |
+| `flow` / `mission.start` · `mission.success` · `mission.fail` | node level | `collection` · `protect` · `destroy` · `slaughter` · `boss` | — | *GameManager._Process · OnMissionResolved* |
+| `flow` / `boss.intro` · `boss.defeated` | node level | the boss's content id | at the boss (where it stood) · source = the boss, if still there | *BossMission.StageBoss · Tick* |
+| `flow` / `player.down` | — | — | at the player | *GameManager.OnPlayerDied* |
+| `flow` / `run.over` | — | `death` · `boss_timer` · `victory` | — | *GameManager.OnPlayerDied · OnMissionResolved* |
+
+---
+
+## 7. Comfort settings
+
+`FeedbackSettings` (static, 0–1). **Nothing writes or saves them yet** — the options screen
+is the next team's; every session runs on the defaults.
+
+| Setting | Default | Scales |
+|---|---|---|
+| `ScreenShake` | 1 | shake, kick, roll — and the tsunami's rumble |
+| `CameraPunch` | 1 | the zoom punch (and slow-motion, when it exists) |
+| `Flash` | 1 | flash strength, from full down to the 35 % tint |
+| `HitStop` | 1 | every stop; 0 = off. The one setting that touches the simulation |
+| `Particles` | 1 | reserved for the VFX director |
+| `MasterVolume` · `MusicVolume` · `SfxVolume` · `UiVolume` | 1 · 0.8 · 1 · 0.9 | reserved for the audio director |
+
+---
+
+## 8. Whose style an effect wears
+
+The universal layer in this document is the same in every world — a hit reads as a hit
+everywhere [R2 B6.1, from memory]. The *effects* layer belongs to whoever caused it: a
+protagonist's effects wear their home world's medium in every arena, a foe's its world's,
+and dust, splashes, ambience and hazards the realm's (R2 §4.5–4.6).
+
+| Protagonist | Style | Status |
+|---|---|---|
+| Pomegraknight | VK Beach — storybook watercolour | from her GDD |
+| PumpKing | Dark Wood — scratchboard | from his GDD |
+| Pixolotl | Forgotten City — pixel art | from the style bible |
+| **Cleopastar** | **Starland (SL) — flat poster** | **provisional** — her GDD says the Palace of LOOING |
+| **Sifu Pangda** | **Banboo Maze (BM) — freehand ink** | **provisional** — his GDD says Gui Lin, which has no world yet |
+
+---
+
+## 9. Deferred
+
+| Deferred | Why |
+|---|---|
+| World-rate slow-motion (last kill, boss kill, ultimates) | The checks set `Engine.TimeScale` themselves, and a world rate has to reach foes, projectiles, hazards and effects first |
+| The boss-kill freeze of every fighter | It is hit-stop, so gameplay must apply it; today `boss.defeated` is a camera beat only |
+| Holding a killed foe on its flash frame | A foe frees itself the frame it dies; needs a death delay in `BaseFoe` |
+| The victim's sprite shaking in place during a stop; squash and stretch | Kits animate their sprites' position and scale; needs a look at each |
+| Pace scaling and per-attack multi-hit decay (R2 §4.3 rules 4, 10) | The stop budget (§4.6) bounds the worst case; the finer rules want real fights to tune against |
+| The other four kits: cues, named hits, attacker stop | Next team — copy Pomegraknight (`20-ENGINEERING.md` §4). Until then their hits are `any`, hold their victims by damage, and never hold their attacker; Pixolotl and Sifu Pangda still shake the camera directly (`ShakeCamera`) |
+| Particles and drawn effects; all audio; rumble; the low-HP vignette | Next teams, on this bus |
+| Pooling and merging damage numbers | `DamageNumberManager` is untouched |
+| The options screen; saving the settings | §7 |
+| Telling a cloud from foliage; a map that serves several worlds | A cloud and a bush are tuned alike — `SoftVolume.MediumKind` is there to be named; `arena.enter` takes the first world a map lists |
+| The flash shader, looked at in a renderer | Headless Godot draws nothing. At rest no body wears the material, so a wrong shader can only spoil the flash frames |
+
+---
+
+## 10. Verification
+
+`Godot --headless --path . res://Scenes/Feedback/FeedbackCheck.tscn` — `40-QA.md` §(2). It
+drives real bodies and proves the mechanisms above; it prints the numbers quoted here.
+
+```
+feel  a slash        15 damage is Light: the victim holds 44 ms (3 ticks), the attacker 31 ms (2) — once for the swing, however many it hit
+feel  the player hit 18 of 200 HP scores 13.5 (Light): held 50 ms, direction 0.97,-0.24 away from the foe
+feel  hit-stop       a 100 ms stop holds 6 ticks: moved 0.00 px running and 0.00 px in the air · out of it at 5.33 px a tick (was 5.33) and rising 9.67 (was 10.24, less one tick of gravity)
+feel  shake          12 Light hits at once: trauma 0.30 (cap 0.30, 2.7 px) · 40 in a row peak 0.30 · a Heavy among them 0.43 (cap 0.75, 16.9 px)
+feel  the bus        14000 cues raised with the feel director listening (shake, kick, flash): 0 bytes allocated
+```
+
+---
+
+## 11. Decisions log
+
+| Date | Decision | Why |
+|---|---|---|
+| 2026-11-25 (v0.11.2) | A cue is keyed by two strings, owner and action, resolved owner → class → `any` | No per-event string work; a new character works before it has rows |
+| 2026-11-25 | Hit-stop is per body and lives in gameplay; everything else is a listener | It moves bodies in time; nothing else in feel can change a fight |
+| 2026-11-25 | During a stop every clock keeps running and abilities are still read | So no DPS, cooldown or check timing moves. Smash freezes attack timing with the body (R2 §4.3 rule 8); we chose not to, and the gain-no window therefore overlaps the stop instead of following it |
+| 2026-11-25 | The attacker's stop is 0.7 of the victim's, once per swing | Responsiveness; set them equal if the follow-through looks wrong |
+| 2026-11-25 | The player's hits are scored by HP share and held 50–150 ms | A hit is felt by what it costs; the i-frames already last 0.8 s |
+| 2026-11-25 | A stop budget: 0.18 s, refilling at 0.15 s/s | Not in the research. Unwired kits fire streams (bubbles at 20 damage each) that a re-arm alone would let hold a foe a third of the time |
+| 2026-11-25 | A body that dies is not held | A foe is freed that frame; the alternative changes when babies spawn and missions resolve |
+| 2026-11-25 | The flash is a shader lent to the sprites only while it runs; foes no longer blink when hit | One owner per property; blink means "cannot be hit" |
+| 2026-11-25 | Dark flash at backdrop lightness ≥ 0.80 | Banboo Maze and Ghost Town (≈ 0.9) need it; a sky-blue canvas (0.76) keeps the white convention. A guess until seen |
+| 2026-11-25 | Hazard and DoT pulses merge to one per 0.35 s | Under 3 Hz, whatever listens |
+| 2026-11-25 | `soft.enter` / `soft.exit` are raised by the body at the edge of "a medium" | A sea is forty tiles; the body is the only thing that knows it is still in the sea |
+| 2026-11-25 | Kit physics: Sifu Pangda and PumpKing's Soul Form hold; PumpKing's head and Cleopastar's star are exempt | §4.10 |
+| 2026-11-25 | `FeedbackSettings.CameraPunch` added beside `ScreenShake` | R2 §4.4 lists zoom as its own switch |
+| 2026-11-25 | **Provisional:** Cleopastar's style follows Starland, Sifu Pangda's follows the Banboo Maze | Needed now by the VFX and audio teams; **the owner has not confirmed either** |
+| 2026-11-25 | Noted, not changed: a dashing seagull usually lands its 20-damage contact hit a tick before its 50-damage dash hit, and the i-frames eat the dash | Found by the check; contact is tested before skills each tick. A FOES balance question |

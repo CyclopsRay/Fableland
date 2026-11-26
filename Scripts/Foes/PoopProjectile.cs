@@ -52,7 +52,8 @@ public partial class PoopProjectile : Area2D
         if (body is CharacterController player)
         {
             _spent = true;
-            player.TakeHit(new HitInfo(_damage, new Vector2(0f, 120f), 0.1f));
+            player.TakeHit(new HitInfo(_damage, new Vector2(0f, 120f), 0.1f).FromRanged("seagull", "s1.poop"),
+                GlobalPosition);
             QueueFree();
             return;
         }

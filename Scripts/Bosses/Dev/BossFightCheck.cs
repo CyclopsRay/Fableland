@@ -432,6 +432,10 @@ public partial class BossFightCheck : Node
         Expect(Mathf.IsEqualApprox(first, 20f) && Mathf.IsEqualApprox(second, 20f), $"sides: two hits in one frame must both land on a boss (dealt {first} and {second})");
         Expect(Mathf.IsEqualApprox(hp - (boss.CurrentHP + boss.Shield), 40f), "sides: the boss's HP + shell did not drop by the damage dealt");
         float pushed = boss.Velocity.X;
+        // Hit-stop (v0.11.2): the boss holds still for the stop those hits earned and the
+        // shove carries it when the stop lets go — so the speed is read then, not on the
+        // tick after the hit. The bound is unchanged.
+        for (int i = 0; i < 30 && boss.InHitStop; i++) await Ticks(1);
         await Ticks(1);
         pushed = Mathf.Max(pushed, boss.Velocity.X);
         Expect(pushed > 0f && pushed < 600f * def.KnockbackTaken + 60f, $"sides: two 300 px/s shoves moved the boss at {pushed:0} px/s; its poise takes {def.KnockbackTaken:0.0#} of a shove");

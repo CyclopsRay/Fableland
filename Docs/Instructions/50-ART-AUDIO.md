@@ -78,26 +78,46 @@ Cleopastar glow pips on spikes, Blackhole distortion + brighter suspended stars 
 Ult; PumpKing head stages (1.0→1.5×) + explosion; Pangda Chi shield/bottle/9×9 field;
 evolution flash; VOID devour flicker; **boss presentation** (v0.10.11 — TBD #28): BOSS
 PumpKing wears a placeholder red mark (`BossPumpKing._Draw`) because a headless black coat
-vanishes against his castle's black stone, flashes red when hit and simply fades when
-beaten; his boss look, entrance and defeat are unmade. Rule: a VFX that communicates gameplay state
+vanishes against his castle's black stone, flashes like every other body when hit (the
+hit flash of v0.11.2 — `Docs/Feedback.gdd` §5.3) and simply fades when beaten; his boss
+look, entrance and defeat are unmade — `flow`/`boss.intro` and `boss.defeated` are the cues
+they will hang on. Rule: a VFX that communicates gameplay state
 (telegraphs, buffs, tells) is a **gameplay deliverable** — it ships with the feature,
 however crude.
 
 ## 6. Feel / juice standards
 
-- Screen shake: trauma² output — tune magnitude until *visible* (MaxOffset 30,
-  Decay 3, trauma 0.22–0.5 per event; caveat v0.2.2). Any new juice effect gets a
-  verify-by-eye pass, not just call-site review.
-- Damage numbers: red damage / green heal, size scales 20→100 with amount.
-- Hit feedback trio on every hit: number + flash/blink + knockback. New attacks must
-  wire all three.
+The design, the tier table and every number: `Docs/Feedback.gdd` (v0.11.2). In short:
+
+- **Gameplay raises a cue; a director decides what it looks, sounds and feels like.** An
+  attack never shakes the camera, tints a sprite or plays a sound itself — it names itself
+  (`HitInfo.From(...)`) and raises its cues (`CueBus`), and `FeelDirector` reads `FeelTable`.
+  The VFX and audio directors plug into the same bus. Recipe: `20-ENGINEERING.md` §4.
+- **A hit is felt by its weight** (Graze / Light / Medium / Heavy / Massive, from the damage
+  it dealt — or named by the attack): hit-stop on both bodies of a melee hit, a camera kick
+  along the blow, shake under a per-tier cap, a silhouette flash, and for the heavy ones a
+  small roll and a zoom punch. Small hits get almost nothing, so the big ones land.
+- Screen shake is still trauma² × `MaxOffset` (30 px), but smooth noise now, with caps:
+  Light 0.30 (2.7 px), Medium 0.50, Heavy 0.75 (17 px), Massive 0.90. The flat 0.35 per hit
+  of v0.2.2 is gone. **These are starting values nobody has watched** — the verify-by-eye
+  pass of this section is still owed, and tuning lives in `FeelTable` / `FeedbackTable`.
+- **Flash means "hit", blink means "cannot be hit".** Foes no longer blink when struck. The
+  flash is white, or ink on a pale arena; it never touches a body's `Modulate` or `Visible`.
+- Photosensitivity limits hold whatever the settings (Feedback.gdd §5.4): no full-screen
+  flash, no saturated red, at most six bodies flashing at once, at most three large flashes
+  a second. A new effect that flashes goes through the same limiter.
+- Damage numbers: red damage / green heal, size scales 20→100 with amount (unchanged; still
+  unpooled).
+- Any new juice effect gets a verify-by-eye pass, not just call-site review — and a line in
+  `FeedbackCheck` for the mechanism behind it.
 
 ## 7. Audio (not started — the plan)
 
 - Start when v0.5.0 makes runs real; sound is 30% of feel and currently 0%.
-- Structure first: an `AudioManager` autoload; buses `Master/Music/SFX/UI`; event
-  names keyed like modifiers (`"sfx:hit_melee"`, `"music:world_VK"`) so data tables
-  can reference sounds the same way they reference stats.
+- Structure first: an audio director autoload listening to the cue bus (v0.11.2 —
+  `Docs/Feedback.gdd` §2, §6: the cue vocabulary there is the audio work order; a sound is
+  a row keyed (owner, action) in the director's own `CueTable`, falling back owner → class
+  → `any`); buses `Master/Music/SFX/UI`, with volumes in `FeedbackSettings`.
 - Minimum viable set: hit/hurt/death, jump/land, per-skill casts, pickup, UI clicks,
   day-end sting, devour rumble, one music loop per world palette + zone 6.
 - Same placeholder rule: free/cheap SFX now, replace later behind stable event names.

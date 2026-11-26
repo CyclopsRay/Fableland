@@ -12,6 +12,16 @@ public abstract partial class Hazard : Area2D
 {
     [Export] public Vector2 BoxSize = new Vector2(64f, 64f);
     [Export] public float TickInterval = 0.25f;
+    /// <summary>What this hazard is, for feedback — the tag of its <c>hazard</c>/<c>tick</c>
+    /// cue ("lava", "spike"). Empty takes the class's own kind (<see cref="DefaultCueKind"/>):
+    /// one script serves several scenes, and the scene is what knows which it is.</summary>
+    [Export] public string CueKind = "";
+
+    /// <summary>The kind a hazard of this class is when its scene names none.</summary>
+    protected virtual string DefaultCueKind => "damage";
+
+    /// <summary>The tag this hazard's cues carry.</summary>
+    public string Kind => string.IsNullOrEmpty(CueKind) ? DefaultCueKind : CueKind;
 
     private readonly Dictionary<Node2D, float> _timers = new();
     private IReadOnlyList<Shape2D> _runtimeShapes;
@@ -92,9 +102,10 @@ public abstract partial class Hazard : Area2D
 
     /// <summary>Route an effect to whichever target type it is. Hazard ticks bypass
     /// combat i-frames (see CharacterController.ApplyHazard) since they reapply
-    /// every <see cref="TickInterval"/>, faster than the post-hit invuln window.</summary>
-    protected static void Deliver(Node2D body, float damage, Vector2 knockback,
-                                  float fireStack = 0f, float frozenStack = 0f)
+    /// every <see cref="TickInterval"/>, faster than the post-hit invuln window.
+    /// Each delivered tick raises one <c>hazard</c>/<c>tick</c> cue at the victim.</summary>
+    protected void Deliver(Node2D body, float damage, Vector2 knockback,
+                           float fireStack = 0f, float frozenStack = 0f)
     {
         if (body is CharacterController c)
         {
@@ -108,6 +119,20 @@ public abstract partial class Hazard : Area2D
             if (fireStack > 0f) e.AddFireStack(fireStack);
             if (frozenStack > 0f) e.AddFrozenStack(frozenStack);
         }
+        else return;
+        RaiseTickCue(body, damage > 0f ? damage : fireStack + frozenStack);
+    }
+
+    /// <summary>The cue for one tick on one body: owner <c>hazard</c>, action <c>tick</c>,
+    /// tag = <see cref="Kind"/>, at the victim, magnitude = the damage (or the status points)
+    /// the tick applies. A hazard that does not go through <see cref="Deliver"/> calls this
+    /// itself. A tick stops nobody: it is not a hit.</summary>
+    protected void RaiseTickCue(Node2D body, float magnitude)
+    {
+        if (body == null || !body.IsInsideTree()) return;
+        CueBus.EmitAt(CueOwners.Hazard, "tick", body.GlobalPosition, this,
+            (body as IFeedbackBody)?.Side ?? CombatSide.Player, size: Mathf.Max(BoxSize.X, BoxSize.Y) * 0.5f, magnitude: magnitude, tag: Kind,
+            extents: BoxSize * 0.5f);
     }
 
     public override void _Draw()

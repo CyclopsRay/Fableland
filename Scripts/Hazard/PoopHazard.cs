@@ -31,8 +31,12 @@ public partial class PoopHazard : Hazard
     protected override void ApplyTick(Node2D body)
     {
         // Player-only: bypasses i-frames via ApplyHazard, like any hazard tick.
-        if (body is CharacterController player) player.ApplyHazard(Damage, Vector2.Zero);
+        if (body is not CharacterController player) return;
+        player.ApplyHazard(Damage, Vector2.Zero);
+        RaiseTickCue(player, Damage);
     }
+
+    protected override string DefaultCueKind => "poop";
 
     protected override Color TintFill => new Color(0.45f, 0.32f, 0.12f, 0.5f);
     protected override Color TintEdge => new Color(0.3f, 0.2f, 0.08f, 0.9f);

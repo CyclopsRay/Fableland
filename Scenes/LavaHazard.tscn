@@ -4,5 +4,6 @@
 
 [node name="LavaHazard" type="Area2D"]
 script = ExtResource("1")
+CueKind = "lava"
 FireStack = 30.0
 Knockback = 0.0

@@ -10,7 +10,7 @@ How modules talk, so that adding module N+1 never means rewiring modules 1..N.
 |-----------|---------|-------|
 | **C# events** (`event Action<...>`) | Gameplay → Presentation notifications (`HpChanged`, `Died`); anything with multiple listeners | Raiser never cares who listens. **Subscribe in `_Ready`/`_EnterTree`, unsubscribe in `_ExitTree` — always.** A scene node subscribed to an autoload's event and then freed by `ReloadCurrentScene` is a leak *and* a crash (the delegate keeps the dead node alive; invoking it touches a disposed object). This will be our most common bug class once RunState exists — make the pair-check a review habit. |
 | **Godot signals** | Scene-boundary wiring authored in `.tscn` (buttons, Area2D enter/exit) | Fine at the edge; don't build cross-module buses out of them (no compile-time checking). |
-| **Autoload singletons** (`static Instance` set in `_EnterTree`) | True globals only. Current: `DamageNumberManager`, `ShakeCamera2D`, `CharacterController.LocalPlayer` (both claimed by the Player-side body only — a Foe-side fighter never touches them, §4a); planned: `RunState`, `AudioManager`, `BalanceOverrides` | Cap the list. Each new one needs a written justification here. A singleton that parents nodes into the live scene must do it via `GetTree().CurrentScene` (survives reloads — existing pattern). |
+| **Autoload singletons** (`static Instance` set in `_EnterTree`) | True globals only. Current: `DamageNumberManager`, `ShakeCamera2D`, `CharacterController.LocalPlayer` (both claimed by the Player-side body only — a Foe-side fighter never touches them, §4a), `FeelDirector` (v0.11.2 — it must outlive every arena, as the cue bus it listens to does; §4b); planned: `RunState`, the VFX and audio directors, `BalanceOverrides` | Cap the list. Each new one needs a written justification here. A singleton that parents nodes into the live scene must do it via `GetTree().CurrentScene` (survives reloads — existing pattern). |
 | **Direct references** (`[Export]` NodePath / ctor args / `Init(...)`) | Parent→child within one scene; spawner→spawnee config | `Init(...)` is called **after** `AddChild` (KNOWLEDGE caveat); spawnee guards against acting on un-Init'd state for one frame. |
 | **Return values / plain calls** | Within a module | Prefer these. Events are for crossing layers, not for everything. |
 
@@ -64,7 +64,9 @@ implicit in `TakeHit`/`ApplyHazard`; keep this canonical order when extending:
                                    isInvincible windows, e.g. Pangda immunities)
 4. Defense mitigation             (100/(100+defense), aggregated pool)
 5. Shield absorption              (currentShield before HP — PumpKing/Pangda)
-6. HP application + events        (HpChanged, popups, hitflash, shake, ult-charge credit)
+6. HP application + events        (HpChanged, popups, ult-charge credit; then FEEDBACK:
+                                   resolve the hit's weight, hold the victim (hit-stop),
+                                   raise ONE HitCue — flash and shake are listeners', §4b)
 7. Reactions                      (knockback AddImpulse, stun window, on-hit passives:
                                    thorns/Kashaya, lifesteal/Zhen Qi, stackable effects)
 ```
@@ -118,6 +120,44 @@ player's Up and Down leave it alone (`BossFightCheck.ProbeSwimmingTakesSides`).
 `PlayerControls` is the only reader of the InputMap for a fighter, so it is also what makes
 sure every action it names exists: `move_up` is not in `project.godot`, and
 `InputDefaults.Ensure()` — called from its constructor — registers it.
+
+## 4b. The cue bus (v0.11.2)
+
+How gameplay tells presentation that something happened, without knowing who listens. Design,
+numbers and the full cue vocabulary: `Docs/Feedback.gdd`.
+
+```
+GAMEPLAY      CueBus.Emit(body, "ba.swing", variant: stage, size: reach, …)     one-shot
+              CueBus.Start(body, "s1.tornado", …)  …  CueBus.Stop(body, "s1.tornado")   a loop
+              CueBus.EmitHit(new HitCue(…))        — the two hit intakes only, once per hit
+PRESENTATION  a director subscribes to CueBus.Raised / HitLanded / LoopStarted / LoopStopped
+              in _EnterTree, unsubscribes in _ExitTree, and looks each cue up in its own
+              CueTable<T>: (owner, action) → (the owner's class, action) → ("any", action)
+```
+
+- **The contract is five types** in `Scripts/Gameplay/Combat/Cue.cs`: `Cue`, `HitCue`,
+  `CueBus`, `IFeedbackBody` (what presentation may know of a body — read-only or purely
+  visual), `CueTable<T>` (the one lookup every director uses). A cue is a struct keyed by
+  two constant strings; raising one allocates nothing (T40 §2).
+- **A raiser never reads anything back, a listener never changes a fight.** Listeners draw
+  their own randomness — never a run's `DetRandom`. A listener that throws is logged
+  (`GD.PushError`) and skipped; the hit lands and the other listeners still hear (§5).
+- **Hit-stop is not on the bus.** It moves bodies in time, so it is gameplay: a body applies
+  it to itself (`ApplyHitStop`) from its hit intake and its own melee helper, with numbers
+  from `Scripts/Data/FeedbackTable.cs`. It is deliberately absent from `IFeedbackBody`.
+- **`HitInfo` carries feedback metadata** (`Attacker`, `CueOwner`, `CueAction`, `CueVariant`,
+  `Weight`, `Ranged`) that damage math never reads. An attack names itself with
+  `.From(this, "ba", stage)` or `.FromRanged(owner, "s2.seed")`; an unnamed hit still works.
+- **One owner per visual property of a body.** `Sprite.Modulate` / `SelfModulate` are the
+  status, telegraph and evolution tints; `Sprite.Visible` is the i-frame blink; the root's
+  `Modulate.a` is the defeat fade; the hit flash is a material lent to the sprites for the
+  frames it lasts (`BodyFlash`). A new effect on a body takes a channel of its own or goes
+  through the owner of an existing one — it never writes someone else's.
+- **Adding a director** (VFX, audio): an autoload under `Scripts/Presentation/`, one line in
+  `project.godot`, a `CueTable` of its own rows, and no edit to any gameplay file. Its
+  justification as a singleton is the same as `FeelDirector`'s (§1).
+- **Adding a cue**: one `CueBus.Emit` at the line where the moment happens, a row in
+  `Docs/Feedback.gdd` §6, and a line in `FeedbackCheck`.
 
 ## 5. Error handling & validation
 

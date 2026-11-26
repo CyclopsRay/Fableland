@@ -10,6 +10,8 @@ namespace Fableland.Missions;
 /// </summary>
 public partial class BossCrab : CrabFoe
 {
+    public override string FeedbackId => "boss_crab";
+
     protected override void InitFoe()
     {
         base.InitFoe();

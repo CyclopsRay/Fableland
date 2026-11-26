@@ -10,6 +10,8 @@ using Fableland.Run;
 /// </summary>
 public partial class Pixolotl : CharacterController
 {
+    public override string FeedbackId => "pixolotl";
+
     private enum TemporalState { Normal, EActive, ShiftRewind, ShiftRecovery }
 
     private sealed class PapelPicadoFrame

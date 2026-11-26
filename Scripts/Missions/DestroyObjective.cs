@@ -28,6 +28,9 @@ public partial class DestroyObjective : BaseFoe
 
     protected override bool CanEvolve => false;
 
+    public override string FeedbackId => "destroy_objective";
+    public override string FeedbackClass => CueOwners.Objective;
+
     public override void _Ready()
     {
         base._Ready();

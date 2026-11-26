@@ -18,6 +18,9 @@ public partial class ProtectCore : Node2D
     public float CurrentHp { get; private set; } = 150f;
     public bool IsDestroyed { get; private set; }
 
+    /// <summary>The content id the core's cues are raised under (class <c>objective</c>).</summary>
+    public const string CueId = "protect_core";
+
     [Export] public float ContactRange = 64f;
     private float _damagePerHit = 18f;
     private const float HitCooldown = 0.9f;
@@ -47,7 +50,13 @@ public partial class ProtectCore : Node2D
                 CurrentHp = Mathf.Max(0f, CurrentHp - _damagePerHit);
                 HpChanged?.Invoke(CurrentHp, MaxHp);
                 DamageNumberManager.Instance?.Pop(GlobalPosition + new Vector2(0f, -40f), _damagePerHit, false);
-                if (CurrentHp <= 0f) IsDestroyed = true;
+                CueBus.EmitAt(CueId, "hurt", GlobalPosition, this, CombatSide.Player, magnitude: _damagePerHit,
+                    direction: (GlobalPosition - f.GlobalPosition).Normalized(), ownerClass: CueOwners.Objective);
+                if (CurrentHp <= 0f)
+                {
+                    IsDestroyed = true;
+                    CueBus.EmitAt(CueId, "death", GlobalPosition, this, CombatSide.Player, ownerClass: CueOwners.Objective);
+                }
                 return;
             }
         }

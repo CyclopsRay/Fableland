@@ -58,6 +58,36 @@ public partial class SoftVolume : Area2D
     [Export] public bool IsMedium = true;
     [Export] public bool Swimmable = true;
 
+    private string _mediumKind;
+
+    /// <summary>
+    /// What this volume is, for feedback — the tag of the <c>world</c> cues
+    /// <c>soft.enter</c> / <c>soft.exit</c> (<c>Docs/Feedback.gdd</c> §6). Whoever builds a
+    /// volume may name it ("cloud", "swamp"); unnamed, it is what the volume's own tuning
+    /// says: <c>water</c> when it has a sink speed, <c>current</c> when it only carries,
+    /// <c>kit</c> for a character's own volume, else <c>foliage</c>. A cloud and a bush are
+    /// tuned alike, so a cloud reads as foliage until its builder names it.
+    /// </summary>
+    public string MediumKind
+    {
+        get => _mediumKind ?? (!IsMedium ? "current" : !Swimmable ? "kit" : SinkSpeed > 0f ? "water" : "foliage");
+        set => _mediumKind = string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    /// <summary>A body crossed between open air and a medium. Raised by the body — which
+    /// knows every volume it is in — so a sea laid as forty tiles is entered once, not at
+    /// every joint. Position is the body's, magnitude its speed in px/s.</summary>
+    public static void RaiseCrossing(CharacterBody2D body, SoftVolume volume, bool entered)
+    {
+        if (body == null || volume == null || !body.IsInsideTree()) return;
+        Vector2 velocity = body.Velocity;
+        float speed = velocity.Length();
+        var feedback = body as IFeedbackBody;
+        CueBus.EmitAt(CueOwners.World, entered ? "soft.enter" : "soft.exit", body.GlobalPosition, body,
+            feedback?.Side ?? CombatSide.Player, size: feedback?.FeedbackRadius ?? 0f, magnitude: speed,
+            direction: speed > 1f ? velocity / speed : Vector2.Zero, tag: volume.MediumKind);
+    }
+
     /// <summary>
     /// Configures an authored runtime tile before it enters the tree. The map
     /// orchestrator supplies collision shapes in this volume's local/world-stable space;

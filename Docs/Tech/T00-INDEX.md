@@ -24,6 +24,9 @@ make a codebase impossible to extend later.
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │ PRESENTATION   Hud, DamageNumberManager, ShakeCamera2D,        │
+│                the DIRECTORS — FeelDirector (shake, flash,     │
+│                zoom), then VFX and audio — each listening to   │
+│                the cue bus with a table of its own,            │
 │                map atlas render (MapControllerAtlas/RenderModel)│
 │                — observes via events/signals; never ticked by  │
 │                  gameplay logic, never queried by it            │
@@ -35,15 +38,18 @@ make a codebase impossible to extend later.
 │ GAMEPLAY       CharacterController + characters, Foes/,         │
 │                Bosses/ (brain + boss classes), Items/ runtime,  │
 │                Hazard family, projectiles, SoftVolume,          │
-│                DecayingDebuff, HitInfo, combat sides/targets    │
+│                DecayingDebuff, HitInfo, combat sides/targets,   │
+│                CueBus + Cue / HitCue (raised here, heard above),│
+│                hit-stop (HitStopClock — it moves bodies)        │
 │                — self-contained combat sim; knows nothing of    │
-│                  maps, days, or UI                              │
+│                  maps, days, UI, effects or sound               │
 ├────────────────────────────────────────────────────────────────┤
-│ DOMAIN DATA    Scripts/Data/ tables (incl. BossTable),          │
-│                MapGenerator+MapData, FoeStats, DetRandom        │
+│ DOMAIN DATA    Scripts/Data/ tables (incl. BossTable,           │
+│                FeedbackTable), MapGenerator+MapData, FoeStats,  │
+│                DetRandom                                        │
 │                — pure C#, no Godot node types, unit-testable    │
 ├────────────────────────────────────────────────────────────────┤
-│ FOUNDATION     Units.cs, GameVersion.cs                         │
+│ FOUNDATION     Units.cs, GameVersion.cs, FeedbackSettings.cs    │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -63,6 +69,12 @@ Consequences you will feel:
 - **UI is write-only from below.** Gameplay raises events (`HpChanged`, `Died`,
   `UltChargeChanged` — the existing pattern); presentation subscribes. Gameplay code
   containing `GetNode<Hud>` is a violation.
+- **Gameplay raises cues; it never names an effect, a sound or a director** (v0.11.2,
+  T10 §4b, `Docs/Feedback.gdd`). A kit says `CueBus.Emit(this, "ba.swing", …)` with the
+  attack's own numbers and forgets it; what that looks, sounds or feels like is a row in a
+  director's table. `grep -rn "Director" Scripts/Gameplay Scripts/Foes Scripts/Protagonists
+  Scripts/Hazard Scripts/Missions` must find nothing. The one part of feel that moves bodies
+  in time — hit-stop — is therefore gameplay, with its numbers in `FeedbackTable`.
 - **Data files never `using Godot`** (beyond math structs if unavoidable — prefer
   `System.Numerics` or plain floats). The day this rule breaks, headless unit testing
   dies with it.
