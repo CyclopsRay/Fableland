@@ -1,0 +1,140 @@
+{
+  "world": "KH",
+  "name": "Kingdom of Horror",
+  "medium": "scratchboard",
+  "ground": "ground.jpg",
+  "groundLuma": 0.091,
+  "groundMean": "#11181e",
+  "tone": "dark",
+  "ink": "#f4ead2",
+  "inkCase": "#1a1412",
+  "seat": 1,
+  "stamps": [
+    {
+      "file": "stamp_0.png",
+      "name": "a gnarled tree with a face",
+      "w": 252,
+      "h": 256,
+      "sheetW": 346,
+      "sheetH": 351,
+      "anchor": [
+        0.4885,
+        0.8659
+      ],
+      "foot": 0.873,
+      "band": "any"
+    },
+    {
+      "file": "stamp_1.png",
+      "name": "a crooked castle with a glowing jack-o'-lantern gate",
+      "w": 256,
+      "h": 247,
+      "sheetW": 366,
+      "sheetH": 353,
+      "anchor": [
+        0.4978,
+        0.861
+      ],
+      "foot": 0.8633,
+      "band": "any"
+    },
+    {
+      "file": "stamp_2.png",
+      "name": "a bramble thicket",
+      "w": 256,
+      "h": 232,
+      "sheetW": 347,
+      "sheetH": 314,
+      "anchor": [
+        0.5144,
+        0.8593
+      ],
+      "foot": 0.8828,
+      "band": "any"
+    },
+    {
+      "file": "stamp_3.png",
+      "name": "a scarecrow",
+      "w": 233,
+      "h": 256,
+      "sheetW": 320,
+      "sheetH": 352,
+      "anchor": [
+        0.487,
+        0.8659
+      ],
+      "foot": 0.7682,
+      "band": "any"
+    },
+    {
+      "file": "stamp_4.png",
+      "name": "a wrought-iron graveyard gate",
+      "w": 256,
+      "h": 188,
+      "sheetW": 416,
+      "sheetH": 306,
+      "anchor": [
+        0.4871,
+        0.8564
+      ],
+      "foot": 0.8828,
+      "band": "any"
+    },
+    {
+      "file": "stamp_5.png",
+      "name": "a hanging iron cage on a post",
+      "w": 215,
+      "h": 256,
+      "sheetW": 289,
+      "sheetH": 344,
+      "anchor": [
+        0.5548,
+        0.8659
+      ],
+      "foot": 0.8279,
+      "band": "any"
+    },
+    {
+      "file": "stamp_6.png",
+      "name": "a lantern will-o'-the-wisp",
+      "w": 228,
+      "h": 256,
+      "sheetW": 317,
+      "sheetH": 356,
+      "anchor": [
+        0.4952,
+        0.8729
+      ],
+      "foot": 0.8465,
+      "band": "any"
+    },
+    {
+      "file": "stamp_7.png",
+      "name": "a crooked cottage with one lit window",
+      "w": 256,
+      "h": 252,
+      "sheetW": 371,
+      "sheetH": 365,
+      "anchor": [
+        0.4964,
+        0.8867
+      ],
+      "foot": 0.8672,
+      "band": "any"
+    },
+    {
+      "file": "stamp_8.png",
+      "name": "a ring of pumpkins",
+      "w": 256,
+      "h": 184,
+      "sheetW": 354,
+      "sheetH": 254,
+      "anchor": [
+        0.5214,
+        0.8408
+      ],
+      "foot": 0.8633,
+      "band": "any"
+    }
+  ]
+}

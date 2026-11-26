@@ -422,6 +422,8 @@ The topological graph can be viewed two ways, toggled by the **View** button (de
 atlas): the original **schematic** diagram, and a rendered **atlas** that reads like a real
 world map. Same graph, same gameplay — the atlas is a pure render layer
 (`Scripts/Map/MapRenderModel.cs` builds it; `Scripts/Map/MapControllerAtlas.cs` draws it).
+A third view, the island as torn storybook pages, follows the schematic on the same button
+and is described in §11a.
 
 **One island, river realms.** The outer silhouette is one roughly circular, softly irregular
 coastline. The static pentagonal VOID sits near the centre; five river surfaces widen and wander
@@ -442,3 +444,25 @@ and otherwise locks those endpoints. The central VOID retains its pentagon, LV5 
 lake, and river; Eidolon Shelters appear only on built bridges. Wheel zoom is unchanged. A short left click selects a
 node, left drag pans the map with the cursor, and right drag rotates it around the current player
 token after centering that token as the pivot.
+
+### 11a. Torn-pages view (a third view — demo, off by default) — v0.11.4
+
+The **View** button cycles *atlas → schematic → pages*; the game still opens on the atlas.
+The pages view draws the same graph as **five pages torn from five storybooks, laid together
+on a desk of sea-coloured paper**: each realm is one page in its world's medium, the tears
+between pages are the rivers (deep blue paper shows through), the VOID is a hole burnt
+through all of them, and devoured city fields are charred paper with an ember line at the
+frontier — the day clock, drawn as fire. Mist is tracing paper laid over an unexplored
+realm: nodes and roads are hidden, the page's colour and pattern are not. Cities are pins
+(the node kinds keep their shapes: circle, diamond, triangle, square, ring), roads are
+dotted ink, a Bridge of Eidolon is a violet thread. Same graph, same input, same hit-test —
+it is a render layer (`Scripts/Map/Pages/`, fed by `Scripts/Map/MapControllerPages.cs`) and
+draws nothing from the generator's random streams, so a seed's map is unchanged.
+
+What makes any generated island read as a map is code and identical on every run; what
+gives a realm its identity is a **page kit** — one ground, nine symbols, one of them the
+seat that stands at the LV4 city — which is art, per world, replaceable file by file. The
+method, the kit specification, the recipe that made the current (AI-made, placeholder)
+kits, the placement rules, the cost and what is still weak are in
+**`Docs/Art/OverworldStyle.md`**. Try it on any seed and any day in
+`res://Scenes/Dev/OverworldArtDemo.tscn`. The Fields overlay is not drawn in this view.

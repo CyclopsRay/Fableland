@@ -120,7 +120,7 @@ public partial class MapController : Node2D
         _realityButton.Pressed += OnTwistedReality;
         _fieldsButton = GetNode<Button>("UI/FieldsButton");
         _fieldsButton.Pressed += OnToggleCityFields;
-        _renderButton.Text = _rendered ? "View: atlas" : "View: schematic";
+        _renderButton.Text = RenderButtonText();
         UpdateViewModeButton();
 
         // Debug day editor — hidden unless debug is on.
@@ -243,8 +243,12 @@ public partial class MapController : Node2D
 
     private void OnToggleRender()
     {
-        _rendered = !_rendered;
-        _renderButton.Text = _rendered ? "View: atlas" : "View: schematic";
+        // atlas → schematic → pages → atlas. The torn-pages view (MapControllerPages.cs) is a
+        // third reading of the same map; the game still opens on the atlas.
+        if (_pages) { SetPagesView(false); _rendered = true; }
+        else if (_rendered) _rendered = false;
+        else SetPagesView(true);
+        _renderButton.Text = RenderButtonText();
         QueueRedraw();
     }
 
@@ -699,6 +703,7 @@ public partial class MapController : Node2D
         _anchor = ComputeAnchor();
         var vdist = VisitedSteps();
 
+        if (_pages) { DrawPages(vdist); return; }
         if (_rendered) { DrawAtlas(vdist); return; }
 
         for (int w = 0; w < _graph.Worlds.Count; w++)

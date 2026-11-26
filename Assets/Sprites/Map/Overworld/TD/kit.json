@@ -1,0 +1,140 @@
+{
+  "world": "TD",
+  "name": "TheDeserted",
+  "medium": "linocut print",
+  "ground": "ground.jpg",
+  "groundLuma": 0.776,
+  "groundMean": "#e2c298",
+  "tone": "light",
+  "ink": "#3a2a20",
+  "inkCase": "#fff7e6",
+  "seat": 0,
+  "stamps": [
+    {
+      "file": "stamp_0.png",
+      "name": "a two-storey frontier saloon with a balcony",
+      "w": 256,
+      "h": 202,
+      "sheetW": 340,
+      "sheetH": 268,
+      "anchor": [
+        0.4947,
+        0.9172
+      ],
+      "foot": 0.9766,
+      "band": "any"
+    },
+    {
+      "file": "stamp_1.png",
+      "name": "a wooden water tower",
+      "w": 252,
+      "h": 256,
+      "sheetW": 280,
+      "sheetH": 285,
+      "anchor": [
+        0.4952,
+        0.9163
+      ],
+      "foot": 0.9762,
+      "band": "any"
+    },
+    {
+      "file": "stamp_2.png",
+      "name": "a flat-topped mesa",
+      "w": 256,
+      "h": 166,
+      "sheetW": 337,
+      "sheetH": 219,
+      "anchor": [
+        0.5022,
+        0.9084
+      ],
+      "foot": 0.8984,
+      "band": "any"
+    },
+    {
+      "file": "stamp_3.png",
+      "name": "a saguaro cactus",
+      "w": 219,
+      "h": 256,
+      "sheetW": 264,
+      "sheetH": 308,
+      "anchor": [
+        0.4993,
+        0.9163
+      ],
+      "foot": 0.9726,
+      "band": "any"
+    },
+    {
+      "file": "stamp_4.png",
+      "name": "a covered wagon",
+      "w": 256,
+      "h": 174,
+      "sheetW": 342,
+      "sheetH": 233,
+      "anchor": [
+        0.5172,
+        0.9148
+      ],
+      "foot": 0.9805,
+      "band": "any"
+    },
+    {
+      "file": "stamp_5.png",
+      "name": "a windmill pump",
+      "w": 223,
+      "h": 256,
+      "sheetW": 277,
+      "sheetH": 318,
+      "anchor": [
+        0.5043,
+        0.9199
+      ],
+      "foot": 0.9731,
+      "band": "any"
+    },
+    {
+      "file": "stamp_6.png",
+      "name": "a small clapboard church",
+      "w": 256,
+      "h": 255,
+      "sheetW": 319,
+      "sheetH": 318,
+      "anchor": [
+        0.502,
+        0.9162
+      ],
+      "foot": 0.9766,
+      "band": "any"
+    },
+    {
+      "file": "stamp_7.png",
+      "name": "a cattle skull on a post",
+      "w": 223,
+      "h": 256,
+      "sheetW": 260,
+      "sheetH": 299,
+      "anchor": [
+        0.4989,
+        0.9163
+      ],
+      "foot": 0.9776,
+      "band": "any"
+    },
+    {
+      "file": "stamp_8.png",
+      "name": "a huddle of abandoned shacks",
+      "w": 256,
+      "h": 178,
+      "sheetW": 352,
+      "sheetH": 245,
+      "anchor": [
+        0.5062,
+        0.9151
+      ],
+      "foot": 0.9062,
+      "band": "any"
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "world": "PL",
+  "name": "Palace of LOOING",
+  "medium": "gongbi (heavy colour)",
+  "ground": "ground.jpg",
+  "groundLuma": 0.273,
+  "groundMean": "#2a487b",
+  "tone": "dark",
+  "ink": "#f4ead2",
+  "inkCase": "#1a1412",
+  "seat": 0,
+  "stamps": [
+    {
+      "file": "stamp_0.png",
+      "name": "an undersea dragon palace with sweeping tiled roofs",
+      "w": 256,
+      "h": 221,
+      "sheetW": 333,
+      "sheetH": 288,
+      "anchor": [
+        0.4534,
+        0.918
+      ],
+      "foot": 0.9727,
+      "band": "any"
+    },
+    {
+      "file": "stamp_1.png",
+      "name": "a branching coral tree",
+      "w": 240,
+      "h": 256,
+      "sheetW": 274,
+      "sheetH": 292,
+      "anchor": [
+        0.4842,
+        0.9163
+      ],
+      "foot": 0.8708,
+      "band": "any"
+    },
+    {
+      "file": "stamp_2.png",
+      "name": "a giant open clam holding a glowing pearl",
+      "w": 256,
+      "h": 233,
+      "sheetW": 290,
+      "sheetH": 264,
+      "anchor": [
+        0.4869,
+        0.9149
+      ],
+      "foot": 0.9688,
+      "band": "any"
+    },
+    {
+      "file": "stamp_3.png",
+      "name": "a stand of tall kelp",
+      "w": 209,
+      "h": 256,
+      "sheetW": 268,
+      "sheetH": 328,
+      "anchor": [
+        0.4858,
+        0.9163
+      ],
+      "foot": 0.9617,
+      "band": "any"
+    },
+    {
+      "file": "stamp_4.png",
+      "name": "a column of rising bubbles",
+      "w": 151,
+      "h": 256,
+      "sheetW": 182,
+      "sheetH": 309,
+      "anchor": [
+        0.4822,
+        0.9163
+      ],
+      "foot": 0.9603,
+      "band": "any"
+    },
+    {
+      "file": "stamp_5.png",
+      "name": "a slender palace tower",
+      "w": 180,
+      "h": 256,
+      "sheetW": 224,
+      "sheetH": 318,
+      "anchor": [
+        0.4848,
+        0.9163
+      ],
+      "foot": 0.9667,
+      "band": "any"
+    },
+    {
+      "file": "stamp_6.png",
+      "name": "an arched bridge made of shells",
+      "w": 256,
+      "h": 173,
+      "sheetW": 341,
+      "sheetH": 230,
+      "anchor": [
+        0.2774,
+        0.9147
+      ],
+      "foot": 0.4688,
+      "band": "any"
+    },
+    {
+      "file": "stamp_7.png",
+      "name": "a lotus-shaped pavilion",
+      "w": 228,
+      "h": 256,
+      "sheetW": 276,
+      "sheetH": 310,
+      "anchor": [
+        0.4587,
+        0.9163
+      ],
+      "foot": 0.9693,
+      "band": "any"
+    },
+    {
+      "file": "stamp_8.png",
+      "name": "a coiled sea dragon statue",
+      "w": 210,
+      "h": 256,
+      "sheetW": 268,
+      "sheetH": 327,
+      "anchor": [
+        0.4946,
+        0.9163
+      ],
+      "foot": 0.9714,
+      "band": "any"
+    }
+  ]
+}

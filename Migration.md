@@ -9,6 +9,61 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.11.4** — **The overworld as torn storybook pages (a third map view; demo).** The
+  owner's question: the main map is random, yet every region must keep its own style — how
+  do we make art so any generated map *feels like a map* while each region keeps its style?
+  The answer built here splits the picture in two. **What makes it a map is code**,
+  identical on every run and computed from the generated shapes: a desk of sea-coloured
+  paper, rows of cut-paper waves, ripple lines off the coast, the shallows, a compass rose,
+  a thin frame — and the torn edge, deckle and shadow of every page, which
+  `PaperCut.Tear` makes from *any* outline and a seed-derived stream. **What makes it a
+  realm is a page kit**: one ground and nine map symbols in that world's medium, one of
+  them the seat that stands at the LV4 city (`Assets/Sprites/Map/Overworld/<W>/`, 8 kits).
+  So the island is five pages torn from five storybooks; the tears between them are the
+  rivers (deep blue paper shows through); **the VOID is a hole burnt through all of them**,
+  and a devoured city's field is charred paper — the page darkened so its medium ghosts
+  through, cracked char over it, a bitten and glowing frontier where it meets living
+  ground. Mist is tracing paper: it hides nodes and roads, not which book lies there.
+  Cities are pins — a cream sticker in the node kind's shape (circle, diamond, triangle,
+  square, ring) with an enamel head in the node's colour — roads are dotted ink, a Bridge
+  of Eidolon is a violet thread; names are the game's own text on slips of paper, and no
+  lettering is drawn into the art. **In the game** the map's View button now cycles *atlas
+  → schematic → pages* (still opens on the atlas); under the tilted, rotated boss-up
+  camera the pages turn and foreshorten while symbols and pins stay upright (captured flat
+  and boss-up; heading-up is the same projection and was not photographed). **To look at it on any seed and
+  any day:** `res://Scenes/Dev/OverworldArtDemo.tscn` (seed field, New seed, a day slider
+  through the 45-day clock, pan / zoom, toggles for symbols, torn edges, mist, labels and
+  the atlas side by side; `-- --shots=DIR [--map]` photographs it and quits). **The kits
+  are AI-made placeholders** (GPT Image 2.5 in Tripo Studio, sixteen prompts from two
+  templates — `Tools/overworld_art/kit_prompts.json`; `build_kits.py --prompts` prints
+  them) processed by `Tools/overworld_art/build_kits.py`: a chroma-difference key that
+  keeps the ink wash's mist soft, despill by palette, split, trim, a measured standing
+  point per symbol, 8-bit palettes for eight of nine stamps. The shared furniture is drawn
+  by code (`shared.py`). Deterministic — two runs give identical bytes. **Added weight:
+  95 files, 5.09 MB.** Measured (dev Mac, Mobile renderer, 1600 × 900, MSAA 4×): 155 – 245 ms
+  to build an island's pages once per generation (≈ 78 000 vertices, 44 – 56 symbols),
+  2 – 7 ms per state change, and per frame two transforms and two modulates. The generator
+  is untouched and draws the numbers it drew before (the view's streams are
+  `seed + ":pages:…"`): the map content check (1062) and the run check (891) pass — counted
+  on 0.11.1, where this was written; the merged tree's numbers are at the end — and the
+  build is 0 warnings. Method, kit specification, recipe, placement rules, cost and
+  weaknesses: **`Docs/Art/OverworldStyle.md`**; `MapGDD.md` §11a. Not done, by decision or
+  for lack of one: the burn is redrawn between days, not animated; the Fields overlay is
+  not drawn in this view; at the overview the tear is subtle on pale pages, so it reads
+  "illustrated map" before "torn pages"; symbols are small because ~25 nodes a realm win;
+  the ground is `ground.jpg` and eight of nine stamps are palette PNGs (the brief said
+  PNG throughout — 1024 px PNG grounds are 15 MB); the kits are first results, unedited;
+  the view asks for MSAA 2D ×4 while shown and has not been tried without it on a weak
+  GPU; frame time was not captured. **Owner's calls:** whether pages becomes the default
+  view; whether the kits are kept, regenerated or painted; whether the seat may cover its
+  own approach roads to be larger.
+  (Merged onto 0.11.3 — written from 0.11.1 — with no conflict; `MapGDD.md` and
+  `50-ART-AUDIO.md` were touched by both and merged by git. On the merged tree:
+  `dotnet build`, 0 errors/warnings; feedback check 249, content check 1170, boss check 109,
+  run check 1328 — the same as 0.11.3, so nothing the checks watch moved; and
+  `OverworldArtDemo.tscn` started headless loads without a script error and builds seed
+  `STORYBK1` (56 symbols, 78 327 vertices). Headless draws nothing: the view itself was not
+  looked at again here. `40-QA.md` §(2) gained the line on the demo's capture mode.)
 - **0.11.3** — **Every shipped combat map can be reached by a run.** Two gaps were known
   after 0.11.1; a third turned up while closing them. Both decisions below are
   **provisional** — made on the owner's standing instruction to decide now and discuss

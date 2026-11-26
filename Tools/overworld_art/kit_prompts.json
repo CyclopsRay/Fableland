@@ -1,0 +1,75 @@
+{
+  "about": "The generation recipe for the overworld page kits (Docs/Art/OverworldStyle.md §4). Two prompts per world: a ground and a sheet of nine symbols. `python3 Tools/overworld_art/build_kits.py --prompts [W …]` prints them filled in. The nine symbols of each world are listed in build_kits.py (WORLDS), in sheet order.",
+  "model": "GPT Image 2.5, in Tripo Studio (web), one 1024 x 1024 image per prompt, first result kept",
+  "generated": "2026-11-25",
+  "templates": {
+    "ground": "{lead} — a flat top-down background texture for an illustrated map, filling the whole square frame edge to edge, evenly lit, no horizon, no perspective, no objects, no buildings, no text. {description} It must read as one continuous {sheet}: subtle variation only, slightly lighter toward the middle, usable as a ground behind small map symbols.",
+    "symbols": "{style} map symbols — a sprite sheet of nine separate map symbols for an illustrated fantasy map, arranged in a clean 3 by 3 grid, each symbol centred in its cell with wide empty margins and nothing touching or overlapping. Background: one perfectly flat solid magenta (#FF00FF), no texture, no gradient, no shadows on the background, no grid lines, no frame. Each symbol is seen from a raised three-quarter view as on a hand-illustrated map, sitting on its own small patch of ground, all lit from the upper left, all at a matching scale. Symbols: {symbols}. Medium: {medium}. Palette: {palette}. No text, no lettering, no numbers."
+  },
+  "worlds": {
+    "VK": {
+      "lead": "Pale pink and cream watercolour wash on cold-press paper",
+      "description": "Soft wet-on-wet blooms, a few faint sand-coloured patches and pale teal tide stains, visible paper grain.",
+      "sheet": "sheet of paper",
+      "style": "Storybook-watercolour",
+      "medium": "storybook watercolour and ink, loose washes, a dark-brown ink line that breaks",
+      "palette": "vanilla cream, strawberry pink, coral, teal, warm sand, coastal green"
+    },
+    "SL": {
+      "lead": "Sand-gold desert ground as a flat minimalist poster print",
+      "description": "Broad flat bands of sand gold and coral with long soft plum dune shadows, faint print grain, a sparse scatter of tiny four-point stars.",
+      "sheet": "sheet of paper",
+      "style": "Flat minimalist poster",
+      "medium": "flat minimalist travel poster, no outlines, each form two or three flat planes split by a hard edge between a warm lit face and a plum shadow face, hairline gold inlay",
+      "palette": "sand gold, coral, rose, plum, indigo, one teal accent"
+    },
+    "BM": {
+      "lead": "Off-white rice paper with faint Chinese ink-wash mist",
+      "description": "Bare xuan paper with visible fibres, a few pale grey ink-wash mist bands and the lightest grey-green washes, most of the sheet left unpainted.",
+      "sheet": "sheet of paper",
+      "style": "Chinese ink-wash",
+      "medium": "Chinese freehand ink painting, xieyi, calligraphic strokes that swell and taper into dry flying-white, wet ink that pools and bleeds, moss dots",
+      "palette": "black ink in five dilutions, a little indigo-cyan and ink green, no warm colour"
+    },
+    "HC": {
+      "lead": "Dark slate-grey rocky ground painted with realistic light",
+      "description": "Cracked basalt and worn flagstone seen from directly above, ash in the hollows, a faint ember-orange glow deep in a few fissures, desaturated and damp.",
+      "sheet": "sheet",
+      "style": "Painterly realist",
+      "medium": "painterly lit realism like a small oil study, no outlines, worn wet stone with weight, cold key light and hot orange bounce light from fire",
+      "palette": "desaturated blue-grey stone, near-black shadow, fire orange as the only saturated colour"
+    },
+    "TD": {
+      "lead": "Cream paper printed with sparse linocut hatching",
+      "description": "Hand-cut relief-print marks in ochre and rust suggesting wind-rippled desert sand, flat spot colour slightly out of register, ink speckle and skips, bare cream paper between the marks.",
+      "sheet": "sheet of paper",
+      "style": "Linocut-print",
+      "medium": "linocut relief print, a black key block with visible gouge marks, two or three flat spot colours slightly out of register, tone made by hatching, wobbling hand-cut edges, ink skips",
+      "palette": "black, rust, ochre, faded teal, cream"
+    },
+    "PL": {
+      "lead": "Deep indigo sea drawn with fine Chinese gongbi wave lines",
+      "description": "An even pattern of traditional curling water lines in thin cyan and pale blue ink over graded indigo and purple mineral colour, a few tiny pearls of light.",
+      "sheet": "sheet of silk",
+      "style": "Chinese gongbi",
+      "medium": "Chinese gongbi painting with heavy colour, every form enclosed by a fine even ink line and filled with smoothly graded mineral colour, tiles and scales drawn one by one",
+      "palette": "azurite blue, purple, cyan, pearl white, deep indigo, no warm colour"
+    },
+    "KH": {
+      "lead": "Black scratchboard ground with fine blue scratched lines",
+      "description": "A black board with thin tangled wandering hatch lines scratched out in moonlight blue, suggesting forest floor, roots, bramble and drifting fog, denser in some patches and empty black in others.",
+      "sheet": "board",
+      "style": "Scratchboard",
+      "medium": "scratchboard, each form a black shape with its moonlit side scratched out in fine tangled hatch lines",
+      "palette": "black, moonlight blue, yellow only for things that give light, red only for danger"
+    },
+    "TF": {
+      "lead": "Pixel-art swamp and old stone ground at night",
+      "description": "Hard square pixels, a small fixed palette, ordered dither only: dark teal swamp water, moss green, patches of violet stone paving, and a few thin neon cyan circuit lines running through.",
+      "sheet": "ground",
+      "style": "Pixel-art",
+      "medium": "pixel art, a hard grid of square pixels, a small fixed palette, shading only by ordered dither, no blur and no anti-aliasing",
+      "palette": "night violet stone, swamp green, mud brown, dark teal, thin neon cyan, magenta-pink and yellow lines as the only bright colours"
+    }
+  }
+}

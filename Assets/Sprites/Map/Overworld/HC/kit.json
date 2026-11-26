@@ -1,0 +1,140 @@
+{
+  "world": "HC",
+  "name": "HollowCastle",
+  "medium": "painterly realism",
+  "ground": "ground.jpg",
+  "groundLuma": 0.216,
+  "groundMean": "#373737",
+  "tone": "dark",
+  "ink": "#f4ead2",
+  "inkCase": "#1a1412",
+  "seat": 0,
+  "stamps": [
+    {
+      "file": "stamp_0.png",
+      "name": "a grim castle keep",
+      "w": 256,
+      "h": 240,
+      "sheetW": 331,
+      "sheetH": 310,
+      "anchor": [
+        0.4886,
+        0.9154
+      ],
+      "foot": 0.9609,
+      "band": "any"
+    },
+    {
+      "file": "stamp_1.png",
+      "name": "a ruined round tower",
+      "w": 255,
+      "h": 256,
+      "sheetW": 307,
+      "sheetH": 308,
+      "anchor": [
+        0.5017,
+        0.9127
+      ],
+      "foot": 0.9686,
+      "band": "any"
+    },
+    {
+      "file": "stamp_2.png",
+      "name": "an iron portcullis gate in a wall",
+      "w": 256,
+      "h": 229,
+      "sheetW": 330,
+      "sheetH": 295,
+      "anchor": [
+        0.5699,
+        0.9187
+      ],
+      "foot": 0.8984,
+      "band": "any"
+    },
+    {
+      "file": "stamp_3.png",
+      "name": "a pit of glowing lava",
+      "w": 256,
+      "h": 194,
+      "sheetW": 335,
+      "sheetH": 254,
+      "anchor": [
+        0.5002,
+        0.9115
+      ],
+      "foot": 0.8711,
+      "band": "any"
+    },
+    {
+      "file": "stamp_4.png",
+      "name": "a cairn of skulls",
+      "w": 256,
+      "h": 254,
+      "sheetW": 305,
+      "sheetH": 303,
+      "anchor": [
+        0.4953,
+        0.9162
+      ],
+      "foot": 0.9766,
+      "band": "any"
+    },
+    {
+      "file": "stamp_5.png",
+      "name": "a drawbridge on chains",
+      "w": 256,
+      "h": 233,
+      "sheetW": 328,
+      "sheetH": 299,
+      "anchor": [
+        0.5164,
+        0.9149
+      ],
+      "foot": 0.9258,
+      "band": "any"
+    },
+    {
+      "file": "stamp_6.png",
+      "name": "a small graveyard",
+      "w": 256,
+      "h": 221,
+      "sheetW": 334,
+      "sheetH": 288,
+      "anchor": [
+        0.5039,
+        0.9141
+      ],
+      "foot": 0.8711,
+      "band": "any"
+    },
+    {
+      "file": "stamp_7.png",
+      "name": "a dead tree",
+      "w": 244,
+      "h": 256,
+      "sheetW": 292,
+      "sheetH": 306,
+      "anchor": [
+        0.4973,
+        0.9163
+      ],
+      "foot": 0.9754,
+      "band": "any"
+    },
+    {
+      "file": "stamp_8.png",
+      "name": "a mine entrance with timber props",
+      "w": 256,
+      "h": 217,
+      "sheetW": 332,
+      "sheetH": 282,
+      "anchor": [
+        0.4839,
+        0.9138
+      ],
+      "foot": 0.8867,
+      "band": "any"
+    }
+  ]
+}

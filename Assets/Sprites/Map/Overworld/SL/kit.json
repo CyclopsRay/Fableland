@@ -1,0 +1,140 @@
+{
+  "world": "SL",
+  "name": "Starland",
+  "medium": "flat minimalist poster",
+  "ground": "ground.jpg",
+  "groundLuma": 0.614,
+  "groundMean": "#e38f50",
+  "tone": "light",
+  "ink": "#3a2a20",
+  "inkCase": "#fff7e6",
+  "seat": 0,
+  "stamps": [
+    {
+      "file": "stamp_0.png",
+      "name": "a colossal half-buried stone head",
+      "w": 256,
+      "h": 171,
+      "sheetW": 333,
+      "sheetH": 223,
+      "anchor": [
+        0.5144,
+        0.9149
+      ],
+      "foot": 0.9766,
+      "band": "any"
+    },
+    {
+      "file": "stamp_1.png",
+      "name": "a tall obelisk",
+      "w": 199,
+      "h": 256,
+      "sheetW": 236,
+      "sheetH": 303,
+      "anchor": [
+        0.503,
+        0.9163
+      ],
+      "foot": 0.9698,
+      "band": "any"
+    },
+    {
+      "file": "stamp_2.png",
+      "name": "a stepped stone plinth",
+      "w": 256,
+      "h": 151,
+      "sheetW": 333,
+      "sheetH": 197,
+      "anchor": [
+        0.5148,
+        0.9125
+      ],
+      "foot": 0.9297,
+      "band": "any"
+    },
+    {
+      "file": "stamp_3.png",
+      "name": "a seated colossus statue",
+      "w": 239,
+      "h": 256,
+      "sheetW": 294,
+      "sheetH": 315,
+      "anchor": [
+        0.5027,
+        0.9199
+      ],
+      "foot": 0.9833,
+      "band": "any"
+    },
+    {
+      "file": "stamp_4.png",
+      "name": "a broken column",
+      "w": 256,
+      "h": 234,
+      "sheetW": 289,
+      "sheetH": 264,
+      "anchor": [
+        0.5046,
+        0.915
+      ],
+      "foot": 0.9766,
+      "band": "any"
+    },
+    {
+      "file": "stamp_5.png",
+      "name": "a monument with a star-shaped opening",
+      "w": 256,
+      "h": 252,
+      "sheetW": 288,
+      "sheetH": 283,
+      "anchor": [
+        0.5003,
+        0.9161
+      ],
+      "foot": 0.9766,
+      "band": "any"
+    },
+    {
+      "file": "stamp_6.png",
+      "name": "an oasis with one palm",
+      "w": 256,
+      "h": 245,
+      "sheetW": 309,
+      "sheetH": 296,
+      "anchor": [
+        0.518,
+        0.9157
+      ],
+      "foot": 0.9609,
+      "band": "any"
+    },
+    {
+      "file": "stamp_7.png",
+      "name": "a striped caravan tent",
+      "w": 256,
+      "h": 187,
+      "sheetW": 331,
+      "sheetH": 242,
+      "anchor": [
+        0.5078,
+        0.9158
+      ],
+      "foot": 0.9805,
+      "band": "any"
+    },
+    {
+      "file": "stamp_8.png",
+      "name": "a crescent dune",
+      "w": 256,
+      "h": 171,
+      "sheetW": 314,
+      "sheetH": 210,
+      "anchor": [
+        0.4837,
+        0.9095
+      ],
+      "foot": 0.8633,
+      "band": "any"
+    }
+  ]
+}

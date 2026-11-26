@@ -1,0 +1,140 @@
+{
+  "world": "BM",
+  "name": "Banboo Maze",
+  "medium": "ink wash (xieyi)",
+  "ground": "ground.jpg",
+  "groundLuma": 0.862,
+  "groundMean": "#e2dbcd",
+  "tone": "light",
+  "ink": "#3a2a20",
+  "inkCase": "#fff7e6",
+  "seat": 0,
+  "stamps": [
+    {
+      "file": "stamp_0.png",
+      "name": "a towering peak crowned with pines",
+      "w": 256,
+      "h": 240,
+      "sheetW": 340,
+      "sheetH": 319,
+      "anchor": [
+        0.5076,
+        0.9251
+      ],
+      "foot": 0.8828,
+      "band": "any"
+    },
+    {
+      "file": "stamp_1.png",
+      "name": "a bamboo grove",
+      "w": 243,
+      "h": 256,
+      "sheetW": 285,
+      "sheetH": 300,
+      "anchor": [
+        0.4984,
+        0.9163
+      ],
+      "foot": 0.9753,
+      "band": "any"
+    },
+    {
+      "file": "stamp_2.png",
+      "name": "a twisted old pine",
+      "w": 256,
+      "h": 225,
+      "sheetW": 320,
+      "sheetH": 281,
+      "anchor": [
+        0.6061,
+        0.9144
+      ],
+      "foot": 0.793,
+      "band": "any"
+    },
+    {
+      "file": "stamp_3.png",
+      "name": "a pavilion on a crag",
+      "w": 254,
+      "h": 256,
+      "sheetW": 307,
+      "sheetH": 309,
+      "anchor": [
+        0.5028,
+        0.9163
+      ],
+      "foot": 0.9724,
+      "band": "any"
+    },
+    {
+      "file": "stamp_4.png",
+      "name": "a small stone arch bridge",
+      "w": 256,
+      "h": 160,
+      "sheetW": 343,
+      "sheetH": 214,
+      "anchor": [
+        0.5658,
+        0.9134
+      ],
+      "foot": 0.7148,
+      "band": "any"
+    },
+    {
+      "file": "stamp_5.png",
+      "name": "a cliff with a waterfall",
+      "w": 251,
+      "h": 256,
+      "sheetW": 318,
+      "sheetH": 324,
+      "anchor": [
+        0.5112,
+        0.9163
+      ],
+      "foot": 0.8765,
+      "band": "any"
+    },
+    {
+      "file": "stamp_6.png",
+      "name": "a slender pagoda",
+      "w": 216,
+      "h": 256,
+      "sheetW": 286,
+      "sheetH": 339,
+      "anchor": [
+        0.4888,
+        0.8582
+      ],
+      "foot": 0.9491,
+      "band": "any"
+    },
+    {
+      "file": "stamp_7.png",
+      "name": "a cluster of misty hills",
+      "w": 256,
+      "h": 205,
+      "sheetW": 335,
+      "sheetH": 268,
+      "anchor": [
+        0.5388,
+        0.9125
+      ],
+      "foot": 0.8633,
+      "band": "any"
+    },
+    {
+      "file": "stamp_8.png",
+      "name": "a village of tiled roofs",
+      "w": 256,
+      "h": 233,
+      "sheetW": 328,
+      "sheetH": 298,
+      "anchor": [
+        0.5216,
+        0.7752
+      ],
+      "foot": 0.8594,
+      "band": "any"
+    }
+  ]
+}

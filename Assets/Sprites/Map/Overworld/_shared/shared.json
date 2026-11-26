@@ -1,0 +1,81 @@
+{
+  "desk": "desk.jpg",
+  "paper": "paper.png",
+  "char": "char.jpg",
+  "waves": {
+    "file": "waves.png",
+    "cells": [
+      [
+        0,
+        0,
+        224,
+        120
+      ],
+      [
+        224,
+        0,
+        224,
+        120
+      ],
+      [
+        448,
+        0,
+        224,
+        120
+      ],
+      [
+        672,
+        0,
+        224,
+        120
+      ],
+      [
+        0,
+        120,
+        224,
+        120
+      ],
+      [
+        224,
+        120,
+        224,
+        120
+      ],
+      [
+        448,
+        120,
+        224,
+        120
+      ],
+      [
+        672,
+        120,
+        224,
+        120
+      ]
+    ]
+  },
+  "compass": {
+    "file": "compass.png",
+    "north": "up"
+  },
+  "pins": {
+    "file": "pins.png",
+    "cell": 80,
+    "radius": 24.0,
+    "shapes": [
+      "circle",
+      "diamond",
+      "triangle",
+      "square",
+      "ring"
+    ],
+    "rows": [
+      "shadow",
+      "sticker",
+      "head",
+      "gloss"
+    ]
+  },
+  "light": "upper left"
+}

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://Scripts/Map/Pages/Dev/OverworldArtDemo.cs" id="1"]
+
+[node name="OverworldArtDemo" type="Node2D"]
+script = ExtResource("1")

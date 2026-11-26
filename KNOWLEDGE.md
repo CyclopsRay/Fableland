@@ -187,6 +187,99 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A band offset from a line with sharp corners folds over itself — and a frontier cut per cell stops at every cell (v0.11.4, overworld pages)
+- **Symptom:** the first charred frontier had a crossed, bow-tie sliver at every corner
+  where three city fields meet, and a pale wedge of unburnt page at each of them.
+- **Cause:** two things. The scorch and bite bands were offset 5 – 18 px from a polyline
+  whose corners are sharp (Voronoi vertices); past the corner's radius an offset curve
+  crosses itself and its quads flip. And each field's frontier was drawn as its own run,
+  tapered to nothing at both ends — so the burn closed and reopened at every cell.
+- **Rule:** before offsetting a band from generated geometry, (1) join the pieces into
+  continuous lines (directed segments, living side always on the right, chained end to
+  start through a 0.5 px hash — `OverworldPageView.Chain`), (2) round the line over more
+  than the largest offset (`PaperCut.Rounded`, a moving average) and take normals from the
+  rounded copy, (3) never let the offset edge fall short of the true corner (the fill band
+  still starts at the unrounded line). Taper only where a run really ends.
+- **Why:** an offset is only a curve while the offset distance is under the radius of
+  curvature. Field boundaries have radius zero at every vertex.
+
+### Pieces from polygon clipping do not meet exactly — grow them by a hair (v0.11.4, overworld pages)
+- **Symptom:** bright specks of unburnt page inside the char, exactly where three fields meet.
+- **Rule:** when adjacent polygons come out of `Geometry2D.IntersectPolygons` (or any
+  Clipper call) and must tile without gaps, grow each by ~0.7 px (`OffsetPolygon`, mitre)
+  before triangulating, and fall back to the ungrown piece if the grown one will not
+  triangulate.
+- **Why:** Clipper snaps to a fixed grid, so a vertex shared by three cells comes back as
+  three vertices a few thousandths of a pixel apart — enough for one pixel of what is
+  underneath at high zoom.
+
+### Keying an AI sprite sheet off flat magenta: three traps (v0.11.4, overworld kits)
+- **Symptom:** (1) a threshold key ate holes in purple and pink paint, or left the
+  background opaque where it showed *through* a symbol (between a pavilion's columns, a
+  gate's bars) because the model painted it a shade off the key; (2) grey stone and green
+  leaves carried a pink cast — the model bounces light off its own background; (3) the
+  ink-wash sheet's white mist came out with a pink halo once the matte was forced opaque.
+- **Rule:** matte by *chroma difference* (`1 − (min(r, b) − g) / (min(Kr, Kb) − Kg)`: exact
+  for achromatic paint); force opaque only what is more than ~3 px from pure key **and**
+  not itself near the key colour; un-mix the key from every part-transparent pixel; despill
+  everywhere for a palette with no pink or purple, in the edge band only for one that owns
+  them; never force or erode a sheet whose paint dissolves into paper. All of it is per
+  world, as data (`WORLDS` in `Tools/overworld_art/build_kits.py`).
+- **Why:** one threshold cannot tell purple paint, magenta spill and magenta background
+  apart; position (near the edge or not) and hue balance (r ≈ b) can. And always review on
+  three grounds — dark, white, the world's own (`--sheet`): each hides a different fringe.
+
+### `.import` is git-ignored, so import settings are not part of the project — set them in code (v0.11.4, reference)
+- **Rule:** a texture that will be drawn much smaller than it was painted needs mipmaps,
+  and "Mipmaps → Generate" in the import dock does not survive a clone (`*.import` is in
+  `.gitignore`). Build them at load: `texture.GetImage()` → `GenerateMipmaps()` →
+  `ImageTexture.CreateFromImage` (`PageTextures.Mipmapped`), and set
+  `TextureFilter = LinearWithMipmaps` on the node. The same goes for any other import
+  option a feature depends on.
+- **Why:** a kit's ground is 1024 px drawn at about a third of that; without mipmaps the
+  scratchboard lines, pixel art and hatching shimmer when the map moves — and the setting
+  that fixes it would silently exist on one machine only.
+
+### A sprite with a baked shadow cannot be mirrored or freely rotated (v0.11.4, overworld furniture)
+- **Rule:** everything in the pages view is lit from the upper left because the kits'
+  symbols are; a shadow baked into a sprite turns with it. Do not flip such a sprite at draw
+  time — cut the mirror image into the sheet (the wave sheet holds each wave twice) — and
+  keep rotation small. Kit symbols are never mirrored for the same reason.
+- **Why:** one shadow falling the wrong way is what makes a collage look pasted.
+
+### Capture tooling: the debug overlay is in the picture, and a tool that opens the Map starts a run (v0.11.4, reference)
+- `DebugManager` is an autoload `CanvasLayer`; its `DBG` button is in every screenshot
+  unless the tool hides it (`DebugManager.Instance.Visible = false`).
+- Instantiating `Scenes/Map.tscn` starts a run if none exists. A tool that does it must set
+  `SaveGameService.DirectoryOverride` to a scratch folder first and put it back
+  (`OverworldArtDemo.ShootRealMap`), exactly as the run check does.
+- A windowed capture can be given a scratch home so that not even `debug_log.txt` lands in
+  the real `user://`: `open -g -n -W --env HOME=/scratch/dir -a /Applications/Godot_mono.app
+  --args --path "$PWD" --log-file /abs/log …`. `--log-file` is how to read a run started
+  with `open`, which has no stdout.
+- Docs images sit inside the project, so Godot imports them. A `.gdignore` in the folder
+  (`Docs/Art/Overworld/captures/`) keeps them out.
+
+### Godot 4.7 facts this work checked by building and running (v0.11.4, reference)
+- An `ArrayMesh` whose vertex array is `Vector2[]` draws in a `MeshInstance2D`, with
+  per-vertex colour and a texture; its UVs are **0..1** (a `Polygon2D`'s are pixels). One
+  `ArrayMesh` can be shared by two `MeshInstance2D`s with different materials, and
+  `ClearSurfaces()` + `AddSurfaceFromArrays` updates both.
+- `CanvasItemMaterial` `BlendMode` `Mul` and `Add` work on the Mobile renderer.
+  `Viewport.Msaa2D` can be set at runtime (and should be put back).
+- `Control.ClipContents` clips `Node2D` children too.
+- `Geometry2D.OffsetPolygon`, `TriangulatePolygon` and `IntersectPolygons` did what their
+  documentation says for every outline here (realm polygons, river strips, the pentagon,
+  city fields). `PaperCut.Tear` relies on the documented empty result of
+  `TriangulatePolygon` for an outline that crosses itself (it halves the roughness and
+  tears again); no seed captured needed the fallback, so that path is untested in practice.
+  Opposite windings were not tried.
+- A map view built as children carrying one `Transform2D` (the same affine `Project` every
+  other view uses: `origin = Project(0)`, axes `Project(1,0) − origin`, `Project(0,1) −
+  origin`) pans, zooms, rotates and tilts without re-running any `_Draw`.
+- `ThemeDB.FallbackFont` compiles in 4.7. It is only a fallback here and was never
+  exercised: both hosts pass in a `Control`'s `GetThemeDefaultFont()` (v0.2.3).
+
 ### Coverage has two directions — every node had a map, and two maps had no node (v0.11.3, no-orphan check)
 - **Symptom:** `MapContentCheck` has asked since v0.10.7 whether every kind of combat node is
   served by a shipped map. Nothing asked the reverse. Cloud Court's map was tagged for a

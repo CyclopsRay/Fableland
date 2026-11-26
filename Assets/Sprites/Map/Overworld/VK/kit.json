@@ -1,0 +1,140 @@
+{
+  "world": "VK",
+  "name": "VanillaKindom",
+  "medium": "storybook watercolour",
+  "ground": "ground.jpg",
+  "groundLuma": 0.855,
+  "groundMean": "#efd5cd",
+  "tone": "light",
+  "ink": "#3a2a20",
+  "inkCase": "#fff7e6",
+  "seat": 0,
+  "stamps": [
+    {
+      "file": "stamp_0.png",
+      "name": "a cream seaside castle with red roofs",
+      "w": 256,
+      "h": 244,
+      "sheetW": 335,
+      "sheetH": 319,
+      "anchor": [
+        0.5087,
+        0.9191
+      ],
+      "foot": 0.9453,
+      "band": "any"
+    },
+    {
+      "file": "stamp_1.png",
+      "name": "a leaning palm tree",
+      "w": 221,
+      "h": 256,
+      "sheetW": 271,
+      "sheetH": 314,
+      "anchor": [
+        0.4555,
+        0.9199
+      ],
+      "foot": 0.8688,
+      "band": "any"
+    },
+    {
+      "file": "stamp_2.png",
+      "name": "a beach hut on stilts",
+      "w": 256,
+      "h": 193,
+      "sheetW": 327,
+      "sheetH": 246,
+      "anchor": [
+        0.4783,
+        0.9118
+      ],
+      "foot": 0.9102,
+      "band": "any"
+    },
+    {
+      "file": "stamp_3.png",
+      "name": "a striped lighthouse",
+      "w": 256,
+      "h": 249,
+      "sheetW": 325,
+      "sheetH": 316,
+      "anchor": [
+        0.4949,
+        0.9156
+      ],
+      "foot": 0.9805,
+      "band": "coast"
+    },
+    {
+      "file": "stamp_4.png",
+      "name": "a small sailboat",
+      "w": 229,
+      "h": 256,
+      "sheetW": 267,
+      "sheetH": 298,
+      "anchor": [
+        0.529,
+        0.9163
+      ],
+      "foot": 0.9782,
+      "band": "coast"
+    },
+    {
+      "file": "stamp_5.png",
+      "name": "a sand dune with a parasol",
+      "w": 256,
+      "h": 196,
+      "sheetW": 324,
+      "sheetH": 248,
+      "anchor": [
+        0.5041,
+        0.9168
+      ],
+      "foot": 0.8867,
+      "band": "any"
+    },
+    {
+      "file": "stamp_6.png",
+      "name": "a pomegranate tree heavy with red fruit",
+      "w": 236,
+      "h": 256,
+      "sheetW": 293,
+      "sheetH": 318,
+      "anchor": [
+        0.5091,
+        0.9163
+      ],
+      "foot": 0.928,
+      "band": "any"
+    },
+    {
+      "file": "stamp_7.png",
+      "name": "a rocky headland",
+      "w": 256,
+      "h": 229,
+      "sheetW": 327,
+      "sheetH": 293,
+      "anchor": [
+        0.4588,
+        0.9187
+      ],
+      "foot": 0.7734,
+      "band": "coast"
+    },
+    {
+      "file": "stamp_8.png",
+      "name": "a tiny fishing village",
+      "w": 256,
+      "h": 237,
+      "sheetW": 334,
+      "sheetH": 309,
+      "anchor": [
+        0.5204,
+        0.9152
+      ],
+      "foot": 0.8555,
+      "band": "coast"
+    }
+  ]
+}

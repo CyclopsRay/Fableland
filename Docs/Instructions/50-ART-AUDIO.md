@@ -64,6 +64,12 @@ The contract, already in place for Pomegraknight:
   and the semantic distinction of map icons. Palette per world is fixed in `MapGDD.md` §2.
 - Map iconography is currently semantic shapes (circle/diamond/triangle/?) — an easy,
   high-value art pass later, but **keep silhouettes distinct at min zoom**.
+- **Overworld art is a page kit per world plus furniture shared by every island** — the
+  torn-pages view (`MapGDD.md` §11a). A kit is one ground and nine map symbols in the
+  world's medium (`Assets/Sprites/Map/Overworld/<W>/`, built by
+  `Tools/overworld_art/build_kits.py`); the desk, waves, compass, pins, torn edges and the
+  burnt VOID are code and never per-world. Kit spec, generation recipe and placement rules:
+  **`Docs/Art/OverworldStyle.md`**. Its pins keep the node kinds' shapes as stickers.
 - UI assets live in `Assets/Sprites/UI/` (mugshots by HP band, cooldown rings, ult fill).
   New HUD elements follow the same set-of-SVG-states pattern. Reserved future HUD:
   boss HP bar (FOES §8), day/stamina during Adventure, item slots + CD pips.
