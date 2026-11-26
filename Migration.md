@@ -9,6 +9,32 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.11.5** — **Style exploration and research, archived.** Documents and pictures only:
+  **nothing here changes a shipped asset**, and no code changed. `Docs/Art/StyleExploration/`
+  holds AI concept images made in Tripo Studio (GPT Image 2.5, Midjourney v8.2) for the
+  owner to choose art directions from: **67 arena concepts over nine worlds and 11 overworld
+  concepts** (`img/`, 78 previews; prompts in `README.md` / `prompts.json`, provenance in
+  `manifest.json`), a render of what each world ships today for comparison (`ref/`, 9), the
+  art-direction review with a recommendation per world (`REVIEW.md`, `review.json`), the
+  pick gallery page (`index.html`, built by `Tools/style_exploration/build_gallery.py`; also
+  published as a private artifact), and the 16 kit sheets the overworld page kits of 0.11.4
+  were cut from (`kit/`). `Tools/style_exploration/fetch_tripo_images.py` is how the images
+  were saved. `Docs/Research/` holds the two research digests behind the feedback / VFX
+  and audio designs (`R2-vfx-feel-research.md`, `R1-audio-research.md`). **The full-size
+  originals are not in git** (`_originals/`, 94 PNGs, 465 MB, git-ignored; they exist only
+  as untracked files in the worktree that made them) — the 16 kit sheets among them are
+  what `Tools/overworld_art/build_kits.py` reads, so the page kits cannot be rebuilt from a
+  clone alone. To cut the weight the 78 previews in `img/` were re-encoded in place, names
+  unchanged: longest side 1280 px (wide) or 900 px (square), progressive JPEG, quality 70 —
+  25.3 MiB → 11.7 MiB (26.5 → 12.3 MB). Quality 80 came to 14.6 MiB; measured against the
+  previews as made, 70 at this size keeps more than 80 at a smaller one. The fetch tool
+  still writes 1600 / 1100 px at quality 86, so a re-run writes larger files. `ref/` and
+  `kit/img/` are as made. A
+  `.gdignore` keeps the folder out of Godot's import (KNOWLEDGE v0.11.4).
+  (Verification: all 103 images decode; every file the gallery page and the two manifests
+  name exists; `ref/`, `kit/img/` and the text files are byte-identical to the copies they
+  came from; `dotnet build`, 0 errors/warnings; the map content check, 1170 — and the
+  feedback, boss and run checks, 249 / 109 / 1328, as in 0.11.4.)
 - **0.11.4** — **The overworld as torn storybook pages (a third map view; demo).** The
   owner's question: the main map is random, yet every region must keep its own style — how
   do we make art so any generated map *feels like a map* while each region keeps its style?

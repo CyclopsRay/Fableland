@@ -1,0 +1,246 @@
+{
+  "about": "Art-direction notes for the style-exploration gallery. Source for Tools/style_exploration/build_gallery.py; the long form is REVIEW.md.",
+  "reviewed": "2026-11-25",
+  "order": [
+    "VK",
+    "SL",
+    "BM",
+    "HC",
+    "TD",
+    "PL",
+    "KH",
+    "TF",
+    "CC",
+    "OW"
+  ],
+  "worlds": {
+    "VK": {
+      "name": "VanillaKindom · Beach",
+      "medium": "Storybook watercolour & ink",
+      "canvas": "#6DB8D8",
+      "ships_ref": "Docs/Art/References/unity_beach_design_sheet.png",
+      "ships": "A watercolour sticker sheet: soft washes in a pencil-brown line with a white die-cut edge. Hand-made marks, stiff placement.",
+      "verdict": [
+        "Pick A as Midjourney paints it (mj2): the world keeps its medium and its shipped props; looseness comes from bare paper, running washes and a ground that is a line, not a row of tiles.",
+        "Runner-up C (torn-paper collage), the best kit fit. Carry over D's white icing cap on every walkable top and its pomegranate tree."
+      ],
+      "pick": "VK-A-mj2",
+      "runner_up": "VK-C",
+      "notes": {
+        "VK-A": "Handsome but over-rendered: tight JRPG concept art under a paper texture, not a loose storybook. The ground is a beach seen from above and the ledges are buried in detail.",
+        "VK-A-mj1": "Truest picture-book hand, wrong picture: a beach from above, no ledges, and a drawn border the prompt forbade.",
+        "VK-A-mj2": "The best A: straight-on, driftwood floating at three heights, trestles and a boat to stand on, mostly air and bare paper.",
+        "VK-A-mj3": "Best ground of the set, one ink line with a coral wash bleeding below it. The floating planks repeat like stamps.",
+        "VK-A-mj4": "Wrong view and nothing to jump to. The sand slab with a red underside is the one idea worth keeping.",
+        "VK-B": "Most playable: flat-topped rock bridge, three distinct ledges, fighters read. 'Mid-century' was ignored; this is modern indie key art.",
+        "VK-C": "Medium fully carried, and the kraft ground strip is unmistakable. Wave crests behind the fighters and magenta flowers compete with them.",
+        "VK-D": "White icing caps every walkable top, one of the best readability ideas in the batch. The pink-and-cream fighter vanishes into a pink-and-cream world."
+      }
+    },
+    "SL": {
+      "name": "Starland · Starfield",
+      "medium": "Flat minimalist poster",
+      "canvas": "#17133A",
+      "ships_ref": "Docs/Art/References/Realms/starfield.png",
+      "ships": "Clean flat vector under a banded sky. The dolmen is a rectangle of brick courses and the sand is a ruled strip with a repeating scalloped lip.",
+      "verdict": [
+        "Pick A (GPT Image): the bible's Starfield with the bricks taken out. Colossal irregular monoliths, a lit top plane wherever you can stand, and the emptiness that makes this the long-range world.",
+        "Runner-up B (risograph), only with an indigo night full of stars. Carry over C's gold zodiac as a hairline ring in the far sky."
+      ],
+      "pick": "SL-A",
+      "runner_up": "SL-B",
+      "notes": {
+        "SL-A": "Mostly sky; every stone a lit ochre face against a plum shadow face. The lit top plane marks every ledge. Fighters came out far too small.",
+        "SL-A-mj1": "Truly flat, gold-rimmed cloud bands, a head in three planes. Correct, and it looks like stock vector art; outlines the prompt forbade.",
+        "SL-A-mj2": "Best of the four: leaning obelisk with star cut-outs, teal stair-block, two slabs at different heights. Poster-flat and still a place.",
+        "SL-A-mj3": "Most arena-like, three slabs at three heights with gold cracks. A third fighter nobody asked for, and clip-art stars.",
+        "SL-A-mj4": "Emptiest and calmest: head, small obelisk, two tiny fighters on a band of sand. Nothing to jump to.",
+        "SL-B": "Real halftone; far colossi fade by dot density, the best depth device in the batch. But a hot coral sky with one star, and three identical banners.",
+        "SL-C": "Most original idea: the sky is a gilded zodiac ceiling. Also the most crowded; the ornament fills the space fighters jump into.",
+        "SL-D": "Very readable dark layers on a sunset glow, but lumpy like clay, not knife-cut card. It is the familiar silhouette-platformer look."
+      }
+    },
+    "BM": {
+      "name": "Banboo Maze · Wulin 武林",
+      "medium": "Freehand ink 写意",
+      "canvas": "#E4E9E8",
+      "ships_ref": "Docs/Art/References/Realms/wulin.png",
+      "ships": "The v0.10.9 ink repaint. Peaks and pines are loose; the pavilion, roofs and bridge are ruled rectangles and the ground is a block.",
+      "verdict": [
+        "Pick A: GPT Image's wet ink with Midjourney's emptiness. Brush the architecture, cantilever the ledges, leave half the sheet bare. Paper is air and ink is solid, the most readable direction in the batch.",
+        "Runner-up B as a tint only: blue-green on far peaks over white paper. Carry over mj4's duel across a gap."
+      ],
+      "pick": "BM-A",
+      "runner_up": "BM-B",
+      "notes": {
+        "BM-A": "Wet ink, flying-white, mist as bare paper, no warm colour: the medium is carried. Denser than true xieyi, but fighters read perfectly.",
+        "BM-A-mj1": "One-corner composition with more than half the sheet bare. Brush-pen line and tinted wash; moss dots as regular as peppercorns.",
+        "BM-A-mj2": "Best of the four: three clean-topped ledges at three heights across a gorge. A vertical arena, which is what this world is.",
+        "BM-A-mj3": "Three small stones float in mid-air as steps, the weakest idea in the set. Shelf, bamboo and pavilion crag are well drawn.",
+        "BM-A-mj4": "Two shelves reach across a gap with a fighter on each: a duel over a chasm, the most wuxia staging in the batch.",
+        "BM-B": "Faithful and sumptuous: mineral blue-green, gold-line clouds, silk weave. Textured edge to edge and more saturated than the fighters.",
+        "BM-C": "Dramatic but not the medium: rendered lantern glow and moon craters make it generic dark-fantasy key art. A dozen waterfalls, none readable as the one that carries."
+      }
+    },
+    "HC": {
+      "name": "HollowCastle · Dungeon",
+      "medium": "Lit realism (relief shading)",
+      "canvas": "#0E0D12",
+      "ships_ref": "Docs/Art/References/Realms/dungeon.png",
+      "ships": "The most rigid kit: identical relief-shaded blocks in running bond, niches at equal spacing, lava as a textured rectangle.",
+      "verdict": [
+        "Pick C (dark fairy-tale gouache), brought indoors: crooked is the opposite of rigid, chunky paint stays calm behind a brawl, and moss caps mark every walkable top. Drop the moon and sky so fire is the only saturated colour.",
+        "Runner-up B (prison etching) if the Dark Wood does not also hatch. Carry over Midjourney's irregular masonry kit and B's chained giant."
+      ],
+      "pick": "HC-C",
+      "runner_up": "HC-B",
+      "notes": {
+        "HC-A": "Exactly the medium asked for, and the most generic picture in the batch: stock dark-fantasy concept art, with fire-glow flooding half the frame.",
+        "HC-A-mj1": "Not the medium: black outlines and cartoon shading. But no two stones alike. Three children, and a floor seen from above.",
+        "HC-A-mj2": "Best of the four: arches, a broken stair, four timber ledges at four heights, cold light from above against lava glow.",
+        "HC-A-mj3": "The floor splits and the gap is the lava: the best hazard staging of the set.",
+        "HC-A-mj4": "A three-storey timber scaffold against a ruined turret, a ready-made multi-ledge prop.",
+        "HC-B": "Piranesi's prisons, fully carried: cross-hatching on cream and one orange for fire. A chained giant in the distance. Busy at fighter height.",
+        "HC-C": "Crooked towers, a lava cauldron, a waving skeleton: character and humour in chunky paint. But it is outdoors under the Dark Wood's moon.",
+        "HC-D": "Most original: a castle cut open into rooms, flames as curling tongues, gold leaf. Saturated everywhere, and it added saints the game should not have."
+      }
+    },
+    "TD": {
+      "name": "TheDeserted · Ghost Town",
+      "medium": "Linocut / woodblock print",
+      "canvas": "#F1E3C4",
+      "ships_ref": "Docs/Art/References/Realms/ghost_town.png",
+      "ships": "A handsome flat print in ochre, rust, teal and black. The saloon is a rectangle ruled with even planks and the line is clean vector, not cut.",
+      "verdict": [
+        "Pick A (GPT Image): the medium the world already has, finally cut by hand. Black is solid, cream is air, and every step toward it is procedural. Keep walls behind the fight in one pale ink.",
+        "Runner-up C (toy theatre), where flat fronts and layers become the point. Carry over Midjourney's black bar with white gouges for ground and ledges."
+      ],
+      "pick": "TD-A",
+      "runner_up": "TD-C",
+      "notes": {
+        "TD-A": "A real cut block: gouges, ink skips, three inks off register, and an open cream field the fighters own. One of the best images in the batch.",
+        "TD-A-mj1": "Cartoon line with a linocut veneer: six colours, no skips, wagons parked on floating slabs. Reads like a sticker sheet.",
+        "TD-A-mj2": "Best of the four for its solid black bars cut with white gouges, an excellent way to say 'this is solid'.",
+        "TD-A-mj3": "Print-like, with its own carved border, but a picture of a town and not an arena.",
+        "TD-A-mj4": "Three identical black bars as a staircase: the repeated stamp. Far mesas in key line only is a true print device.",
+        "TD-B": "The loneliest and loosest: sepia pen and wash, a crow, a huge pale sky. All one tan, and the same T-shaped ledge three times.",
+        "TD-C": "A cardboard stage photographed: flat fronts with white cut edges, a tumbleweed on a thread. Charming, and saturated edge to edge.",
+        "TD-D": "A realistic 3D street under an old-photo filter, in central perspective. The least hand-made image here, and not buildable as a kit."
+      }
+    },
+    "PL": {
+      "name": "Palace of LOOING · Loong's Nest 龙宫",
+      "medium": "Gongbi 工笔重彩",
+      "canvas": "#0C1230",
+      "ships_ref": "Docs/Art/References/Realms/loongs_nest.png",
+      "ships": "Even line and graded colour are already there. So are a ruled grid of roof tiles, dead-straight pillars, mirror symmetry and a bubble column that repeats.",
+      "verdict": [
+        "Pick A as Midjourney paints it (mj3), a shade darker: keep the fine line and graded colour, break the symmetry, build from terraces, shells and kelp. It is the medium a code painter does best.",
+        "Runner-up C (bioluminescent), the crowd-pleaser but a lighting idea, not a medium. Carry over GPT A's dragon gate and mj1's glass bubble columns."
+      ],
+      "pick": "PL-A-mj3",
+      "runner_up": "PL-C",
+      "notes": {
+        "PL-A": "A dragon palace in full dress, fine line and graded blues. Filled corner to corner at one mid-blue, so the purple fighter disappears. Waterfalls under the sea.",
+        "PL-A-mj1": "Gongbi as a picture book. Bubble lifts drawn as glass columns, the clearest 'this carries you' in the batch. A lettered signboard.",
+        "PL-A-mj2": "Most arena-like: halls, stairs and stacked terraces around open water, fighters squared up. Two lettered signboards.",
+        "PL-A-mj3": "Best of the four: open water, shelves at different heights, pearl-bubbles rising through the gap, kelp as a near layer, no lettering.",
+        "PL-A-mj4": "Two terraces and big clams over a flat indigo deep. Pink coral and yellow lanterns let warm colour in.",
+        "PL-B": "A convincing cave mural, unlike anything else in the game. The fighters dissolve into it, it reads as mountains, and it includes a Buddha figure that must not ship.",
+        "PL-C": "Seductive: jellyfish domes, a dragon-skeleton bridge, a red scarf that pops. Also the default look of AI fantasy art, glow on black."
+      }
+    },
+    "KH": {
+      "name": "Kingdom of Horror · Dark Wood",
+      "medium": "Scratchboard",
+      "canvas": "#111B3D",
+      "ships_ref": "Docs/Art/References/Realms/dark_wood.png",
+      "ships": "Blue line on a navy board. The trees are organic; the platforms are one sprite repeated six times and the two thickets are the same scribble.",
+      "verdict": [
+        "Pick C (silhouette shadow theatre): black is solid, light is air. The most readable, among the cheapest to build, and a real storybook tradition for fairy-tale horror.",
+        "Runner-up A as Midjourney paints it (mj2), the shipped scratchboard loosened. Carry A's colour code into C: yellow only for light, red only for danger."
+      ],
+      "pick": "KH-C",
+      "runner_up": "KH-A-mj2",
+      "notes": {
+        "KH-A": "The truest scratchboard in the batch, colour code obeyed exactly. Also grim and murky: a metal-album cover with blood under the traps.",
+        "KH-A-mj1": "Friendlier: long white scratch lines, four shelves joined by rope bridges, red lantern-traps. Clear, but as symmetrical as a tile map.",
+        "KH-A-mj2": "Best of the four: trees with glowing eyes, sagging rope bridges, a stepped hill to the castle. Asymmetrical and every ledge findable.",
+        "KH-A-mj3": "The most open, three shelves with icicle drips. One fighter is bright red, which this world reserves for danger.",
+        "KH-A-mj4": "A taller arena with shelves at three heights and two shadow-children for fighters. The floor is a mat of scratched roots.",
+        "KH-B": "Cosy-spooky pen and wash with a pumpkin patch, gates and crows. Well drawn, busier and more ordinary than asked: a Halloween picture book.",
+        "KH-C": "Pure black cut shapes on glowing tissue, a pumpkin king on the balcony. The most beautiful image of this world; black on deep blue is weak at the left."
+      }
+    },
+    "TF": {
+      "name": "The Forgotten · Forgotten City",
+      "medium": "Pixel art",
+      "canvas": "#0C0C22",
+      "ships_ref": "Docs/Art/References/Realms/forgotten_city.png",
+      "ships": "True low-res pixel art, very sparse: one flat pyramid, three identical slabs, a rectangle of swamp. Stiff from emptiness and repetition, not from the medium.",
+      "verdict": [
+        "Pick A (GPT Image's scene, held to Midjourney's pixel discipline): the hero is called Pixolotl, so the world is pixel art, and A shows hard pixels can be deep, mossy and irregular. The most code-friendly medium of the nine.",
+        "Runner-up B, only as borrowed effects (neon mirrored in the water, mist). Carry over C's feathered-serpent bridge and axolotl spirit as pixel murals and props."
+      ],
+      "pick": "TF-A",
+      "runner_up": "TF-B",
+      "notes": {
+        "TF-A": "Night city over a swamp, thin neon, moss caps on every top, warm fighters on a cool field. Pixel discipline is loose but it reads at once.",
+        "TF-A-mj1": "Stricter pixels than GPT's, with a dither band and no glow. But the swamp is a top-down map and the four slabs are one stamp.",
+        "TF-A-mj2": "Best of the four for its kit: ledges growing out of the pyramids on carved-face brackets. The river is still drawn from above.",
+        "TF-A-mj3": "Mirror-symmetrical pyramids, beams and tables, and three children. The rigidity we are trying to leave, in pixels.",
+        "TF-A-mj4": "Cleanest layout: four slabs at four heights in an open sky, water edged in cyan. Slabs and floor are plainly repeated blocks.",
+        "TF-B": "A lovely festival night, and no longer quite pixel art: a glowing painting through a pixel filter. Thick neon, thirty light sources, dull fighters.",
+        "TF-C": "A delight: bark-paper codex, a feathered serpent as a ledge, an axolotl spirit, red caps on every top. But not pixels, and the neon needs the dark."
+      }
+    },
+    "CC": {
+      "name": "Cloud Court",
+      "medium": "Cloisonné enamel",
+      "canvas": "#2A1B4A",
+      "ships_ref": "Docs/Art/References/Realms/cloud_court.png",
+      "ships": "Real cloisonné colour arranged with a set square: a square moon-gate panel, a lattice rectangle for ground, mirrored columns, one cloud stamp, a sea of repeating scales.",
+      "verdict": [
+        "Pick B (embroidered silk): soft where enamel is hard, the calmest field for fighters in the whole batch, clouds that look enterable, and real distance from Loong's Nest. Test it at game resolution first.",
+        "Runner-up A as Midjourney paints it (mj3), the cheap route since the cloisonné painter exists. Carry over A's dragon in the clouds and keep the gold as couched thread."
+      ],
+      "pick": "CC-B",
+      "runner_up": "CC-A-mj3",
+      "notes": {
+        "CC-A": "Spectacular for five seconds, exhausting after: gold-veined marble more than enamel cells, no rest anywhere, bright cloud filling the frame.",
+        "CC-A-mj1": "True cloisonné, flat mottled cells and wire spirals. But a decorative panel, not an arena, with a gold frame the prompt forbade.",
+        "CC-A-mj2": "An arena: a banded enamel deck, a palace terrace with a dragon wound round it, open night sky above.",
+        "CC-A-mj3": "Best of the four: open sky, lotus terraces at three heights, an imperial-yellow floor both fighters read against.",
+        "CC-A-mj4": "Darker and busier; the floating red slabs with lattice undersides are the shipped rectangles again. Four children, and a frame.",
+        "CC-B": "Midnight silk, padded white clouds, stitched rock with pale tops, cranes, a couched-gold moon. Medium fully carried; one of the best images in the batch.",
+        "CC-C": "Beautiful cobalt painting on the swell of a jar, with gold-mended cracks. But brush landscape on white with pines and mist is Wulin in blue."
+      }
+    },
+    "OW": {
+      "name": "Overworld (the run map)",
+      "medium": "Five realms, each in its own medium",
+      "canvas": "",
+      "ships_ref": "",
+      "ships": "",
+      "verdict": [
+        "Pick B (torn storybook pages): the game's premise as a picture. Each realm sits on its own paper, tears are rivers, the burn is the VOID, and a torn page is allowed to cut through its picture, so it survives a new island every run.",
+        "Runner-up A as Midjourney paints it (mj3), the safest map. Carry over mj3's bare paper and bold nodes, and the pins and twine of OW-B-mj2."
+      ],
+      "pick": "OW-B",
+      "runner_up": "OW-A-mj3",
+      "notes": {
+        "OW-A": "A map before anything else, and each wedge truly in its own medium. Nodes and roads are tiny and vanish in the dark wood; the pixel realm is a loud green jungle.",
+        "OW-A-mj1": "Clean, with bold stars and dots. But ruled pie-slice borders while the rivers wander elsewhere; one cartoon hand in five palettes.",
+        "OW-A-mj2": "Covered in garbled lettering the prompt forbade, and four compass roses. Discard.",
+        "OW-A-mj3": "The best map of all eleven: rivers are the borders, nodes sit boldly on bare parchment. The media are weak, mostly one cartoon hand.",
+        "OW-A-mj4": "A five-pointed star instead of a pentagon and one river instead of five. Discard as a test of the rule.",
+        "OW-B": "Five torn pages, each in its own medium on its own paper, a charred pentagon burnt through. The strongest separation of realms. Nodes too small to find.",
+        "OW-B-mj1": "Five scraps floating apart, so there is no island. A star, not a pentagon, as in all four of these.",
+        "OW-B-mj2": "Pins joined by twine: the best node-and-road language in the set, legible on any page. No island outline. Star.",
+        "OW-B-mj3": "Best of the four: a disc island in a ringed lagoon, cut-paper waves, pins and thread, each page on its own paper. Star.",
+        "OW-B-mj4": "A cream card disc under the pages keeps the island's outline, a useful trick. Few pins. Star.",
+        "OW-C": "The clearest node graph of all eleven, wooden discs on dotted roads. But a slanted 3D render, and five materials are not five media."
+      }
+    }
+  }
+}

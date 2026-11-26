@@ -1,0 +1,530 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Fableland Style Picks</title>
+<style>
+/* Layout: a sticky pick bar over one long column of worlds. Each world is a header (verdict,
+   what ships today), a grid of directions, then a strip of Midjourney takes. The pictures
+   carry the page; the chrome is neutral grey so that colour is judged fairly. */
+:root{
+  color-scheme:light;
+  --bg:#EDEEF0; --surface:#FFFFFF; --ink:#16181D; --muted:#5A5F6B; --line:#D3D6DD; --well:#DFE1E6;
+  --accent:#A61E3C; --accent-ink:#FFFFFF; --accent-soft:#F4D9DF;
+  --lb-bg:#0B0C0E; --lb-ink:#F2F3F5; --lb-muted:#A9ADB8; --lb-line:#3A3D45; --lb-btn:rgba(11,12,14,.62);
+  --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-display:"Iowan Old Style","Palatino Linotype",Palatino,"Songti SC",Georgia,serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --radius:6px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#121316; --surface:#1B1D21; --ink:#ECEDF0; --muted:#9CA1AD; --line:#2E3139; --well:#23262C;
+    --accent:#F0718A; --accent-ink:#22060C; --accent-soft:#43202A;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#121316; --surface:#1B1D21; --ink:#ECEDF0; --muted:#9CA1AD; --line:#2E3139; --well:#23262C;
+  --accent:#F0718A; --accent-ink:#22060C; --accent-soft:#43202A;
+}
+*{box-sizing:border-box}
+html{padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font-ui)}
+body.lb-open{overflow:hidden}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+[hidden]{display:none!important}
+img{max-width:100%}
+p{margin:0}
+.in{max-width:1560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* buttons */
+.btn{font:500 13px/1.2 var(--font-ui);padding:7px 13px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.pick[aria-pressed="true"],.btn.go{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.like[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+
+/* sticky pick bar */
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar .in{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"t c" "n n";gap:8px 12px;align-items:center;padding-block:8px}
+.bar-t{grid-area:t;min-width:0;display:flex;gap:10px;align-items:baseline;white-space:nowrap}
+.bar-t b{font:600 15px/1.2 var(--font-display)}
+.bar-t span{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+#copyTop{grid-area:c}
+.chips{grid-area:n;display:flex;gap:6px;min-width:0;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;display:inline-flex;gap:6px;align-items:baseline;padding:4px 9px;border:1px solid var(--line);border-radius:999px;color:var(--ink);text-decoration:none;font:600 12px/1.3 var(--font-mono)}
+.chip span{font-weight:400;color:var(--muted)}
+.chip.on{border-color:var(--accent);background:var(--accent-soft)}
+.chip.on span{color:var(--ink)}
+@media (min-width:960px){.bar .in{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"t n c";gap:16px}}
+
+/* intro */
+.intro{padding-block:36px 28px;display:grid;gap:10px}
+.intro h1{margin:0;font:600 30px/1.15 var(--font-display);text-wrap:balance}
+.intro p{max-width:68ch}
+.intro .how{color:var(--muted)}
+
+/* a world */
+.world{padding-block:36px 44px;border-top:1px solid var(--line);scroll-margin-top:calc(env(safe-area-inset-top,0px) + 100px)}
+@media (min-width:960px){.world{scroll-margin-top:calc(env(safe-area-inset-top,0px) + 60px)}}
+.w-head{display:grid;grid-template-columns:minmax(0,1fr);gap:22px;margin-bottom:26px}
+@media (min-width:900px){.w-head.has-ref{grid-template-columns:minmax(0,1fr) 340px;gap:40px;align-items:start}}
+.w-text{min-width:0;display:grid;gap:10px;justify-items:start}
+.w-code{font:600 12px/1 var(--font-mono);letter-spacing:.08em;color:var(--muted)}
+.w-text h2{margin:0;font:600 27px/1.15 var(--font-display);text-wrap:balance}
+.w-medium{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:14px}
+.swatch{width:14px;height:14px;border-radius:3px;border:1px solid var(--line);margin-left:6px}
+.hex{font:12px/1 var(--font-mono);color:var(--muted)}
+.w-verdict{display:grid;gap:4px;max-width:72ch;margin-top:4px}
+.w-verdict p + p + p{color:var(--muted)}
+.w-ref{margin:0;display:grid;grid-template-columns:128px minmax(0,1fr);gap:8px 14px;max-width:560px;min-width:0;justify-items:start;align-items:start}
+.w-ref .shot{grid-row:1 / span 2}
+.w-ref figcaption{font-size:13px;color:var(--muted)}
+@media (min-width:900px){.w-ref{grid-template-columns:minmax(0,1fr);max-width:none}.w-ref .shot{grid-row:auto}}
+.g-label{margin:30px 0 12px;font:500 12px/1.3 var(--font-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.grid{display:grid;gap:30px 20px;grid-template-columns:minmax(0,1fr)}
+.grid.mj{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 12px}
+@media (min-width:720px){
+  .grid.main[data-n="4"],.grid.main[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid.mj{grid-template-columns:repeat(4,minmax(0,1fr));gap:24px 20px}
+}
+@media (min-width:900px){.grid.main[data-n="3"]{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* a picture and its caption */
+.card{min-width:0}
+.shot{display:block;width:100%;max-width:100%;padding:0;border:0;border-radius:var(--radius);overflow:hidden;background:var(--well);cursor:zoom-in}
+.shot img{display:block;width:100%;height:100%;object-fit:cover}
+.card.is-pick .shot{outline:3px solid var(--accent);outline-offset:3px}
+.c-top{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:11px}
+.c-id{font:600 12px/1.4 var(--font-mono);letter-spacing:.02em}
+.c-model{font-size:12px;color:var(--muted)}
+.tag{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted)}
+.tag.rec{border-color:var(--ink);color:var(--ink)}
+.c-title{margin:5px 0 0;font:600 15px/1.35 var(--font-ui)}
+.c-pitch{margin-top:2px;font-size:13px;color:var(--muted)}
+.c-note{margin-top:8px;font-size:14px;max-width:64ch}
+.c-act{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}
+.c-prompt{margin-top:9px;font-size:12.5px;color:var(--muted)}
+.c-prompt summary{cursor:pointer;width:max-content;max-width:100%}
+.c-prompt p{margin-top:6px;max-width:84ch;overflow-wrap:anywhere}
+.card.sm .c-title{font-size:13.5px}
+.card.sm .c-pitch{font-size:12.5px}
+.card.sm .c-note{font-size:13px}
+
+/* note per world, and the summary */
+.w-note{margin-top:30px;display:grid;gap:6px;max-width:760px}
+.w-note label{font-size:13px;color:var(--muted)}
+textarea{width:100%;max-width:100%;font:14px/1.45 var(--font-ui);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:9px 11px;resize:vertical}
+.out{padding-block:36px 28px;border-top:1px solid var(--line);display:grid;gap:12px;max-width:820px}
+.out h2{margin:0;font:600 24px/1.2 var(--font-display)}
+.out textarea{font:12.5px/1.5 var(--font-mono);min-height:260px}
+.out-row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}
+.out small,.foot{font-size:13px;color:var(--muted)}
+.foot{padding-block:8px 48px}
+
+/* large view */
+.lb{position:fixed;inset:0;z-index:100;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:8px;background:var(--lb-bg);color:var(--lb-ink);
+  padding:max(10px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+.lb-top{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;color:var(--lb-muted);font-variant-numeric:tabular-nums}
+.lb .btn{background:transparent;border-color:var(--lb-line);color:var(--lb-ink)}
+.lb .btn.pick[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.lb .btn.like[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.lb :focus-visible{outline-color:var(--lb-ink)}
+.lb-stage{position:relative;min-height:0}
+.lb-stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:68px;padding:0;border:0;border-radius:6px;background:var(--lb-btn);color:var(--lb-ink);font:400 28px/1 var(--font-ui);cursor:pointer}
+.lb-prev{left:0}
+.lb-next{right:0}
+.lb-cap{width:100%;max-width:920px;margin:0 auto;display:grid;gap:6px;max-height:42vh;overflow-y:auto;font-size:14px}
+.lb-head{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.lb-head b{font:600 13px/1.4 var(--font-mono)}
+.lb-head span{color:var(--lb-muted);font-size:13px}
+.lb-cap .c-prompt{color:var(--lb-muted);margin-top:2px}
+</style>
+
+<header class="bar">
+  <div class="in">
+    <div class="bar-t"><b>Style picks</b><span id="count"></span></div>
+    <nav class="chips" id="chips" aria-label="Worlds and your pick for each"></nav>
+    <button class="btn go" id="copyTop" type="button">Copy my picks</button>
+  </div>
+</header>
+
+<main class="in">
+  <section class="intro">
+    <h1>Realm style exploration</h1>
+    <p id="lede">Concept images for nine worlds and the overworld. Nothing here changes a shipped asset; it is a choice of direction for each world.</p>
+    <p class="how">For each world, choose one picture as your pick (or keep what ships), mark anything else you like, and leave a note. Then press Copy my picks and paste the text back into the chat. Click any picture to see it large. Recommended and Runner-up are the art director's calls; the reasoning is in REVIEW.md.</p>
+    <noscript><p>This page needs JavaScript to show the pictures.</p></noscript>
+  </section>
+  <div id="worlds"></div>
+  <section class="out" id="out">
+    <h2>Your picks</h2>
+    <textarea id="summary" readonly rows="14" aria-label="Your picks as plain text"></textarea>
+    <div class="out-row">
+      <button class="btn go" id="copyBottom" type="button">Copy my picks</button>
+      <small id="copyStatus" role="status"></small>
+    </div>
+    <small id="syncNote">Your picks are remembered in this browser.</small>
+  </section>
+  <p class="foot" id="foot"></p>
+</main>
+
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Picture, large" hidden>
+  <div class="lb-top">
+    <span id="lbCount"></span>
+    <button class="btn" id="lbClose" type="button">Close</button>
+  </div>
+  <div class="lb-stage" id="lbStage">
+    <img id="lbImg" alt="">
+    <button class="lb-nav lb-prev" id="lbPrev" type="button" aria-label="Previous picture">&lsaquo;</button>
+    <button class="lb-nav lb-next" id="lbNext" type="button" aria-label="Next picture">&rsaquo;</button>
+  </div>
+  <div class="lb-cap">
+    <div class="lb-head"><b id="lbId"></b><span id="lbTitle"></span><span id="lbModel"></span></div>
+    <p id="lbNote"></p>
+    <div class="c-act">
+      <button class="btn pick" id="lbPick" type="button"></button>
+      <button class="btn like" id="lbLike" type="button"></button>
+    </div>
+    <details class="c-prompt" id="lbPrompt"><summary>Prompt</summary><p id="lbPromptText"></p></details>
+  </div>
+</div>
+
+<script type="application/json" id="data">{"built":"2026-11-25 23:13","images":78,"worlds":[{"code":"VK","name":"VanillaKindom \u00b7 Beach","medium":"Storybook watercolour \u0026 ink","mediumLabel":"Medium in the style bible","canvas":"#6DB8D8","verdict":["Pick A as Midjourney paints it (mj2): the world keeps its medium and its shipped props; looseness comes from bare paper, running washes and a ground that is a line, not a row of tiles.","Runner-up C (torn-paper collage), the best kit fit. Carry over D's white icing cap on every walkable top and its pomegranate tree."],"ships":"A watercolour sticker sheet: soft washes in a pencil-brown line with a white die-cut edge. Hand-made marks, stiff placement.","ref":{"src":"ref/VK.jpg","w":612,"h":408},"pick":"VK-A-mj2","runner":"VK-C","groups":[{"kind":"main","label":"","items":[{"key":"VK-A","id":"VK-A","letter":"A","variant":0,"title":"Storybook watercolour \u0026 ink","pitch":"the bible's medium: wet washes, a brown ink line that breaks","model":"GPT Image 2.5","src":"img/VK-A.jpg","w":1792,"h":1024,"note":"Handsome but over-rendered: tight JRPG concept art under a paper texture, not a loose storybook. The ground is a beach seen from above and the ledges are buried in detail."},{"key":"VK-B","id":"VK-B","letter":"B","variant":0,"title":"Mid-century gouache picture book","pitch":"flat chalky shapes, a vanilla-pink sky, bolder and simpler","model":"GPT Image 2.5","src":"img/VK-B.jpg","w":1792,"h":1024,"note":"Most playable: flat-topped rock bridge, three distinct ledges, fighters read. 'Mid-century' was ignored; this is modern indie key art."},{"key":"VK-C","id":"VK-C","letter":"C","variant":0,"title":"Torn-paper collage","pitch":"layered torn paper, crayon marks \u2014 tactile and playful","model":"GPT Image 2.5","src":"img/VK-C.jpg","w":1792,"h":1024,"note":"Medium fully carried, and the kraft ground strip is unmistakable. Wave crests behind the fighters and magenta flowers compete with them."},{"key":"VK-D","id":"VK-D","letter":"D","variant":0,"title":"Seaside candy kingdom","pitch":"leans on the *Vanilla Kingdom* name: sugar-and-cream architecture on the shore","model":"GPT Image 2.5","src":"img/VK-D.jpg","w":1792,"h":1024,"note":"White icing caps every walkable top, one of the best readability ideas in the batch. The pink-and-cream fighter vanishes into a pink-and-cream world."}]},{"kind":"mj","items":[{"key":"VK-A-mj1","id":"VK-A","letter":"A","variant":1,"title":"Storybook watercolour \u0026 ink","pitch":"the bible's medium: wet washes, a brown ink line that breaks","model":"Midjourney v8.2","src":"img/VK-A-mj1.jpg","w":2048,"h":2048,"note":"Truest picture-book hand, wrong picture: a beach from above, no ledges, and a drawn border the prompt forbade."},{"key":"VK-A-mj2","id":"VK-A","letter":"A","variant":2,"title":"Storybook watercolour \u0026 ink","pitch":"the bible's medium: wet washes, a brown ink line that breaks","model":"Midjourney v8.2","src":"img/VK-A-mj2.jpg","w":2048,"h":2048,"note":"The best A: straight-on, driftwood floating at three heights, trestles and a boat to stand on, mostly air and bare paper."},{"key":"VK-A-mj3","id":"VK-A","letter":"A","variant":3,"title":"Storybook watercolour \u0026 ink","pitch":"the bible's medium: wet washes, a brown ink line that breaks","model":"Midjourney v8.2","src":"img/VK-A-mj3.jpg","w":2048,"h":2048,"note":"Best ground of the set, one ink line with a coral wash bleeding below it. The floating planks repeat like stamps."},{"key":"VK-A-mj4","id":"VK-A","letter":"A","variant":4,"title":"Storybook watercolour \u0026 ink","pitch":"the bible's medium: wet washes, a brown ink line that breaks","model":"Midjourney v8.2","src":"img/VK-A-mj4.jpg","w":2048,"h":2048,"note":"Wrong view and nothing to jump to. The sand slab with a red underside is the one idea worth keeping."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"}]},{"code":"SL","name":"Starland \u00b7 Starfield","medium":"Flat minimalist poster","mediumLabel":"Medium in the style bible","canvas":"#17133A","verdict":["Pick A (GPT Image): the bible's Starfield with the bricks taken out. Colossal irregular monoliths, a lit top plane wherever you can stand, and the emptiness that makes this the long-range world.","Runner-up B (risograph), only with an indigo night full of stars. Carry over C's gold zodiac as a hairline ring in the far sky."],"ships":"Clean flat vector under a banded sky. The dolmen is a rectangle of brick courses and the sand is a ruled strip with a repeating scalloped lip.","ref":{"src":"ref/SL.jpg","w":1152,"h":648},"pick":"SL-A","runner":"SL-B","groups":[{"kind":"main","label":"","items":[{"key":"SL-A","id":"SL-A","letter":"A","variant":0,"title":"Flat minimalist poster","pitch":"the bible's medium: two or three flat planes, no outlines","model":"GPT Image 2.5","src":"img/SL-A.jpg","w":1792,"h":1024,"note":"Mostly sky; every stone a lit ochre face against a plum shadow face. The lit top plane marks every ledge. Fighters came out far too small."},{"key":"SL-B","id":"SL-B","letter":"B","variant":0,"title":"Risograph print","pitch":"the same flatness with halftone grain and off-register ink \u2014 warmer, hand-printed","model":"GPT Image 2.5","src":"img/SL-B.jpg","w":1792,"h":1024,"note":"Real halftone; far colossi fade by dot density, the best depth device in the batch. But a hot coral sky with one star, and three identical banners."},{"key":"SL-C","id":"SL-C","letter":"C","variant":0,"title":"Painted star-chart mural","pitch":"the sky is a gilded astronomical ceiling; monuments are fresco","model":"GPT Image 2.5","src":"img/SL-C.jpg","w":1792,"h":1024,"note":"Most original idea: the sky is a gilded zodiac ceiling. Also the most crowded; the ornament fills the space fighters jump into."},{"key":"SL-D","id":"SL-D","letter":"D","variant":0,"title":"Paper-cut shadow box","pitch":"layered card silhouettes lit from behind \u2014 depth without detail","model":"GPT Image 2.5","src":"img/SL-D.jpg","w":1792,"h":1024,"note":"Very readable dark layers on a sunset glow, but lumpy like clay, not knife-cut card. It is the familiar silhouette-platformer look."}]},{"kind":"mj","items":[{"key":"SL-A-mj1","id":"SL-A","letter":"A","variant":1,"title":"Flat minimalist poster","pitch":"the bible's medium: two or three flat planes, no outlines","model":"Midjourney v8.2","src":"img/SL-A-mj1.jpg","w":2048,"h":2048,"note":"Truly flat, gold-rimmed cloud bands, a head in three planes. Correct, and it looks like stock vector art; outlines the prompt forbade."},{"key":"SL-A-mj2","id":"SL-A","letter":"A","variant":2,"title":"Flat minimalist poster","pitch":"the bible's medium: two or three flat planes, no outlines","model":"Midjourney v8.2","src":"img/SL-A-mj2.jpg","w":2048,"h":2048,"note":"Best of the four: leaning obelisk with star cut-outs, teal stair-block, two slabs at different heights. Poster-flat and still a place."},{"key":"SL-A-mj3","id":"SL-A","letter":"A","variant":3,"title":"Flat minimalist poster","pitch":"the bible's medium: two or three flat planes, no outlines","model":"Midjourney v8.2","src":"img/SL-A-mj3.jpg","w":2048,"h":2048,"note":"Most arena-like, three slabs at three heights with gold cracks. A third fighter nobody asked for, and clip-art stars."},{"key":"SL-A-mj4","id":"SL-A","letter":"A","variant":4,"title":"Flat minimalist poster","pitch":"the bible's medium: two or three flat planes, no outlines","model":"Midjourney v8.2","src":"img/SL-A-mj4.jpg","w":2048,"h":2048,"note":"Emptiest and calmest: head, small obelisk, two tiny fighters on a band of sand. Nothing to jump to."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"}]},{"code":"BM","name":"Banboo Maze \u00b7 Wulin \u6b66\u6797","medium":"Freehand ink \u5199\u610f","mediumLabel":"Medium in the style bible","canvas":"#E4E9E8","verdict":["Pick A: GPT Image's wet ink with Midjourney's emptiness. Brush the architecture, cantilever the ledges, leave half the sheet bare. Paper is air and ink is solid, the most readable direction in the batch.","Runner-up B as a tint only: blue-green on far peaks over white paper. Carry over mj4's duel across a gap."],"ships":"The v0.10.9 ink repaint. Peaks and pines are loose; the pavilion, roofs and bridge are ruled rectangles and the ground is a block.","ref":{"src":"ref/BM.jpg","w":1152,"h":648},"pick":"BM-A","runner":"BM-B","groups":[{"kind":"main","label":"","items":[{"key":"BM-A","id":"BM-A","letter":"A","variant":0,"title":"Freehand ink \u5199\u610f","pitch":"the bible's medium, as repainted in v0.10.9: stroke and bare paper","model":"GPT Image 2.5","src":"img/BM-A.jpg","w":1792,"h":1024,"note":"Wet ink, flying-white, mist as bare paper, no warm colour: the medium is carried. Denser than true xieyi, but fighters read perfectly."},{"key":"BM-B","id":"BM-B","letter":"B","variant":0,"title":"Blue-green landscape \u9752\u7eff\u5c71\u6c34","pitch":"ink bones with mineral blue and green laid over \u2014 richer, still Chinese painting","model":"GPT Image 2.5","src":"img/BM-B.jpg","w":1792,"h":1024,"note":"Faithful and sumptuous: mineral blue-green, gold-line clouds, silk weave. Textured edge to edge and more saturated than the fighters."},{"key":"BM-C","id":"BM-C","letter":"C","variant":0,"title":"Night scroll, ink on indigo","pitch":"the same brush on dark paper with a pale gold moon \u2014 dramatic, high contrast","model":"GPT Image 2.5","src":"img/BM-C.jpg","w":1792,"h":1024,"note":"Dramatic but not the medium: rendered lantern glow and moon craters make it generic dark-fantasy key art. A dozen waterfalls, none readable as the one that carries."}]},{"kind":"mj","items":[{"key":"BM-A-mj1","id":"BM-A","letter":"A","variant":1,"title":"Freehand ink \u5199\u610f","pitch":"the bible's medium, as repainted in v0.10.9: stroke and bare paper","model":"Midjourney v8.2","src":"img/BM-A-mj1.jpg","w":2048,"h":2048,"note":"One-corner composition with more than half the sheet bare. Brush-pen line and tinted wash; moss dots as regular as peppercorns."},{"key":"BM-A-mj2","id":"BM-A","letter":"A","variant":2,"title":"Freehand ink \u5199\u610f","pitch":"the bible's medium, as repainted in v0.10.9: stroke and bare paper","model":"Midjourney v8.2","src":"img/BM-A-mj2.jpg","w":2048,"h":2048,"note":"Best of the four: three clean-topped ledges at three heights across a gorge. A vertical arena, which is what this world is."},{"key":"BM-A-mj3","id":"BM-A","letter":"A","variant":3,"title":"Freehand ink \u5199\u610f","pitch":"the bible's medium, as repainted in v0.10.9: stroke and bare paper","model":"Midjourney v8.2","src":"img/BM-A-mj3.jpg","w":2048,"h":2048,"note":"Three small stones float in mid-air as steps, the weakest idea in the set. Shelf, bamboo and pavilion crag are well drawn."},{"key":"BM-A-mj4","id":"BM-A","letter":"A","variant":4,"title":"Freehand ink \u5199\u610f","pitch":"the bible's medium, as repainted in v0.10.9: stroke and bare paper","model":"Midjourney v8.2","src":"img/BM-A-mj4.jpg","w":2048,"h":2048,"note":"Two shelves reach across a gap with a fighter on each: a duel over a chasm, the most wuxia staging in the batch."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"}]},{"code":"HC","name":"HollowCastle \u00b7 Dungeon","medium":"Lit realism (relief shading)","mediumLabel":"Medium in the style bible","canvas":"#0E0D12","verdict":["Pick C (dark fairy-tale gouache), brought indoors: crooked is the opposite of rigid, chunky paint stays calm behind a brawl, and moss caps mark every walkable top. Drop the moon and sky so fire is the only saturated colour.","Runner-up B (prison etching) if the Dark Wood does not also hatch. Carry over Midjourney's irregular masonry kit and B's chained giant."],"ships":"The most rigid kit: identical relief-shaded blocks in running bond, niches at equal spacing, lava as a textured rectangle.","ref":{"src":"ref/HC.jpg","w":1152,"h":648},"pick":"HC-C","runner":"HC-B","groups":[{"kind":"main","label":"","items":[{"key":"HC-A","id":"HC-A","letter":"A","variant":0,"title":"Painterly lit realism","pitch":"the bible's medium, but painted: irregular masonry, real light, no tiles","model":"GPT Image 2.5","src":"img/HC-A.jpg","w":1792,"h":1024,"note":"Exactly the medium asked for, and the most generic picture in the batch: stock dark-fantasy concept art, with fire-glow flooding half the frame."},{"key":"HC-B","id":"HC-B","letter":"B","variant":0,"title":"Prison etching with one fire colour","pitch":"vast engraved vaults; the only colour is lava","model":"GPT Image 2.5","src":"img/HC-B.jpg","w":1792,"h":1024,"note":"Piranesi's prisons, fully carried: cross-hatching on cream and one orange for fire. A chained giant in the distance. Busy at fighter height."},{"key":"HC-C","id":"HC-C","letter":"C","variant":0,"title":"Dark fairy-tale gouache","pitch":"crooked, chunky, characterful \u2014 less real, more storybook","model":"GPT Image 2.5","src":"img/HC-C.jpg","w":1792,"h":1024,"note":"Crooked towers, a lava cauldron, a waving skeleton: character and humour in chunky paint. But it is outdoors under the Dark Wood's moon."},{"key":"HC-D","id":"HC-D","letter":"D","variant":0,"title":"Illuminated-manuscript hell","pitch":"a castle cross-section drawn as a medieval miniature with gold and vermilion","model":"GPT Image 2.5","src":"img/HC-D.jpg","w":1792,"h":1024,"note":"Most original: a castle cut open into rooms, flames as curling tongues, gold leaf. Saturated everywhere, and it added saints the game should not have."}]},{"kind":"mj","items":[{"key":"HC-A-mj1","id":"HC-A","letter":"A","variant":1,"title":"Painterly lit realism","pitch":"the bible's medium, but painted: irregular masonry, real light, no tiles","model":"Midjourney v8.2","src":"img/HC-A-mj1.jpg","w":2048,"h":2048,"note":"Not the medium: black outlines and cartoon shading. But no two stones alike. Three children, and a floor seen from above."},{"key":"HC-A-mj2","id":"HC-A","letter":"A","variant":2,"title":"Painterly lit realism","pitch":"the bible's medium, but painted: irregular masonry, real light, no tiles","model":"Midjourney v8.2","src":"img/HC-A-mj2.jpg","w":2048,"h":2048,"note":"Best of the four: arches, a broken stair, four timber ledges at four heights, cold light from above against lava glow."},{"key":"HC-A-mj3","id":"HC-A","letter":"A","variant":3,"title":"Painterly lit realism","pitch":"the bible's medium, but painted: irregular masonry, real light, no tiles","model":"Midjourney v8.2","src":"img/HC-A-mj3.jpg","w":2048,"h":2048,"note":"The floor splits and the gap is the lava: the best hazard staging of the set."},{"key":"HC-A-mj4","id":"HC-A","letter":"A","variant":4,"title":"Painterly lit realism","pitch":"the bible's medium, but painted: irregular masonry, real light, no tiles","model":"Midjourney v8.2","src":"img/HC-A-mj4.jpg","w":2048,"h":2048,"note":"A three-storey timber scaffold against a ruined turret, a ready-made multi-ledge prop."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"}]},{"code":"TD","name":"TheDeserted \u00b7 Ghost Town","medium":"Linocut / woodblock print","mediumLabel":"Medium in the style bible","canvas":"#F1E3C4","verdict":["Pick A (GPT Image): the medium the world already has, finally cut by hand. Black is solid, cream is air, and every step toward it is procedural. Keep walls behind the fight in one pale ink.","Runner-up C (toy theatre), where flat fronts and layers become the point. Carry over Midjourney's black bar with white gouges for ground and ledges."],"ships":"A handsome flat print in ochre, rust, teal and black. The saloon is a rectangle ruled with even planks and the line is clean vector, not cut.","ref":{"src":"ref/TD.jpg","w":1152,"h":648},"pick":"TD-A","runner":"TD-C","groups":[{"kind":"main","label":"","items":[{"key":"TD-A","id":"TD-A","letter":"A","variant":0,"title":"Linocut relief print","pitch":"the bible's medium: black key block, three spot inks, out of register","model":"GPT Image 2.5","src":"img/TD-A.jpg","w":1792,"h":1024,"note":"A real cut block: gouges, ink skips, three inks off register, and an open cream field the fighters own. One of the best images in the batch."},{"key":"TD-B","id":"TD-B","letter":"B","variant":0,"title":"Frontier sketchbook","pitch":"pen, sepia ink and dusty wash \u2014 looser and lonelier","model":"GPT Image 2.5","src":"img/TD-B.jpg","w":1792,"h":1024,"note":"The loneliest and loosest: sepia pen and wash, a crow, a huge pale sky. All one tan, and the same T-shaped ledge three times."},{"key":"TD-C","id":"TD-C","letter":"C","variant":0,"title":"Toy theatre","pitch":"a cardboard stage set of a street \u2014 playful, layered, obviously hand-built","model":"GPT Image 2.5","src":"img/TD-C.jpg","w":1792,"h":1024,"note":"A cardboard stage photographed: flat fronts with white cut edges, a tumbleweed on a thread. Charming, and saturated edge to edge."},{"key":"TD-D","id":"TD-D","letter":"D","variant":0,"title":"Sun-bleached photograph, hand-tinted","pitch":"a tintype of the street with colour rubbed on \u2014 eerie and real","model":"GPT Image 2.5","src":"img/TD-D.jpg","w":1792,"h":1024,"note":"A realistic 3D street under an old-photo filter, in central perspective. The least hand-made image here, and not buildable as a kit."}]},{"kind":"mj","items":[{"key":"TD-A-mj1","id":"TD-A","letter":"A","variant":1,"title":"Linocut relief print","pitch":"the bible's medium: black key block, three spot inks, out of register","model":"Midjourney v8.2","src":"img/TD-A-mj1.jpg","w":2048,"h":2048,"note":"Cartoon line with a linocut veneer: six colours, no skips, wagons parked on floating slabs. Reads like a sticker sheet."},{"key":"TD-A-mj2","id":"TD-A","letter":"A","variant":2,"title":"Linocut relief print","pitch":"the bible's medium: black key block, three spot inks, out of register","model":"Midjourney v8.2","src":"img/TD-A-mj2.jpg","w":2048,"h":2048,"note":"Best of the four for its solid black bars cut with white gouges, an excellent way to say 'this is solid'."},{"key":"TD-A-mj3","id":"TD-A","letter":"A","variant":3,"title":"Linocut relief print","pitch":"the bible's medium: black key block, three spot inks, out of register","model":"Midjourney v8.2","src":"img/TD-A-mj3.jpg","w":2048,"h":2048,"note":"Print-like, with its own carved border, but a picture of a town and not an arena."},{"key":"TD-A-mj4","id":"TD-A","letter":"A","variant":4,"title":"Linocut relief print","pitch":"the bible's medium: black key block, three spot inks, out of register","model":"Midjourney v8.2","src":"img/TD-A-mj4.jpg","w":2048,"h":2048,"note":"Three identical black bars as a staircase: the repeated stamp. Far mesas in key line only is a true print device."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"}]},{"code":"PL","name":"Palace of LOOING \u00b7 Loong's Nest \u9f99\u5bab","medium":"Gongbi \u5de5\u7b14\u91cd\u5f69","mediumLabel":"Medium in the style bible","canvas":"#0C1230","verdict":["Pick A as Midjourney paints it (mj3), a shade darker: keep the fine line and graded colour, break the symmetry, build from terraces, shells and kelp. It is the medium a code painter does best.","Runner-up C (bioluminescent), the crowd-pleaser but a lighting idea, not a medium. Carry over GPT A's dragon gate and mj1's glass bubble columns."],"ships":"Even line and graded colour are already there. So are a ruled grid of roof tiles, dead-straight pillars, mirror symmetry and a bubble column that repeats.","ref":{"src":"ref/PL.jpg","w":1152,"h":648},"pick":"PL-A-mj3","runner":"PL-C","groups":[{"kind":"main","label":"","items":[{"key":"PL-A","id":"PL-A","letter":"A","variant":0,"title":"Gongbi, fine line and heavy colour \u5de5\u7b14\u91cd\u5f69","pitch":"the bible's medium: iron-wire line, graded mineral blues","model":"GPT Image 2.5","src":"img/PL-A.jpg","w":1792,"h":1024,"note":"A dragon palace in full dress, fine line and graded blues. Filled corner to corner at one mid-blue, so the purple fighter disappears. Waterfalls under the sea."},{"key":"PL-B","id":"PL-B","letter":"B","variant":0,"title":"Cave-mural","pitch":"mineral pigment on plaster, flowing ribbons \u2014 older, warmer, freer in line","model":"GPT Image 2.5","src":"img/PL-B.jpg","w":1792,"h":1024,"note":"A convincing cave mural, unlike anything else in the game. The fighters dissolve into it, it reads as mountains, and it includes a Buddha figure that must not ship."},{"key":"PL-C","id":"PL-C","letter":"C","variant":0,"title":"Bioluminescent deep sea","pitch":"the palace is lit only by living light \u2014 atmospheric, dark, glowing","model":"GPT Image 2.5","src":"img/PL-C.jpg","w":1792,"h":1024,"note":"Seductive: jellyfish domes, a dragon-skeleton bridge, a red scarf that pops. Also the default look of AI fantasy art, glow on black."}]},{"kind":"mj","items":[{"key":"PL-A-mj1","id":"PL-A","letter":"A","variant":1,"title":"Gongbi, fine line and heavy colour \u5de5\u7b14\u91cd\u5f69","pitch":"the bible's medium: iron-wire line, graded mineral blues","model":"Midjourney v8.2","src":"img/PL-A-mj1.jpg","w":2048,"h":2048,"note":"Gongbi as a picture book. Bubble lifts drawn as glass columns, the clearest 'this carries you' in the batch. A lettered signboard."},{"key":"PL-A-mj2","id":"PL-A","letter":"A","variant":2,"title":"Gongbi, fine line and heavy colour \u5de5\u7b14\u91cd\u5f69","pitch":"the bible's medium: iron-wire line, graded mineral blues","model":"Midjourney v8.2","src":"img/PL-A-mj2.jpg","w":2048,"h":2048,"note":"Most arena-like: halls, stairs and stacked terraces around open water, fighters squared up. Two lettered signboards."},{"key":"PL-A-mj3","id":"PL-A","letter":"A","variant":3,"title":"Gongbi, fine line and heavy colour \u5de5\u7b14\u91cd\u5f69","pitch":"the bible's medium: iron-wire line, graded mineral blues","model":"Midjourney v8.2","src":"img/PL-A-mj3.jpg","w":2048,"h":2048,"note":"Best of the four: open water, shelves at different heights, pearl-bubbles rising through the gap, kelp as a near layer, no lettering."},{"key":"PL-A-mj4","id":"PL-A","letter":"A","variant":4,"title":"Gongbi, fine line and heavy colour \u5de5\u7b14\u91cd\u5f69","pitch":"the bible's medium: iron-wire line, graded mineral blues","model":"Midjourney v8.2","src":"img/PL-A-mj4.jpg","w":2048,"h":2048,"note":"Two terraces and big clams over a flat indigo deep. Pink coral and yellow lanterns let warm colour in."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"}]},{"code":"KH","name":"Kingdom of Horror \u00b7 Dark Wood","medium":"Scratchboard","mediumLabel":"Medium in the style bible","canvas":"#111B3D","verdict":["Pick C (silhouette shadow theatre): black is solid, light is air. The most readable, among the cheapest to build, and a real storybook tradition for fairy-tale horror.","Runner-up A as Midjourney paints it (mj2), the shipped scratchboard loosened. Carry A's colour code into C: yellow only for light, red only for danger."],"ships":"Blue line on a navy board. The trees are organic; the platforms are one sprite repeated six times and the two thickets are the same scribble.","ref":{"src":"ref/KH.jpg","w":1152,"h":648},"pick":"KH-C","runner":"KH-A-mj2","groups":[{"kind":"main","label":"","items":[{"key":"KH-A","id":"KH-A","letter":"A","variant":0,"title":"Scratchboard","pitch":"the bible's medium: light scratched out of black, colour as a code","model":"GPT Image 2.5","src":"img/KH-A.jpg","w":1792,"h":1024,"note":"The truest scratchboard in the batch, colour code obeyed exactly. Also grim and murky: a metal-album cover with blood under the traps."},{"key":"KH-B","id":"KH-B","letter":"B","variant":0,"title":"Victorian gothic pen and ink","pitch":"fine cross-hatching with muted washes \u2014 dry humour, storybook horror","model":"GPT Image 2.5","src":"img/KH-B.jpg","w":1792,"h":1024,"note":"Cosy-spooky pen and wash with a pumpkin patch, gates and crows. Well drawn, busier and more ordinary than asked: a Halloween picture book."},{"key":"KH-C","id":"KH-C","letter":"C","variant":0,"title":"Silhouette shadow theatre","pitch":"black cut-paper on glowing tissue \u2014 the most readable of the three","model":"GPT Image 2.5","src":"img/KH-C.jpg","w":1792,"h":1024,"note":"Pure black cut shapes on glowing tissue, a pumpkin king on the balcony. The most beautiful image of this world; black on deep blue is weak at the left."}]},{"kind":"mj","items":[{"key":"KH-A-mj1","id":"KH-A","letter":"A","variant":1,"title":"Scratchboard","pitch":"the bible's medium: light scratched out of black, colour as a code","model":"Midjourney v8.2","src":"img/KH-A-mj1.jpg","w":2048,"h":2048,"note":"Friendlier: long white scratch lines, four shelves joined by rope bridges, red lantern-traps. Clear, but as symmetrical as a tile map."},{"key":"KH-A-mj2","id":"KH-A","letter":"A","variant":2,"title":"Scratchboard","pitch":"the bible's medium: light scratched out of black, colour as a code","model":"Midjourney v8.2","src":"img/KH-A-mj2.jpg","w":2048,"h":2048,"note":"Best of the four: trees with glowing eyes, sagging rope bridges, a stepped hill to the castle. Asymmetrical and every ledge findable."},{"key":"KH-A-mj3","id":"KH-A","letter":"A","variant":3,"title":"Scratchboard","pitch":"the bible's medium: light scratched out of black, colour as a code","model":"Midjourney v8.2","src":"img/KH-A-mj3.jpg","w":2048,"h":2048,"note":"The most open, three shelves with icicle drips. One fighter is bright red, which this world reserves for danger."},{"key":"KH-A-mj4","id":"KH-A","letter":"A","variant":4,"title":"Scratchboard","pitch":"the bible's medium: light scratched out of black, colour as a code","model":"Midjourney v8.2","src":"img/KH-A-mj4.jpg","w":2048,"h":2048,"note":"A taller arena with shelves at three heights and two shadow-children for fighters. The floor is a mat of scratched roots."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"}]},{"code":"TF","name":"The Forgotten \u00b7 Forgotten City","medium":"Pixel art","mediumLabel":"Medium in the style bible","canvas":"#0C0C22","verdict":["Pick A (GPT Image's scene, held to Midjourney's pixel discipline): the hero is called Pixolotl, so the world is pixel art, and A shows hard pixels can be deep, mossy and irregular. The most code-friendly medium of the nine.","Runner-up B, only as borrowed effects (neon mirrored in the water, mist). Carry over C's feathered-serpent bridge and axolotl spirit as pixel murals and props."],"ships":"True low-res pixel art, very sparse: one flat pyramid, three identical slabs, a rectangle of swamp. Stiff from emptiness and repetition, not from the medium.","ref":{"src":"ref/TF.jpg","w":1152,"h":648},"pick":"TF-A","runner":"TF-B","groups":[{"kind":"main","label":"","items":[{"key":"TF-A","id":"TF-A","letter":"A","variant":0,"title":"Hard pixel art","pitch":"the bible's medium: square pixels, fixed palette, dither, thin neon","model":"GPT Image 2.5","src":"img/TF-A.jpg","w":1792,"h":1024,"note":"Night city over a swamp, thin neon, moss caps on every top, warm fighters on a cool field. Pixel discipline is loose but it reads at once."},{"key":"TF-B","id":"TF-B","letter":"B","variant":0,"title":"Lush modern pixel art","pitch":"pixels with painterly light, glow and depth \u2014 the same grid, far less stiff","model":"GPT Image 2.5","src":"img/TF-B.jpg","w":1792,"h":1024,"note":"A lovely festival night, and no longer quite pixel art: a glowing painting through a pixel filter. Thick neon, thirty light sources, dull fighters."},{"key":"TF-C","id":"TF-C","letter":"C","variant":0,"title":"Painted codex with circuitry","pitch":"bark-paper codex figures whose glyphs are secretly circuits","model":"GPT Image 2.5","src":"img/TF-C.jpg","w":1792,"h":1024,"note":"A delight: bark-paper codex, a feathered serpent as a ledge, an axolotl spirit, red caps on every top. But not pixels, and the neon needs the dark."}]},{"kind":"mj","items":[{"key":"TF-A-mj1","id":"TF-A","letter":"A","variant":1,"title":"Hard pixel art","pitch":"the bible's medium: square pixels, fixed palette, dither, thin neon","model":"Midjourney v8.2","src":"img/TF-A-mj1.jpg","w":2048,"h":2048,"note":"Stricter pixels than GPT's, with a dither band and no glow. But the swamp is a top-down map and the four slabs are one stamp."},{"key":"TF-A-mj2","id":"TF-A","letter":"A","variant":2,"title":"Hard pixel art","pitch":"the bible's medium: square pixels, fixed palette, dither, thin neon","model":"Midjourney v8.2","src":"img/TF-A-mj2.jpg","w":2048,"h":2048,"note":"Best of the four for its kit: ledges growing out of the pyramids on carved-face brackets. The river is still drawn from above."},{"key":"TF-A-mj3","id":"TF-A","letter":"A","variant":3,"title":"Hard pixel art","pitch":"the bible's medium: square pixels, fixed palette, dither, thin neon","model":"Midjourney v8.2","src":"img/TF-A-mj3.jpg","w":2048,"h":2048,"note":"Mirror-symmetrical pyramids, beams and tables, and three children. The rigidity we are trying to leave, in pixels."},{"key":"TF-A-mj4","id":"TF-A","letter":"A","variant":4,"title":"Hard pixel art","pitch":"the bible's medium: square pixels, fixed palette, dither, thin neon","model":"Midjourney v8.2","src":"img/TF-A-mj4.jpg","w":2048,"h":2048,"note":"Cleanest layout: four slabs at four heights in an open sky, water edged in cyan. Slabs and floor are plainly repeated blocks."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"}]},{"code":"CC","name":"Cloud Court","medium":"Cloisonn\u00e9 enamel","mediumLabel":"Medium in the style bible","canvas":"#2A1B4A","verdict":["Pick B (embroidered silk): soft where enamel is hard, the calmest field for fighters in the whole batch, clouds that look enterable, and real distance from Loong's Nest. Test it at game resolution first.","Runner-up A as Midjourney paints it (mj3), the cheap route since the cloisonn\u00e9 painter exists. Carry over A's dragon in the clouds and keep the gold as couched thread."],"ships":"Real cloisonn\u00e9 colour arranged with a set square: a square moon-gate panel, a lattice rectangle for ground, mirrored columns, one cloud stamp, a sea of repeating scales.","ref":{"src":"ref/CC.jpg","w":1152,"h":648},"pick":"CC-B","runner":"CC-A-mj3","groups":[{"kind":"main","label":"","items":[{"key":"CC-A","id":"CC-A","letter":"A","variant":0,"title":"Cloisonn\u00e9 enamel \u666f\u6cf0\u84dd","pitch":"the bible's medium: jewel enamel cells bounded by gold wire","model":"GPT Image 2.5","src":"img/CC-A.jpg","w":1792,"h":1024,"note":"Spectacular for five seconds, exhausting after: gold-veined marble more than enamel cells, no rest anywhere, bright cloud filling the frame."},{"key":"CC-B","id":"CC-B","letter":"B","variant":0,"title":"Embroidered silk","pitch":"clouds and terraces stitched in silk and gold thread \u2014 soft where enamel is hard","model":"GPT Image 2.5","src":"img/CC-B.jpg","w":1792,"h":1024,"note":"Midnight silk, padded white clouds, stitched rock with pale tops, cranes, a couched-gold moon. Medium fully carried; one of the best images in the batch."},{"key":"CC-C","id":"CC-C","letter":"C","variant":0,"title":"Blue-and-white porcelain \u9752\u82b1","pitch":"everything painted in cobalt on white glaze, mended with gold","model":"GPT Image 2.5","src":"img/CC-C.jpg","w":1792,"h":1024,"note":"Beautiful cobalt painting on the swell of a jar, with gold-mended cracks. But brush landscape on white with pines and mist is Wulin in blue."}]},{"kind":"mj","items":[{"key":"CC-A-mj1","id":"CC-A","letter":"A","variant":1,"title":"Cloisonn\u00e9 enamel \u666f\u6cf0\u84dd","pitch":"the bible's medium: jewel enamel cells bounded by gold wire","model":"Midjourney v8.2","src":"img/CC-A-mj1.jpg","w":2048,"h":2048,"note":"True cloisonn\u00e9, flat mottled cells and wire spirals. But a decorative panel, not an arena, with a gold frame the prompt forbade."},{"key":"CC-A-mj2","id":"CC-A","letter":"A","variant":2,"title":"Cloisonn\u00e9 enamel \u666f\u6cf0\u84dd","pitch":"the bible's medium: jewel enamel cells bounded by gold wire","model":"Midjourney v8.2","src":"img/CC-A-mj2.jpg","w":2048,"h":2048,"note":"An arena: a banded enamel deck, a palace terrace with a dragon wound round it, open night sky above."},{"key":"CC-A-mj3","id":"CC-A","letter":"A","variant":3,"title":"Cloisonn\u00e9 enamel \u666f\u6cf0\u84dd","pitch":"the bible's medium: jewel enamel cells bounded by gold wire","model":"Midjourney v8.2","src":"img/CC-A-mj3.jpg","w":2048,"h":2048,"note":"Best of the four: open sky, lotus terraces at three heights, an imperial-yellow floor both fighters read against."},{"key":"CC-A-mj4","id":"CC-A","letter":"A","variant":4,"title":"Cloisonn\u00e9 enamel \u666f\u6cf0\u84dd","pitch":"the bible's medium: jewel enamel cells bounded by gold wire","model":"Midjourney v8.2","src":"img/CC-A-mj4.jpg","w":2048,"h":2048,"note":"Darker and busier; the floating red slabs with lattice undersides are the shipped rectangles again. Four children, and a frame."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"}]},{"code":"OW","name":"Overworld (the run map)","medium":"Five realms, each in its own medium","mediumLabel":"Brief","canvas":"","verdict":["Pick B (torn storybook pages): the game's premise as a picture. Each realm sits on its own paper, tears are rivers, the burn is the VOID, and a torn page is allowed to cut through its picture, so it survives a new island every run.","Runner-up A as Midjourney paints it (mj3), the safest map. Carry over mj3's bare paper and bold nodes, and the pins and twine of OW-B-mj2."],"ships":"","ref":null,"pick":"OW-B","runner":"OW-A-mj3","groups":[{"kind":"main","label":"","items":[{"key":"OW-A","id":"OW-A","letter":"A","variant":0,"title":"One cartographer, five inks","pitch":"a hand-drawn atlas on one sheet of parchment; each realm in its own medium, held together by the same paper and coastline","model":"GPT Image 2.5","src":"img/OW-A.jpg","w":1024,"h":1024,"note":"A map before anything else, and each wedge truly in its own medium. Nodes and roads are tiny and vanish in the dark wood; the pixel realm is a loud green jungle."},{"key":"OW-B","id":"OW-B","letter":"B","variant":0,"title":"Torn storybook pages","pitch":"the island is five torn pages from five storybooks; the tears are the rivers and the VOID is burnt through all of them","model":"GPT Image 2.5","src":"img/OW-B.jpg","w":1024,"h":1024,"note":"Five torn pages, each in its own medium on its own paper, a charred pentagon burnt through. The strongest separation of realms. Nodes too small to find."},{"key":"OW-C","id":"OW-C","letter":"C","variant":0,"title":"Board-game table","pitch":"a crafted tabletop board of five materials with resin rivers and wooden city tokens","model":"GPT Image 2.5","src":"img/OW-C.jpg","w":1024,"h":1024,"note":"The clearest node graph of all eleven, wooden discs on dotted roads. But a slanted 3D render, and five materials are not five media."}]},{"kind":"mj","items":[{"key":"OW-A-mj1","id":"OW-A","letter":"A","variant":1,"title":"One cartographer, five inks","pitch":"a hand-drawn atlas on one sheet of parchment; each realm in its own medium, held together by the same paper and coastline","model":"Midjourney v8.2","src":"img/OW-A-mj1.jpg","w":2048,"h":2048,"note":"Clean, with bold stars and dots. But ruled pie-slice borders while the rivers wander elsewhere; one cartoon hand in five palettes."},{"key":"OW-A-mj2","id":"OW-A","letter":"A","variant":2,"title":"One cartographer, five inks","pitch":"a hand-drawn atlas on one sheet of parchment; each realm in its own medium, held together by the same paper and coastline","model":"Midjourney v8.2","src":"img/OW-A-mj2.jpg","w":2048,"h":2048,"note":"Covered in garbled lettering the prompt forbade, and four compass roses. Discard."},{"key":"OW-A-mj3","id":"OW-A","letter":"A","variant":3,"title":"One cartographer, five inks","pitch":"a hand-drawn atlas on one sheet of parchment; each realm in its own medium, held together by the same paper and coastline","model":"Midjourney v8.2","src":"img/OW-A-mj3.jpg","w":2048,"h":2048,"note":"The best map of all eleven: rivers are the borders, nodes sit boldly on bare parchment. The media are weak, mostly one cartoon hand."},{"key":"OW-A-mj4","id":"OW-A","letter":"A","variant":4,"title":"One cartographer, five inks","pitch":"a hand-drawn atlas on one sheet of parchment; each realm in its own medium, held together by the same paper and coastline","model":"Midjourney v8.2","src":"img/OW-A-mj4.jpg","w":2048,"h":2048,"note":"A five-pointed star instead of a pentagon and one river instead of five. Discard as a test of the rule."}],"label":"Midjourney v8.2 \u2014 4 takes on direction A, same prompt"},{"kind":"mj","items":[{"key":"OW-B-mj1","id":"OW-B","letter":"B","variant":1,"title":"Torn storybook pages","pitch":"the island is five torn pages from five storybooks; the tears are the rivers and the VOID is burnt through all of them","model":"Midjourney v8.2","src":"img/OW-B-mj1.jpg","w":2048,"h":2048,"note":"Five scraps floating apart, so there is no island. A star, not a pentagon, as in all four of these."},{"key":"OW-B-mj2","id":"OW-B","letter":"B","variant":2,"title":"Torn storybook pages","pitch":"the island is five torn pages from five storybooks; the tears are the rivers and the VOID is burnt through all of them","model":"Midjourney v8.2","src":"img/OW-B-mj2.jpg","w":2048,"h":2048,"note":"Pins joined by twine: the best node-and-road language in the set, legible on any page. No island outline. Star."},{"key":"OW-B-mj3","id":"OW-B","letter":"B","variant":3,"title":"Torn storybook pages","pitch":"the island is five torn pages from five storybooks; the tears are the rivers and the VOID is burnt through all of them","model":"Midjourney v8.2","src":"img/OW-B-mj3.jpg","w":2048,"h":2048,"note":"Best of the four: a disc island in a ringed lagoon, cut-paper waves, pins and thread, each page on its own paper. Star."},{"key":"OW-B-mj4","id":"OW-B","letter":"B","variant":4,"title":"Torn storybook pages","pitch":"the island is five torn pages from five storybooks; the tears are the rivers and the VOID is burnt through all of them","model":"Midjourney v8.2","src":"img/OW-B-mj4.jpg","w":2048,"h":2048,"note":"A cream card disc under the pages keeps the island's outline, a useful trick. Few pins. Star."}],"label":"Midjourney v8.2 \u2014 4 takes on direction B, same prompt"}]}],"prompts":{"VK-A":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a small sunny cove \u2014 warm sand, tide pools, leaning palm trees, a driftwood pier, two beach huts on stilts whose roofs and a sun-bleached boat serve as ledges, gentle teal sea and far headland. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: storybook watercolour and ink \u2014 loose wet-on-wet washes that pool and bloom, visible cold-press paper grain, a dark-brown ink line that swells, breaks and misses the edge of the colour. Palette: warm sand, coral orange, teal, sun-bleached wood, coastal green, cream paper showing through. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","VK-B":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the same cove at golden hour \u2014 huts, pier, palms, a striped lighthouse far off. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: mid-century gouache picture-book illustration \u2014 flat opaque shapes with chalky dry-brush texture, no outlines, simplified geometric palms and waves, overlapping shapes making new colours. Palette: vanilla pink sky, peach, turquoise, cream, one deep navy for shadows. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","VK-C":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the cove built as a paper stage \u2014 dunes, waves in rows, palm fronds, a hut, a sun. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: torn and cut paper collage \u2014 hand-torn edges showing white paper core, layered sheets casting small soft shadows, wax-crayon scribbles for texture, visible paper fibres. Palette: sand kraft paper, coral, teal tissue paper, cream, a few magenta scraps. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","VK-D":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a pastel seaside kingdom \u2014 a small castle with whipped-cream turrets and wafer balconies on the shore, a candy-striped pier, sugar-loaf rocks as ledges, pomegranate trees heavy with red fruit, calm pink-and-teal sea. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: storybook watercolour and ink, loose washes, broken brown ink line, paper grain. Palette: vanilla cream, strawberry pink, pomegranate red accents, teal sea, warm sand. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","SL-A":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a vast empty desert at dusk under a field of stars \u2014 one colossal half-buried stone head, a broken obelisk and a stepped plinth far apart serving as ledges, a long low dune as the ground, enormous sky. Emptiness is the composition. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: flat minimalist travel poster \u2014 no outlines at all, every form is two or three flat planes split by a hard edge between a warm lit face and a plum shadow face, faint print grain, hairline gold inlay and star-shaped cut-outs as the only ornament, sky in broad posterised bands. Palette: indigo, violet, rose, coral horizon, sand gold, plum shadow, one teal accent. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","SL-B":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the same dusk desert and colossal monuments. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: two-colour-plus-gold risograph print \u2014 flat shapes built from visible halftone dots and grain, inks slightly out of register so edges fringe, soy-ink texture, uncoated paper. Palette: fluorescent coral and deep indigo overprinting to plum, metallic gold for stars, cream paper. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","SL-C":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a desert night where the sky is a painted astronomical ceiling \u2014 constellations drawn as gold figures joined by lines, a huge zodiac ring, below it sandstone colossi and a temple pylon as ledges. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: ancient tomb-ceiling fresco with gold leaf \u2014 matte mineral pigment on plaster, fine cracks, flaking edges, flat figures in profile, gold leaf stars that catch light. Palette: deep lapis blue, gold leaf, ochre sandstone, faded turquoise, terracotta. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","SL-D":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the dusk desert as a shadow box \u2014 five layers of cut card: far dunes, pyramids, a colossal seated statue, near ruins, foreground reeds; stars are pinholes of light. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: layered paper-cut diorama lit from behind \u2014 crisp cut edges, each layer a single flat tone, soft glow between layers, slight card thickness visible. Palette: graduated indigo to coral backlight, layers from pale sand to near-black plum. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","BM-A":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a vertical mountain gorge \u2014 one towering peak crowned with twisted pines, a thread of waterfall, bamboo groves, a small stone bridge and a roofed pavilion on a crag as ledges, a village lost in mist below. Most of the sheet is bare paper. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: Chinese freehand ink painting, xieyi \u2014 calligraphic strokes that swell and taper into dry flying-white, wet splashed ink that pools and bleeds, mist and water left as unpainted paper, axe-cut texture strokes on rock, moss dots. Palette: black ink in five dilutions, white paper, a little indigo-cyan and ink green, no warm colour. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","BM-B":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the same gorge with terraced cliffs, pines, a waterfall, a bridge and pavilion. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: Chinese blue-green landscape painting \u2014 fine ink contour and texture strokes with azurite blue and malachite green mineral colour laid on peaks and slopes, gold-outlined cloud bands, silk ground showing its weave. Palette: azurite, malachite, ink black, aged silk tan, thin gold line. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","BM-C":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the gorge at night \u2014 a huge pale moon behind the peak, bamboo silhouettes, lantern-lit pavilion, falling water catching moonlight. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: ink and pale gold on dark indigo paper \u2014 light is painted instead of left bare: white and gold brush strokes with dry flying-white over deep blue ground, splashed silver mist. Palette: deep indigo ground, white ink, pale gold, cold cyan, black. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","HC-A":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the undercroft of a ruined castle \u2014 broken arches, a collapsed stair, hanging chains and a wooden gantry as ledges, uneven flagstones, a channel of lava that lights everything from below, one torch, deep darkness behind. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: painterly lit realism, like an oil concept painting \u2014 no outlines, visible brushwork, wet worn stone with weight, a dim cold key light from the upper left against a hot orange bounce from below, soft smoke and embers. Palette: desaturated blue-grey stone, near-black voids, and fire as the only saturated colour. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","HC-B":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: an immense prison vault \u2014 tiers of arches, drawbridges, giant chains and pulleys, stairways to nowhere as ledges, a glowing pit below. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: 18th-century copperplate etching \u2014 dense cross-hatching, deep bitten blacks, tiny figures against huge architecture, plate tone on cream paper, with a single hand-tinted colour: orange fire. Palette: black ink, cream paper, one orange. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","HC-C":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a crooked dungeon \u2014 leaning towers of mismatched stones, a drawbridge on chains, a cauldron bridge over bubbling lava, bats, a barred gate with a friendly skull. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: dark fairy-tale gouache illustration \u2014 chunky simplified shapes, exaggerated wobbly perspective, opaque paint with dry-brush texture, strong rim light from the lava. Palette: slate blue, charcoal, moss green, saturated lava orange and yellow. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","HC-D":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a castle cut open like a doll's house \u2014 cellars, a forge, a gaol, a lava moat, ladders and beams as ledges, tiny demons. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: medieval illuminated manuscript miniature \u2014 flat tempera colour, black contour, burnished gold leaf, patterned diaper background, decorative flames drawn as curling tongues, vellum texture. Palette: vermilion, ultramarine, gold leaf, bone vellum, soot black. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","TD-A":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the main street of an abandoned frontier town \u2014 a two-storey saloon with a balcony, a water tower, a hanging sign with a star, awnings and a wagon as ledges, tumbleweed, a saguaro, mesas far off. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: linocut relief print \u2014 a black key block with visible gouge marks, two or three flat spot colours printed slightly out of register on cream paper, tone made by hatching, light is bare paper, wobbling hand-cut edges, ink skips in the solids. Palette: black, rust, ochre, faded teal, cream paper. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","TD-B":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the same empty street under a huge pale sky, a crow on the saloon balcony, wind-blown dust. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: travelling artist's sketchbook \u2014 scratchy dip-pen line that blots and skips, loose sepia ink wash, dusty watercolour stains, the paper's deckle edge and foxing visible. Palette: sepia, burnt umber, dusty ochre, one faded sky blue. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","TD-C":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the street as a toy theatre \u2014 flat cardboard building fronts standing in rows on a stage, a cut-out water tower, a painted backdrop of mesas, paper tumbleweed on a wire. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: Victorian toy theatre and cardboard diorama \u2014 printed and hand-coloured card cut-outs with visible white cut edges and tabs, layers casting soft shadows, slightly warped card. Palette: aged cream card, brick red, mustard, bottle green, lamp black. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","TD-D":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the deserted street at noon, hard shadows, a single swinging door, heat haze, telegraph poles. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: hand-tinted tintype photograph \u2014 soft-focus metallic greys, scratches and chemical stains at the edges, thin transparent colour rubbed on by hand over only the sky, a sign and a door. Palette: silver grey, warm brown-black, a pale blue tint and a rust tint. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","PL-A":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the dragon king's palace under the sea \u2014 sweeping tiled roofs, coral trees, giant clam shells and palace terraces as ledges, kelp, rising bubble columns, pearls glowing like lamps, pale light falling from the surface. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: Chinese gongbi painting with heavy colour \u2014 every form enclosed by a fine even ink line, filled with mineral colour graded smoothly from dark to light, roof tiles and scales drawn one by one, no visible brush stroke. Palette: azurite blue, purple, cyan, pearl white on deep indigo; no warm colour. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","PL-B":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the undersea palace with dragon pillars, coral and flowing water drawn as ribbons, shell terraces as ledges. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: ancient Buddhist cave mural \u2014 matte mineral pigment on earthen plaster, rhythmic flowing line, flying ribbons and cloud scrolls, flaked and weathered surface, figures and forms outlined in dark oxidised line. Palette: malachite green, azurite, earth red, ochre, chalk white, darkened brown line. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","PL-C":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the palace in the black deep \u2014 translucent roofs like jellyfish bells, glowing coral, lantern fish, drifting plankton, a dragon's ribcage as a bridge, shell ledges edged with light. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: luminous painterly illustration \u2014 soft glows on darkness, light scattering through water, forms defined by rim light and silhouette rather than line. Palette: black-blue water, cyan and violet bioluminescence, pearl white highlights. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","KH-A":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a tangled night forest \u2014 gnarled trees with faces, bramble thickets, rope bridges and crooked branches as ledges, low fog, bear traps, will-o'-the-wisps, a castle with one lit window on a hill, a huge moon. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: scratchboard \u2014 a black board with light scratched out of it in fine tangled wandering hatch lines, crowded where moonlight falls and absent in shadow; everything is a black shape with its moonlit side scratched in. Palette: black, moonlight blue, yellow only for things that give light, red only for danger. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","KH-B":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the same haunted wood and castle, a pumpkin patch with carved lanterns, iron gates, crows. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: Victorian gothic pen-and-ink illustration \u2014 obsessive fine cross-hatching, elongated spindly forms, deadpan stillness, thin muted watercolour washes over the ink. Palette: ink black, grey-violet wash, sickly green, lantern orange. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","KH-C":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the wood as a shadow play \u2014 filigree trees, a spiked castle, hanging cages and branches as ledges, a pumpkin-headed king's silhouette on a balcony. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: cut-paper silhouette shadow theatre \u2014 intricate pure-black scissor-cut shapes in front of backlit layers of coloured tissue paper, soft glowing halos, no interior detail in the blacks. Palette: black silhouettes, backlight from deep blue through violet to an orange moon glow. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","TF-A":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a Teotihuacan-style pyramid city at night above a swamp \u2014 stepped pyramids, a causeway, carved serpent heads and floating stone slabs as ledges, canals of dark water, reeds and marigolds, thin lines of neon running through the old stone. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: pixel art \u2014 a hard grid of square pixels, a small fixed palette, shading only by ordered dither, no blur and no anti-aliasing. Palette: night violet stone, swamp green, mud brown, dark teal water, and thin neon cyan, magenta and yellow as the only bright colours. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","TF-B":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the same pyramid city and canals, fireflies, mist over the water, neon glyphs reflected in the swamp, papel-picado banners between temples. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: high-detail modern pixel art \u2014 crisp square pixels at fine resolution with rich atmospheric lighting, coloured glow, reflections and soft depth haze built from pixels. Palette: deep violet night, jade water, marigold orange banners, neon cyan and magenta light. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","TF-C":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the pyramid city drawn flat like a page of a codex \u2014 temples in profile, a feathered serpent as a bridge, canals as bands of blue scrolls, an axolotl spirit, sun and star glyphs. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: Mesoamerican painted codex on amate bark paper \u2014 flat colour inside firm black contour, figures in profile, no perspective, fibrous brown paper; here and there the glyph borders turn into glowing circuit traces. Palette: turquoise, cochineal red, ochre yellow, black line, bark-paper brown, a little neon cyan. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","CC-A":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: a palace above the clouds \u2014 small terrace islands, lotus pads, curved bridges and roofs as ledges, great scrolling clouds filling the space, a dragon coiling through them, frost pearls. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: cloisonn\u00e9 enamel \u2014 every shape is a cell of flat saturated jewel enamel bounded by a raised gold wire, faint enamel mottling, the wire lit as relief so it gleams on one side; no line that is not gold, no colour that is not enclosed. Palette: purple night, lapis, turquoise, cinnabar, jade, ivory, imperial yellow, gold wire. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","CC-B":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the same sky palace, cranes flying between cloud banks, tasselled bridges. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: Chinese silk embroidery \u2014 satin-stitch fields with visible thread direction and sheen, couched gold-thread outlines, padded clouds, the silk ground showing between motifs. Palette: midnight blue silk, pearl and jade thread, coral red, couched gold. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","CC-C":"Side-view 2D platform-fighter arena, game environment concept art, 16:9 widescreen, camera straight-on. Scene: the sky palace, clouds and dragon painted across the curved surface of a giant porcelain jar, terraces as painted bands. Composition: one long uneven ground line across the lower third, three or four ledges at different heights a character could jump between, open space above for jumping, layered depth (far, middle, near). Two tiny chibi fighters stand on the ground for scale, each about one-tenth of the image height. Medium: blue-and-white porcelain painting \u2014 cobalt brushwork from pale wash to deep blue-black on glossy white glaze, heaped-and-piled dark spots, with cracks mended in gold. Palette: cobalt blue, white glaze, thin gold seams. Organic hand-made shapes, irregular silhouettes, nothing tile-like or grid-aligned, no repeated stamps. No text, no lettering, no UI, no watermark, no border.","OW-A":"Top-down fantasy world map of a single roughly circular island, hand-drawn on aged parchment by one cartographer. The island has an organic, irregular coastline. At its exact centre sits a small pitch-black regular pentagon, a void, with scorched paper edges. Five winding rivers of varying width run from the pentagon's five sides out to the sea, cutting the island into five wedge-shaped realms. Each realm is drawn in a different art medium, yet all share the same paper and the same brown ink coastline: (1) a pink seaside kingdom in loose storybook watercolour with a small cream castle and palm trees; (2) misty peaks, bamboo and pines in black Chinese ink wash with lots of bare paper; (3) a sandy frontier ghost town with mesas in rust-and-ochre linocut print; (4) a tangled dark wood with a pumpkin-lantern castle in blue-and-black scratchboard; (5) stepped pyramids and jade canals in pixel art with thin neon lines. Small city markers (dots, diamonds, stars) joined by dotted roads that never cross a river. Around the coast: ripple-line hatching, a compass rose, a decorative border. No text, no lettering, no labels.","OW-B":"Top-down game world map made as a paper collage: one roughly circular island assembled from five torn storybook pages, each page a different illustration medium, fitted together like wedges of a pie. The ragged torn edges between pages are the rivers \u2014 strips of deep blue paper show through the gaps and run from the centre to the sea. At the exact centre a small black regular pentagon is burnt through all the pages, edges charred and curling, darkness beneath. The five pages: (1) pink watercolour seaside kingdom with a cream castle; (2) Chinese ink-wash mountains, bamboo and mist on rice paper; (3) rust-and-ochre linocut desert ghost town on cream stock; (4) blue-and-black scratchboard haunted wood with a glowing pumpkin castle; (5) pixel-art pyramid city with jade canals and neon lines on dark paper. The collage lies on a deep teal sea made of layered cut-paper waves. Small pinned markers and thread roads connect cities within each page. Soft studio light, slight paper shadows. No text, no lettering, no labels.","OW-C":"Top-down view of a tabletop board-game map: one roughly circular island board built from five wedge-shaped pieces of different crafted materials, separated by five inlaid rivers of blue resin that run from a small black glass pentagon at the exact centre out to the rim. The five pieces: (1) painted pink ceramic seaside kingdom with a tiny cream castle; (2) carved pale wood and ink bamboo mountains; (3) embossed leather and printed card desert frontier town; (4) black scratchboard-lacquer dark forest with a tiny glowing pumpkin castle; (5) pixel-mosaic tile pyramid city with glowing neon inlays. Small wooden city tokens on each piece, connected by engraved dotted roads that never cross a river. The board sits on a dark teal cloth sea with a brass compass. Crafted, tactile, photographed from directly above with soft even light. No text, no lettering, no labels."}}</script>
+<script>
+(function () {
+  'use strict';
+  function byId(id) { return document.getElementById(id); }
+  function all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  var DATA;
+  try { DATA = JSON.parse(byId('data').textContent); }
+  catch (err) { byId('worlds').textContent = 'The picture list could not be read.'; return; }
+
+  // Lookups: every picture by key, its world, and the order the large view walks through.
+  var items = {}, worldOf = {}, seq = [];
+  DATA.worlds.forEach(function (w) {
+    if (w.ref) seq.push({ key: 'ref:' + w.code, w: w, ref: true });
+    w.groups.forEach(function (g) {
+      g.items.forEach(function (it) { items[it.key] = it; worldOf[it.key] = w; seq.push({ key: it.key, w: w, it: it }); });
+    });
+  });
+
+  // ---- state: one pick per world, any number of likes, a note per world -------------
+  var STORE = 'fableland.stylepicks.v1';
+  function clean(o) {
+    var s = { v: 1, t: (o && typeof o.t === 'number') ? o.t : 0, picks: {}, likes: {}, notes: {} };
+    if (!o) return s;
+    DATA.worlds.forEach(function (w) {
+      var p = o.picks && o.picks[w.code];
+      if (p === 'ships' || (typeof p === 'string' && worldOf[p] === w)) s.picks[w.code] = p;
+      var n = o.notes && o.notes[w.code];
+      if (typeof n === 'string' && n) s.notes[w.code] = n.slice(0, 2000);
+    });
+    if (o.likes) Object.keys(o.likes).forEach(function (k) { if (items[k] && o.likes[k]) s.likes[k] = true; });
+    return s;
+  }
+  var state = clean(null);
+  try { var raw = window.localStorage.getItem(STORE); if (raw) state = clean(JSON.parse(raw)); } catch (err) {}
+  function save() { try { window.localStorage.setItem(STORE, JSON.stringify(state)); } catch (err) {} }
+  function touch() { state.t = Date.now(); save(); refresh(); pushSoon(); }
+  function setPick(code, key) { if (state.picks[code] === key) delete state.picks[code]; else state.picks[code] = key; touch(); }
+  function toggleLike(key) { if (state.likes[key]) delete state.likes[key]; else state.likes[key] = true; touch(); }
+
+  // ---- text ---------------------------------------------------------------------------
+  // The page is kept ASCII-only, so punctuation outside ASCII is built from its code.
+  var DOT = String.fromCharCode(183), EN = String.fromCharCode(8211), EM = String.fromCharCode(8212);
+  function shortId(it) { return it.variant ? it.id + ' ' + DOT + ' mj' + it.variant : it.id; }
+  function chipText(w) {
+    var p = state.picks[w.code];
+    if (!p) return EN;
+    if (p === 'ships') return 'keep';
+    return items[p].letter + (items[p].variant ? DOT + 'mj' + items[p].variant : '');
+  }
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+  function summary() {
+    var d = new Date();
+    var lines = ['Fableland style picks ' + EM + ' ' + d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate()) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes())];
+    DATA.worlds.forEach(function (w) {
+      var p = state.picks[w.code], pick = '(no pick yet)', likes = [];
+      if (p === 'ships') pick = 'keep what ships';
+      else if (p) pick = p + ' ' + EM + ' ' + items[p].title + ' (' + items[p].model + ')';
+      w.groups.forEach(function (g) { g.items.forEach(function (it) { if (state.likes[it.key] && it.key !== p) likes.push(it.key); }); });
+      lines.push('', w.code + '  ' + w.name, '  pick: ' + pick);
+      if (likes.length) lines.push('  also like: ' + likes.join(', '));
+      if (state.notes[w.code]) lines.push('  note: ' + state.notes[w.code].replace(/\s+/g, ' ').trim());
+    });
+    return lines.join('\n');
+  }
+
+  // ---- building the page --------------------------------------------------------------
+  function pickBtn(code, key) {
+    var b = el('button', 'btn pick'); b.type = 'button';
+    b.setAttribute('data-pick', key); b.setAttribute('data-world', code);
+    b.addEventListener('click', function () { setPick(code, key); });
+    return b;
+  }
+  function likeBtn(key) {
+    var b = el('button', 'btn like'); b.type = 'button';
+    b.setAttribute('data-like', key);
+    b.addEventListener('click', function () { toggleLike(key); });
+    return b;
+  }
+  function shot(src, w, h, alt, key) {
+    var b = el('button', 'shot'); b.type = 'button';
+    b.style.aspectRatio = w + ' / ' + h;
+    b.setAttribute('aria-label', 'Open large: ' + alt);
+    var img = el('img'); img.loading = 'lazy'; img.decoding = 'async'; img.width = w; img.height = h; img.alt = alt; img.src = src;
+    b.appendChild(img);
+    b.addEventListener('click', function () { openLb(key, b); });
+    return b;
+  }
+  function card(it, w, small) {
+    var a = el('article', 'card' + (small ? ' sm' : ''));
+    a.setAttribute('data-key', it.key);
+    a.appendChild(shot(it.src, it.w, it.h, shortId(it) + ', ' + it.title, it.key));
+    var top = el('div', 'c-top');
+    top.appendChild(el('span', 'c-id', shortId(it)));
+    top.appendChild(el('span', 'c-model', it.model));
+    if (w.pick === it.key) top.appendChild(el('span', 'tag rec', 'Recommended'));
+    else if (w.runner === it.key) top.appendChild(el('span', 'tag', 'Runner-up'));
+    a.appendChild(top);
+    a.appendChild(el('h4', 'c-title', it.title));
+    a.appendChild(el('p', 'c-pitch', it.pitch));
+    a.appendChild(el('p', 'c-note', it.note));
+    var act = el('div', 'c-act');
+    act.appendChild(pickBtn(w.code, it.key));
+    act.appendChild(likeBtn(it.key));
+    a.appendChild(act);
+    var d = el('details', 'c-prompt');
+    d.appendChild(el('summary', null, 'Prompt'));
+    d.appendChild(el('p', null, DATA.prompts[it.id] || ''));
+    a.appendChild(d);
+    return a;
+  }
+  var noteFields = {};
+  function world(w) {
+    var s = el('section', 'world'); s.id = 'w-' + w.code;
+    var head = el('header', 'w-head' + (w.ref ? ' has-ref' : '')), text = el('div', 'w-text');
+    text.appendChild(el('p', 'w-code', w.code));
+    text.appendChild(el('h2', null, w.name));
+    var med = el('p', 'w-medium');
+    med.appendChild(el('span', 'k', w.mediumLabel));
+    med.appendChild(el('span', null, w.medium));
+    if (w.canvas) {
+      var sw = el('span', 'swatch'); sw.style.background = w.canvas; sw.title = 'Canvas colour in the style bible';
+      med.appendChild(sw); med.appendChild(el('span', 'hex', w.canvas));
+    }
+    text.appendChild(med);
+    var v = el('div', 'w-verdict');
+    v.appendChild(el('p', 'k', 'Art director'));
+    w.verdict.forEach(function (line) { v.appendChild(el('p', null, line)); });
+    text.appendChild(v);
+    head.appendChild(text);
+    var keep = pickBtn(w.code, 'ships');
+    if (w.ref) {
+      var fig = el('figure', 'w-ref');
+      fig.appendChild(shot(w.ref.src, w.ref.w, w.ref.h, w.name + ', what ships today', 'ref:' + w.code));
+      var cap = el('figcaption');
+      cap.appendChild(el('span', 'k', 'Ships today'));
+      cap.appendChild(document.createTextNode(' ' + w.ships));
+      fig.appendChild(cap); fig.appendChild(keep);
+      head.appendChild(fig);
+    } else {
+      text.appendChild(keep);
+    }
+    s.appendChild(head);
+    w.groups.forEach(function (g) {
+      if (g.label) s.appendChild(el('h3', 'g-label', g.label));
+      var grid = el('div', 'grid ' + g.kind);
+      grid.setAttribute('data-n', g.items.length);
+      g.items.forEach(function (it) { grid.appendChild(card(it, w, g.kind === 'mj')); });
+      s.appendChild(grid);
+    });
+    var nf = el('div', 'w-note');
+    var lab = el('label', null, 'Your note on ' + w.code + ': anything to carry across, such as a palette, a motif or a level of looseness');
+    var ta = el('textarea'); ta.id = 'note-' + w.code; ta.rows = 2; lab.htmlFor = ta.id;
+    ta.value = state.notes[w.code] || '';
+    ta.addEventListener('input', function () {
+      if (ta.value) state.notes[w.code] = ta.value.slice(0, 2000); else delete state.notes[w.code];
+      state.t = Date.now(); save(); byId('summary').value = summary(); pushSoon();
+    });
+    noteFields[w.code] = ta;
+    nf.appendChild(lab); nf.appendChild(ta);
+    s.appendChild(nf);
+    return s;
+  }
+  function fillNotes() {
+    Object.keys(noteFields).forEach(function (code) {
+      if (document.activeElement !== noteFields[code]) noteFields[code].value = state.notes[code] || '';
+    });
+  }
+  function jump(code) {
+    var calm = false;
+    try { calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (err) {}
+    byId('w-' + code).scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+  }
+  var chipEls = {};
+  DATA.worlds.forEach(function (w) {
+    byId('worlds').appendChild(world(w));
+    var c = el('a', 'chip', w.code); c.href = '#w-' + w.code;
+    var val = el('span'); c.appendChild(val);
+    c.addEventListener('click', function (ev) { ev.preventDefault(); jump(w.code); });
+    chipEls[w.code] = { a: c, val: val };
+    byId('chips').appendChild(c);
+  });
+  byId('lede').textContent = DATA.images + ' concept images for nine worlds and the overworld. Nothing here changes a shipped asset; it is a choice of direction for each world.';
+  byId('foot').textContent = 'Built ' + DATA.built + ' from manifest.json, prompts.json and review.json by Tools/style_exploration/build_gallery.py.';
+
+  function refresh() {
+    var n = 0;
+    DATA.worlds.forEach(function (w) {
+      var on = !!state.picks[w.code]; if (on) n++;
+      chipEls[w.code].val.textContent = chipText(w);
+      chipEls[w.code].a.className = 'chip' + (on ? ' on' : '');
+      chipEls[w.code].a.setAttribute('aria-label', w.name + ': ' + (on ? 'picked ' + chipText(w) : 'no pick yet'));
+    });
+    all('[data-pick]').forEach(function (b) {
+      var key = b.getAttribute('data-pick'), on = state.picks[b.getAttribute('data-world')] === key;
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.textContent = key === 'ships' ? (on ? 'Keeping what ships' : 'Keep what ships') : (on ? 'Your pick' : 'Pick');
+    });
+    all('[data-like]').forEach(function (b) {
+      var on = !!state.likes[b.getAttribute('data-like')];
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.textContent = on ? 'Also liked' : 'Also like';
+    });
+    all('.card').forEach(function (c) {
+      var key = c.getAttribute('data-key');
+      c.classList.toggle('is-pick', state.picks[worldOf[key].code] === key);
+    });
+    byId('count').textContent = n + ' of ' + DATA.worlds.length + ' picked';
+    byId('summary').value = summary();
+  }
+
+  // ---- copy -----------------------------------------------------------------------------
+  function copyPicks(btn) {
+    var box = byId('summary'), status = byId('copyStatus'), text = summary();
+    box.value = text;
+    function ok() {
+      status.textContent = 'Copied. Paste it into the chat.';
+      var was = btn.textContent; btn.textContent = 'Copied';
+      window.setTimeout(function () { btn.textContent = was; }, 1600);
+    }
+    function byHand() {
+      var done = false;
+      try { box.focus(); box.select(); box.setSelectionRange(0, text.length); done = document.execCommand('copy'); } catch (err) {}
+      if (done) { ok(); return; }
+      status.textContent = 'Could not copy automatically. The text is selected in the box: copy it by hand.';
+      byId('out').scrollIntoView({ block: 'center' });
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(ok, byHand); return; }
+    } catch (err) {}
+    byHand();
+  }
+  byId('copyTop').addEventListener('click', function () { copyPicks(byId('copyTop')); });
+  byId('copyBottom').addEventListener('click', function () { copyPicks(byId('copyBottom')); });
+
+  // ---- large view -------------------------------------------------------------------------
+  var lb = byId('lb'), lbAt = 0, lbFrom = null;
+  function show(i) {
+    lbAt = (i + seq.length) % seq.length;
+    var s = seq[lbAt], w = s.w, it = s.it;
+    byId('lbCount').textContent = (lbAt + 1) + ' / ' + seq.length + ' ' + DOT + ' ' + w.name;
+    byId('lbImg').src = s.ref ? w.ref.src : it.src;
+    byId('lbImg').alt = s.ref ? w.name + ', what ships today' : shortId(it) + ', ' + it.title;
+    byId('lbId').textContent = s.ref ? w.code + ' ' + DOT + ' ships today' : shortId(it);
+    byId('lbTitle').textContent = s.ref ? 'In the game now' : it.title;
+    byId('lbModel').textContent = s.ref ? '' : it.model;
+    byId('lbNote').textContent = s.ref ? w.ships : it.note;
+    byId('lbPick').setAttribute('data-world', w.code);
+    byId('lbPick').setAttribute('data-pick', s.ref ? 'ships' : it.key);
+    byId('lbLike').hidden = !!s.ref;
+    byId('lbLike').setAttribute('data-like', s.ref ? '' : it.key);
+    byId('lbPrompt').hidden = !!s.ref;
+    byId('lbPrompt').open = false;
+    byId('lbPromptText').textContent = s.ref ? '' : (DATA.prompts[it.id] || '');
+    refresh();
+  }
+  function openLb(key, from) {
+    for (var i = 0; i < seq.length; i++) if (seq[i].key === key) break;
+    if (i === seq.length) return;
+    lbFrom = from || null;
+    lb.hidden = false; document.body.classList.add('lb-open');
+    show(i); byId('lbClose').focus();
+  }
+  function closeLb() {
+    lb.hidden = true; document.body.classList.remove('lb-open');
+    byId('lbImg').removeAttribute('src');
+    if (lbFrom && lbFrom.focus) lbFrom.focus();
+  }
+  byId('lbClose').addEventListener('click', closeLb);
+  byId('lbPrev').addEventListener('click', function () { show(lbAt - 1); });
+  byId('lbNext').addEventListener('click', function () { show(lbAt + 1); });
+  byId('lbPick').addEventListener('click', function () { setPick(this.getAttribute('data-world'), this.getAttribute('data-pick')); });
+  byId('lbLike').addEventListener('click', function () { toggleLike(this.getAttribute('data-like')); });
+  document.addEventListener('keydown', function (ev) {
+    if (lb.hidden) return;
+    if (ev.key === 'Escape') closeLb();
+    else if (ev.key === 'ArrowLeft') show(lbAt - 1);
+    else if (ev.key === 'ArrowRight') show(lbAt + 1);
+  });
+  var sx = 0, sy = 0;
+  byId('lbStage').addEventListener('touchstart', function (ev) { sx = ev.changedTouches[0].clientX; sy = ev.changedTouches[0].clientY; }, { passive: true });
+  byId('lbStage').addEventListener('touchend', function (ev) {
+    var dx = ev.changedTouches[0].clientX - sx, dy = ev.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) > 48 && Math.abs(dx) > 1.5 * Math.abs(dy)) show(lbAt + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+
+  // ---- optional: keep the picks with the published page (Claude artifact "db") -----------
+  // Opened from disk there is no window.claude and the picks simply stay in this browser.
+  var remote = null, writing = false, dirty = false, timer = 0;
+  function setSync(on) {
+    byId('syncNote').textContent = on
+      ? 'Your picks are saved with this page and follow you to your other devices.'
+      : 'Your picks are remembered in this browser.';
+  }
+  function push() {
+    if (!remote) return;
+    if (writing) { dirty = true; return; }
+    writing = true; dirty = false;
+    var body = JSON.parse(JSON.stringify(state)); body.summary = summary();
+    remote.set(body).then(function () { writing = false; if (dirty) push(); },
+                          function () { writing = false; remote = null; setSync(false); });
+  }
+  function pushSoon() { if (!remote) return; window.clearTimeout(timer); timer = window.setTimeout(push, 900); }
+  function connect() {
+    var c = window.claude, p;
+    if (!c || typeof c.use !== 'function') return;
+    try { p = c.use('db'); } catch (err) { return; }
+    Promise.resolve(p).then(function (db) {
+      if (!db) return;
+      var ref = db.doc('picks/owner'), first = true;
+      ref.onSnapshot(function (snap) {
+        if (snap.metadata && snap.metadata.hasPendingWrites) return;
+        var d = snap.exists ? snap.data() : null;
+        if (d && typeof d.t === 'number' && d.t > state.t) { state = clean(d); save(); fillNotes(); refresh(); }
+        if (first) {
+          first = false; remote = ref; setSync(true);
+          if (state.t && !(d && d.t >= state.t)) push();
+        }
+      }, function () { remote = null; setSync(false); });
+    }).catch(function () {});
+  }
+
+  refresh();
+  connect();
+})();
+</script>

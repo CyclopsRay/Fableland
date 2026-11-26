@@ -35,3 +35,6 @@ Icon
 
 # Claude
 .claude/
+
+# Full-size AI concept images (previews in img/ are tracked)
+Docs/Art/StyleExploration/_originals/

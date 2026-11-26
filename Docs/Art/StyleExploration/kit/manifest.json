@@ -1,0 +1,277 @@
+{
+ "images": [
+  {
+   "file": "KIT-BM-G.jpg",
+   "original": "_originals/KIT-BM-G.png",
+   "id": "KIT-BM-G",
+   "world": "BM",
+   "letter": "G",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1685647,
+   "generated": "2026-11-25 22:41",
+   "source": "Tripo Studio web / generate-image/20261126/2713328f-9ca1-4ecd-83ee-8f39c83a4516/image.png",
+   "prompt": "Off-white rice paper with faint Chinese ink-wash mist — a flat top-down background texture for an illustrated map, filling the whole square frame edge to edge, evenly lit, no horizon, no perspective, no objects, no buildings, no text. Bare xuan paper with visible fibres, a few pale grey ink-wash mist bands and the lightest grey-green washes, most of the sheet left unpainted. It must read as one continuous sheet of paper: subtle variation only, slightly lighter toward the middle, usable as a ground behind small map symbols."
+  },
+  {
+   "file": "KIT-BM-S.jpg",
+   "original": "_originals/KIT-BM-S.png",
+   "id": "KIT-BM-S",
+   "world": "BM",
+   "letter": "S",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1581101,
+   "generated": "2026-11-25 22:41",
+   "source": "Tripo Studio web / generate-image/20261126/fd283661-06e4-4c2d-a072-a6c257681fcf/image.png",
+   "prompt": "Chinese ink-wash map symbols — a sprite sheet of nine separate map symbols for an illustrated fantasy map, arranged in a clean 3 by 3 grid, each symbol centred in its cell with wide empty margins and nothing touching or overlapping. Background: one perfectly flat solid magenta (#FF00FF), no texture, no gradient, no shadows on the background, no grid lines, no frame. Each symbol is seen from a raised three-quarter view as on a hand-illustrated map, sitting on its own small patch of ground, all lit from the upper left, all at a matching scale. Symbols: a towering peak crowned with pines, a bamboo grove, a twisted old pine, a pavilion on a crag, a small stone arch bridge, a cliff with a waterfall, a slender pagoda, a cluster of misty hills, a village of tiled roofs. Medium: Chinese freehand ink painting, xieyi, calligraphic strokes that swell and taper into dry flying-white, wet ink that pools and bleeds, moss dots. Palette: black ink in five dilutions, a little indigo-cyan and ink green, no warm colour. No text, no lettering, no numbers."
+  },
+  {
+   "file": "KIT-HC-G.jpg",
+   "original": "_originals/KIT-HC-G.png",
+   "id": "KIT-HC-G",
+   "world": "HC",
+   "letter": "G",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 2202195,
+   "generated": "2026-11-25 22:41",
+   "source": "Tripo Studio web / generate-image/20261126/4aea0f0f-6a8f-44db-821b-414e360732a6/image.png",
+   "prompt": "Dark slate-grey rocky ground painted with realistic light — a flat top-down background texture for an illustrated map, filling the whole square frame edge to edge, evenly lit, no horizon, no perspective, no objects, no buildings, no text. Cracked basalt and worn flagstone seen from directly above, ash in the hollows, a faint ember-orange glow deep in a few fissures, desaturated and damp. It must read as one continuous sheet: subtle variation only, slightly lighter toward the middle, usable as a ground behind small map symbols."
+  },
+  {
+   "file": "KIT-HC-S.jpg",
+   "original": "_originals/KIT-HC-S.png",
+   "id": "KIT-HC-S",
+   "world": "HC",
+   "letter": "S",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1681660,
+   "generated": "2026-11-25 22:41",
+   "source": "Tripo Studio web / generate-image/20261126/b2d62982-b526-40a7-a38f-99ceda7ce066/image.png",
+   "prompt": "Painterly realist map symbols — a sprite sheet of nine separate map symbols for an illustrated fantasy map, arranged in a clean 3 by 3 grid, each symbol centred in its cell with wide empty margins and nothing touching or overlapping. Background: one perfectly flat solid magenta (#FF00FF), no texture, no gradient, no shadows on the background, no grid lines, no frame. Each symbol is seen from a raised three-quarter view as on a hand-illustrated map, sitting on its own small patch of ground, all lit from the upper left, all at a matching scale. Symbols: a grim castle keep, a ruined round tower, an iron portcullis gate in a wall, a pit of glowing lava, a cairn of skulls, a drawbridge on chains, a small graveyard, a dead tree, a mine entrance with timber props. Medium: painterly lit realism like a small oil study, no outlines, worn wet stone with weight, cold key light and hot orange bounce light from fire. Palette: desaturated blue-grey stone, near-black shadow, fire orange as the only saturated colour. No text, no lettering, no numbers."
+  },
+  {
+   "file": "KIT-KH-G.jpg",
+   "original": "_originals/KIT-KH-G.png",
+   "id": "KIT-KH-G",
+   "world": "KH",
+   "letter": "G",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 2288118,
+   "generated": "2026-11-25 22:42",
+   "source": "Tripo Studio web / generate-image/20261126/d4f865ae-d16f-4b10-af95-6f7fae9f37fc/image.png",
+   "prompt": "Black scratchboard ground with fine blue scratched lines — a flat top-down background texture for an illustrated map, filling the whole square frame edge to edge, evenly lit, no horizon, no perspective, no objects, no buildings, no text. A black board with thin tangled wandering hatch lines scratched out in moonlight blue, suggesting forest floor, roots, bramble and drifting fog, denser in some patches and empty black in others. It must read as one continuous board: subtle variation only, slightly lighter toward the middle, usable as a ground behind small map symbols."
+  },
+  {
+   "file": "KIT-KH-S.jpg",
+   "original": "_originals/KIT-KH-S.png",
+   "id": "KIT-KH-S",
+   "world": "KH",
+   "letter": "S",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1650965,
+   "generated": "2026-11-25 22:42",
+   "source": "Tripo Studio web / generate-image/20261126/e83d1b34-fa8d-4c5f-b36c-5e66807d9dc4/image.png",
+   "prompt": "Scratchboard map symbols — a sprite sheet of nine separate map symbols for an illustrated fantasy map, arranged in a clean 3 by 3 grid, each symbol centred in its cell with wide empty margins and nothing touching or overlapping. Background: one perfectly flat solid magenta (#FF00FF), no texture, no gradient, no shadows on the background, no grid lines, no frame. Each symbol is seen from a raised three-quarter view as on a hand-illustrated map, sitting on its own small patch of ground, all lit from the upper left, all at a matching scale. Symbols: a gnarled tree with a face, a crooked castle with a glowing jack-o'-lantern gate, a bramble thicket, a scarecrow, a wrought-iron graveyard gate, a hanging iron cage on a post, a lantern will-o'-the-wisp, a crooked cottage with one lit window, a ring of pumpkins. Medium: scratchboard, each form a black shape with its moonlit side scratched out in fine tangled hatch lines. Palette: black, moonlight blue, yellow only for things that give light, red only for danger. No text, no lettering, no numbers."
+  },
+  {
+   "file": "KIT-PL-G.jpg",
+   "original": "_originals/KIT-PL-G.png",
+   "id": "KIT-PL-G",
+   "world": "PL",
+   "letter": "G",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 2245714,
+   "generated": "2026-11-25 22:42",
+   "source": "Tripo Studio web / generate-image/20261126/4e6b9f9f-e67e-48e6-878d-806e5abddc55/image.png",
+   "prompt": "Deep indigo sea drawn with fine Chinese gongbi wave lines — a flat top-down background texture for an illustrated map, filling the whole square frame edge to edge, evenly lit, no horizon, no perspective, no objects, no buildings, no text. An even pattern of traditional curling water lines in thin cyan and pale blue ink over graded indigo and purple mineral colour, a few tiny pearls of light. It must read as one continuous sheet of silk: subtle variation only, slightly lighter toward the middle, usable as a ground behind small map symbols."
+  },
+  {
+   "file": "KIT-PL-S.jpg",
+   "original": "_originals/KIT-PL-S.png",
+   "id": "KIT-PL-S",
+   "world": "PL",
+   "letter": "S",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1579376,
+   "generated": "2026-11-25 22:42",
+   "source": "Tripo Studio web / generate-image/20261126/ed3c4e53-2633-4adf-8633-9528701aa7ee/image.png",
+   "prompt": "Chinese gongbi map symbols — a sprite sheet of nine separate map symbols for an illustrated fantasy map, arranged in a clean 3 by 3 grid, each symbol centred in its cell with wide empty margins and nothing touching or overlapping. Background: one perfectly flat solid magenta (#FF00FF), no texture, no gradient, no shadows on the background, no grid lines, no frame. Each symbol is seen from a raised three-quarter view as on a hand-illustrated map, sitting on its own small patch of ground, all lit from the upper left, all at a matching scale. Symbols: an undersea dragon palace with sweeping tiled roofs, a branching coral tree, a giant open clam holding a glowing pearl, a stand of tall kelp, a column of rising bubbles, a slender palace tower, an arched bridge made of shells, a lotus-shaped pavilion, a coiled sea dragon statue. Medium: Chinese gongbi painting with heavy colour, every form enclosed by a fine even ink line and filled with smoothly graded mineral colour, tiles and scales drawn one by one. Palette: azurite blue, purple, cyan, pearl white, deep indigo, no warm colour. No text, no lettering, no numbers."
+  },
+  {
+   "file": "KIT-SL-G.jpg",
+   "original": "_originals/KIT-SL-G.png",
+   "id": "KIT-SL-G",
+   "world": "SL",
+   "letter": "G",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1980513,
+   "generated": "2026-11-25 22:41",
+   "source": "Tripo Studio web / generate-image/20261126/6d1cd698-691d-44e7-b6ba-b842e989941d/image.png",
+   "prompt": "Sand-gold desert ground as a flat minimalist poster print — a flat top-down background texture for an illustrated map, filling the whole square frame edge to edge, evenly lit, no horizon, no perspective, no objects, no buildings, no text. Broad flat bands of sand gold and coral with long soft plum dune shadows, faint print grain, a sparse scatter of tiny four-point stars. It must read as one continuous sheet of paper: subtle variation only, slightly lighter toward the middle, usable as a ground behind small map symbols."
+  },
+  {
+   "file": "KIT-SL-S.jpg",
+   "original": "_originals/KIT-SL-S.png",
+   "id": "KIT-SL-S",
+   "world": "SL",
+   "letter": "S",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 923211,
+   "generated": "2026-11-25 22:41",
+   "source": "Tripo Studio web / generate-image/20261126/994acbaa-dbe2-4adf-aaf5-830c9ce07576/image.png",
+   "prompt": "Flat minimalist poster map symbols — a sprite sheet of nine separate map symbols for an illustrated fantasy map, arranged in a clean 3 by 3 grid, each symbol centred in its cell with wide empty margins and nothing touching or overlapping. Background: one perfectly flat solid magenta (#FF00FF), no texture, no gradient, no shadows on the background, no grid lines, no frame. Each symbol is seen from a raised three-quarter view as on a hand-illustrated map, sitting on its own small patch of ground, all lit from the upper left, all at a matching scale. Symbols: a colossal half-buried stone head, a tall obelisk, a stepped stone plinth, a seated colossus statue, a broken column, a monument with a star-shaped opening, an oasis with one palm, a striped caravan tent, a crescent dune. Medium: flat minimalist travel poster, no outlines, each form two or three flat planes split by a hard edge between a warm lit face and a plum shadow face, hairline gold inlay. Palette: sand gold, coral, rose, plum, indigo, one teal accent. No text, no lettering, no numbers."
+  },
+  {
+   "file": "KIT-TD-G.jpg",
+   "original": "_originals/KIT-TD-G.png",
+   "id": "KIT-TD-G",
+   "world": "TD",
+   "letter": "G",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 2212147,
+   "generated": "2026-11-25 22:42",
+   "source": "Tripo Studio web / generate-image/20261126/42f05bc7-8ede-40ee-8db4-159bffa8c261/image.png",
+   "prompt": "Cream paper printed with sparse linocut hatching — a flat top-down background texture for an illustrated map, filling the whole square frame edge to edge, evenly lit, no horizon, no perspective, no objects, no buildings, no text. Hand-cut relief-print marks in ochre and rust suggesting wind-rippled desert sand, flat spot colour slightly out of register, ink speckle and skips, bare cream paper between the marks. It must read as one continuous sheet of paper: subtle variation only, slightly lighter toward the middle, usable as a ground behind small map symbols."
+  },
+  {
+   "file": "KIT-TD-S.jpg",
+   "original": "_originals/KIT-TD-S.png",
+   "id": "KIT-TD-S",
+   "world": "TD",
+   "letter": "S",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1474839,
+   "generated": "2026-11-25 22:42",
+   "source": "Tripo Studio web / generate-image/20261126/bdd0dbe9-6248-4c61-ab1b-e34e9277a9b3/image.png",
+   "prompt": "Linocut-print map symbols — a sprite sheet of nine separate map symbols for an illustrated fantasy map, arranged in a clean 3 by 3 grid, each symbol centred in its cell with wide empty margins and nothing touching or overlapping. Background: one perfectly flat solid magenta (#FF00FF), no texture, no gradient, no shadows on the background, no grid lines, no frame. Each symbol is seen from a raised three-quarter view as on a hand-illustrated map, sitting on its own small patch of ground, all lit from the upper left, all at a matching scale. Symbols: a two-storey frontier saloon with a balcony, a wooden water tower, a flat-topped mesa, a saguaro cactus, a covered wagon, a windmill pump, a small clapboard church, a cattle skull on a post, a huddle of abandoned shacks. Medium: linocut relief print, a black key block with visible gouge marks, two or three flat spot colours slightly out of register, tone made by hatching, wobbling hand-cut edges, ink skips. Palette: black, rust, ochre, faded teal, cream. No text, no lettering, no numbers."
+  },
+  {
+   "file": "KIT-TF-G.jpg",
+   "original": "_originals/KIT-TF-G.png",
+   "id": "KIT-TF-G",
+   "world": "TF",
+   "letter": "G",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1832883,
+   "generated": "2026-11-25 22:42",
+   "source": "Tripo Studio web / generate-image/20261126/d293426c-b9b0-43b3-be8c-5d538ad5ed79/image.png",
+   "prompt": "Pixel-art swamp and old stone ground at night — a flat top-down background texture for an illustrated map, filling the whole square frame edge to edge, evenly lit, no horizon, no perspective, no objects, no buildings, no text. Hard square pixels, a small fixed palette, ordered dither only: dark teal swamp water, moss green, patches of violet stone paving, and a few thin neon cyan circuit lines running through. It must read as one continuous ground: subtle variation only, slightly lighter toward the middle, usable as a ground behind small map symbols."
+  },
+  {
+   "file": "KIT-TF-S.jpg",
+   "original": "_originals/KIT-TF-S.png",
+   "id": "KIT-TF-S",
+   "world": "TF",
+   "letter": "S",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1498577,
+   "generated": "2026-11-25 22:42",
+   "source": "Tripo Studio web / generate-image/20261126/fe2f9661-ec8a-464c-8cfe-f96cbd3db0d2/image.png",
+   "prompt": "Pixel-art map symbols — a sprite sheet of nine separate map symbols for an illustrated fantasy map, arranged in a clean 3 by 3 grid, each symbol centred in its cell with wide empty margins and nothing touching or overlapping. Background: one perfectly flat solid magenta (#FF00FF), no texture, no gradient, no shadows on the background, no grid lines, no frame. Each symbol is seen from a raised three-quarter view as on a hand-illustrated map, sitting on its own small patch of ground, all lit from the upper left, all at a matching scale. Symbols: a stepped pyramid temple, a carved feathered-serpent head, a raised stone causeway, a floating stone slab, a canal with reeds, a field of marigolds, an obelisk with neon glyphs, a temple gateway, a small axolotl shrine. Medium: pixel art, a hard grid of square pixels, a small fixed palette, shading only by ordered dither, no blur and no anti-aliasing. Palette: night violet stone, swamp green, mud brown, dark teal, thin neon cyan, magenta-pink and yellow lines as the only bright colours. No text, no lettering, no numbers."
+  },
+  {
+   "file": "KIT-VK-G.jpg",
+   "original": "_originals/KIT-VK-G.png",
+   "id": "KIT-VK-G",
+   "world": "VK",
+   "letter": "G",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1824497,
+   "generated": "2026-11-25 22:41",
+   "source": "Tripo Studio web / generate-image/20261126/3e9b1f21-8fec-4c61-b5e1-6e6249d80bcf/image.png",
+   "prompt": "Pale pink and cream watercolour wash on cold-press paper — a flat top-down background texture for an illustrated map, filling the whole square frame edge to edge, evenly lit, no horizon, no perspective, no objects, no buildings, no text. Soft wet-on-wet blooms, a few faint sand-coloured patches and pale teal tide stains, visible paper grain. It must read as one continuous sheet of paper: subtle variation only, slightly lighter toward the middle, usable as a ground behind small map symbols."
+  },
+  {
+   "file": "KIT-VK-S.jpg",
+   "original": "_originals/KIT-VK-S.png",
+   "id": "KIT-VK-S",
+   "world": "VK",
+   "letter": "S",
+   "model": "GPT Image 2.5",
+   "variant": 0,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 1596913,
+   "generated": "2026-11-25 22:41",
+   "source": "Tripo Studio web / generate-image/20261126/3232675d-e59c-461b-b06e-f003c729ab40/image.png",
+   "prompt": "Storybook-watercolour map symbols — a sprite sheet of nine separate map symbols for an illustrated fantasy map, arranged in a clean 3 by 3 grid, each symbol centred in its cell with wide empty margins and nothing touching or overlapping. Background: one perfectly flat solid magenta (#FF00FF), no texture, no gradient, no shadows on the background, no grid lines, no frame. Each symbol is seen from a raised three-quarter view as on a hand-illustrated map, sitting on its own small patch of ground, all lit from the upper left, all at a matching scale. Symbols: a cream seaside castle with red roofs, a leaning palm tree, a beach hut on stilts, a striped lighthouse, a small sailboat, a sand dune with a parasol, a pomegranate tree heavy with red fruit, a rocky headland, a tiny fishing village. Medium: storybook watercolour and ink, loose washes, a dark-brown ink line that breaks. Palette: vanilla cream, strawberry pink, coral, teal, warm sand, coastal green. No text, no lettering, no numbers."
+  }
+ ],
+ "note": "Concept images for the owner to choose from. Originals are not in git (see .gitignore)."
+}
