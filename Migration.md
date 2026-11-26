@@ -9,6 +9,56 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.11.6** — **Effects: a VFX director that draws every cue in the art medium of whoever
+  caused it.** Design, the ten media, every row and the budget: `Docs/VFX.gdd`. It was
+  **looked at** — every archetype in every medium, and a staged fight on a mid-tone, a pale
+  and a dark map, captured in the real renderer and iterated four times
+  (`Docs/Art/Vfx/captures/`); **nobody has watched it move at play speed**.
+  **What a player should notice:** Pomegraknight's slash is a ruby watercolour crescent that
+  sits exactly on her cone (double on the third hit, orange with flame motes while she
+  burns); hits throw a small juice splat and droplets, bigger by weight; Blush blooms; the
+  Fire Tornado is two flame ribbons on its real box with a pulse per tick; seeds leave a fan
+  and a pop where they die; PumpKing's head goes off in yellow scratches to its true radius.
+  Every body has dust when it jumps and lands, a pop when it arrives, a burst when it dies,
+  a loop while it burns, freezes, is trapped or stunned; a foe's tell is drawn on its real
+  path; water splashes and leaves rustle; each realm has its own air. And each of those is
+  drawn differently in each world — watercolour wash, flat poster planes, ink strokes, lit
+  sparks and smoke, linocut stamps, gongbi line and graded fill, scratches out of black,
+  pixels, gold-wired enamel, and the VOID's erasure.
+  **The contract:** `VfxDirector` is a presentation autoload (one line in `project.godot`)
+  that subscribes to `CueBus` and resolves each cue in `VfxTable` — owner → class → `any` —
+  to a `VfxDef`: an **archetype** (20 of them) rendered by a **style** (one per medium, ten).
+  A style is five primitives (mass, brush, hoop, chip, tone), a palette rule for dark, mid
+  and pale canvases, a timing rule and its particle recipes. Gameplay files changed by two
+  additive lines and one visual fix: `ba.swing` carries its cone (`CueShapes.Cone`),
+  `arena.enter` carries the arena as its source, and the i-frame blink waits for the hit
+  flash.
+  **Cheap:** 72 pooled marks, 24 pooled emitters and 2 ambient emitters for the whole game,
+  created once; a mark is one canvas command; 0 bytes allocated per cue, per frame and per
+  draw; a three-priority budget that never drops a telegraph, a status or the player's own
+  hurt. Measured in the staged fights: peak 13–19 marks, 9–13 emitters, 49–97 particles.
+  **Verified:** `Scenes/Feedback/VfxCheck.tscn` (headless) and `Scenes/Dev/VfxGallery.tscn`
+  (windowed, by eye); the feedback, map, boss and run checks unchanged.
+  **Not done:** the four other kits' own effects (they get their home medium's generic
+  ones), decals and trails, an options screen, audio — `Docs/VFX.gdd` §9.
+  (Merged onto 0.11.5. The branch opened with v0.11.2 re-applied as a commit of its own —
+  the same tree under another history — so a plain squash merge conflicted in eleven files
+  over text both sides already shared. The six VFX commits were applied on their own
+  instead, with no conflict; the result differs from the branch in exactly the files
+  0.11.3–0.11.5 changed. On the merged tree: `dotnet build`, 0 errors/warnings; VFX check
+  1298, feedback check 249, content check 1170, boss check 109, run check 1328;
+  `VfxGallery.tscn` started headless loads and runs without a script error — headless
+  draws nothing, so the effects were not looked at again here. **Two things the merge
+  brought together that no one has looked at, and no check fails on:** a zone-6 fight
+  (0.11.3) is drawn VOID-touched, at about half its backdrop's lightness, while
+  `arena.enter` still reports the lightness from before the drain and the world whose map
+  it wears — so effect palettes and the hit flash's dark-or-light choice are made for a
+  lighter canvas than the one on screen; and the Cloud Court map announces `PL` since
+  0.11.3, so its arena effects are gongbi and the enamel style (`CC`) is reached by no
+  arena. Both are registered, TBD #49 and #50, and left for a decision. From the hand-off:
+  the Tech paragraphs are in `T00-INDEX.md`, `T10` §1 / §4b and `T40` §1 / §3 / §4, the
+  mutation list in `40-QA.md` §(2), the TBDs #48–#55; `Docs/Art/Vfx/captures/` has a
+  `.gdignore`, and the check's two scripts got their `.uid` files.)
 - **0.11.5** — **Style exploration and research, archived.** Documents and pictures only:
   **nothing here changes a shipped asset**, and no code changed. `Docs/Art/StyleExploration/`
   holds AI concept images made in Tripo Studio (GPT Image 2.5, Midjourney v8.2) for the

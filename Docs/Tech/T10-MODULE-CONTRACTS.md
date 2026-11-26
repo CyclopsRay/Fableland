@@ -10,7 +10,7 @@ How modules talk, so that adding module N+1 never means rewiring modules 1..N.
 |-----------|---------|-------|
 | **C# events** (`event Action<...>`) | Gameplay → Presentation notifications (`HpChanged`, `Died`); anything with multiple listeners | Raiser never cares who listens. **Subscribe in `_Ready`/`_EnterTree`, unsubscribe in `_ExitTree` — always.** A scene node subscribed to an autoload's event and then freed by `ReloadCurrentScene` is a leak *and* a crash (the delegate keeps the dead node alive; invoking it touches a disposed object). This will be our most common bug class once RunState exists — make the pair-check a review habit. |
 | **Godot signals** | Scene-boundary wiring authored in `.tscn` (buttons, Area2D enter/exit) | Fine at the edge; don't build cross-module buses out of them (no compile-time checking). |
-| **Autoload singletons** (`static Instance` set in `_EnterTree`) | True globals only. Current: `DamageNumberManager`, `ShakeCamera2D`, `CharacterController.LocalPlayer` (both claimed by the Player-side body only — a Foe-side fighter never touches them, §4a), `FeelDirector` (v0.11.2 — it must outlive every arena, as the cue bus it listens to does; §4b); planned: `RunState`, the VFX and audio directors, `BalanceOverrides` | Cap the list. Each new one needs a written justification here. A singleton that parents nodes into the live scene must do it via `GetTree().CurrentScene` (survives reloads — existing pattern). |
+| **Autoload singletons** (`static Instance` set in `_EnterTree`) | True globals only. Current: `DamageNumberManager`, `ShakeCamera2D`, `CharacterController.LocalPlayer` (both claimed by the Player-side body only — a Foe-side fighter never touches them, §4a), `FeelDirector` (v0.11.2 — it must outlive every arena, as the cue bus it listens to does; §4b), `VfxDirector` (v0.11.6 — it must outlive every arena, as the bus it listens to does; its pooled nodes are its own children, so no scene owns or frees them; §4b); planned: `RunState`, the audio director, `BalanceOverrides` | Cap the list. Each new one needs a written justification here. A singleton that parents nodes into the live scene must do it via `GetTree().CurrentScene` (survives reloads — existing pattern). |
 | **Direct references** (`[Export]` NodePath / ctor args / `Init(...)`) | Parent→child within one scene; spawner→spawnee config | `Init(...)` is called **after** `AddChild` (KNOWLEDGE caveat); spawnee guards against acting on un-Init'd state for one frame. |
 | **Return values / plain calls** | Within a module | Prefer these. Events are for crossing layers, not for everything. |
 
@@ -156,6 +156,15 @@ PRESENTATION  a director subscribes to CueBus.Raised / HitLanded / LoopStarted /
 - **Adding a director** (VFX, audio): an autoload under `Scripts/Presentation/`, one line in
   `project.godot`, a `CueTable` of its own rows, and no edit to any gameplay file. Its
   justification as a singleton is the same as `FeelDirector`'s (§1).
+- **The VFX director** (v0.11.6, `Docs/VFX.gdd`) is the second listener. It resolves a cue
+  to a `VfxDef` — an *archetype* rendered by a *style*, one style per art medium — in the
+  medium of whoever caused it: the attack's owner for a hit, the body for its own effects,
+  the arena (the tag of `flow`/`arena.enter`) for dust, water, hazards and ambience. It
+  keeps a small context blackboard (combat intensity, combo, boss phase) and reads the
+  source body's `FeedbackState`, so a row can change with the fight; nothing it reads is
+  ever written back. A cue that carries a cone packs it in `Extents` (`CueShapes.Cone`);
+  `arena.enter`'s `Source` is the arena, and a listener ends what belongs to the arena when
+  that node leaves the tree.
 - **Adding a cue**: one `CueBus.Emit` at the line where the moment happens, a row in
   `Docs/Feedback.gdd` §6, and a line in `FeedbackCheck`.
 

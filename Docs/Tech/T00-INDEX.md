@@ -25,8 +25,10 @@ make a codebase impossible to extend later.
 ┌────────────────────────────────────────────────────────────────┐
 │ PRESENTATION   Hud, DamageNumberManager, ShakeCamera2D,        │
 │                the DIRECTORS — FeelDirector (shake, flash,     │
-│                zoom), then VFX and audio — each listening to   │
-│                the cue bus with a table of its own,            │
+│                zoom), VfxDirector (every cue's effect, in the  │
+│                art medium of whoever caused it), then audio —  │
+│                each listening to the cue bus with a table of   │
+│                its own,                                        │
 │                map atlas render (MapControllerAtlas/RenderModel)│
 │                — observes via events/signals; never ticked by  │
 │                  gameplay logic, never queried by it            │

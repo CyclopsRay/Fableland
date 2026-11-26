@@ -1,0 +1,432 @@
+# Fableland — VFX GDD
+
+How a moment is **shown**: the VFX director, the ten medium styles, the archetypes, the
+table that gives every cue an effect, and the budget that keeps it cheap. It sits on the cue
+bus of `Docs/Feedback.gdd` and never touches gameplay.
+
+Implementation: `Scripts/Presentation/Vfx/` — `VfxDirector.cs` (the autoload), `VfxTable.cs`
+(looks and rows), `VfxStyle.cs` (a medium: compositions and mark drawing),
+`Styles/*.cs` (one file per medium), `VfxPen.cs`, `VfxNodes.cs`, `VfxTextures.cs`,
+`VfxTypes.cs`. Checked by `Scenes/Feedback/VfxCheck.tscn`; looked at with
+`Scenes/Dev/VfxGallery.tscn`. Research: `Docs/Research/R2-vfx-feel-research.md` (cited as
+**R2**; its §6 says which sources were read and which are from memory — repeated here per
+claim).
+
+> **What has and has not been looked at.** Every archetype in every medium was captured in
+> the real renderer and iterated four times (§11; `Docs/Art/Vfx/captures/`). That proves the
+> stills. **Nobody has watched it move at play speed**: timing, the tempo of each medium and
+> how busy a real fight gets are still a verify-by-eye job (`50-ART-AUDIO.md` §6).
+
+---
+
+## 1. Principles
+
+1. **An effect is drawn in the medium of whoever caused it.** An attack's effects wear the
+   attacker's medium, a body's own effects (death, status, its launch) that body's, and dust,
+   water, hazards, ambience and the flow beats the arena's. A character carries their home
+   world's medium into every fight; the universal feel layer (flash, shake, hit-stop) stays
+   the same everywhere so a hit reads as a hit in any world [R2 B6.1 — Smash's per-franchise
+   effect layer over one hit language; *from memory*].
+2. **A medium is its mark, not its palette** (`RealmStyleBible.md` §0) [R2 B6.2 — *Okami*;
+   *from memory*]. Each style fixes five things: shape language, palette and blend rule,
+   edge quality, motion and frame stepping, and how a mark ends [R2 §B6, this project's
+   synthesis]. If two styles could trade an effect by swapping colours, one of them is wrong.
+3. **Stepped timing sells a hand-made medium** [R2 B6.3 — *Cuphead* at 24 fps over a 60 fps
+   game; B6.5 — pixel effects on the grid; both *from memory*]. Ink, linocut, scratchboard,
+   pixel art and the VOID redraw at 10–15 frames a second over smooth gameplay.
+4. **Impact is the shortest, brightest phase; a mark loses value before shape** [R2 B6.8 —
+   craft convention, *from memory*].
+5. **The effect and the hitbox are one number** (`50-ART-AUDIO.md` §1; Riot's style guide,
+   R2 A5.4, *from memory*). A slash is drawn on the cue's real reach and half-angle, a field
+   on its real box, a blast to its real radius, a telegraph along the real path. Such rows
+   may not jitter their scale (`VfxTable.SelfTest`).
+6. **Fighters read first** (`RealmStyleBible.md` §2.6). A hit mark is a fraction of a fighter
+   (§6.2), not a cloud over one — found by looking, §11.
+7. **Dynamic range stops fatigue**: a graze is one fleck, an ultimate is everything
+   [R2 A5.3 — Kao 2020, the no-juice and extreme-juice versions both did worse; *from memory,
+   figures not quoted*]. Then variant shuffle-bags, jitter, context variants, escalation and
+   a rare flourish [R2 B7, *from memory*].
+8. **Cosmetic means droppable.** A cue is a tag, an effect is a listener's choice, and an
+   effect may be culled without changing the fight [R2 B8.1 — Unreal GameplayCues; B8.3 —
+   Niagara significance; *from memory*]. What tells the player something is never culled.
+9. **Cheap by construction** (`T40` §2–3): pooled nodes, one canvas command per mark, no
+   allocation per cue, bursts on `CPUParticles2D` — no GPU restart latency and no process
+   material to compile on first use [R2 B9.1–B9.3, B9.12 — **verified** against the Godot
+   `GPUParticles2D` / `CPUParticles2D` class references].
+10. **Safe.** No effect here flashes the screen; the only flash is the body flash of
+    `Feedback.gdd` §5.3–5.4, under its photosensitivity limiter [R2 A3 — **verified**: WCAG
+    2.3.1, Xbox Accessibility Guideline 118].
+
+---
+
+## 2. The ten media
+
+One `VfxStyle` per medium. Palette values are the style bible's; everything else was chosen
+here and looked at. *Fps* is the rate a mark is redrawn at — the medium's own frame.
+
+| World · medium (`id`) | A mark is… | Palette and blend rule | Timing | How a mark ends | Off its own canvas |
+|---|---|---|---|---|---|
+| VK Beach · storybook watercolour (`watercolour`) | A wash: a wobbling bloom, palest at its heart, a thin wet line at its rim; dark-brown ink on the key shape only | Translucent (α 0.2–0.9), cream lights, never pure white or black; never additive | 30 fps; blooms in a fifth of its life, tempo ×1.15 | Spreads 10 % while it dries away | On a dark canvas lays a quarter-strength cream paper first |
+| SL Starfield · flat poster (`poster`) | Two flat planes split by a hard terminator: four-point stars, diamonds, flat rings, a hairline of inlay. No outline, no gradient | 2–3 flat colours | 30 fps, **linear**; pops over-size for one frame, turns 45°; at most 5 pieces | Shrinks to nothing, or alpha in three hard bands | On a pale canvas the lit face deepens and the shadow face is plum |
+| BM Wulin · freehand ink 写意 (`ink`) | One stroke of the brush: swells where pressed, tapers, ends in dry flying-white; a blot with satellite dots; an enso for a ring | Five dilutions of black, indigo-cyan, ink green — **no warm hue**: fire is black flame with a cyan heart | **12 fps**; written on in held frames, holds, tempo ×1.6 | Bleeds: the edge creeps out in a thinner dilution while the ink thins | Brings its own bare paper as a soft mist under the stroke |
+| HC Dungeon · lit realism (`realism`) | Glow, velocity-stretched sparks, soft smoke; one cold glint for steel | Fire ramp for anything hot; **additive** for light, alpha for smoke | Every frame; gravity and drag | Cools down the ramp, then fades; smoke lingers | On a pale canvas light is drawn solid over a bed of soot |
+| TD Ghost Town · linocut (`linocut`) | Stamped: a black key block cut in jagged wedges over ONE spot ink printed ~2 px out of register; tone is hatching | Key black, bone paper, one of rust / ochre / teal / sage | **10 fps**, hard pop, ±1 px wobble every frame | Breaks up — wedges and segments drop out. Never alpha | On a dark canvas prints on a scrap of its cream paper |
+| PL Loong's Nest · gongbi 工笔重彩 (`gongbi`) | Closed and symmetric: an even "iron-wire" line of constant width round a fill graded dark to light — petals, pearls, outlined bubbles | Azurite, purple, cyan, pearl — **no warm hue**: fire is a pale purple petal | 30 fps, eased in **and** out, tempo ×1.55; thrown pieces slow, then rise | A ring thins away at constant width; a bubble drifts up and is gone | On a dark canvas a pale twin line rides inside the dark one |
+| KH Dark Wood · scratchboard (`scratchboard`) | A black cut-out with thin nervous lines scratched on it: radiating hatches, cross-hatch, wandering curves. Nothing is filled with colour | The realm's code: moon blue neutral, **yellow = gives light** (fire, blasts, heals), **red = danger** | **11 fps**; scratched in over two frames, lines boil | Lines leave one by one | The black board is drawn under every mark, so it reads anywhere |
+| TF Forgotten City · pixel art (`pixel`) | Squares on the realm's grid (1 art px = 2 px). A hit is four frames: block, plus, ring of eight, four scattered pixels | ≤ 4 colours an effect; neon on dark | **12 fps**, whole-pixel positions, never turned off the grid, tempo ×1.4 | Palette step (white → neon → second neon → dark → off) and dither dropout. Never alpha | Off its night: a dark pixel under every pixel; on a pale canvas the first step is dark, not white |
+| Cloud Court · cloisonné enamel 景泰蓝 (`enamel`) | A cell of one flat enamel inside gold wire: lotus rosettes, scale bands, beaded rings. No line that is not gold, no gradient across a cell | Jewel enamels in gold | 30 fps; pops with a small overshoot, turns slowly; one glint sweeps instead of a glow | Shrinks, or breaks into a few chips that fall | On a pale canvas the wire casts the night under itself |
+| VOID, zone 6 · erasure (`void`) | A hole: a black disc in a white hairline; white outline shards. Everything runs backwards — pieces converge, rings close | Black, white, one drained accent of whoever is acting | **15 fps**, cuts not curves, every sixth frame dropped | Swallowed toward its centre | Reads on any canvas by construction |
+
+The VOID row has no art bible behind it: a proposal, to be signed off (§12).
+
+**Five primitives make a style** (`VfxStyle`): `Mass` (a filled contact mark), `Brush` (a
+stroke along a path), `Hoop` (a ring), `Chip` (one small piece), `Tone` (an area at low
+strength) — plus its palette rule (every `VfxElement` on a dark, a mid-tone and a pale
+canvas), its timing rule and its particle and ambience recipes. The base class composes
+every archetype and every mark kind from those five, so a new medium is about 150–200 lines.
+A style overrides a composition where its medium has a grammar of its own (the VOID's
+implosion, the pixel hit's four frames).
+
+**The contrast guard.** `flow`/`arena.enter` carries the backdrop's lightness: ≥ 0.80 is a
+*pale* canvas (Wulin, Ghost Town), under 0.30 *dark*, between or unknown *mid* (the beach).
+Every style answers its palette for all three and, where the canvas would swallow a mark,
+lays the medium's own ground under it (last column).
+
+**Elements** every medium must be able to say: impact, dust, fire, ice, water, leaf, poison,
+danger, heal, light, smoke — each in its own rule. "Danger" is the realm's warning colour:
+red on the scratchboard, rust in linocut, the blackest ink in Wulin, deep purple in gongbi.
+
+---
+
+## 3. Archetypes
+
+What an effect *is*, whatever draws it (`VfxArchetype`). Each is composed from **marks**
+(pooled drawn nodes: impact, arc, ring, puff, streak, zone, field, aura, bits, glint, sheet)
+and **bursts** (pooled `CPUParticles2D`).
+
+| Archetype | Composition | Size comes from |
+|---|---|---|
+| Hit spark | Contact mark + pieces flung along the blow; a ring from Heavy up; a graze is the mark alone; the rare flourish is one glint | the hit's weight × the victim's radius |
+| Hit react | Pieces off the victim, in the **victim's** medium (Medium hits and up, and kills) | weight |
+| Slash arc | A crescent whose outer edge is the arc of the cue's reach, spanning the cone's angle; stage 2 sweeps back up, stage 3 is a double crescent; burning adds fire | cue reach + cone half-angle |
+| Burst | Core + a ring to exactly the radius + pieces + smoke | cue radius |
+| Ring | One pulse ring, an ellipse when the cue gives a box | cue reach / box |
+| Trail | A fan of 3–5 streaks and a small pop | fixed |
+| Dust puff | 3–5 lobes hugging the ground; under water, bubbles instead | impact speed |
+| Splash | A ripple lying on the surface + droplets up | body radius, speed |
+| Rustle | A few pieces of the medium's leaf | body radius |
+| Status loop | Worn by the body: tongues (burning / on fire), shards and a ring (frozen), two rings at the feet (trapped), three pieces circling overhead (stunned) | body radius |
+| Telegraph | A lane on the attack's real reach and direction, filling as the tell runs out; a ring round the body when the cue gives no reach | cue reach, tell seconds |
+| Death burst | Mark + falling pieces + dust; a ring for a fighter or a boss | body radius |
+| Spawn pop | A ring closing on the arrival (opening when leaving) + rising pieces | body radius |
+| Heal · Shine · Cast · Sting | Rising pieces and a ring at the feet · a four-point glint · a bloom ring with rising pieces · a small mark with one or two motes | body radius |
+| Expire pop | A small mark where a projectile died | fixed |
+| Field loop | Two ribbons wound end to end of the box and as tall as it; hard media also show the box as a hatched / dithered / enamelled plane | cue box |
+| Ambient | The arena's own air: 1–2 continuous emitters that ride the view | — |
+
+Bursts use an emitter where the medium moves continuously (watercolour droplets, realism's
+sparks / chips / embers / smoke, gongbi's bubbles) and a drawn, stepped mark where it is
+stamped (ink, poster, linocut, scratchboard, pixel, enamel, VOID) — a particle node cannot
+snap to a grid, turn 45° at a time or drop out one line at a time.
+
+---
+
+## 4. Who owns the style
+
+`VfxTable.Looks`: owner → medium (+ its own three colours). A world code is a look with no
+colours of its own.
+
+| Owner | Medium | Own colours | Status |
+|---|---|---|---|
+| `pomegraknight` | watercolour | ruby wash `#CF3F5C`, deep rim `#8E1F3C`, cream | from her GDD |
+| `pumpking` | scratchboard | yellow `#FFD23F` (gives light), pale yellow, moon blue | from his GDD |
+| `pixolotl` | pixel | her pink `#FF8FCF` / `#D9589F`, neon cyan | from the style bible |
+| `cleopastar` | poster | gold `#FBE08A` / `#D9A441`, teal | **provisional** (Feedback.gdd §8) |
+| `sifu_pangda` | ink | burnt ink, heavy ink, ink green | **provisional** |
+| `crab` · `seagull` · `boss_crab` | watercolour | crab orange · feather cream and grey · deep red | VK natives |
+| `VK` `SL` `BM` `HC` `TD` `PL` `KH` `TF` | watercolour · poster · ink · realism · linocut · gongbi · scratchboard · pixel | — | the tag of `arena.enter` |
+| `CC` · `VOID` / `Z6` | enamel · void | — | Cloud Court has no world; nothing raises a VOID tag yet (§9). *As merged (v0.11.6) no arena reaches either row: since v0.11.3 the Cloud Court map announces `PL` (gongbi), and a zone-6 fight announces the world whose map it wears — TBD #49, #50* |
+
+Rules the director applies (`VfxDef.StyleFrom`): **Owner** — the cue's owner; for a hit, the
+attack's owner, else the body that swung, else the player when a foe was hit (the four
+unwired kits name nothing: §9). **Arena** — the world of the last `arena.enter` (the
+watercolour default on the legacy arena). **Victim** — the body that was hit. An owner with
+no look (an objective, an unknown id) is drawn in the arena's medium.
+
+---
+
+## 5. Signature effects — the art direction for each owner
+
+What exists today is marked **built**; the rest is direction for whoever wires that kit
+(R2 §4.6–4.7, adjusted to what the styles turned out to be). Every shape takes its size from
+the skill's own numbers.
+
+**Pomegraknight · watercolour — built, the reference.** Pome Slash: a ruby wash crescent on
+the real 130 px / 40° cone, ink on its leading edge; stage 2 sweeps up; stage 3 is a double
+crescent that flings juice drops. Burning: the wash turns orange and flame motes rise off
+it — a modifier, not a second effect. Hit: a small juice splat with a wet rim and two
+satellite blooms. Blush: a fire bloom ring and rising motes, then the burning aura. Fire
+Tornado: two wound flame ribbons on the real 256 × 80 px box, an elliptical pulse ring per
+tick. Seed Eruption: a cream-and-ruby bloom at the crown, a fan of streaks per wave, a small
+juice pop where each seed dies (orange when burning). *To do:* seed-shaped drops, juice
+stains (decals), the steam puff when Blush ends (needs a cue — §9).
+
+**PumpKing · scratchboard — the head blast is built.** The blast: a black cut-out, a yellow
+hatched ring to exactly the blast radius, yellow scratches thrown out, a dud only pops.
+*Direction:* the rolling head trails 3–4 scratched arcs re-drawn each step; Pump Up is one
+scratched arc per shield stack; Soul Form scratches the body out bottom-up and leaves a
+pale-blue outline; as BOSS his tells and glow turn **red** (the danger code — the telegraph
+row already does this).
+
+**Cleopastar · poster (provisional) — generic today.** *Direction:* Star Shot is a gold
+hairline and a four-point pop, stamping a shrinking diamond every 2 m instead of a trail;
+the explosion is a flat disc with a star cut out (the poster's burst core already is);
+Apep's Maw is a black disc in a teal/gold rim whose pull ring contracts in four hard steps —
+never a screen shader.
+
+**Pixolotl · pixel — generic today.** *Direction:* bubbles are 2-px pixel rings with one
+highlight cluster; a pop is ring → 8 arcs → 8 pixels at 12 fps; RANIBOBER tears scanlines
+±2 px per rewind step and arrives in an expanding **square** outline; afterimages are 1-bit
+cyan every third step.
+
+**Sifu Pangda · ink (provisional) — generic today.** *Direction:* Fuhu Palm is one bold dab
+at the far edge of his box with a flying-white tail from the hand; Tiger Kick's windup marks
+the true box with dry-brush corners (the ink telegraph already draws those) and releases as
+one sweeping stroke; the Chi shield is an **enso** whose thickness is the shield (the ink
+ring already is an enso); stun is ink dots circling.
+
+**Foes · watercolour.** Built from the generic rows in their own colours: contact hit (crab
+orange splat + sand puff), death (a wash that bursts into drops, dust), spawn, aggro glint,
+the seagull's dash telegraph on its real 15 m path, poop hit (cream). *Direction:* the crab's
+weak-side variant; feathers for the gull; each baby crab out of a droplet (`spawn` tagged
+`born` is already a smaller pop).
+
+**Hazards — the arena's medium, built.** One `hazard`/`tick` row, an alternate per kind:
+fire, freeze, lava (bigger), spike (a hit mark in the danger colour), poop, damage. On the
+player's side a tick is Critical.
+
+**Soft volumes — the arena's medium, built.** Water: ripple + droplets; foliage: leaves;
+cloud: a puff; a kit's own volume: a light rustle. At most once per body per 0.25 s.
+
+**Realms — ambience, built** (≤ 24 particles each): VK petals and sea spray · SL hard
+twinkles · BM bamboo leaves and mist · HC embers and dust in light · TD print specks · PL
+bubble streams and pearl motes · KH fireflies and fog scratches · TF neon motes · CC gold
+dust and petals · VOID specks.
+
+---
+
+## 6. The data
+
+### 6.1 The cue table
+
+`VfxTable.Cues` and `VfxTable.Hits` are `CueTable<VfxDef>`: (owner, action) → the owner's
+class → `any`, exactly as every director resolves (`Feedback.gdd` §2). A hit whose action
+has no row falls to (`any`, `""`). Every row of the vocabulary (`Feedback.gdd` §6) has one —
+the check asserts it:
+
+| Cue | Effect | Medium | Priority |
+|---|---|---|---|
+| hit · `pomegraknight`/`ba`, `s2.seed` · `pumpking`/`ba.head`, `ba.explode` · *foe*/`contact` · `seagull`/`s2.dash` · unnamed | Hit spark by weight (+ hit react on the victim from Medium, + ground dust for contact) | attacker | Confirm |
+| hit · `pomegraknight`/`s1.tornado` · `seagull`/`s1.poop` · `hazard`/`tsunami` | Hit spark in fire · in poison · a splash in water | attacker · attacker · arena | Confirm · Confirm · Critical |
+| `spawn` (tag `born`) · `respawn` · `switch.in` / `switch.out` | Spawn pop (smaller) · bigger · closing / opening | body | Confirm |
+| `jump` — ground · `air` · `swim` | Dust puff · a step-ring · bubbles | arena · body · arena | Cosmetic |
+| `land` | Dust puff by impact speed (192–1100 px/s → 11–30 px) | arena | Cosmetic |
+| `death` — any · fighter · boss | Death burst · big · big | body | Confirm · Critical · Critical |
+| `heal` · `ult.ready` · `aggro` · `evolve` | Heal · Shine at the head · a small Shine above the head · Cast (a rising bloom) | body | Confirm · Critical · Confirm · Critical |
+| `hurt.tick` — `hazard` / `burn` / `on_fire` / `frozen` | Sting in danger / fire / fire / ice | body | Confirm; **Critical on the player's side** |
+| `hurt` (the Protect core) | Sting in the danger colour | arena | Critical |
+| loop `status.burning` / `on_fire` / `frozen` / `trapped` / `stunned` | Status loop | body | Critical |
+| loop `telegraph` | Telegraph on the real reach, danger colour | body | Critical |
+| `pomegraknight` / `ba.swing` · `s1.cast` · loop `s1.tornado` · `s1.tornado.tick` · `s2.cast` · `s2.wave` · `s2.seed.expire` | Slash arc · Cast · Field loop · Ring · Cast · Trail · Expire pop | hers | Confirm; the field Critical; the expire Cosmetic |
+| `ba.explode` (tag `dud`) | Burst to the blast radius (an Expire pop) | owner | Critical (Confirm) |
+| `world` / `soft.enter`, `soft.exit` — `water` · `foliage` · `cloud` · `kit` · other | Splash · Rustle · Dust puff · Rustle · Rustle | arena | Cosmetic |
+| `hazard` / `tick` — `fire` · `freeze` · `lava` · `spike` · `poop` · `damage` | Sting (lava: an Expire pop; spike: a Hit spark) | arena | Confirm; Critical on the player's side |
+| `flow` / `arena.enter` | The realm's ambience starts; pools warm | arena | — |
+| `flow` / `countdown.tick` · `countdown.go` · `mission.start` | A closing ring · Shine · a ring | arena | Confirm · Critical · Cosmetic |
+| `flow` / `mission.success` · `mission.fail` · `boss.intro` · `boss.defeated` · `player.down` · `run.over` (`victory`) | Cast · a smoke puff · Shine in danger · a Burst · a danger ring · smoke (Shine) | arena | Critical (run.over: Cosmetic) |
+
+### 6.2 A row (`VfxDef`)
+
+`Id` · `Archetype` · whose medium (`Style`, else `StyleFrom`) · colours (`OwnerColours`, else
+`Element`) · the size rule (`SizeFrom`: fixed px, the cue's reach, its box, its magnitude
+mapped to a range, the body's radius, or the hit's weight) · `Variants` (a shuffle-bag) ·
+jitter ranges (`RotJitterDeg`, `ScaleJitter`, `TimeJitter`, `HueJitter` — how far the main
+colour may lean to its second) · `Count`, `Life` · `Priority` (+ `CriticalForPlayer`) ·
+`Cooldown` (per source) · `MinMagnitude` · `Follow`, `Anchor` · `FlourishOneIn` ·
+`Modifiers` · `Layers` (more rows on the same cue) · `ByTag` (the row the cue's tag selects).
+
+Hit marks, by weight (radius, before the victim's radius factor 0.85–1.6):
+Graze 4 · Light 7 · Medium 11 · Heavy 16 · Massive 23 px — a fighter is 64 px tall.
+
+### 6.3 State and pace
+
+A `VfxModifier` applies when **all** its conditions hold: the source body's `FeedbackState`
+(any of the flags), the cue's `Tag`, `MinCombo`, `MinIntensity`, `MinBossPhase`, `Killed`,
+`MinWeight`, `Stage`. It multiplies count, scale, life and speed, may repaint the effect in
+another element, set flags, or add a layer.
+
+| In use | When | Then |
+|---|---|---|
+| burning swing | tag `burning` | repaint in fire, flame motes join |
+| attacker on fire | state `Burning` on the attacker | a fire lick is added to the hit |
+| under water | state `Submerged` | dust becomes bubbles |
+| a kill | `Killed` | pieces ×1.5, size ×1.15 |
+| combo | `MinCombo` 4 | size ×1.06 |
+| boss enraged | `MinBossPhase` 2 | size ×1.12, pieces ×1.25 (hits and telegraphs) |
+| frozen victim | state `Frozen` on the victim | its reaction is ice |
+
+The **blackboard** the director keeps (`VfxDirector`): `Intensity` 0–1 (+0.07 a hit, +0.012 a
+cue, half-life 1.6 s), `Combo` (the player's side's hits within 1.4 s of each other),
+`BossPhase` (0 none · 1 after `boss.intro` · 2 once the boss reports low health · 0 at
+`boss.defeated`). Built in: every third hit of a combo is one step of escalation, up to
+three (+7 % size, +18 % pieces a step); at intensity ≥ 0.70 decoration thins (pieces ×0.6,
+life ×0.85) so a crowded fight stays readable.
+
+### 6.4 No fatigue
+
+Shape variants from a shuffle-bag (every variant once before a repeat, never the same twice
+across a refill) · jitter inside the row's ranges · context (burning, kill, weight, combo,
+boss phase, the canvas) · a one-in-twenty glint on named hits · a graze is a fleck and
+nothing else · a stream of effects is thinned by the per-frame cap and by intensity.
+
+---
+
+## 7. Budget
+
+Our own targets — no external numbers exist for 2D [R2 B8.5]. `VfxBudget`:
+
+| Budget | Cap | Measured (three staged fights, real renderer) |
+|---|---|---|
+| Drawn marks alive | 72 pooled (Cosmetic stops at 36, Confirm at 56) | peak 13–19 |
+| One-shot emitters alive | 24 pooled (10 / 18) | peak 9–13 |
+| Particles alive, ambience included | 512 (220 / 400); ≤ 32 a burst | peak 49–97 |
+| Ambient emitters · particles | 2 · ≤ 24 a realm | 8–24 |
+| Loops alive | 24 | ≤ 4 |
+| Effects started per frame (not Critical) | 6 | — |
+| Texture memory | 16 generated textures, ≤ 64 px a side | 63 KB in all |
+| Garbage | 0 bytes per cue, per frame and per draw | 0 (§10) |
+
+- **Three priorities.** *Critical* (telegraphs, status loops, fields, the player's own
+  hurt, a fighter's death, blasts, the big flow beats) is never refused: with the pool full
+  it takes the oldest lesser mark. *Confirm* (hit sparks, spawns) is refused over its
+  threshold. *Cosmetic* (dust, splashes, rustles, reactions) goes first.
+- **Off screen**, nothing but Critical is started (160 px margin).
+- **`FeedbackSettings.Particles`** (0.25–1) scales the piece counts of everything that is
+  not Critical, and the ambience; it never removes an effect.
+- A mark is **one canvas command** (a triangle mesh with per-vertex colour) and is redrawn
+  only when its medium's frame changes; a mark that follows a body is moved, not redrawn.
+- In the staged fights 14–40 Confirm and 4–16 Cosmetic effects were refused each — foes
+  spawning off screen, and seed hits landing more than six to a frame. No Critical was.
+- Whole-scene draw calls stayed 27–40 a frame with effects running.
+
+---
+
+## 8. Authored art replaces procedural
+
+Two levels, same contract as a tile — keep the name and the footprint (`RealmStyleBible` §1):
+
+1. **A texture.** `res://Assets/Vfx/<id>.png` replaces the generated texture of that id
+   (`watercolour/drop`, `ink/drybrush`, `realism/spark`, `gongbi/bubble` … —
+   `VfxTextures.All`). Same size, same orientation (a particle's leading end is down).
+2. **A whole effect.** `res://Assets/Vfx/<style>/<effect id>.png` — a horizontal strip of
+   square frames — replaces the procedural effect of that row in that medium
+   (`Assets/Vfx/watercolour/pome_slash.png`). It is played on a pooled mark at the medium's
+   own frame rate (24 fps at most), sized by the row's size rule (the strip's frame is
+   2 × size across) and turned to the cue's direction. Nothing else changes: the row, the
+   budget, the modifiers still apply.
+
+Neither needs a code change; `Assets/Vfx/` does not exist yet.
+
+---
+
+## 9. Deferred, and what is missing
+
+| Deferred | Why |
+|---|---|
+| Watching it move | Stills were judged; tempo and density at play speed were not (§11) |
+| The four other kits' own abilities | Out of scope; their cues are not raised yet. Until then every hit they land is drawn as the generic hit of their home medium, and the attacker is *inferred* (the player, when a foe is hit) |
+| Decals (juice stains, poop splats), trails on projectiles, afterimages | Pooled decals and ≤ 8 trails are budgeted in R2 §4.9 but not built |
+| A cue for a status **ending** with a flourish (Blush's steam puff, a thaw's shatter) | The loop's stop is told; nothing says *how* it ended |
+| `arena.enter` from the map editor's Playtest, and for zone 6 | The Playtest raises none, so its effects use the default medium; no map carries a VOID tag |
+| The fan's real angles on `s2.wave`; the swing's cone for the other kits | `CueShapes.Cone` is there to be used when they are wired |
+| Screen-space distortion, glow, 2D lights, `CanvasGroup` outlines | Cost on the Mobile renderer unmeasured [R2 B9.19, *from memory*] |
+| A spawn queue ("wait two frames, then drop") | Over-budget effects are dropped at once; simpler, and nothing Critical is affected |
+| `GPUParticles2D` | Not used: at ≤ 32 particles a burst and ≤ 24 of ambience it did not earn its place |
+| An options screen; quality tiers | `FeedbackSettings.Particles` is read; nothing writes it |
+| Audio | The same vocabulary; another team |
+
+---
+
+## 10. Verification
+
+- **Headless:** `Godot --headless --path . res://Scenes/Feedback/VfxCheck.tscn` — `40-QA.md`.
+  1 298 checks in 12 s: every vocabulary row resolves for every owner and class and plays
+  in all ten media; pools are reused and return clean; budgets hold under a flood; loops
+  stop when stopped and when their source leaves; nothing survives an arena; the settings
+  scale; allocation is zero. Mutation-tested: twenty deliberate breakages, twenty failed by
+  name. Its measured lines:
+
+```
+vfx  tables       10 media · 79 rows (43 cue keys, 10 hit keys) · 16 textures, 63.3 KB
+vfx  coverage     380 vocabulary rows resolve (every owner × every class) · 750 of them played in 10 media: 3319 marks drawn, 0 draw errors
+vfx  whose medium a slash is the attacker's (watercolour in an ink arena) · dust the arena's · an unwired kit its home medium's · the slash on 130 px / 40.0°, the field on 128 × 40, the blast to 96 px, the tell along 480 px
+vfx  pools        98 nodes for the whole game (72 marks, 24 emitters, 2 ambient) · 121 mark rents in 40 rounds, 0 created, all returned clean
+vfx  budget       a flood of 3 660 cues over 30 frames: peak 72/72 marks, 18/24 emitters, 106/512 particles · refused 1540 Confirm, 3081 Cosmetic, 0 Critical · 37 marks handed to Critical effects · 30 status loops asked, 24 run
+vfx  the arena    Wulin: ink, a pale canvas, 2 ambient emitters / 12 particles · everything gone when the arena left · pool unchanged at 98 nodes
+vfx  settings     Particles 1 → 0.25: a massive hit's pieces 18 → 5, its marks 2 → 2, a Critical blast 14 → 14, ambience 12 → 3 · variety: 3 shapes, 0 repeats in 400, 26 flourishes
+vfx  allocation   18000 cues raised with the director acting on each: 0 bytes · 120 frames of its update: 0 bytes · 1572 mark draws: 0 bytes · worst medium to draw: 0 bytes
+```
+- **By eye:** `Scenes/Dev/VfxGallery.tscn` (needs a window, scratch `HOME`) — the archetype
+  × style grid on a dark and a pale backdrop, the protagonists' looks, a hit and a slash at
+  five moments of their lives, each realm's air, and a staged fight in the real Arena on a
+  mid-tone, a pale and a dark map. Eight captures are kept in `Docs/Art/Vfx/captures/`.
+
+---
+
+## 11. What looking at it changed
+
+Four passes in the real renderer (2026-11-26). Each line is something no check could find.
+
+| Seen | Change |
+|---|---|
+| Every slash was a bulging half-moon, its tips short of the cone | The crescent's centre line bends inward so its **outer edge is the arc of the reach** and it ends in points |
+| Stepped media showed nothing for their first frame (83–100 ms late) | A stepped mark shows the *middle* of each held frame |
+| The same four-point cross in every "pop" read as a targeting reticle | A kill, a spawn and a shine no longer share it; a watercolour glint is a soft sparkle, not an inked cross |
+| Hit marks buried the fighter they landed on | Sizes roughly halved (§6.2); the wash thinned |
+| The Fire Tornado was a rectangle with a helix in it | Soft media draw a field as ribbons that reach the box's edges; only hard media show the box |
+| Ink and watercolour on a dark canvas wore a white sticker | Their paper is now a soft, quarter-strength breath under the mark |
+| Scratchboard and pixel slashes were a single thin line | Scratched in over two frames, six lines; pixel strokes as thick as their crescent |
+| Ambience could not be seen | Every realm's motes ×1.6 (`VfxTable.AmbientScale`) |
+| **The player vanished on the frame she was hit** | The i-frame blink opened on its "off" half and hid the body — and the flash — for the first ~20 ms. The blink now waits for the flash (`CharacterController`, one line) |
+
+**The hit flash** (`Feedback.gdd` §5.3), seen for the first time: on foes it is a clean
+silhouette that keeps the sprite's shape — **white** on the beach (mid) and in the Dungeon
+(dark), **ink** on Wulin's paper (pale) — and reads at once on all three. On the player it
+is the same once the blink fix is in. **The camera:** a Light hit reads 0.21–0.26 trauma
+(≈ 1.5–2 px, gone in 70 ms at `Decay` 3 /s) — carried by the 2 px kick, as designed; the
+third slash 0.41; a kill 0.33–0.63; the player hit 0.38 with a 4–10 px kick away from the
+blow and a 1.006 zoom. Stills cannot show whether that *feels* right.
+
+**Still wrong, in my eye:** status loops are small and timid; the realism smoke is thin;
+the pixel hit's plus frame dominates its four; watercolour on a dark canvas goes chalky;
+the gallery's telegraph cannot show its fill; ambience is still sparse on big screens.
+
+---
+
+## 12. Decisions log
+
+| Date | Decision | Why |
+|---|---|---|
+| 2026-11-26 | An effect = an archetype rendered by a style; one style per medium | The brief; adding a world is adding a style |
+| 2026-11-26 | A style is five primitives; the base class composes everything else | Ten media × twenty archetypes would otherwise be two hundred hand-written effects |
+| 2026-11-26 | Drawn marks are one triangle mesh each, built in static buffers and sent straight to the rendering server | One canvas command, per-vertex colour for soft edges without textures, no allocation |
+| 2026-11-26 | Emitters for continuous media, drawn stepped pieces for stamped media | A particle node cannot snap to a grid or turn in 45° steps |
+| 2026-11-26 | `CPUParticles2D` for bursts **and** ambience; no `GPUParticles2D` | Counts are tiny; no restart latency, no process material [R2 B9, verified] |
+| 2026-11-26 | Pooled nodes are the director's own children and live for the whole session | No scene owns them; nothing to leak on a scene change |
+| 2026-11-26 | Dust belongs to the ground (the arena's medium); an air jump's ring to the body | Reconciles "a body's own effects" with "dust on the ground" |
+| 2026-11-26 | The contrast guard is three canvases, and each medium brings its own ground | A bool was not enough: the beach is neither pale nor dark |
+| 2026-11-26 | Hit marks are 4–23 px | Looked at; twice that hid fighters |
+| 2026-11-26 | `ba.swing` carries its cone in `Extents` (`CueShapes.Cone`) rather than a new `Cue` field | The contract's five types stay as they are while the audio team builds on them |
+| 2026-11-26 | `arena.enter` carries the arena as its `Source`; the director ends ambience when that node leaves the tree | A loop whose source leaves is ended by listeners already; no new cue |
+| 2026-11-26 | The i-frame blink waits for the hit flash | Found in the captures; visual only |
+| 2026-11-26 | **For the owner:** Cleopastar → poster and Sifu Pangda → ink remain provisional; the VOID style has no bible; Cloud Court (`CC`) keeps the enamel style though no world owns it | One field each in `VfxTable.Looks` |

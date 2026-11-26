@@ -160,10 +160,20 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | 45 | Should hit-stop also freeze attack timing? Today every clock keeps running during a stop and abilities are still read, so no DPS or cooldown moves; Smash freezes attack timing with the body | Feedback.gdd §4, §11 |
 | 46 | The hit-stop budget numbers — 0.18 s, refilling at 0.15 s per second; not from the research and never tuned in a fight | Feedback.gdd §4, §11 |
 | 47 | A photosensitivity test on real footage (Harding-style) — the limits are reasoned, not measured | Feedback.gdd §5.4 |
+| 48 | **Cleopastar's and Sifu Pangda's effect media are still provisional** (poster / ink — #37, #38); since v0.11.6 they are also two fields in `VfxTable.Looks`, to change with Feedback.gdd §8 | VFX.gdd §4 |
+| 49 | **The VOID style has no art bible, and no arena raises a VOID tag.** A zone-6 fight is fought on a map of one of the run's worlds, drawn VOID-touched (#33): its `arena.enter` still names that world, and reports the backdrop's lightness from before the drain — the picture is drawn at about half of it. So effects are in the borrowed world's medium, and their palette and the hit flash's dark-or-light choice are made for a canvas lighter than the one on screen. Should a VOID-touched arena announce the VOID's medium, and its drained lightness? | VFX.gdd §2, §9, MapGDD §7, Feedback.gdd §5.3 |
+| 50 | **Cloud Court's effects are not enamel.** The enamel style is filed under `CC`, a code no arena raises: since v0.11.3 the Cloud Court map is a Palace of LOOING map (#26), so its arena announces `PL` and its dust, water, hazards and ambience are drawn in gongbi — Loong's Nest's medium — over cloisonné art. Should `arena.enter` name the map's realm (`MapRealm.Of`) and not its world? (see also #42) | VFX.gdd §4, RealmStyleBible §7C |
+| 51 | The kits' own placeholder telegraphs (`_baTelegraph`'s cone outline and the debug ranges) are still drawn under the new slash — keep them as a debug view, or remove them now that the cone is shown? | VFX.gdd §11, `Docs/Art/Vfx/captures/` 06–08 |
+| 52 | Tempo and density at play speed — every medium's `Tempo`, the hit sizes and the ambience scale were judged from stills; nobody has watched the effects move | VFX.gdd §11 |
+| 53 | Shake on a Light hit is ≈ 1.5–2 px for 70 ms (`Decay` 3 /s) — invisible in a capture; is the kick enough on its own? | Feedback.gdd §3 |
+| 54 | A cue for *how* a status ended (Blush's steam, a thaw's shatter) | VFX.gdd §9 |
+| 55 | The map editor's Playtest raises no `arena.enter`, so its effects use the default medium | VFX.gdd §9 |
 
 Numbering: #28–#33 were minted by v0.10.11 / v0.11.0 and #34–#35 by the swimming work, which
 called them #28 and #29 in its own worktree before the two lines met (v0.11.1). #36–#47 are
-the open questions v0.11.2's hit feedback left, registered here in v0.11.3.
+the open questions v0.11.2's hit feedback left, registered here in v0.11.3. #48–#55 came with
+the VFX director (v0.11.6); #49 and #50 were written before zone 6 was dealt maps and Cloud
+Court joined the Palace (v0.11.3) and are reworded here for the tree they landed in.
 
 Note #19/#20/#24: **realm ↔ world-pool consistency** — every playable character must have
 a home world in `MapGDD.md` §2 (home world = start zone). The Kingdom of Horror and The

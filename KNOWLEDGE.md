@@ -187,6 +187,83 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A stepped effect drew nothing on its first frame — 83 to 100 ms of a slash went missing (v0.11.6, VFX)
+- **Symptom:** in the first gallery captures the scratchboard, linocut and VOID columns
+  were empty for slashes and trails, and ink and pixel art showed a sliver. Each of those
+  media redraws at 10–15 fps and computed its phase as `step / fps`: on step 0 that is 0,
+  and a stroke at phase 0 has not been written yet.
+- **Rule:** a held frame shows the *middle* of its interval: `(step + 0.5) / fps`. Anything
+  with fewer than ~6 frames in its life has to be checked at its first one.
+- **Why:** a smooth effect at t = 0 is one invisible frame in sixty; a stepped one is a
+  third of the effect's life.
+
+### The player vanished on the frame she was hit — the i-frame blink opened on its "off" half (v0.11.6, hit feedback, found by the VFX captures)
+- **Symptom:** the hit flash had never been drawn by anyone. Captured on the frame of the
+  hit, foes flashed white (ink on a pale arena) as designed — and the player was not on
+  screen at all. `Sprite.Visible = PosMod(_invulnTimer, 0.12) < 0.06` with the timer set to
+  0.8: 0.8 mod 0.12 is 0.08, so the blink's first 20 ms are invisible, and the flash under it.
+- **Rule:** `Sprite.Visible = _flash.Active || …` — the blink waits for the flash. One
+  owner still writes `Visible`. A timer-phase effect has to be asked what its *first* frame
+  is.
+- **Why it hid:** `FeedbackCheck` asserts the flash does not touch `Visible` — and it does
+  not. The picture was wrong, the mechanism was right; only a capture on the exact frame
+  shows it.
+
+### A crescent drawn round a constant-radius arc does not reach the cone (v0.11.6, VFX)
+- **Symptom:** every slash was a bulging half-moon: a band of half-width `w·sin(πu)` round
+  an arc of radius `reach − w` has its outer edge at `reach − w` at the tips and at `reach`
+  only in the middle, so it is more curved than the hitbox and looks like a "D".
+- **Rule:** bend the centre line: `r(u) = reach − halfWidth(u)`. The outer edge is then the
+  arc of the reach all the way round (`VfxStyle.CrescentPath`). The kit's own debug cone,
+  still drawn, sits exactly under it in the captures.
+
+### A hit mark sized from a table of round numbers buried the fighter (v0.11.6, VFX)
+- **Symptom:** marks of 12–38 px radius looked right alone on the grid and hid the whole
+  64 px fighter in a fight, three at a time, the moment foes stood on the player.
+- **Rule:** judge an effect in the fight, at the camera's zoom, with the bodies in it. Hit
+  marks are now 4–23 px. A grid proves the medium, not the scale.
+
+### Drawing with the rendering server from `_Draw`: one command, no garbage — and four things to get right (v0.11.6, VFX, reference)
+- `RenderingServer.CanvasItemAddTriangleArray(GetCanvasItem(), indices, points, colours, uvs,
+  default, default, texture, -1)` has `ReadOnlySpan` overloads in 4.7: slices of static
+  buffers go straight in, nothing is allocated, and a whole mark is one canvas command.
+- Colours must be one per vertex. Pass an **empty** UV span for untextured geometry and a
+  full one for textured — so a mark that mixes them flushes when the texture changes
+  (`VfxPen.Use`).
+- It appends to the item's command list: call it only inside `_Draw` (the list was just
+  cleared for you). `QueueRedraw()` on a hidden node clears its cached commands.
+- An autoload's children are drawn **behind** the current scene at equal z (tree order):
+  pooled effect nodes need `ZAsRelative = false` and an absolute `ZIndex` (10 world, 30
+  must-read, 5 ambience) or they are invisible.
+
+### A `CPUParticles2D` burst from a pool (v0.11.6, VFX, reference)
+- Create with `Emitting = false` (the default is true). Per rent: set everything, then
+  `Restart()` and `Emitting = true`; recycle on your own clock (`Lifetime` + a little), not
+  on `finished` — no signal, no callback allocation.
+- `ColorInitialRamp` gives each particle a colour between two stops: keep one `Gradient` per
+  pooled node and `SetColor` it per rent rather than making one.
+- With `AlignYToVelocity` a particle's **+Y** (the bottom of its texture) leads: draw a
+  droplet head-down.
+- A still for a capture: `Preprocess = seconds; Restart(); SpeedScale = 0` shows the burst
+  at that age and holds it.
+- Reset `Preprocess` and `SpeedScale` when it returns to the pool.
+
+### Capturing a staged fight: three things that wasted a run each (v0.11.6, tooling)
+- **The debug arena's authored body is Pixolotl**, not Pomegraknight: the first fight sheet
+  was bubbles. `GameManager.DebugSwapProtagonist("Pomegraknight")` works only in debug
+  mode; a tool turns it on the way a user does (find the overlay's `DBG` button, emit
+  `pressed`), swaps, and turns it off.
+- **Foes placed beside the player walk onto her within 0.4 s** and raise their own spawn
+  pops: stage fresh ones before each shot, wait out the pop (0.36 s), then swing.
+- **To catch a two-frame flash,** await `RenderingServer.FramePostDraw` in the frame the cue
+  is seen, and read the viewport then. `open --stdout file --stderr file` gets a windowed
+  run's log.
+
+### C# in a hot path: two small ones (v0.11.6, VFX, reference)
+- `side.Equals(CombatSide.Player)` boxes; `side != CombatSide.Player` does not.
+- `a && kind is X or Y or Z` parses as `a && (kind is (X or Y or Z))` — which is what you
+  want, and worth a comment.
+
 ### A band offset from a line with sharp corners folds over itself — and a frontier cut per cell stops at every cell (v0.11.4, overworld pages)
 - **Symptom:** the first charred frontier had a crossed, bow-tie sliver at every corner
   where three city fields meet, and a pale wedge of unburnt page at each of them.

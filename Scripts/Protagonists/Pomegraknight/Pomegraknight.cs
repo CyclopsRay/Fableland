@@ -161,9 +161,11 @@ public partial class Pomegraknight : CharacterController
         float dmg = ComboDamage[_comboStage % ComboDamage.Length] * mult;
         int stage = (_comboStage % 3) + 1;             // captured before _comboStage++ below
 
-        // The swing, whether or not it lands: the cone's real reach, which way, which stage.
+        // The swing, whether or not it lands: the cone's real reach and half-angle, which
+        // way, which stage.
         CueBus.Emit(this, "ba.swing", variant: stage, size: SlashRange, magnitude: dmg,
-            direction: FacingDirection, tag: IsBurning ? "burning" : null);
+            direction: FacingDirection, tag: IsBurning ? "burning" : null,
+            extents: CueShapes.Cone(SlashRange, SlashHalfAngle));
 
         // NOTE(animation): with call-method tracks, move this MeleeCone call onto
         // the Slash clip's damage-event frame instead of firing it immediately here.

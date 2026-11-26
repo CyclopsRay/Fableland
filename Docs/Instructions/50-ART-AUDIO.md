@@ -91,6 +91,21 @@ they will hang on. Rule: a VFX that communicates gameplay state
 (telegraphs, buffs, tells) is a **gameplay deliverable** — it ships with the feature,
 however crude.
 
+**Effects have a director and ten media (v0.11.6 — `Docs/VFX.gdd`).** Every cue is drawn by
+`VfxDirector` as an *archetype* (hit spark, slash arc, burst, ring, dust, splash, status
+loop, telegraph…) rendered by a *style* — one per art medium, in the medium of whoever
+caused it: a character carries their home world's medium into every fight, and dust,
+water, hazards and ambience wear the arena's. The procedural effects are the placeholder
+tier of this section, and they obey the style bible (a mark is its medium: wash, flat
+plane, brush stroke, glow, stamp, iron-wire line, scratch, pixel, enamel cell, erasure).
+**Authored art replaces any of them without code**: a texture at `Assets/Vfx/<id>.png`, or
+a whole effect as a strip of square frames at `Assets/Vfx/<style>/<effect id>.png` — same
+name, same footprint (VFX.gdd §8). The art direction for each protagonist's signature
+effects, built and not yet built, is VFX.gdd §5; the eight reference captures are in
+`Docs/Art/Vfx/captures/`. Of the backlog above, the Blush loop, the Fire Tornado, the
+burning-seed variant, PumpKing's explosion and the evolution flash now exist in their
+procedural form.
+
 ## 6. Feel / juice standards
 
 The design, the tier table and every number: `Docs/Feedback.gdd` (v0.11.2). In short:

@@ -18,6 +18,11 @@ Optimize by measurement against budgets, never by folklore.
 | GC | zero steady-state allocations in combat (§2); a GC pause *is* a dropped input in a fighter |
 | Scene swap (Map ⇄ Arena) | < 200 ms perceived; mask with a fade if over |
 | Map redraw | only on state change / camera move — never unconditional per-frame `QueueRedraw` |
+| Effect marks alive (v0.11.6, `Docs/VFX.gdd` §7) | 72 pooled; Cosmetic stops at 36, Confirm at 56, Critical takes the oldest lesser one |
+| Burst emitters alive | 24 pooled, ≤ 32 particles each |
+| Particles alive (ambience included) | 512; ordinary fights measured 49–97 |
+| Non-critical effects started per frame | 6; none off screen |
+| VFX garbage | 0 bytes per cue, per frame, per draw (`VfxCheck`) |
 
 ## 2. C# / GC discipline (the #1 lag source in Godot C#)
 
@@ -56,6 +61,8 @@ hides + resets):
   field list.
 - Warm pools at arena load (spawn+return N instances) so first combat has no
   instantiation hitch.
+- Effects are the first full use of the pool rule (v0.11.6): `VfxMark.ResetForPool` /
+  `VfxBurst.ResetForPool`, and `IsClean` is what `VfxCheck` asserts of every returned node.
 
 ## 4. Known project-specific traps
 
@@ -76,8 +83,9 @@ hides + resets):
 - **SVG imports** are rasterized at import, not runtime — free. But texture *scale*
   abuse (huge SVG scaled down per-node) wastes VRAM; export placeholder SVGs at
   target pixel size.
-- **Shader/material first-use hitch:** when real VFX arrive, pre-instantiate one of
-  each particle material off-screen during scene load.
+- **Shader/material first-use hitch:** done (v0.11.6) by `VfxDirector.WarmUp` on
+  `arena.enter` — one invisible mark per pipeline (plain, textured, additive), kept on
+  screen for a quarter of a second.
 
 ## 5. Scene-flow smoothness (Map ⇄ Arena)
 

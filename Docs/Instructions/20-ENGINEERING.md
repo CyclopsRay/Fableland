@@ -180,6 +180,34 @@ explicitly, as a ranged hit: `.FromRanged(CueOwners.Hazard, "tsunami")`.
 7. Add the cues to `Docs/Feedback.gdd` §6 and a probe to `FeedbackCheck`; break the wiring
    once and watch it fail by name.
 
+**Give a cue its effect (v0.11.6 — `Docs/VFX.gdd`)** — no gameplay file is touched unless
+the moment raises no cue yet (then: the recipe above, one `CueBus.Emit` with real numbers).
+1. **Does it already have one?** Every cue resolves owner → class → `any` in
+   `VfxTable.Cues` (hits: `VfxTable.Hits`, by attack owner and action). A new character
+   that raises `jump`, `death` or an unnamed hit is already drawn in its home medium's
+   generic form. Check before adding.
+2. **Whose medium?** Give the owner a line in `VfxTable.Looks` — a style id and three
+   colours that obey that medium's palette rule (`RealmStyleBible.md`). A new *world* is a
+   new `VfxStyle` (five primitives, a palette for dark / mid / pale canvases, a timing rule,
+   ~150–200 lines: copy the nearest medium in `Styles/`) and a line for its world code.
+3. **Add a row**: `.Add("my_kit", "s1.cast", new VfxDef { Id = "my_kit_cast", Archetype = …,
+   … })`. Pick the **archetype** (VFX.gdd §3) — what the effect *is*; the style decides how
+   it is drawn. Size it from the cue (`SizeFrom.CueSize` / `CueExtents` / `BodyRadius` /
+   `Weight` / `Magnitude`), never from a number of your own when the cue has one: a swing
+   packs its cone with `CueShapes.Cone(reach, halfAngleDeg)`, a field its box. Rows drawn
+   on a hitbox's size set `ScaleJitter = 0`.
+4. **Priority**: `Critical` only if it tells the player something they must act on (a tell,
+   a status, an area that hurts); `Confirm` for the result of an action; `Cosmetic` for
+   everything else. Critical is never culled — spend it carefully.
+5. **State and pace**: a `VfxModifier` (tag, the body's `FeedbackState`, combo, intensity,
+   boss phase, kill, weight, stage) rather than a second row; `ByTag` when the tag picks a
+   different effect altogether; `Layers` when one cue is two effects in two media.
+6. **Look at it** — `Scenes/Dev/VfxGallery.tscn` (40-QA.md), on a dark and a pale canvas
+   and in a fight. A grid proves the medium; only the fight proves the scale.
+7. Add the cue to `VfxCheck`'s vocabulary lists, and break the row once to see it fail.
+An authored sprite replaces any of it without code: `Assets/Vfx/<style>/<effect id>.png`
+(VFX.gdd §8).
+
 **New mission type (v0.5.0+)** — a `Mission` strategy object the arena GameManager
 hosts: `Setup(nodeLevel)`, `Tick`, `IsComplete/IsFailed`, `GrantReward`. Mission choice
 is rolled **at map-generation time** from `DetRandom` and stored on the node.

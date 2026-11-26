@@ -550,7 +550,10 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		if (_invulnTimer > 0f)
 		{
 			_invulnTimer -= dt;
-			Sprite.Visible = Mathf.PosMod(_invulnTimer, 0.12f) < 0.06f;
+			// The blink waits for the hit flash: 0.8 s of i-frames opens on the blink's "off"
+			// half, which hid the body on the very frame it was hit — and the flash with it
+			// (seen in the VFX pass's first captures, v0.11.6). Flash means "hit"; then blink.
+			Sprite.Visible = _flash.Active || Mathf.PosMod(_invulnTimer, 0.12f) < 0.06f;
 			if (_invulnTimer <= 0f) Sprite.Visible = true;
 		}
 		if (_stunTimer > 0f) _stunTimer -= dt;

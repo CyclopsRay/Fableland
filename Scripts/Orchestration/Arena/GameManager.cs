@@ -238,13 +238,15 @@ public partial class GameManager : Node2D
     /// <c>flow</c>/<c>arena.enter</c>: the arena is built. Tag = the world the map was authored
     /// for ("" on the legacy arena or a map that names none), magnitude = how light the
     /// backdrop is (0 black – 1 white; −1 if there is none) so presentation can keep its marks
-    /// readable against it, size = the battlefield's width in px.
+    /// readable against it, size = the battlefield's width in px, source = this arena — what a
+    /// listener watches to know the arena has gone (its ambience ends when this node leaves
+    /// the tree).
     /// </summary>
     private void RaiseArenaEntered()
     {
         var backdrop = GetNodeOrNull<ColorRect>("Background");
         float luminance = backdrop != null ? backdrop.Color.Luminance : -1f;
-        CueBus.EmitAt(CueOwners.Flow, "arena.enter", PlayerPosition, null, CombatSide.Player,
+        CueBus.EmitAt(CueOwners.Flow, "arena.enter", PlayerPosition, this, CombatSide.Player,
             variant: _nodeLevel, size: _authoredMapWidth, magnitude: luminance, tag: _mapWorld);
     }
 

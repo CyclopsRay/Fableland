@@ -281,7 +281,7 @@ The attack names in use today:
 
 | Action | Variant | Tag | Size · Magnitude · Direction · Position | Raised by |
 |---|---|---|---|---|
-| `ba.swing` | stage 1–3 | `burning` while her passive is on | size = the cone's reach (130 px) · magnitude = damage · direction = facing | *HandleBA* |
+| `ba.swing` | stage 1–3 | `burning` while her passive is on | size = the cone's reach (130 px) · extents = the cone, packed by `CueShapes.Cone(reach, half-angle)` — the half-extents of its bounding box; `CueShapes.ConeHalfAngle` unpacks it (40°) · magnitude = damage · direction = facing | *HandleBA* |
 | `s1.cast` | — | — | magnitude = burn seconds | *HandleSkill1* |
 | **loop** `s1.tornado` | — | — | size = half-width · extents = the box's half-extents (128 × 40 px) · magnitude = seconds | *ActivateTornado / EndTornado / _ExitTree* |
 | `s1.tornado.tick` | tick 1–5 | — | size, extents as the loop · magnitude = tick damage | *TornadoHit* |
@@ -299,7 +299,7 @@ radius, magnitude = blast damage, 0 and tag `dud` for a head that only pops) —
 |---|---|---|---|---|
 | `world` / `soft.enter` · `soft.exit` | — | the medium: `water` · `foliage` · `kit` (a character's own volume) · or whatever its builder named it | size = the body's radius · magnitude = its speed px/s · direction = its travel · at the body · source = the body | *SoftVolume.RaiseCrossing ← the body's Enter/ExitSoftVolume* — between open air and "a medium", once per sea, not per tile; a pure current raises nothing |
 | `hazard` / `tick` | — | the hazard: `fire` · `freeze` · `lava` · `spike` · `poop` · `damage` | size, extents = its box · magnitude = damage or status points · at the victim · source = the hazard · side = the victim's | *Hazard.RaiseTickCue ← Deliver* |
-| `flow` / `arena.enter` | node level | the world the map was built for (`""` on the legacy arena or a map that names none) | size = map width px · magnitude = backdrop lightness 0–1 (−1 = none) | *GameManager._Ready* |
+| `flow` / `arena.enter` | node level | the world the map was built for (`""` on the legacy arena or a map that names none) | size = map width px · magnitude = backdrop lightness 0–1 (−1 = none) · source = the arena itself: when that node leaves the tree the arena is over (there is no `arena.exit`; a listener ends its ambience then) | *GameManager._Ready* |
 | `flow` / `countdown.tick` · `countdown.go` | seconds left (3, 2, 1) | — | — | *GameManager._Process* |
 | `flow` / `mission.start` · `mission.success` · `mission.fail` | node level | `collection` · `protect` · `destroy` · `slaughter` · `boss` | — | *GameManager._Process · OnMissionResolved* |
 | `flow` / `boss.intro` · `boss.defeated` | node level | the boss's content id | at the boss (where it stood) · source = the boss, if still there | *BossMission.StageBoss · Tick* |
