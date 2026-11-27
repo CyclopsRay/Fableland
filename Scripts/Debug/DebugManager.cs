@@ -207,9 +207,12 @@ public partial class DebugManager : CanvasLayer
         };
         _protagonistPanel.AddThemeStyleboxOverride("panel", style);
 
-        var vbox = new VBoxContainer();
-        vbox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        _protagonistPanel.AddChild(vbox);
+        // The page outgrew a short window (the roster section, v0.12.8): it scrolls.
+        var scroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        scroll.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        _protagonistPanel.AddChild(scroll);
+        var vbox = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        scroll.AddChild(vbox);
 
         // Title bar row
         var titleRow = new HBoxContainer();
@@ -245,6 +248,8 @@ public partial class DebugManager : CanvasLayer
         var clearBtn = new Button { Text = "Clear override (scene default)" };
         clearBtn.Pressed += ClearProtagonistOverride;
         vbox.AddChild(clearBtn);
+
+        BuildRosterSection(vbox);
 
         // Boss fights (FOES.gdd §8): stage any boss without the overworld. One button per
         // realm boss row, so a new boss appears here by existing; zone 6's twelve share a picker.
@@ -457,6 +462,46 @@ public partial class DebugManager : CanvasLayer
         if (_protagonistPageVisible) ToggleProtagonistPage();
         GetTree().Paused = false;
         GetTree().ChangeSceneToFile("res://Scenes/Arena.tscn");
+    }
+
+    // ---- the run's roster (NODES §3.1) -----------------------------------------------
+
+    /// <summary>A run starts with one protagonist and recruits the rest (v0.12.8); a tester
+    /// still wants all five. Two ways: everyone joins the run in progress now, or new runs
+    /// start with all five and the prototype's team (also <c>FABLELAND_ROSTER=all</c>).</summary>
+    private void BuildRosterSection(VBoxContainer vbox)
+    {
+        var title = new Label { Text = "Roster — a run starts with its home protagonist alone" };
+        title.AddThemeFontSizeOverride("font_size", 14);
+        vbox.AddChild(title);
+
+        var recruitAll = new Button { Text = "Recruit all five into this run" };
+        recruitAll.Pressed += () =>
+        {
+            RunState run = RunState.Instance;
+            if (run?.Graph == null)
+            {
+                _protagonistStatus.Text = "No run in progress — tick the box below for new runs.";
+                return;
+            }
+            int joined = run.DebugRecruitAll();
+            _protagonistStatus.Text = joined == 0
+                ? "Everyone is already on this run's roster."
+                : $"{joined} joined. Team: {string.Join(", ", run.ActiveBuild)} — the next fight uses it.";
+        };
+        vbox.AddChild(recruitAll);
+
+        var allOnNewRun = new CheckBox
+        {
+            Text = "New runs start with all five",
+            ButtonPressed = RunState.DebugAllProtagonistsOnNewRun,
+        };
+        allOnNewRun.Toggled += on =>
+        {
+            RunState.DebugAllProtagonistsOnNewRun = on;
+            LogSystem("New runs start with " + (on ? "all five protagonists" : "their home protagonist alone"));
+        };
+        vbox.AddChild(allOnNewRun);
     }
 
     // ---- zone 6 (Docs/Zone6.gdd §8) -------------------------------------------------

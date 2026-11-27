@@ -25,6 +25,7 @@ public static class ControlsCard
         ("use_item", "Use the held item"),
         ("switch_protagonist", "Switch fighter"),
         ("pause", "Pause"),
+        (InputDefaults.Interact, "Use a station (in a shelter)"),
     };
 
     /// <summary>"A / Left" — every key or button bound to an action, as the engine names them.</summary>
@@ -34,11 +35,29 @@ public static class ControlsCard
         var keys = new List<string>();
         foreach (InputEvent bound in InputMap.ActionGetEvents(action))
         {
-            string text = bound.AsText().Replace(" (Physical)", "").Trim();
+            string text = KeyName(bound);
             if (text.Length > 0 && !keys.Contains(text)) keys.Add(text);
         }
         return keys.Count > 0 ? string.Join(" / ", keys) : "—";
     }
+
+    /// <summary>The first key bound to an action ("E"), for a prompt; "?" when none is.</summary>
+    public static string FirstKeyOf(string action)
+    {
+        if (string.IsNullOrEmpty(action) || !InputMap.HasAction(action)) return "?";
+        foreach (InputEvent bound in InputMap.ActionGetEvents(action))
+        {
+            string text = KeyName(bound);
+            if (text.Length > 0) return text;
+        }
+        return "?";
+    }
+
+    /// <summary>A key as a player reads it. The engine marks a physical key "E - Physical"
+    /// (Godot 4.3 on; "E (Physical)" before) — which key it is matters, how it is matched
+    /// does not (v0.12.8: every key on the card and the countdown read "… - Physical").</summary>
+    private static string KeyName(InputEvent bound) =>
+        bound.AsText().Replace(" - Physical", "").Replace(" (Physical)", "").Trim();
 
     /// <summary>The whole card, one line per action: "Jump — Space".</summary>
     public static string Text()

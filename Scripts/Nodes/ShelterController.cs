@@ -3,24 +3,54 @@ using Godot;
 using Fableland.Run;
 using Fableland.Items;
 using Fableland.Debug;
+using Fableland.Data;
+using Fableland.Map;
+using Fableland.Shelter;
+using Fableland.UI;
 
 /// <summary>
-/// Shelter Adventure scene. Blessings remain day-ending actions while Team Build is a free
-/// management action. Team Build keeps the editable next-battle order inside RunState; an arena
-/// receives only its frozen battle snapshot.
+/// The shelter Adventure scene (NODES §5): a small room the player walks through as the
+/// team's lead fighter — the fighter's own walk and jump, no attacks — using a station for
+/// each action with the interact key (§5.0): the road out, the team board (Team Build), the
+/// lantern (Finish the Day), and the campfire, whetstone and anvil (the Blessing: Rest,
+/// Sharpen Weapon, Sharpen Armor). Which stations stand where is data (<see cref="ShelterTable"/>,
+/// one room per world, else the default); what each does is a behaviour
+/// (<see cref="ShelterStations"/>). Blessings remain day-ending actions while Team Build is a
+/// free management action; Team Build keeps the editable next-battle order inside RunState,
+/// and an arena receives only its frozen battle snapshot.
 /// </summary>
-public partial class ShelterController : CanvasLayer
+public partial class ShelterController : Node2D
 {
     private const string BlessingConfirm =
         "You will use all your stamina and the Blessing of this shelter to make the magic happen.";
 
+    private Node2D _world;
+    private CanvasLayer _ui;
     private Label _title;
     private Label _status;
-    private Button _rest, _sharpenWeapon, _sharpenArmor, _teamBuild, _finishDay, _back;
+    private PanelContainer _promptBox;
+    private Label _prompt;
+    private Label _promptReason;
+    private Label _keys;
 
     private string _nodeId;
-    private bool _isVoidShelter;
-    private bool _isEidolonShelter;
+    private ShelterKind _kind;
+    private ShelterLayoutDef _layout;
+    private Color _accent;
+    private ShelterRoom _room;
+    private readonly List<ShelterStationNode> _stations = new();
+    private ShelterVisit _visit;
+
+    private CharacterController _walker;
+    private string _walkerId;
+    private ICharacterControls _walkerSource;    // the player's keys, or a check's pad
+    private ShelterWalkControls _controls;
+    private ShelterStationNode _current;         // the station the walker stands at
+    private readonly HashSet<Node> _modals = new();
+    private bool _leaving;
+
+    private bool _isVoidShelter => _kind == ShelterKind.Last;
+    private bool _isEidolonShelter => _kind == ShelterKind.Eidolon;
 
     // ---- Team Build window ----
     private enum TeamBuildMode { Overview, ProtagonistPicker, ItemPicker }
@@ -41,42 +71,269 @@ public partial class ShelterController : CanvasLayer
         "Pomegraknight", "PumpKing", "Cleopastar", "Pixolotl", "Sifu Pangda",
     };
 
+    // ---- read-only, for checks ----
+    public ShelterKind Kind => _kind;
+    public ShelterLayoutDef Layout => _layout;
+    public IReadOnlyList<ShelterStationNode> Stations => _stations;
+    public ShelterStationNode CurrentStation => _current;
+    public CharacterController Walker => _walker;
+    public ShelterVisit Visit => _visit;
+    public bool WalkerFrozen => _controls?.Frozen ?? false;
+    public string PromptText => _promptBox != null && _promptBox.Visible ? _prompt.Text : "";
+    public string StatusText => _status?.Text ?? "";
+    public bool TeamBuildOpen => _teamBuildPanel?.Visible ?? false;
+
+    /// <summary>The station built for this id, or null (not offered here, or not built).</summary>
+    public ShelterStationNode Station(string id) => _stations.Find(s => s.Def.Id == id && s.Usable);
+
     public override void _Ready()
     {
-        _title = GetNode<Label>("Center/Box/TitleLabel");
-        _status = GetNode<Label>("Center/Box/StatusLabel");
-        _rest = GetNode<Button>("Center/Box/RestButton");
-        _sharpenWeapon = GetNode<Button>("Center/Box/SharpenWeaponButton");
-        _sharpenArmor = GetNode<Button>("Center/Box/SharpenArmorButton");
-        _teamBuild = GetNode<Button>("Center/Box/TeamBuildButton");
-        _finishDay = GetNode<Button>("Center/Box/FinishDayButton");
-        _back = GetNode<Button>("Center/Box/BackButton");
+        InputDefaults.Ensure();   // the interact key ships with this code (InputDefaults)
+        _world = GetNode<Node2D>("World");
+        _ui = GetNode<CanvasLayer>("Ui");
+        BuildHud();
 
         var rs = RunState.Instance;
         _nodeId = rs?.CurrentAdventure?.NodeId ?? "(debug)";
-        _isVoidShelter = rs?.FindNode(_nodeId)?.Kind == Fableland.Map.NodeKind.Shelter;
-        _isEidolonShelter = !string.IsNullOrWhiteSpace(rs?.FindNode(_nodeId)?.RealityBridgeId);
+        MapNode node = rs?.FindNode(_nodeId);
+        _kind = KindOf(node);
+        _layout = ShelterTable.ForWorld(node?.Zone);
+        // The world's map colour; past the singularity a drained violet; with no run the home's pink.
+        _accent = WorldDef.ByAbbr(node?.Zone)?.Color
+            ?? (_kind == ShelterKind.Last ? new Color(0.30f, 0.24f, 0.42f) : new Color(0.95f, 0.55f, 0.75f));
 
-        _rest.Pressed += () => Blessing("Rest — restore 30% max HP (excess → permanent max HP).",
-            () => rs?.RestBlessing());
-        _sharpenWeapon.Pressed += () => Blessing("Sharpen Weapon — permanently +10 ATK.",
-            () => rs?.AddAtk(10));
-        _sharpenArmor.Pressed += () => Blessing("Sharpen Armor — permanently +10 DEF.",
-            () => rs?.AddDef(10));
-        _teamBuild.Pressed += OpenTeamBuild;
-        _finishDay.Pressed += () => Confirm("Finish the Day?", null);
-        _back.Pressed += OnBack;
-
+        BuildRoom();
         BuildTeamBuildPanel();
+        _walkerSource = PlayerControls.Instance;
+        _controls = new ShelterWalkControls(_walkerSource);
+        EnsureWalker(SpawnPoint);
         Refresh();
 
         // flow/shelter.enter: the shelter's screen is up. Tag = which kind of shelter.
-        Fableland.UI.UiCues.MarkBack(_back);
-        Fableland.UI.UiCues.Attach(this);
+        UiCues.Attach(this);
         CueBus.EmitAt(CueOwners.Flow, "shelter.enter", Vector2.Zero, variant: rs?.Day ?? 0,
             tag: _isEidolonShelter ? "eidolon" : _isVoidShelter ? "void" : "hub");
     }
 
+    /// <summary>Which of the three kinds a shelter node is (NODES §5): a bridge's midpoint is an
+    /// Eidolon Shelter (it is a <see cref="NodeKind.Shelter"/> too, so the bridge is asked
+    /// first); any other Shelter node is the zone-6 Last Shelter; everything else a hub.</summary>
+    public static ShelterKind KindOf(MapNode node) =>
+        !string.IsNullOrWhiteSpace(node?.RealityBridgeId) ? ShelterKind.Eidolon
+        : node?.Kind == NodeKind.Shelter ? ShelterKind.Last
+        : ShelterKind.Hub;
+
+    // ============================================================= the room
+
+    private void BuildRoom()
+    {
+        _room = ShelterRoom.Build(_layout, _accent, _kind);
+        _world.AddChild(_room);
+        foreach (ShelterSpot spot in _layout.Spots)
+        {
+            ShelterStationDef def = ShelterTable.Station(spot.StationId);
+            if (def == null || !def.StandsIn(_kind)) continue;
+            // A station with no behaviour is not built: its spot waits (an outline in debug mode).
+            var station = ShelterStationNode.Create(def, ShelterStations.Get(def.Id), Units.Px(spot.XM), _accent);
+            _world.AddChild(station);
+            _stations.Add(station);
+        }
+    }
+
+    /// <summary>The title, the status line, the prompt for the station in reach and the keys —
+    /// built here, over the room. Nothing in it takes the mouse: walking is the keyboard's.</summary>
+    private void BuildHud()
+    {
+        var top = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        top.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
+        top.OffsetTop = 14f;
+        top.AddThemeConstantOverride("separation", 4);
+        _title = new Label { HorizontalAlignment = HorizontalAlignment.Center };
+        _title.AddThemeFontSizeOverride("font_size", 26);
+        _title.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.8f));
+        _title.AddThemeConstantOverride("outline_size", 6);
+        _status = new Label { HorizontalAlignment = HorizontalAlignment.Center, AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _status.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.8f));
+        _status.AddThemeConstantOverride("outline_size", 5);
+        top.AddChild(_title);
+        top.AddChild(_status);
+        _ui.AddChild(top);
+
+        _promptBox = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
+        _promptBox.AddThemeStyleboxOverride("panel", MakePanelStyle(new Color(0.07f, 0.07f, 0.10f, 0.88f), new Color(0.78f, 0.68f, 0.39f), 10, 2));
+        // Under the status line, over the wall: never over the floor, where the walker and the
+        // stations are (the first capture had it hiding both).
+        _promptBox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
+        _promptBox.GrowHorizontal = Control.GrowDirection.Both;
+        _promptBox.OffsetTop = 96f;
+        _promptBox.OffsetBottom = 160f;
+        _promptBox.OffsetLeft = -330f;
+        _promptBox.OffsetRight = 330f;
+        var box = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _prompt = new Label { HorizontalAlignment = HorizontalAlignment.Center, AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _prompt.AddThemeFontSizeOverride("font_size", 18);
+        _promptReason = new Label { HorizontalAlignment = HorizontalAlignment.Center, AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        _promptReason.AddThemeColorOverride("font_color", new Color(0.95f, 0.62f, 0.45f));
+        box.AddChild(_prompt);
+        box.AddChild(_promptReason);
+        _promptBox.AddChild(box);
+        _ui.AddChild(_promptBox);
+
+        _keys = new Label { MouseFilter = Control.MouseFilterEnum.Ignore };
+        _keys.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.BottomLeft);
+        _keys.GrowVertical = Control.GrowDirection.Begin;
+        _keys.OffsetLeft = 16f;
+        _keys.OffsetTop = -36f;
+        _keys.OffsetBottom = -12f;
+        _keys.AddThemeColorOverride("font_color", new Color(0.92f, 0.90f, 0.84f));
+        _keys.AddThemeColorOverride("font_outline_color", new Color(0f, 0f, 0f, 0.8f));
+        _keys.AddThemeConstantOverride("outline_size", 5);
+        _keys.Text = $"{ControlsCard.KeysOf("move_left")} · {ControlsCard.KeysOf("move_right")} walk   " +
+                     $"{ControlsCard.KeysOf("jump")} jump   {ControlsCard.KeysOf(InputDefaults.Interact)} use a station";
+        _ui.AddChild(_keys);
+    }
+
+    /// <summary>The first key bound to an action, as a player reads it ("E").</summary>
+    private static string FirstKey(string action) => ControlsCard.FirstKeyOf(action);
+
+    // ============================================================= the walker
+
+    /// <summary>Where the walker arrives: the layout's spawn, a little above the floor.</summary>
+    private Vector2 SpawnPoint => new(Units.Px(_layout.SpawnXM), -Units.Px(1.2f));
+
+    /// <summary>Where a protagonist who is not on the roster can be recruited in this run
+    /// (NODES §3.1) — the line under a locked face in Team Build.</summary>
+    public static string RecruitHint(string id)
+    {
+        WorldDef home = WorldDef.HomeOf(id);
+        if (home == null) return "Not recruitable yet.";
+        bool inRun = RunState.Instance?.Graph?.Worlds.Exists(world => world.Abbr == home.Abbr) == true;
+        return inRun
+            ? $"Not recruited yet — beat the boss of {home.Name} (its 4-1) and {id} joins you."
+            : $"Not recruited yet — {home.Name} is not one of this run's worlds.";
+    }
+
+    /// <summary>The team's lead walks the room: the fighter who would open the next battle.
+    /// With no run (F5 on this scene) the debug page's pick, else the first protagonist.</summary>
+    private static string LeadId()
+    {
+        BattleTeamSnapshot team = RunState.Instance?.Graph != null ? RunState.Instance.CaptureBattleTeam() : null;
+        if (team != null && team.Count > 0) return team.MemberIds[team.InitialIndex];
+        return DebugManager.Instance?.SelectedProtagonistId ?? ProtagonistRoster.Entries[0].Id;
+    }
+
+    /// <summary>Puts the lead in the room — again after Team Build changes who leads, in the
+    /// same spot. The body is placed before it enters the tree, so it latches its own spawn
+    /// and its camera does not sweep in from the origin.</summary>
+    private void EnsureWalker(Vector2 at)
+    {
+        string lead = LeadId();
+        bool alive = _walker != null && IsInstanceValid(_walker);
+        if (alive && _walkerId == lead) return;
+        if (alive)
+        {
+            at = _walker.GlobalPosition;
+            _world.RemoveChild(_walker);
+            _walker.QueueFree();
+            _walker = null;
+        }
+        PackedScene scene = ProtagonistRoster.GetScene(lead) ?? ProtagonistRoster.GetScene(ProtagonistRoster.Entries[0].Id);
+        if (scene == null)
+        {
+            GD.PushError($"[Shelter] no scene for the lead '{lead}'; the room has no walker.");
+            return;
+        }
+        var body = scene.Instantiate<CharacterController>();
+        body.Position = at;
+        body.UseControls(_controls);
+        _world.AddChild(body);
+        _walker = body;
+        _walkerId = lead;
+        FitCamera(body);
+    }
+
+    /// <summary>The fighter's own camera, held to the room: it follows along the floor and
+    /// never scrolls up or down (the room is shorter than the screen).</summary>
+    private void FitCamera(CharacterController body)
+    {
+        Camera2D camera = body.GetNodeOrNull<Camera2D>("Camera2D");
+        if (camera == null) return;
+        float viewHeight = GetViewportRect().Size.Y;
+        camera.LimitLeft = -(int)Units.Px(1f);
+        camera.LimitRight = (int)(_room.WidthPx + Units.Px(1f));
+        camera.LimitBottom = (int)Units.Px(2.5f);
+        camera.LimitTop = camera.LimitBottom - (int)Mathf.Max(viewHeight, _room.HeightPx + Units.Px(4f));
+        camera.MakeCurrent();
+        camera.ResetSmoothing();
+    }
+
+    /// <summary>Checks drive the walker with their own pad (the player's keys otherwise).</summary>
+    public void UseWalkerSource(ICharacterControls source)
+    {
+        _walkerSource = source ?? PlayerControls.Instance;
+        bool frozen = _controls?.Frozen ?? false;
+        _controls = new ShelterWalkControls(_walkerSource) { Frozen = frozen };
+        if (_walker != null && IsInstanceValid(_walker)) _walker.UseControls(_controls);
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {
+        if (_walker == null || !IsInstanceValid(_walker)) return;
+        ShelterStationNode reach = StationAt(_walker.GlobalPosition.X);
+        if (reach == _current) return;
+        _current = reach;
+        if (_current != null && _current.Offer.Enabled)
+            CueBus.EmitAt(CueOwners.Ui, "hover", _current.GetGlobalTransformWithCanvas().Origin, size: _current.WidthPx);
+        ShowStations();
+    }
+
+    /// <summary>The usable station whose stretch of floor the walker stands on (the nearest
+    /// centre if two could reach — the table forbids it, the rule is still total).</summary>
+    public ShelterStationNode StationAt(float x)
+    {
+        ShelterStationNode best = null;
+        foreach (ShelterStationNode station in _stations)
+            if (station.Usable && station.InReach(x)
+                && (best == null || Mathf.Abs(x - station.Position.X) < Mathf.Abs(x - best.Position.X)))
+                best = station;
+        return best;
+    }
+
+    // ============================================================= using a station
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event.IsEcho()) return;
+        if (@event.IsActionPressed("ui_cancel") && TeamBuildOpen)
+        {
+            CloseTeamBuild();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (@event.IsActionPressed(InputDefaults.Interact) && TryUseStation())
+            GetViewport().SetInputAsHandled();
+    }
+
+    /// <summary>Use the station in reach — what the interact key does. False when nothing is in
+    /// reach, it is closed, a dialog or panel is open, or the screen is already leaving.</summary>
+    public bool TryUseStation()
+    {
+        if (_leaving || _modals.Count > 0 || _current == null || !_current.Usable) return false;
+        Refresh();
+        if (!_current.Offer.Enabled)
+        {
+            _promptReason.Modulate = new Color(1.4f, 1.4f, 1.4f);
+            CreateTween().TweenProperty(_promptReason, "modulate", Colors.White, 0.35f);
+            return false;
+        }
+        // ui/press (ui/back for the way out), as a button raises it: at its place on screen.
+        CueBus.EmitAt(CueOwners.Ui, _current.Behaviour.LeavesScreen ? "back" : "press", _current.GetGlobalTransformWithCanvas().Origin, size: _current.WidthPx);
+        _current.Behaviour.Use(_visit);
+        return true;
+    }
+
+    /// <summary>Recompute what this visit offers — the one rule, <see cref="Exits"/>, for the
+    /// ways out — and show it on the stations, the status line and the prompt.</summary>
     private void Refresh()
     {
         var rs = RunState.Instance;
@@ -84,41 +341,95 @@ public partial class ShelterController : CanvasLayer
         int stamina = rs?.Stamina ?? RunState.MaxStamina;
 
         // An Eidolon Shelter's only exit is its Blessing, which carries you across. Once the
-        // crossing is spent — or can no longer happen (the far shore devoured) — Back opens:
-        // the map always has Finish the Day, so this screen can never be a dead end (#16).
+        // crossing is spent — or can no longer happen (the far shore devoured) — the road opens:
+        // the map always has Finish the Day, so this room can never be a dead end (#16).
         string blocked = null;
         bool canCross = _isEidolonShelter && blessed && rs != null && rs.CanCrossEidolonShelter(_nodeId, out blocked);
-        _title.Text = _isEidolonShelter ? "Eidolon Shelter" : _isVoidShelter ? $"Last Shelter {_nodeId}" : $"Transportation Hub {_nodeId}";
+        _visit = new ShelterVisit
+        {
+            Shelter = this,
+            Run = rs,
+            NodeId = _nodeId,
+            Kind = _kind,
+            Blessed = blessed,
+            CanCross = canCross,
+            CrossBlocked = blocked,
+            Stamina = stamina,
+            Exits = Exits(_isEidolonShelter, blessed, canCross, stamina),
+        };
+
+        WorldDef world = WorldDef.ByAbbr(rs?.FindNode(_nodeId)?.Zone);
+        _title.Text = _isEidolonShelter ? "Eidolon Shelter"
+            : _isVoidShelter ? $"Last Shelter {_nodeId}"
+            : $"Transportation Hub {_nodeId}{(world != null ? " · " + world.Name : "")}";
         _status.Text = _isEidolonShelter
-            ? (canCross ? "Spend this shelter's Blessing on Rest or Sharpen, then cross to the far shore."
-                : blessed ? $"{blocked ?? "The bridge cannot be crossed."} Team Build, or back to the map."
-                : "The bridge has been crossed: Team Build, or back to the map.")
+            ? (canCross ? "Spend this shelter's Blessing at the campfire, whetstone or anvil to cross to the far shore."
+                : blessed ? $"{blocked ?? "The bridge cannot be crossed."} Team Build, or take the road back to the map."
+                : "The bridge has been crossed: Team Build, or take the road back to the map.")
             : _isVoidShelter
                 ? "The singularity has closed behind you. Rest, sharpen, or rebuild before the VOID."
                 : (blessed ? "Blessed — one day-ending action available." : "Mundane — the Blessing is spent.");
 
-        (bool back, bool finish, bool blessings) = Exits(_isEidolonShelter, blessed, canCross, stamina);
-        _rest.Disabled = !blessings;
-        _sharpenWeapon.Disabled = !blessings;
-        _sharpenArmor.Disabled = !blessings;
-        _finishDay.Disabled = !finish;
-        _back.Disabled = !back;
-        _back.Text = _isVoidShelter ? "Continue into the VOID" : "Back to Map";
+        foreach (ShelterStationNode station in _stations)
+            if (station.Usable) station.Show(station.Behaviour.Offer(_visit), station == _current, FirstKey(InputDefaults.Interact));
+        ShowTeamFaces();
+        ShowPrompt();
+    }
+
+    /// <summary>Re-show the stations without recomputing the visit (the walker moved).</summary>
+    private void ShowStations()
+    {
+        if (_visit == null) return;
+        foreach (ShelterStationNode station in _stations)
+            if (station.Usable) station.Show(station.Offer, station == _current, FirstKey(InputDefaults.Interact));
+        ShowPrompt();
+    }
+
+    private void ShowPrompt()
+    {
+        if (_current == null || !_current.Usable)
+        {
+            _promptBox.Visible = false;
+            return;
+        }
+        StationOffer offer = _current.Offer;
+        _promptBox.Visible = true;
+        _prompt.Text = offer.Enabled ? $"[{FirstKey(InputDefaults.Interact)}]  {_current.Def.Name}: {offer.Line}" : $"{_current.Def.Name}: {offer.Line}";
+        _prompt.Modulate = offer.Enabled ? Colors.White : new Color(0.7f, 0.7f, 0.72f);
+        _promptReason.Text = offer.Enabled ? "" : offer.Reason;
+        _promptReason.Visible = !offer.Enabled && !string.IsNullOrEmpty(offer.Reason);
+    }
+
+    /// <summary>The team board shows the next battle's team, by face.</summary>
+    private void ShowTeamFaces()
+    {
+        ShelterStationNode board = _stations.Find(s => s.Def.Id == ShelterTable.TeamBoard);
+        if (board == null) return;
+        var faces = new List<Texture2D>();
+        string[] team = RunState.Instance?.Graph != null ? RunState.Instance.CaptureBattleTeam().MemberIds : new[] { LeadId() };
+        foreach (string id in team) faces.Add(LoadTexture(MugshotPath(id)));
+        board.ShowFaces(faces);
     }
 
     /// <summary>
-    /// Which ways out a shelter screen offers (NODES §1.2). A hub: the Blessing's actions while
-    /// blessed, Finish the Day, and Back while stamina lasts. An Eidolon Shelter: its Blessing
-    /// is its exit — it carries you across — so Back and Finish are closed while it can; once
-    /// it is spent, or the crossing can no longer happen, Back opens, because the map always
-    /// has Finish the Day (audit v0.11.1 #16). Pure: the check runs every case.
+    /// Which ways out a shelter offers (NODES §1.2) — the one rule; the stations only show it.
+    /// A hub: the Blessing's actions while blessed, Finish the Day, and Back while stamina lasts.
+    /// An Eidolon Shelter: its Blessing is its exit — it carries you across — so Back and
+    /// Finish are closed while it can; once it is spent, or the crossing can no longer happen,
+    /// Back opens, because the map always has Finish the Day (audit v0.11.1 #16). Pure: the
+    /// check runs every case.
     /// </summary>
     public static (bool Back, bool Finish, bool Blessings) Exits(bool eidolon, bool blessed, bool canCross, int stamina) =>
         eidolon
             ? (Back: !canCross, Finish: false, Blessings: blessed && canCross)
             : (Back: stamina > 0, Finish: true, Blessings: blessed);
 
-    private void Blessing(string effectLine, System.Action apply)
+    // ---- what stations ask of the screen (ShelterStations) ----
+
+    /// <summary>A Blessing (Rest, Sharpen Weapon, Sharpen Armor), confirmed: at a hub or the
+    /// Last Shelter it uses all stamina and ends the day; at an Eidolon Shelter it carries the
+    /// player across the bridge without ending the day.</summary>
+    public void RequestBlessing(string effectLine, System.Action apply)
     {
         if (_isEidolonShelter)
         {
@@ -132,6 +443,7 @@ public partial class ShelterController : CanvasLayer
                     _status.Text = reason ?? "The bridge cannot be crossed.";
                     return;
                 }
+                _leaving = true;
                 apply?.Invoke();
             });
             return;
@@ -144,13 +456,58 @@ public partial class ShelterController : CanvasLayer
         });
     }
 
+    /// <summary>The lantern: "Finish the Day?" — the day ends on Yes.</summary>
+    public void RequestFinishDay() => Confirm("Finish the Day?", null);
+
+    /// <summary>The road: back to the map, whenever the one rule opens it — at an Eidolon Shelter
+    /// with no stamina too (the map has Finish the Day; the old Back button refused there, and
+    /// the screen was a dead end).</summary>
+    public void RequestLeave()
+    {
+        var rs = RunState.Instance;
+        if (rs == null || _visit == null || !_visit.Exits.Back) return;
+        _leaving = true;
+        rs.ReturnToMap();
+    }
+
+    /// <summary>A line on the status bar (a station's own news).</summary>
+    public void Say(string text) => _status.Text = text ?? "";
+
+    /// <summary>Shows a station's own panel over the room — the walker stands still until it is
+    /// hidden or freed. For stations that bring a screen of their own (the plantation).</summary>
+    public void ShowPanel(Control panel)
+    {
+        if (panel == null) return;
+        if (panel.GetParent() == null) _ui.AddChild(panel);
+        panel.Visible = true;
+        OpenModal(panel);
+        panel.VisibilityChanged += () => { if (!panel.Visible) CloseModal(panel); };
+        panel.TreeExiting += () => CloseModal(panel);
+    }
+
+    private void OpenModal(Node owner)
+    {
+        _modals.Add(owner);
+        if (_controls != null) _controls.Frozen = true;
+    }
+
+    private void CloseModal(Node owner)
+    {
+        if (!_modals.Remove(owner)) return;
+        if (_controls != null) _controls.Frozen = _modals.Count > 0;
+        if (!_leaving && IsInsideTree() && !IsQueuedForDeletion()) Refresh();
+    }
+
     private void Confirm(string text, System.Action onYes)
     {
         var dlg = new ConfirmationDialog { DialogText = text, Title = "Shelter" };
-        AddChild(dlg);
+        _ui.AddChild(dlg);
+        OpenModal(dlg);
+        dlg.TreeExiting += () => CloseModal(dlg);
         dlg.Confirmed += () =>
         {
             dlg.QueueFree();
+            _leaving = true;
             onYes?.Invoke();
             RunState.Instance?.EndDay();
         };
@@ -161,17 +518,20 @@ public partial class ShelterController : CanvasLayer
     private void ConfirmWithoutEnding(string text, System.Action onYes)
     {
         var dlg = new ConfirmationDialog { DialogText = text, Title = "Eidolon Shelter" };
-        AddChild(dlg);
+        _ui.AddChild(dlg);
+        OpenModal(dlg);
+        dlg.TreeExiting += () => CloseModal(dlg);
         dlg.Confirmed += () => { dlg.QueueFree(); onYes?.Invoke(); };
         dlg.Canceled += dlg.QueueFree;
         dlg.PopupCentered();
     }
 
-    private void OnBack()
+    /// <summary>The dialog a station opened, if one is up (read-only, for checks).</summary>
+    public ConfirmationDialog OpenDialog()
     {
-        var rs = RunState.Instance;
-        if (rs == null || rs.Stamina <= 0) return;
-        rs.ReturnToMap();
+        foreach (Node child in _ui.GetChildren())
+            if (child is ConfirmationDialog dlg && !dlg.IsQueuedForDeletion()) return dlg;
+        return null;
     }
 
     // ============================================================= Team Build
@@ -228,10 +588,11 @@ public partial class ShelterController : CanvasLayer
         _teamBuildStatus = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart };
         _teamBuildStatus.AddThemeColorOverride("font_color", new Color(0.74f, 0.77f, 0.88f));
         layout.AddChild(_teamBuildStatus);
-        AddChild(_teamBuildPanel);
+        _ui.AddChild(_teamBuildPanel);
     }
 
-    private void OpenTeamBuild()
+    /// <summary>The team board's action. The walker stands still while it is open.</summary>
+    public void OpenTeamBuild()
     {
         _teamBuildMode = TeamBuildMode.Overview;
         _selectedTeamSlot = -1;
@@ -239,13 +600,17 @@ public partial class ShelterController : CanvasLayer
         RepositionTeamBuildPanel();
         RebuildTeamBuildView();
         _teamBuildPanel.Visible = true;
+        OpenModal(_teamBuildPanel);
     }
 
-    private void CloseTeamBuild()
+    /// <summary>Closes Team Build; a new lead walks on from where the old one stood.</summary>
+    public void CloseTeamBuild()
     {
         _teamBuildPanel.Visible = false;
         _teamBuildMode = TeamBuildMode.Overview;
         _selectedTeamSlot = -1;
+        EnsureWalker(SpawnPoint);
+        CloseModal(_teamBuildPanel);
     }
 
     private void RepositionTeamBuildPanel()
@@ -412,7 +777,7 @@ public partial class ShelterController : CanvasLayer
             var choice = CreateSquareChoice(LoadTexture(MugshotPath(id)), ProtagonistTooltip(id), inTeam);
             bool owned = rs?.FindProtagonist(id) != null;
             choice.Disabled = !owned;
-            if (!owned) choice.TooltipText += "\nUnavailable outside debug preview.";
+            if (!owned) choice.TooltipText += "\n" + RecruitHint(id);
             else choice.Pressed += () => ChooseProtagonist(id);
             grid.AddChild(choice);
         }

@@ -776,14 +776,23 @@ public partial class RunWalkCheck : Node
                     bossLines.Add($"{world.Abbr} day {run.Day} L{level.Level}: {boss.MaxHP:0} HP ×{boss.DamageDealtScale:0.00}");
 
                     // Beating him: the node completes, the first capital of the home realm
-                    // yields TwistedReality, and PumpKing is on the roster exactly once.
-                    bool owned = run.FindProtagonist(def.ProtagonistId) != null;
+                    // yields TwistedReality, and the REALM's own protagonist joins, once —
+                    // whichever kit held the capital (NODES §4.5, v0.12.8: a run starts with
+                    // one fighter; the stand-in PumpKing beaten in Starland brings Cleopastar,
+                    // not himself). A realm with no protagonist yet recruits nobody.
+                    string recruit = WorldDef.HomeProtagonistOf(world.Abbr);
+                    bool owned = recruit != null && run.FindProtagonist(recruit) != null;
+                    bool kitOwned = run.FindProtagonist(def.ProtagonistId) != null;
                     int roster = run.Owned.Count;
+                    Expect(arena.RecruitId == (recruit ?? ""), $"{where}: the arena would recruit '{arena.RecruitId}'; {world.Abbr}'s own is '{recruit ?? "nobody"}'");
                     arena.CurrentMission.DebugForceComplete();
                     for (int i = 0; i < 300 && !arena.GoalResolved; i++) await Ticks(1);
                     Expect(arena.GoalResolved && run.CompletedNodeIds.Contains(capital.Id), $"{where}: beating the boss did not complete the capital");
-                    Expect(run.FindProtagonist(def.ProtagonistId) != null && run.Owned.Count == roster + (owned ? 0 : 1),
-                        $"{where}: {def.ProtagonistId} must be on the roster once (was owned: {owned}; roster {roster} → {run.Owned.Count})");
+                    Expect((recruit == null || run.FindProtagonist(recruit) != null) && run.Owned.Count == roster + (recruit == null || owned ? 0 : 1),
+                        $"{where}: beating the capital must put {recruit ?? "nobody"} on the roster once (was owned: {owned}; roster {roster} → {run.Owned.Count})");
+                    if (def.ProtagonistId != recruit)
+                        Expect((run.FindProtagonist(def.ProtagonistId) != null) == kitOwned,
+                            $"{where}: the stand-in's own protagonist ({def.ProtagonistId}) joined — the recruit belongs to the realm, not the kit");
                     if (world.Abbr == Home)
                         Expect(run.HasTwistedReality(), $"{where}: the home realm's capital must yield TwistedReality");
                 }
@@ -994,6 +1003,12 @@ public partial class RunWalkCheck : Node
         Expect(seed != null, $"void: no seed among 200 draws {variant.Id}");
         if (seed == null) return;
         run.NewRun(seed);
+        // The walk switches fighters mid-fight (Avīci's seals on every body), so it needs a
+        // party. Since v0.12.8 a run starts with one protagonist and a run that reaches zone 6
+        // has recruited on the way; the debug path stands in for that, with the team every run
+        // fielded before (so the walk's fighters are the ones it was written for).
+        run.DebugRecruitAll();
+        Expect(run.TrySetActiveBuild(new[] { "Sifu Pangda", "Pixolotl", "Cleopastar" }, out string teamError), $"void: the party could not be set: {teamError}");
         string tag = $"void {variant.Id} ({seed})";
         Expect(run.Zone6.VariantId == variant.Id && run.Zone6.Nodes.Count == 0, $"{tag}: a new run of this seed is not an empty {variant.Id}");
         MapNode core = run.FindNode("XX-6-1");

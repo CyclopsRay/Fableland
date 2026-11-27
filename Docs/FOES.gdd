@@ -456,13 +456,16 @@ A boss map takes its boss's side.
 - **The boss owns the field.** The ambient spawner is off; two foes at foe level −1 arrive
   once, when the boss falls below half health.
 - **The bar** names the boss and shows its HP, with the shell beside it while he has one.
-- **Beating it** resolves the mission, grants the node's reward and **recruits the
-  protagonist** — once: a protagonist already on the roster is not added again. The body
+- **Beating it** resolves the mission, grants the node's reward and **recruits the realm's
+  own protagonist** — once: a protagonist already on the roster is not added again. The body
   fades and frees itself; there are no lives on the Foe side.
-- **Prototype note.** A run currently starts with every implemented protagonist owned
-  (`RunState.EnsurePrototypeRoster`), PumpKing included, so recruiting him today changes
-  nothing. When that policy ends, recruitable protagonists leave the starting roster; the
-  reward path is already in place.
+- **The recruit belongs to the realm, not the kit (v0.12.8, `NODES.gdd` §3.1, §4.5).** A run
+  starts with its home protagonist alone (the prototype roster that owned all five ended).
+  The handshake names the recruit (`AdventureContext.RecruitId`, the realm's home
+  protagonist) beside the boss, and the mission pays it — so BOSS PumpKing standing in at
+  Starland's 4-1 recruits Cleopastar, and nobody where no protagonist lives yet. A realm's own
+  boss row must name the realm's home protagonist (the recruit check holds the two tables
+  together).
 
 ### 8.7 Zone 6's bosses (v0.12.0, provisional — `Docs/Zone6.gdd` is their home)
 

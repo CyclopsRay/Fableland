@@ -15,7 +15,8 @@ Originally each fable's heroes lived in their own separate world inside **Fablel
 One day a **magic turbulence** swept every fable and fused the worlds from different
 storybooks together. **Pomegraknight** — guardian of her kingdom, and the starting
 protagonist (others unlock on completing a run) — sets out to discover why the worlds
-are now connected. On the road she meets friends and enemies and finally uncovers the
+are now connected. Within a run she sets out alone and recruits the others in the realms she
+crosses (`NODES.gdd` §3.1). On the road she meets friends and enemies and finally uncovers the
 cause.
 
 The game is a **rogue-like**. The goal of a run is to reach the **dark zone** at the
@@ -56,17 +57,21 @@ characters unlock, they begin in their own home world. (Pixolotl is currently a
 **non-starter** — recruit-only. Her home world, **The Forgotten**, has been in the pool
 since v0.11.0; whether she becomes a starter there is still TBD registry #24.)
 
-| World            | Abbr | Palette       | In the pool since |
-|------------------|------|---------------|-------------------|
-| Starland         | SL   | orange        | the start |
-| HollowCastle     | HC   | grey          | the start |
-| VanillaKindom    | VK   | pink          | the start |
-| TheDeserted      | TD   | sandy yellow  | the start |
-| Palace of LOOING | PL   | purple        | the start |
-| Banboo Maze      | BM   | dark green    | the start |
-| Kingdom of Horror | KH  | danger red    | v0.11.0 — PumpKing's home |
-| The Forgotten    | TF   | canal jade    | v0.11.0 — Pixolotl's home |
-| **The VOID / dark zone** | **XX** | **black** | — |
+| World            | Abbr | Palette       | In the pool since | Home protagonist (v0.12.8) |
+|------------------|------|---------------|-------------------|----------------------------|
+| Starland         | SL   | orange        | the start | Cleopastar — *provisional* (TBD #37) |
+| HollowCastle     | HC   | grey          | the start | — |
+| VanillaKindom    | VK   | pink          | the start | Pomegraknight |
+| TheDeserted      | TD   | sandy yellow  | the start | — |
+| Palace of LOOING | PL   | purple        | the start | — |
+| Banboo Maze      | BM   | dark green    | the start | Sifu Pangda — *provisional* (TBD #38) |
+| Kingdom of Horror | KH  | danger red    | v0.11.0 — PumpKing's home | PumpKing |
+| The Forgotten    | TF   | canal jade    | v0.11.0 — Pixolotl's home | Pixolotl |
+| **The VOID / dark zone** | **XX** | **black** | — | — |
+
+A world's **home protagonist** is world data (`WorldDef.HomeProtagonistId`): a run that starts
+in that world starts with them alone, and beating that realm's 4-1 recruits them, whichever
+boss kit holds it (`NODES.gdd` §3.1, §4.5). It is fed to no seed, so changing one moves no map.
 
 The two newcomers took the two hues the first six left free; blue stays the rivers' and the
 sea's. (Cloud Court, the earlier aerial proposal for the Palace of LOOING, is not a ninth
