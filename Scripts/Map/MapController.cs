@@ -85,6 +85,7 @@ public partial class MapController : Node2D
     private Button _renderButton;
     private Button _viewModeButton;
     private Button _realityButton;
+    private Button _featherButton;   // Pixolotl's Feather: turn back today (ITEMS.gdd §7.8)
     private Button _fieldsButton;
     private bool _showCityFields;
 
@@ -120,6 +121,18 @@ public partial class MapController : Node2D
         _viewModeButton.Pressed += OnCycleViewMode;
         _realityButton = GetNode<Button>("UI/RealityButton");
         _realityButton.Pressed += OnTwistedReality;
+        // Built here, not in Map.tscn: it shows only while a team member holds the Feather,
+        // just right of the Bridge of Eidolon button.
+        _featherButton = new Button
+        {
+            Name = "FeatherButton",
+            Text = "Pixolotl's Feather: rewind today",
+            Position = _realityButton.Position + new Vector2(_realityButton.Size.X + 8f, 0f),
+            Size = new Vector2(250f, _realityButton.Size.Y),
+            Visible = false,
+        };
+        _realityButton.GetParent().AddChild(_featherButton);
+        _featherButton.Pressed += OnFeatherRewind;
         _fieldsButton = GetNode<Button>("UI/FieldsButton");
         _fieldsButton.Pressed += OnToggleCityFields;
         _renderButton.Text = RenderButtonText();
@@ -318,6 +331,53 @@ public partial class MapController : Node2D
         QueueRedraw();
     }
 
+    private void UpdateFeatherButton()
+    {
+        if (_featherButton == null) return;
+        var rs = RunState.Instance;
+        bool held = rs?.TeamHolderOf(RunState.FeatherItemId) != null;
+        _featherButton.Visible = held;
+        if (!held) return;
+        string reason = null;
+        bool ready = rs.CanRewindToday(out reason);
+        _featherButton.Disabled = !ready;
+        _featherButton.TooltipText = ready
+            ? "Single use: return to where you stood this morning, with this morning's HP and stamina. The day count and anything won stay. The Feather becomes Pixolotl's Wish."
+            : reason ?? "Unavailable.";
+    }
+
+    /// <summary>Pixolotl's Feather (ITEMS.gdd §7.8): asked once, then the day turns back.</summary>
+    private void OnFeatherRewind()
+    {
+        var rs = RunState.Instance;
+        if (rs == null) return;
+        var dlg = new ConfirmationDialog
+        {
+            Title = "Pixolotl's Feather",
+            DialogText = "Turn the day back to this morning?\n\nYou return to where you woke, with this morning's HP and stamina.\n" +
+                         "The day count, and anything won, stay as they are. The Feather becomes Pixolotl's Wish.",
+        };
+        AddChild(dlg);
+        dlg.Confirmed += () =>
+        {
+            dlg.QueueFree();
+            if (!rs.TryRewindToday(out string reason))
+            {
+                ShowMapToast(reason ?? "The Feather will not turn.");
+                UpdateInfo();
+                return;
+            }
+            if (!rs.SaveActiveRun(out string saveError))
+                GD.PushError($"[MapController] Feather rewind save failed: {saveError}");
+            SyncFromRunState();
+            ShowMapToast("The Feather turns the day back to this morning. It is Pixolotl's Wish now.");
+            UpdateInfo();
+            QueueRedraw();
+        };
+        dlg.Canceled += dlg.QueueFree;
+        dlg.PopupCentered();
+    }
+
     private void ShowMapToast(string text)
     {
         if (_toastLabel == null || string.IsNullOrEmpty(text)) return;
@@ -407,8 +467,19 @@ public partial class MapController : Node2D
         _infoLabel.Text = $"Day {day}   Stamina {_stamina}/{MaxStamina}   Wonder cores {cores}\n" +
                           $"Traversed {_visited.Count}\n" +
                           $"fights {fights}  hubs {hubs}  shelter {shelters}  ? {marks}" +
-                          (zone6.Length > 0 ? "\n" + zone6 : "");
+                          (zone6.Length > 0 ? "\n" + zone6 : "") +
+                          PhantomLine();
         UpdateTwistedRealityButton();
+        UpdateFeatherButton();
+    }
+
+    /// <summary>THE VOID's phantoms on the map, and when the next one rises (ITEMS.gdd §7.2).</summary>
+    private static string PhantomLine()
+    {
+        RunState run = RunState.Instance;
+        if (run == null || !run.OwnsItem(RunState.VoidItemId)) return "";
+        int phantoms = run.Ledger.Phantoms.Count;
+        return $"\nVOID phantoms {phantoms} — the next rises in {run.Ledger.PhantomClock} day{(run.Ledger.PhantomClock == 1 ? "" : "s")}";
     }
 
     /// <summary>Where zone 6 stands (Docs/Zone6.gdd §6) — its gravity, the seals on you, what
@@ -750,8 +821,8 @@ public partial class MapController : Node2D
         _anchor = ComputeAnchor();
         var vdist = VisitedSteps();
 
-        if (_pages) { DrawPages(vdist); return; }
-        if (_rendered) { DrawAtlas(vdist); return; }
+        if (_pages) { DrawPages(vdist); DrawPhantoms(); return; }
+        if (_rendered) { DrawAtlas(vdist); DrawPhantoms(); return; }
 
         for (int w = 0; w < _graph.Worlds.Count; w++)
             if (!_mist || _revealed.Contains(_graph.Worlds[w].Abbr))
@@ -803,6 +874,32 @@ public partial class MapController : Node2D
         }
 
         DrawToken(Project(_tokenPos));
+        DrawPhantoms();
+    }
+
+    /// <summary>
+    /// THE VOID's phantoms (ITEMS.gdd §7.2), drawn wherever they stand — fog or not: they see
+    /// what you see, and you see them coming. TODO(art): a phantom figure for the atlas and the
+    /// pages; the placeholder is a hooded shape with two pale eyes and a slow pulse.
+    /// </summary>
+    private void DrawPhantoms()
+    {
+        RunState run = RunState.Instance;
+        if (run?.Ledger == null || run.Ledger.Phantoms.Count == 0) return;
+        float r = Scaled(7f);
+        float pulse = 0.55f + 0.25f * Mathf.Sin(_time * 3f);
+        foreach (string id in run.Ledger.Phantoms)
+        {
+            MapNode node = run.FindNode(id);
+            if (node == null) continue;
+            Vector2 p = Project(node.Pos) + new Vector2(Scaled(10f), -Scaled(10f));
+            DrawCircle(p, r * 1.7f, new Color(0.35f, 0.10f, 0.55f, 0.25f * pulse));
+            DrawCircle(p, r, new Color(0.08f, 0.02f, 0.12f, 0.95f));
+            DrawColoredPolygon(new[] { p + new Vector2(-r, 0f), p + new Vector2(r, 0f), p + new Vector2(r * 0.8f, r * 1.6f),
+                p + new Vector2(0f, r * 1.2f), p + new Vector2(-r * 0.8f, r * 1.6f) }, new Color(0.08f, 0.02f, 0.12f, 0.95f));
+            DrawCircle(p + new Vector2(-r * 0.35f, -r * 0.1f), Scaled(1.3f), new Color(0.85f, 0.8f, 1f, pulse + 0.2f));
+            DrawCircle(p + new Vector2(r * 0.35f, -r * 0.1f), Scaled(1.3f), new Color(0.85f, 0.8f, 1f, pulse + 0.2f));
+        }
     }
 
     private void DrawWedge(int w, Color color)

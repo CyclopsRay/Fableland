@@ -100,6 +100,7 @@ public sealed class CollectionMission : Mission
         _cores.Remove(core);
         _collected++;
         RunState.Instance?.AddWonderCores(1);   // credited immediately → kept on failure
+        RunState.Instance?.NotifyCorePickedUp(); // DD's passive heals on it (ITEMS.gdd §7.3)
 
         if (_collected >= _required && !_completing)
         {

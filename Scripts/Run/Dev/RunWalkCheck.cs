@@ -118,6 +118,7 @@ public partial class RunWalkCheck : Node
             await WalkEveryWorld();
             await WalkToTheCloudCourt();
             await WalkTheVoid();
+            await WalkThePhantoms();
         }
         catch (Exception e)
         {
@@ -650,6 +651,90 @@ public partial class RunWalkCheck : Node
     }
 
     private GameManager _lastArena;
+
+    /// <summary>Waits for the arena of a node some other path (a resume) is opening.</summary>
+    private async Task<GameManager> ArenaFor(string nodeId)
+    {
+        RunState run = RunState.Instance;
+        for (int i = 0; i < 600; i++)
+        {
+            await Ticks(1);
+            if (GetTree().CurrentScene is GameManager current && current.IsNodeReady()
+                && run.CurrentAdventure?.NodeId == nodeId && current.CurrentMission != null && current != _lastArena)
+            {
+                _lastArena = current;
+                return current;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// THE VOID's phantoms through real scene changes (ITEMS.gdd §7.2, v0.12.8): entering a
+    /// combat node draws a phantom one road nearer; a battle left with Save &amp; Quit and resumed
+    /// on Continue is the same challenge, so it does not step again; and a phantom that arrives
+    /// touches the party before the fight.
+    /// </summary>
+    private async Task WalkThePhantoms()
+    {
+        RunState run = RunState.Instance;
+        run.NewRun("WALKPHANTOMS");
+        run.AddItem(RunState.VoidItemId);
+        MapNode fight = null, haunt = null;
+        foreach (MapNode node in run.Graph.Nodes)
+        {
+            if (node.Kind != NodeKind.Combat || node.Devoured || node.WorldIndex != 0) continue;
+            foreach ((MapNode other, int roads) in ItemLedger.Distances(run.Graph, node))
+                if (roads == 2 && !other.Devoured) { haunt = other; break; }
+            if (haunt != null) { fight = node; break; }
+        }
+        Expect(fight != null, "phantoms: no home combat node with a node two roads away");
+        if (fight == null) return;
+        string where = $"phantoms: {fight.Id}";
+        int RoadsLeft() => run.Ledger.Phantoms.Count == 1
+            ? ItemLedger.Distances(run.Graph, fight).GetValueOrDefault(run.FindNode(run.Ledger.Phantoms[0]), -1) : -1;
+        ProtagonistState lead = run.FindProtagonist(run.ActiveBuild[0]);
+        run.Ledger.Phantoms.Clear();
+        run.Ledger.Phantoms.Add(haunt.Id);
+
+        GameManager arena = await Enter(where, fight);
+        if (arena == null) return;
+        Expect(RoadsLeft() == 1 && Mathf.IsEqualApprox(lead.HpRatio, 1f) && run.LastPhantomNote.Length == 0,
+            $"{where}: the challenge must draw the phantom one road nearer without touching (roads {RoadsLeft()}, HP {lead.HpRatio:0.00})");
+
+        // Save & Quit mid-battle, load, Continue: the same challenge, so no second step.
+        Expect(run.SaveAndQuit(resumeUnfinishedBattle: true), $"{where}: Save & Quit in battle failed");
+        await Ticks(5);
+        Expect(run.TryLoadRunFromSlot(run.ActiveSaveSlot, out string error), $"{where}: the battle save did not load: {error}");
+        // A load regenerates the graph: every MapNode held from before it is a stranger to the
+        // new one (its edges are keyed by node), so look the fight up again by id.
+        fight = run.FindNode(fight.Id);
+        run.ResumeLoadedRun();
+        GameManager resumed = await ArenaFor(fight.Id);
+        Expect(resumed != null, $"{where}: Continue did not reopen the saved battle");
+        lead = run.FindProtagonist(run.ActiveBuild[0]);
+        Expect(RoadsLeft() == 1 && Mathf.IsEqualApprox(lead.HpRatio, 1f),
+            $"{where}: a resumed battle must not step the phantoms again (roads {RoadsLeft()}, HP {lead.HpRatio:0.00}) — KNOWLEDGE v0.12.8");
+
+        // A phantom one road from a node you challenge reaches you: a quarter of every fighter's HP.
+        MapNode next = null;
+        MapNode at = run.FindNode(run.Ledger.Phantoms[0]);
+        foreach (MapEdge edge in run.Graph.EdgesOf(at))
+        {
+            MapNode other = edge.Other(at);
+            if (other.Kind == NodeKind.Combat && !other.Devoured && other != fight) { next = other; break; }
+        }
+        if (next == null)
+        {
+            next = fight;   // the phantom stands beside the fight it came for
+            run.CompletedNodeIds.Remove(fight.Id);
+        }
+        GameManager touched = await Enter($"phantoms: {next.Id}", next);
+        Expect(touched != null && run.Ledger.Phantoms.Count == 0 && Mathf.IsEqualApprox(lead.HpRatio, 1f - ItemLedger.PhantomTouchHpShare)
+               && run.LastPhantomNote.Length > 0,
+            $"phantoms: {next.Id}: a phantom one road away must reach you and touch the party for a quarter of its HP ({run.Ledger.Phantoms.Count} left, HP {lead.HpRatio:0.00})");
+        GD.Print($"  run      phantoms       a challenge draws THE VOID's phantom a road nearer, a resumed battle does not, and its touch costs {ItemLedger.PhantomTouchHpShare:P0} HP");
+    }
 
     private async Task WalkEveryWorld()
     {

@@ -270,6 +270,45 @@ public static class EventDefs
             Choice("Cut through to the glint", "Thorns and a long sleep, then the glint: The Forgotten Kashaya. −20% HP.",
                 EventEffect.HurtParty(0.20f), EventEffect.GrantItem("forgotten_kashaya")),
             Choice("Rest in the scent", "You doze in the roses. +20% HP.", EventEffect.HealParty(0.20f))),
+
+        // ── v0.12.8: where the rest of the wonder items come from (ITEMS.gdd §1.2) ──
+
+        One("peddler_of_wonders", "A Peddler of Small Wonders",
+            "A peddler with a tray of odd little wonders, each in its own paper box. \"Cores only, friend.\"",
+            Choice("DD (14 cores)", "Something in the box crouches and chitters. DD joins your backpack.",
+                EventEffect.SpendCores(14), EventEffect.GrantItem("dd")),
+            Choice("The Blessing of Shieldon (9 cores)", "A warm charm shaped like a little shield. The Blessing of Shieldon joins your backpack.",
+                EventEffect.SpendCores(9), EventEffect.GrantItem("blessing_of_shieldon")),
+            Choice("A Weird Mushroom (3 cores)", "It smells of rain, and of something else. A Weird Mushroom joins your backpack — eat it within two days.",
+                EventEffect.SpendCores(3), EventEffect.GrantItem("weird_mushroom")),
+            Choice("Just browse", "You look, and leave with nothing.", EventEffect.Nothing())),
+
+        One("fairy_ring", "A Ring of Mushrooms",
+            "Mushrooms grow in a perfect ring in the grass. One is brighter than the rest, and seems to be looking at you.",
+            Choice("Pick the bright one", "It comes up with a sigh. A Weird Mushroom joins your backpack — eat it within two days.",
+                EventEffect.GrantItem("weird_mushroom")),
+            Choice("Step into the ring", "You dance till dawn with the little folk, and wake light and rested. +20% HP.",
+                EventEffect.HealParty(0.20f)),
+            Choice("Walk around it", "You give the ring a wide berth.", EventEffect.Nothing())),
+
+        One("moon_pool", "A Pool Under the Moon",
+            "A still pool holds the moon, though it is day. A pale axolotl drifts in it beneath a single floating feather.",
+            Choice("Reach for the feather", "The water bites cold, but the axolotl lets you have it: Pixolotl's Feather joins your backpack. −15% HP.",
+                EventEffect.HurtParty(0.15f), EventEffect.GrantItem("pixolotls_feather")),
+            Choice("Drink from the pool", "Moonwater, sweet and cold. +15% HP.", EventEffect.HealParty(0.15f)),
+            Choice("Leave the moon where it is", "You leave the pool undisturbed.", EventEffect.Nothing())),
+
+        One("black_door", "A Black Door",
+            "A black door stands alone in a field, without a wall. Something behind it is breathing. A voice offers a gift — and a price you will never stop paying.",
+            Choice("Open it", "Darkness pours into your pack and does not leave: THE VOID is yours, forever, and its phantoms will follow you. Where the door stood lies a pile of wonder cores. +25 wonder cores.",
+                EventEffect.GrantItem("the_void"), EventEffect.GrantCores(25)),
+            Choice("Leave it shut", "You walk away. The breathing follows you for a while, then stops.", EventEffect.Nothing())),
+
+        One("claw_in_riverbed", "A Claw in the Riverbed",
+            "Something huge and golden is caught in the riverbed: a dragon's claw, still twitching.",
+            Choice("Pull it free", "It fights you all the way out. The QiongFeng Emperor's Claw joins your backpack. −15% HP.",
+                EventEffect.HurtParty(0.15f), EventEffect.GrantItem("qiongfeng_emperors_claw")),
+            Choice("Leave it to the river", "The claw sinks back into the silt.", EventEffect.Nothing())),
     };
 
     private static EventDef One(string id, string title, string text, params EventChoice[] choices) => new()

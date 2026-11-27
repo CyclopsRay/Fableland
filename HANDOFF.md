@@ -3,18 +3,19 @@
 Written 2026-11-27, at the end of a long multi-agent session (v0.11.1 → v0.11.8); updated
 the same day for **v0.12.0** (zone 6 as a stage, realm laws), **v0.12.1** (the first two
 zone-6 kits), **v0.12.2** (Māra's design; the dark leader settled), **v0.12.3** (Māra built:
-his wheel and his kit, art in placeholder) and **v0.12.4** (the audit's run-stopping bugs and
-kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:** it describes
+his wheel and his kit, art in placeholder), **v0.12.4** (the audit's run-stopping bugs and
+kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events, small rules) and
+**v0.12.8** (the wonder items). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.7**, sixteen commits on top of
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.8**, seventeen commits on top of
   v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
   owner asks for each fast-forward; until then it trails the branch.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.7, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.8, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -53,9 +54,10 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 | 0.12.4 | `2774457` | **The audit's bugs that could end or stall a run, and kits back to their GDDs** (Part 2 #11–#17): resolution invincibility held by sources (Pixolotl's Shift), the Eidolon Shelter's dead end, Yukai's Rope letting go, Cleopastar's star jump, damage credited to Pangda's blows and to thrown stars and heads, the Fire Tornado replacing Slash 1 and spinning in place, the seagull's puddle and dash; the Asura's flurry lands every arm. New **`FlowCheck`**, each fix broken once | `Docs/Research/AUDIT-v0.11.1.md` Part 2 (its status line), KNOWLEDGE v0.12.4 |
 | 0.12.5 | `a419a6a` | **The player is told what happens**: a Controls card in the pause menu and a key line under the countdown; rewards named in the toast (and the day's notes kept for the summary); wonder cores on the map; each fighter's own face in the portrait and the Switch slot, the magazine as pips; the run-over screen names the dark leader | `Docs/Research/AUDIT-v0.11.1.md` Part 2 status |
 | 0.12.6 | `b149cca` | **The shell, and the road between fights**: a real Settings screen (comfort + volumes, saved beside the slots), Quit on the title, a beat before RUN OVER, the map's mist on by default, debug tools only in a debug build; fifteen "?" events (stray storybook pages) with costs, prices — wonder cores' first use — and stats | `NODES.gdd` §6.1, `Feedback.gdd` §7 |
-| 0.12.7 | — | Collection's grace stops the ambient spawner; a benched fighter's item cools down at the bench rate | NODES §3.3, §4.1 |
+| 0.12.7 | `c2424c8` | Collection's grace stops the ambient spawner; a benched fighter's item cools down at the bench rate | NODES §3.3, §4.1 |
+| 0.12.8 | — | **The wonder items live — all fourteen, each with a source.** One `ItemLedger` (perish, enchantments, plots, VOID phantoms, mushroom days) written by `RunState.Items.cs`; DD's creature, the mushroom, the Feather's rewind button, the Claw's loot-crack-throw, Possession passives from the backpack; five new events | `ITEMS.gdd` (status block, each *Built* note, §9 v0.12.8), KNOWLEDGE v0.12.8 |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.4, all passing:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.8, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
@@ -65,8 +67,8 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 | Map content | `Scenes/MapCreation/MapContentCheck.tscn` | 1171 |
 | Boss | `Scenes/Bosses/BossFightCheck.tscn` | 192 |
 | Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
-| Run | `Scenes/Run/RunWalkCheck.tscn` | 1993 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
-| Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 37 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events |
+| Run | `Scenes/Run/RunWalkCheck.tscn` | 2002 at v0.12.8 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
+| Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 82 at v0.12.8 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives |
 
 **Look and listen without a fight:**
 - `Scenes/Dev/VfxGallery.tscn`
@@ -81,8 +83,11 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
   recruiting. Whether a run then starts with one protagonist is the owner's call.
 - **Ultimates (#5):** the ring fills and Q does nothing for all five. Every character GDD
   defers its ultimate, so write the designs first (TBD #21).
-- **Items (#19):** 8 of 14 have no behaviour. Most need systems that do not exist yet:
-  planting (TBD #5), possession enchanting, phantoms, chests, a day rewind.
+- **Items (#19): done in v0.12.8** except three pieces that wait on the two parallel sessions
+  below: the planting and enchanting *screens* (the verbs `TryPlant`/`TryHarvest`/
+  `TryEnchantPossession` exist), and THE VOID's combat skill (needs the foes' sight limit).
+  Also open: rolled 60–140 % inheritance on harvests, the mushroom's outcome (f), and the
+  phantom's BOSS fight (a −25 % HP touch stands in). `ITEMS.gdd` marks each.
 - **Zone 6:** the other eight guardians, and the Unwritten's Borrowed Shapes and Blank Page
   (item 6 below).
 - **Feedback for the four other kits** (item 1 below).
@@ -184,10 +189,16 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
   arena. Laws for the other seven realms (#62). Play both variants: the debug page (key 4 →
   Zone 6) forces a variant, stages any zone-6 boss, and sets gravity and seals.
 - **Design gaps** (audit Part 2):
-  - the ultimate does nothing for all five fighters;
-  - every realm's boss is PumpKing, and beating him recruits nobody;
-  - 8 of 14 items cannot be obtained;
-  - "?" nodes have 3 placeholder events.
+  - the ultimate does nothing for all five fighters (PumpKing's is being built — below);
+  - every realm's boss is PumpKing, and beating him recruits nobody (being built — below);
+  - ~~8 of 14 items cannot be obtained~~ (v0.12.8: every item has a source);
+  - ~~"?" nodes have 3 placeholder events~~ (20 since v0.12.8).
+- **Two parallel sessions started 2026-11-27 from v0.12.7** (each writes
+  `Docs/_handoff/<name>.md`; this branch integrates them): **`pumpking-ult`** — PumpKing's
+  ultimate, the Black Prison (branch `claude/pumpking-black-prison-f31091`); **`recruit-shelter`**
+  — the recruitment system and a walkable shelter map with today's shelter buttons folded in
+  (branch `claude/recruitment-shelter-map-4f6988`). After merging: wire the plantation and
+  enchant screens into the shelter map, and THE VOID's skill onto the ult's sight API.
 
 ## 5. How to work here (each of these cost hours)
 

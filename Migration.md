@@ -9,6 +9,42 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.8** — **The wonder items live: all fourteen, each with a source** (audit Part 2 #19;
+  the owner's "先实现道具"). Decisions the GDD left open are logged in `ITEMS.gdd` §9 (v0.12.8).
+  - **One ledger** (`Scripts/Run/ItemLedger.cs`) holds what the items do to the run: perish
+    clocks, enchantments, the hubs' plots, THE VOID's phantoms, the Weird Mushroom's days. Only
+    `RunState`'s item verbs write it (`Scripts/Run/RunState.Items.cs`). It saves as an optional
+    `RunSaveData.ItemLedger` — an older save loads an empty one, version still 4. The day end runs
+    it in `PerishStep` (`RunState.RunItemDay`).
+  - **Lifecycles:** a Weird Mushroom rots into A Rotten Mushroom after 2 day ends, held or not.
+    Hubs have 2 plots (Rotten Mushroom → 4 mushrooms in 4 days; Wish → 2 Feathers, Seed → 2
+    Bravery in 7). The Blessing of Shieldon enchants Possession onto another, non-Eternal item.
+    A Possession item's passive now works on the body in play from wherever it lies.
+  - **THE VOID:** every 4 days a phantom rises ≥3 roads away; each combat node you challenge
+    draws every phantom a road nearer; a touch costs every fighter 25 % HP (the placeholder for
+    its BOSS fight). Phantoms are drawn on the map, counted in its info line.
+  - **Pixolotl's Feather:** a map button turns the day back to this morning (place, HP,
+    stamina; not the day count, not what was won); the Feather becomes a Wish.
+  - **The QiongFeng Claw:** a realm capital's first fall, the claw held in the team, pays every
+    unconquered combat node of that realm its goal's reward, throws you to another realm's hub,
+    cracks the realm down and faints. The Palace of LOOING's capital yields one.
+  - **In combat (F):** DD crawls along the ground devouring each target once for 200, turns at
+    walls, and must be walked into before you leave or it is set free (2-day cooldown; a core
+    picked up heals 2 %). A Weird Mushroom eaten: +20 % max HP for good, and the next day one of
+    −40 % max HP, swapped left/right, ×4 speed, ×4 jump, or +20 % more. Passives: the Feather
+    and Wish ×0.8 gravity, the Blessing ×1.1 speed. Day cooldowns now gate combat skills.
+  - **Sources:** five new events — a peddler (DD, the Blessing, a mushroom), a ring of
+    mushrooms, a moon pool (the Feather), a black door (THE VOID + 25 cores), a claw in a
+    riverbed — and the Palace of LOOING's capital (the Claw).
+  - **Waiting on the parallel work:** the planting and enchanting screens (the shelter map),
+    THE VOID's combat skill (foes' sight, with the PumpKing ult). Art placeholders are drawn in
+    code and marked `TODO(art)` (DD, the phantoms).
+  - **A resumed battle is the same challenge:** Continue after a battle's Save & Quit re-enters
+    through `BeginAdventure`, which no longer steps the phantoms a second time (KNOWLEDGE v0.12.8).
+  - **Checks:** the flow check grows to 82 (the item lifecycles on real runs; DD on a real
+    stage; the passives and the mushroom's day on a real body); the run check to 2002 (a
+    phantom walk through real scene changes: a challenge, a battle Save & Quit and Continue, a
+    touch). Every new rule was broken once and caught (twelve mutants). Every suite is clean.
 - **0.12.7** — **Two small rules from the audit's notes.**
   - **Collection's grace:** the ambient spawner stops when the grace begins. Its foes die
     (NODES §4.1), and the trickle no longer refills the field during it.

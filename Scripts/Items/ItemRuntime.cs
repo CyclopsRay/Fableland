@@ -5,7 +5,8 @@ using Fableland.Run;
 
 namespace Fableland.Items;
 
-/// <summary>Combat-local interpreter for one protagonist's held item. RunState owns durable
+/// <summary>Combat-local interpreter for one protagonist's held item — or, passive only, for a
+/// <c>Possession</c> item the team owns elsewhere (ITEMS.gdd §4.4). RunState owns durable
 /// location/cooldown state; this object owns only live subscriptions and temporary modifiers and
 /// is disposed before a body switch or scene exit.</summary>
 public sealed class ItemRuntime : IDisposable
@@ -17,26 +18,57 @@ public sealed class ItemRuntime : IDisposable
         [ItemBehaviorId.ForgottenKashaya] = () => new ForgottenKashayaBehavior(),
         [ItemBehaviorId.PomesBravery] = () => new PomesBraveryBehavior(),
         [ItemBehaviorId.PomesSeed] = () => new PomesSeedBehavior(),
+        [ItemBehaviorId.Dd] = () => new DdBehavior(),
+        [ItemBehaviorId.WeirdMushroom] = () => new WeirdMushroomBehavior(),
+        [ItemBehaviorId.PixolotlsFeather] = () => new PixolotlsFeatherBehavior(),
+        [ItemBehaviorId.PixolotlsWish] = () => new PixolotlsWishBehavior(),
+        [ItemBehaviorId.Shieldon] = () => new ShieldonBehavior(),
     };
 
     public CharacterController Holder { get; }
+    /// <summary>The holder's run state; null for a passive-only (Possession) runtime.</summary>
     public ProtagonistState State { get; }
-    public ItemDef Definition { get; }
-    public string SourceKey { get; }
-    /// <summary>Set after a single-use conversion. The arena rebinds immediately so the new
-    /// item's passive is active on the same body without waiting for a scene transition.</summary>
+    public ItemDef Definition { get; private set; }
+    public string InstanceId { get; private set; } = "";
+    public string SourceKey { get; private set; }
+    /// <summary>A Possession item working from elsewhere: its passive only, never its skill.</summary>
+    public bool PassiveOnly { get; }
+    /// <summary>Set after a single-use conversion (or an item used up). The arena rebinds
+    /// immediately so the new item's passive is active on the same body without waiting for a
+    /// scene transition.</summary>
     public bool RebindRequested { get; private set; }
+    /// <summary>What the last use asks of the run (the arena carries it to RunState).</summary>
+    public ItemRunVerb PendingVerb { get; private set; }
 
-    private readonly ICombatItemBehavior _behavior;
+    private ICombatItemBehavior _behavior;
 
     public ItemRuntime(CharacterController holder, ProtagonistState state)
     {
         Holder = holder;
         State = state;
         if (holder == null || state == null || !ItemCatalog.TryGet(state.HeldItemDefId, out ItemDef definition)) return;
+        Bind(definition, state.HeldItemInstanceId);
+    }
 
+    private ItemRuntime(CharacterController holder, string defId, string instanceId)
+    {
+        Holder = holder;
+        PassiveOnly = true;
+        if (holder == null || !ItemCatalog.TryGet(defId, out ItemDef definition)) return;
+        Bind(definition, instanceId);
+    }
+
+    /// <summary>A Possession item's passive on the body in play, from wherever the item lies
+    /// (ITEMS.gdd §4.4: party-wide, applied once — never with the holder's own runtime of the
+    /// same instance).</summary>
+    public static ItemRuntime ForPossession(CharacterController holder, string defId, string instanceId) =>
+        new(holder, defId, instanceId);
+
+    private void Bind(ItemDef definition, string instanceId)
+    {
         Definition = definition;
-        string id = string.IsNullOrWhiteSpace(state.HeldItemInstanceId) ? "ephemeral" : state.HeldItemInstanceId;
+        InstanceId = instanceId ?? "";
+        string id = string.IsNullOrWhiteSpace(instanceId) ? "ephemeral" : instanceId;
         SourceKey = $"item:{definition.Id}#{id}";
         if (!string.IsNullOrEmpty(definition.CombatBehaviorId)
             && Behaviors.TryGetValue(definition.CombatBehaviorId, out Func<ICombatItemBehavior> factory))
@@ -46,23 +78,35 @@ public sealed class ItemRuntime : IDisposable
         }
     }
 
-    public bool IsUsable => Definition != null && _behavior != null;
+    public bool IsUsable => Definition != null && _behavior != null && !PassiveOnly;
 
     /// <summary>True while Yukai's Rope is pulling its holder (checks read it).</summary>
     public bool RopeDragging => _behavior is YukaisRopeBehavior { Dragging: true };
 
     public void Tick(float dt)
     {
-        if (State == null || Definition == null) return;
-        if (State.HeldItemSecondCooldownRemaining > 0f)
+        if (Definition == null) return;
+        if (State != null && State.HeldItemSecondCooldownRemaining > 0f)
             State.HeldItemSecondCooldownRemaining = Mathf.Max(0f, State.HeldItemSecondCooldownRemaining - dt);
         _behavior?.Tick(this, dt);
+    }
+
+    /// <summary>A wonder core was picked up in this fight (DD's passive heals on it).</summary>
+    public void NotifyCorePickedUp()
+    {
+        if (_behavior is ICoreListener listener) listener.OnCorePickedUp(this);
     }
 
     public bool TryUse(out string reason)
     {
         reason = null;
-        if (Definition == null || _behavior == null) { reason = "This held item has no combat skill."; return false; }
+        if (Definition == null || _behavior == null || PassiveOnly || State == null) { reason = "This held item has no combat skill."; return false; }
+        if (Definition.DayCooldownDays > 0 && State.HeldItemDayCooldownRemaining > 0)
+        {
+            int days = State.HeldItemDayCooldownRemaining;
+            reason = $"{Definition.DisplayName} is ready in {days} day{(days == 1 ? "" : "s")}.";
+            return false;
+        }
         if (State.HeldItemSecondCooldownRemaining > 0.05f)
         {
             reason = $"{Definition.DisplayName} is ready in {Mathf.CeilToInt(State.HeldItemSecondCooldownRemaining)} s.";
@@ -70,8 +114,20 @@ public sealed class ItemRuntime : IDisposable
         }
         if (!_behavior.TryUse(this, out reason)) return false;
         if (!RebindRequested)
+        {
             State.HeldItemSecondCooldownRemaining = Definition.SecondCooldownSeconds;
+            // A day-cooldown skill used in a fight (DD, THE VOID) waits out its days (ITEMS.gdd §3.1).
+            if (Definition.DayCooldownDays > 0) State.HeldItemDayCooldownRemaining = Definition.DayCooldownDays;
+        }
         return true;
+    }
+
+    /// <summary>The held item is used up by something the run must do (eaten): the arena
+    /// performs <paramref name="verb"/> on RunState, then rebinds.</summary>
+    internal void RequestRunVerb(ItemRunVerb verb)
+    {
+        PendingVerb = verb;
+        RebindRequested = true;
     }
 
     /// <summary>Replace this held instance's definition in place. Its identity stays stable,
@@ -104,6 +160,12 @@ internal interface ICombatItemBehavior
     void Tick(ItemRuntime runtime, float dt);
     bool TryUse(ItemRuntime runtime, out string reason);
     void OnUnequip(ItemRuntime runtime);
+}
+
+/// <summary>A behaviour that answers a wonder-core pickup (DD's passive).</summary>
+internal interface ICoreListener
+{
+    void OnCorePickedUp(ItemRuntime runtime);
 }
 
 internal sealed class FanChensHeartBehavior : ICombatItemBehavior
@@ -297,7 +359,108 @@ internal sealed class PomesSeedBehavior : PomesLineageBehavior
 {
     public override bool TryUse(ItemRuntime runtime, out string reason)
     {
-        reason = "Pome's Seed has no combat skill.";
+        reason = "Pome's Seed has no combat skill — plant it at a Transportation Hub.";
         return false;
     }
+}
+
+/// <summary>
+/// DD (ITEMS.gdd §7.3). Passive: a wonder core picked up heals 2 % of max HP. Skill (2-day
+/// cooldown): let DD go at the holder's feet, facing the holder's way — the creature itself
+/// (<see cref="DdCreature"/>) crawls, devours and waits to be reclaimed; the arena sets a DD
+/// still loose free when the player leaves the fight.
+/// </summary>
+internal sealed class DdBehavior : ICombatItemBehavior, ICoreListener
+{
+    public const float CoreHealShare = 0.02f;
+
+    public void OnEquip(ItemRuntime runtime) { }
+    public void Tick(ItemRuntime runtime, float dt) { }
+
+    public bool TryUse(ItemRuntime runtime, out string reason)
+    {
+        if (DdCreature.IsLoose(runtime.InstanceId))
+        {
+            reason = "DD is still out — walk into it to reclaim it.";
+            return false;
+        }
+        Node parent = runtime.Holder.GetParent();
+        if (parent == null)
+        {
+            reason = "There is nowhere to let DD go.";
+            return false;
+        }
+        float direction = runtime.Holder.FacingDirection.X < 0f ? -1f : 1f;
+        DdCreature.Release(parent, runtime.Holder.GlobalPosition, direction, runtime.Holder.Side, runtime.InstanceId);
+        reason = null;
+        return true;
+    }
+
+    public void OnCorePickedUp(ItemRuntime runtime) => runtime.Holder.Heal(runtime.Holder.MaxHP * CoreHealShare);
+
+    public void OnUnequip(ItemRuntime runtime) { }
+}
+
+/// <summary>A Weird Mushroom (ITEMS.gdd §7.13): eating it is the run's business (max HP for
+/// good, tomorrow's consequence) — the behaviour only asks the arena to carry it there.</summary>
+internal sealed class WeirdMushroomBehavior : ICombatItemBehavior
+{
+    public void OnEquip(ItemRuntime runtime) { }
+    public void Tick(ItemRuntime runtime, float dt) { }
+
+    public bool TryUse(ItemRuntime runtime, out string reason)
+    {
+        runtime.RequestRunVerb(ItemRunVerb.EatMushroom);
+        reason = null;
+        return true;
+    }
+
+    public void OnUnequip(ItemRuntime runtime) { }
+}
+
+/// <summary>Pixolotl's Feather and Wish share a passive: gravity −20 % (ITEMS.gdd §7.8–7.9).</summary>
+internal abstract class PixolotlsLineageBehavior : ICombatItemBehavior
+{
+    public const float GravityShare = 0.8f;
+
+    public void OnEquip(ItemRuntime runtime) => runtime.Holder.SetGravityScale(runtime.SourceKey, GravityShare);
+    public void Tick(ItemRuntime runtime, float dt) { }
+    public abstract bool TryUse(ItemRuntime runtime, out string reason);
+    public void OnUnequip(ItemRuntime runtime) => runtime.Holder.SetGravityScale(runtime.SourceKey, 1f);
+}
+
+internal sealed class PixolotlsFeatherBehavior : PixolotlsLineageBehavior
+{
+    public override bool TryUse(ItemRuntime runtime, out string reason)
+    {
+        reason = "Pixolotl's Feather turns back the day from the map, not in a fight.";
+        return false;
+    }
+}
+
+internal sealed class PixolotlsWishBehavior : PixolotlsLineageBehavior
+{
+    public override bool TryUse(ItemRuntime runtime, out string reason)
+    {
+        reason = "Pixolotl's Wish has no combat skill — plant it at a Transportation Hub.";
+        return false;
+    }
+}
+
+/// <summary>The Blessing of Shieldon (ITEMS.gdd §7.1): +10 % move speed; its enchant is spent
+/// at a Transportation Hub.</summary>
+internal sealed class ShieldonBehavior : ICombatItemBehavior
+{
+    public const float SpeedShare = 1.1f;
+
+    public void OnEquip(ItemRuntime runtime) => runtime.Holder.SetMoveSpeedScale(runtime.SourceKey, SpeedShare);
+    public void Tick(ItemRuntime runtime, float dt) { }
+
+    public bool TryUse(ItemRuntime runtime, out string reason)
+    {
+        reason = "The Blessing of Shieldon is spent at a Transportation Hub, not in a fight.";
+        return false;
+    }
+
+    public void OnUnequip(ItemRuntime runtime) => runtime.Holder.SetMoveSpeedScale(runtime.SourceKey, 1f);
 }

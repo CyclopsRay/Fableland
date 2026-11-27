@@ -7,12 +7,22 @@ Implementation target: `Scripts/Items/`. The next runtime landing is the **v0.10
 combat-item prototype**; the earlier v0.6.0 landing supplied only catalog display data,
 one held slot, and Transportation-Hub equipment management.
 
-> **Status (v0.10.0):** every held item is now an instance with persistent day/second cooldowns.
-> FanChen's Heart, Yukai's Rope, The Forgotten Kashaya, Pome's Bravery, and Pome's Seed are live
-> combat prototypes; their mission/event rewards can be equipped at a Transportation Hub and
-> activated with **F** in the arena where applicable.
-> TwistedReality is live as a possession rewind and Eidolon-bridge map skill. Planting,
-> conversion, perish, rolled stats, and the remaining catalog entries are still design-only.
+> **Status (v0.12.8):** all fourteen catalog items are live, with a source each (§1.2). The
+> item layer's run state is one ledger (`Scripts/Run/ItemLedger.cs`, saved as the optional
+> `RunSaveData.ItemLedger`) written only by `RunState`'s item verbs (`Scripts/Run/RunState.Items.cs`):
+> perishing (§4.1), Possession and its enchant (§4.4), the plantation (§4.3), THE VOID's phantoms,
+> the Weird Mushroom's morning after, Pixolotl's Feather's rewind and the QiongFeng Claw. The day
+> end runs them in `PerishStep` (`RunState.RunItemDay`). Combat halves are `ItemRuntime`
+> behaviours: DD (a creature, `Scripts/Items/DdCreature.cs`), the mushroom, the Feather/Wish
+> and Blessing passives; a Possession item's passive is put on the body in play from wherever
+> it lies (passive-only runtimes). **Still open:** THE VOID's combat skill (foes' sight — lands
+> with the PumpKing ult's sight API), the planting and enchant *screens* (land with the shelter
+> map; the verbs exist), the phantom's BOSS fight (a −25 % HP touch stands in), rolled
+> inheritance (60–140 %) on harvests, and the mushroom's outcome (f). Each is marked below.
+>
+> *(v0.10.0: every held item is an instance with persistent day/second cooldowns; FanChen's
+> Heart, Yukai's Rope, The Forgotten Kashaya, Pome's Bravery and Pome's Seed live; TwistedReality
+> live as a possession rewind and Eidolon-bridge map skill.)*
 
 ---
 
@@ -64,6 +74,20 @@ so the player cannot bench a protagonist mid-combat or mid-exploration to shuffl
 **Current prototype rewards:** Protect grants FanChen's Heart, Destroy grants The Forgotten
 Kashaya, an outer BOSS grants Yukai's Rope, and the Abandoned Cart event grants Pome's Bravery.
 The first starting-realm LV4 victory additionally grants TwistedReality.
+
+**v0.12.8 sources** (every item now has one; events are append-only in `EventDefs`):
+
+| Item | Source |
+|------|--------|
+| DD | "A Peddler of Small Wonders" — 14 wonder cores |
+| The Blessing of Shieldon | the Peddler — 9 cores |
+| A Weird Mushroom | the Peddler — 3 cores; "A Ring of Mushrooms" — free; a Rotten Mushroom's harvest (4) |
+| A Rotten Mushroom | a Weird Mushroom left uneaten for 2 days |
+| Pixolotl's Feather | "A Pool Under the Moon" — −15 % HP; Pixolotl's Wish's harvest (2) |
+| Pixolotl's Wish | a Feather's rewind |
+| THE VOID | "A Black Door" — opened, with 25 cores (the only event whose gift is a curse) |
+| QiongFeng Emperor's Claw | "A Claw in the Riverbed" — −15 % HP; the **Palace of LOOING**'s capital, on its first fall (it is the claw's own realm) |
+| Pome's Bravery | the Abandoned Cart event; Pome's Seed's harvest (2) |
 
 ---
 
@@ -285,6 +309,13 @@ each status application received by the holder, not once to the aggregate stack.
 | CD | — (single use) |
 | Tags | — |
 
+> **Built (v0.12.8):** the passive is ×1.1 move speed on the holder (`ShieldonBehavior`). The
+> enchant is `RunState.TryEnchantPossession(target)`: the Blessing must be held by a team
+> member; the target may be any other item that is not `Eternal` and not already Possession
+> (so not TwistedReality or THE VOID); the enchantment belongs to the item *instance*
+> (`ItemLedger.EnchantedPossession`) and survives its conversions. **TODO(UI):** the enchant
+> screen lands with the shelter map (the verb is ready); in a fight **F** only says so.
+
 ### 7.2 THE VOID
 
 | Field | Value |
@@ -302,6 +333,18 @@ each status application received by the holder, not once to the aggregate stack.
 > (Phantom contact mechanics are deferred to a future content pass — the spawning and
 > movement rules are kept as placeholders.)
 
+> **Built (v0.12.8):** while THE VOID is owned anywhere (Possession), a clock counts day ends;
+> every **4** a phantom rises on a node chosen from the run's own stream among nodes the VOID
+> has not eaten at least **3 roads** from you. **Challenging** a combat node you have not
+> conquered (a retry counts) moves every phantom one road along a shortest path toward it, at
+> node entry — before the battle team's HP is taken — so a touch is felt in that fight.
+> Devoured ground still carries a phantom (it is the VOID's own). **Placeholder for the BOSS
+> fight:** a phantom that reaches you touches the party for **25 % of every fighter's HP**
+> (`HurtParty`, never below 5 %) and is gone; the arena says so as it opens. Phantoms are drawn
+> on the map (a hooded shape with pale eyes — **TODO(art)**), and the map's info line counts
+> them and the days to the next. **Still open:** the combat skill — every foe loses its sight
+> for 10 s — waits for the foes' sight limit the PumpKing ult (Black Prison) brings.
+
 ### 7.3 DD
 
 | Field | Value |
@@ -317,6 +360,17 @@ each status application received by the holder, not once to the aggregate stack.
 > the timer expires — DD can still be reclaimed during the post-combat window. If the
 > player leaves the node without reclaiming DD, it is **set free** (lost permanently).
 > The item is removed from inventory. Don't forget to claim it back.
+
+> **Built (v0.12.8):** **F** lets DD go at the holder's feet, facing the holder's way, and
+> starts its 2 days. DD (`DdCreature`, built in code) crawls along Ground and Platforms at
+> **4 m/s**, devours every hostile target it touches for **200** — **each once per release**
+> (an invincible one is skipped and can still be devoured later) — and turns at walls. It
+> collides with nothing but terrain; if it falls for 3 s (off the map's edge) it is put back
+> where it was let go. The body the player wears reclaims it by walking into it (within 1 m),
+> not before 0.6 s have passed; any party member's body can. **Finish the Day**, or quitting
+> after the goal resolved, with DD still loose sets it free (`RunState.SetItemFree`; the day
+> summary says so). The passive heals 2 % max HP per wonder core picked up in a fight.
+> **TODO(art):** DD's sprite and crawl/devour animations (a drawn shell stands in).
 
 ### 7.4 Pome's Bravery
 
@@ -346,6 +400,11 @@ each status application received by the holder, not once to the aggregate stack.
 > 5%-damage-heal passive in combat. Bravery's **F** skill grants 60 OnFire stacks and converts
 > the held instance into Seed immediately. The plantation system does not yet exist, so Seed's
 > planting/7-day harvest remains unavailable rather than being simulated through the backpack.
+>
+> **Decision (v0.12.8):** the fruit the GDD left TBD is **2× Pome's Bravery** — its parent,
+> twice, like the Wish's two Feathers. The plantation is live (§4.3 note); rolled inheritance
+> (60–140 % of the father's stats) waits for per-instance rolled stats, so a fruit today is a
+> plain Bravery.
 
 ### 7.6 FanChen's Heart
 
@@ -385,6 +444,13 @@ each status application received by the holder, not once to the aggregate stack.
 > precise specification before implementation. The safest interpretation: the day
 > counter does **not** rewind (time only flows forward for the VOID), but the player's
 > position, HP, and stamina revert to their start-of-day state.
+
+> **Built (v0.12.8), the safest interpretation:** a map button (shown while a team member
+> holds the Feather) asks once, then returns you to **this morning** — the start-of-day
+> snapshot TwistedReality also uses: where you stood (unless the VOID has eaten it since),
+> every fighter's HP and the stamina. The day count, the VOID, conquests, rewards, items and
+> cooldowns stay as they are. The Feather becomes Pixolotl's Wish in its slot. In a fight
+> **F** says it is used on the map. The passive is gravity ×0.8 (Feather and Wish).
 
 ### 7.9 Pixolotl's Wish
 
@@ -427,6 +493,18 @@ each status application received by the holder, not once to the aggregate stack.
 > location" must be selected deterministically from an explicitly-defined eligible-node set
 > before implementation.
 
+> **Built (v0.12.8):** it fires on a realm capital's (LV4 BOSS) **first** fall while a team
+> member holds it, or from anywhere once enchanted with Possession. **Unopened chests** are the
+> realm's combat nodes you never conquered: each pays its goal's reward now and counts as
+> conquered (Collection its cores by level, Protect 10 cores + FanChen's Heart, Destroy The
+> Forgotten Kashaya, Slaughter +10 ATK); function nodes pay nothing (an event's outcome is a
+> choice, a shelter's Blessing a rest). **The eligible set** for the throw: Transportation Hubs
+> of the *other* outer realms the VOID has not eaten — those you have visited if any —
+> sorted by id and picked from the run's own stream (`claw:<capital>`). Then every node of the
+> realm is devoured (bridges to it collapse) and the claw faints. With nowhere to throw you, the
+> realm holds — cracking it would end the run under your feet — but the chests still pay and
+> the claw still faints. The **Palace of LOOING**'s capital yields a claw on its first fall.
+
 ### 7.12 TwistedReality
 
 | Field | Value |
@@ -468,6 +546,17 @@ each status application received by the holder, not once to the aggregate stack.
 > only**. Outcomes (b)/(c)/(d) last the entire next day and are intended at full
 > strength: **+300% really means ×4** — this is a maniac item by design.
 
+> **Built (v0.12.8):** **F** in a fight eats it: +20 max-HP points for good, and the live body
+> grows with them at once (max and current HP together). The eater's outcome rolls at that
+> day's end from the run's stream (`mushroom:<day>:<id>`) and is said in the day summary; it
+> lasts the next day and is undone at the following day end. (a) hydrates the body with 40
+> points fewer; (b) installs `MirroredControls` (left/right swapped, aim untouched); (c) move
+> speed ×4 and (d) jump height ×4 as source-keyed scales; (e) adds 20 points for good at once.
+> **Decision:** (f), a second held slot, needs a slot that does not exist yet — until it does,
+> its 10 % rolls as (e), which is therefore 28 %. Perishing: 2 day ends, held or bagged, turn it
+> into A Rotten Mushroom in its slot. Harvested mushrooms are plain ones for now — the labelled
+> consequence and the 60–140 % inherited HP wait for per-instance rolled stats.
+
 | CD | — (single use) |
 | Tags | `Perishable`, `Convertible` |
 
@@ -483,6 +572,14 @@ each status application received by the holder, not once to the aggregate stack.
 | Tags | `Plantable` |
 | Harvest time | 4 days |
 | Fruit | 4× **A Weird Mushroom**. Each fruit inherits the father's max-HP modifier in the range **60%–140%**. Unlike the wild mushroom, each fruit has a **clearly labeled consequence** (a–f) visible before eating — the consequence is an **inheritable trait** determined at harvest time, rolled independently per fruit. |
+
+> **Built (v0.12.8) — the plantation:** a Transportation Hub has **2 plots**
+> (`ItemLedger.PlotsPerHub`). `RunState.TryPlant(plot, instance)` takes a plantable item from
+> the backpack while you stand on the hub; each day end grows every plot a day; a ripe plot is
+> harvested with `TryHarvest` into the backpack. A hub the VOID eats loses its plots (the day
+> summary says what was lost). Harvests: Rotten Mushroom 4 days → 4 Weird Mushrooms; Pixolotl's
+> Wish 7 → 2 Feathers; Pome's Seed 7 → 2 Bravery. **TODO(UI):** the plot screen lands with the
+> shelter map (the verbs are ready). Rolled inheritance waits for per-instance rolled stats.
 
 ---
 
@@ -570,3 +667,26 @@ each status application received by the holder, not once to the aggregate stack.
   specific fruit type and quantity must be set before plantation work begins.
 - **(v0.10.0 design sync) `Pixolotl` is the canonical spelling.** The catalog id and successor
   remain `pixolotls_wish`; the "Poxilotl" spelling in an early item list is treated as a typo.
+- **(v0.12.8) The item layer lands; what the GDD left open was decided as follows** (see each
+  item's *Built* note):
+  - **One ledger, one writer.** Perish clocks, enchantments, plots, phantoms and mushroom days
+    live in `ItemLedger`, saved as an optional section — a save from before v0.12.8 loads an
+    empty one, so the save version stays 4. Only `RunState`'s item verbs write it; the arena
+    asks RunState for anything that is the run's (eating a mushroom, setting DD free).
+  - **Pome's Seed's fruit is 2× Pome's Bravery.** Rolled 60–140 % inheritance (Seed and the
+    Rotten Mushroom's labelled fruit) waits for per-instance rolled stats.
+  - **The mushroom's (f) rolls as (e)** until a second held slot exists.
+  - **A phantom's touch is −25 % HP to every fighter** until its BOSS fight is designed.
+    Phantoms rise every 4 days ≥3 roads away and step on every challenge of an unconquered
+    combat node (retries count).
+  - **The Feather's undo scope** is the GDD's safest reading: place, HP and stamina return to
+    this morning's; the day count and everything won stay.
+  - **The Claw's chests** are the realm's unconquered combat nodes, paid their goals' rewards;
+    **its eligible landings** are other realms' uneaten Transportation Hubs, visited ones first,
+    picked from the run's stream; no landing → the realm holds. The Palace of LOOING's first
+    capital fall yields one.
+  - **Enchantment belongs to the instance** and survives its conversions; the Blessing must be
+    held in the team to be spent.
+  - **DD devours each target once per release**, and only the body the player wears reclaims it.
+  - **Planting and enchanting screens** wait for the shelter map; THE VOID's combat skill waits
+    for the foes' sight limit (the PumpKing ult). Both verbs/hooks are ready.

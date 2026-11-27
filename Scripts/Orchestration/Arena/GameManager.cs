@@ -129,6 +129,15 @@ public partial class GameManager : Node2D
     private Hud _hud;
     private CharacterController _player;
     private ItemRuntime _itemRuntime;
+    // Possession passives of items the team owns elsewhere, on the body in play (ITEMS.gdd §4.4).
+    private readonly System.Collections.Generic.List<ItemRuntime> _possessionRuntimes = new();
+    // The body's authored max HP, before the run's points (a mushroom eaten mid-fight regrows from it).
+    private float _baseMaxHp;
+    // What the player should hear as the fight opens (a phantom's touch, today's mushroom), said
+    // with the place's first rule line; after the HUD is up a switch-in says its own at once.
+    private readonly System.Collections.Generic.List<string> _arrivalNotes = new();
+    private bool _hudReady;
+    private const string MushroomDaySource = "item:weird_mushroom:day";
     private Godot.Collections.Array<Node> _foeSpawnMarkers;
     private System.Collections.Generic.List<Vector2> _surfacePoints = new();
     private readonly System.Collections.Generic.List<CombatMapSpawnPoint> _authoredEnemySpawns = new();
@@ -283,6 +292,14 @@ public partial class GameManager : Node2D
         _mission = CreateMission(_missionType);
         _mission.Setup(this, _nodeLevel, _rng.Sub("mission"));
         DebugManager.Instance?.LogMission($"Mission start: {MissionName(_missionType)} LV{_nodeLevel} foeLV{FoeLevel} day{day} node{nodeId}");
+        // The wonder items' hooks into this fight (ITEMS.gdd §7): a core picked up, DD reclaimed,
+        // and what THE VOID's phantoms did on the way in.
+        if (_hasRun)
+        {
+            rs.CorePickedUp += OnCorePickedUp;
+            if (!string.IsNullOrEmpty(rs.LastPhantomNote)) _arrivalNotes.Add(rs.LastPhantomNote);
+        }
+        DdCreature.Reclaimed += OnDdReclaimed;
         SetupPlayer(rs);
         SetupHud();
         ApplyRulesToArena();
@@ -390,8 +407,11 @@ public partial class GameManager : Node2D
         // and a later SKIP press (from a different arena visit) would invoke it.
         if (DebugManager.Instance != null)
             DebugManager.Instance.SkipRequested -= OnSkipRequested;
+        if (RunState.Instance != null) RunState.Instance.CorePickedUp -= OnCorePickedUp;
+        DdCreature.Reclaimed -= OnDdReclaimed;
         _itemRuntime?.Dispose();
         _itemRuntime = null;
+        DisposePossessions();
     }
 
     private static Mission CreateMission(MissionType type) => type switch
@@ -558,6 +578,7 @@ public partial class GameManager : Node2D
     {
         _itemRuntime?.Dispose();
         _itemRuntime = null;
+        DisposePossessions();
         if (_player == null) return;
 
         _player.HpChanged += OnPlayerHpChanged;
@@ -575,13 +596,16 @@ public partial class GameManager : Node2D
                 GD.PushError($"GameManager: captured battle member '{_battlePartyIds[_battlePartyIndex]}' is no longer owned.");
                 return;
             }
-            float baseMaxHp = _player.MaxHP;   // authored default, captured before hydrating
-            _player.HydrateRun(baseMaxHp, _protagonist.MaxHpPercentPoints, _protagonist.HpRatio,
+            _baseMaxHp = _player.MaxHP;   // authored default, captured before hydrating
+            // Today's points: a Weird Mushroom's (a) takes 40 of them for the day (ITEMS.gdd §7.13).
+            _player.HydrateRun(_baseMaxHp, rs.EffectiveMaxHpPoints(_protagonist), _protagonist.HpRatio,
                                 _protagonist.BonusAtk, _protagonist.BonusDef);
             // Restore saved cooldown remaining from the protagonist's run state (background-CD, NODES §3.3)
             _player.LoadCooldownsFromState(_protagonist);
             _player.LoadAmmoFromState(_protagonist);
             _itemRuntime = new ItemRuntime(_player, _protagonist);
+            BindPossessions(rs);
+            ApplyMushroomDay(rs);
             _hud.SetLivesVisible(false);       // permadeath in a run — lives don't apply (NODES §2.2)
             UpdateNextMugshot();
         }
@@ -591,6 +615,76 @@ public partial class GameManager : Node2D
             _hud.SetLives(_player.LivesRemaining);
         }
         PushItemHud();
+    }
+
+    // ── Wonder items beyond the held one (ITEMS.gdd §4.4, §7) ────────────────────────────────
+
+    /// <summary>Every Possession passive the team owns elsewhere goes on the body in play.</summary>
+    private void BindPossessions(RunState rs)
+    {
+        DisposePossessions();
+        if (rs == null || _player == null || _protagonist == null) return;
+        foreach ((string defId, string instanceId) in rs.PossessionItems(_protagonist.HeldItemInstanceId))
+            _possessionRuntimes.Add(ItemRuntime.ForPossession(_player, defId, instanceId));
+    }
+
+    private void DisposePossessions()
+    {
+        foreach (ItemRuntime runtime in _possessionRuntimes) runtime.Dispose();
+        _possessionRuntimes.Clear();
+    }
+
+    /// <summary>The Weird Mushroom's morning after, on its eater's body (ITEMS.gdd §7.13): (a) is
+    /// already in the hydrated max HP; (b) swaps left and right; (c)/(d) make it ×4. A new body
+    /// starts clean, so nothing here needs undoing.</summary>
+    private void ApplyMushroomDay(RunState rs)
+    {
+        MushroomOutcome today = rs?.MushroomToday(_protagonist?.Id) ?? MushroomOutcome.None;
+        switch (today)
+        {
+            case MushroomOutcome.Swapped: _player.UseControls(new MirroredControls(PlayerControls.Instance)); break;
+            case MushroomOutcome.Fleet: _player.SetMoveSpeedScale(MushroomDaySource, ItemLedger.MushroomBoost); break;
+            case MushroomOutcome.Springy: _player.SetJumpHeightScale(MushroomDaySource, ItemLedger.MushroomBoost); break;
+        }
+        if (today == MushroomOutcome.None || today == MushroomOutcome.Hearty) return;
+        string note = $"{_protagonist.Id} {ItemLedger.Describe(today)}.";
+        if (_hudReady) _hud.ShowToast(note, 4f);
+        else _arrivalNotes.Add(note);
+    }
+
+    private void OnCorePickedUp()
+    {
+        _itemRuntime?.NotifyCorePickedUp();
+        foreach (ItemRuntime runtime in _possessionRuntimes) runtime.NotifyCorePickedUp();
+    }
+
+    private void OnDdReclaimed(DdCreature dd)
+    {
+        if (_hudReady) _hud.ShowToast("DD is back in its pocket.");
+    }
+
+    /// <summary>Leaving the fight: a DD still loose is set free (ITEMS.gdd §7.3).</summary>
+    private void SetLooseDdFree()
+    {
+        if (!_hasRun || RunState.Instance == null) return;
+        foreach (DdCreature dd in DdCreature.Loose.ToArray())
+        {
+            if (!IsInstanceValid(dd)) continue;
+            RunState.Instance.SetItemFree(dd.InstanceId);
+            dd.QueueFree();
+        }
+    }
+
+    /// <summary>Eat the held Weird Mushroom: the run takes it (max HP for good, tomorrow's roll)
+    /// and the live body grows with it at once.</summary>
+    private string EatHeldMushroom()
+    {
+        var rs = RunState.Instance;
+        string reason = null;
+        if (rs == null || _protagonist == null || !rs.TryEatMushroom(_protagonist, out reason))
+            return reason ?? "The mushroom will not go down.";
+        _player?.RescaleMaxHp(_baseMaxHp * (1f + rs.EffectiveMaxHpPoints(_protagonist) / 100f));
+        return $"You ate the Weird Mushroom: +{ItemLedger.MushroomMaxHpPoints}% max HP. Something will happen tomorrow…";
     }
 
     /// <summary>Push the next protagonist's mugshot to the HUD (NODES §3.3).
@@ -825,7 +919,13 @@ public partial class GameManager : Node2D
         // fight opens (the law of a realm, or which zone 6 this is).
         var ruleLines = _rules.HudLines();
         _hud.SetRulesLines(ruleLines);
-        if (ruleLines.Count > 0) _hud.ShowToast(ruleLines[0], 4f);
+        // The opening word: the place's first rule, then what happened on the way in.
+        var opening = new System.Collections.Generic.List<string>();
+        if (ruleLines.Count > 0) opening.Add(ruleLines[0]);
+        opening.AddRange(_arrivalNotes);
+        _arrivalNotes.Clear();
+        if (opening.Count > 0) _hud.ShowToast(string.Join("\n", opening), 4f + 1.5f * (opening.Count - 1));
+        _hudReady = true;
         _hud.ConfigureFinishDay(_hasRun);
         _hud.SetFinishDayEnabled(false);
         _hud.FinishDayPressed += OnFinishDayPressed;
@@ -899,7 +999,9 @@ public partial class GameManager : Node2D
 
         // Held-item second cooldowns and active effects belong to the active body,
         // so Pixolotl's local-time boost advances them with her other timers.
-        _itemRuntime?.Tick(_player != null ? _player.GetActDelta(dt) : dt);
+        float actDt = _player != null ? _player.GetActDelta(dt) : dt;
+        _itemRuntime?.Tick(actDt);
+        foreach (ItemRuntime possession in _possessionRuntimes) possession.Tick(actDt);
         if (Input.IsActionJustPressed("use_item"))
         {
             string reason = null;
@@ -910,15 +1012,20 @@ public partial class GameManager : Node2D
                 _hud.ShowToast(reason ?? "That action is unavailable right now.");
             else
             {
-                bool converted = _itemRuntime.RebindRequested;
-                string newName = _protagonist?.HeldItemDefId != null
-                    ? ItemCatalog.DisplayName(_protagonist.HeldItemDefId) : null;
-                if (converted)
+                string said = $"{activatedName} activated.";
+                if (_itemRuntime.PendingVerb == ItemRunVerb.EatMushroom) said = EatHeldMushroom();
+                else if (_itemRuntime.RebindRequested)
+                {
+                    string newName = _protagonist?.HeldItemDefId != null
+                        ? ItemCatalog.DisplayName(_protagonist.HeldItemDefId) : null;
+                    said = $"{activatedName} became {newName}.";
+                }
+                if (_itemRuntime.RebindRequested)
                 {
                     _itemRuntime.Dispose();
                     _itemRuntime = new ItemRuntime(_player, _protagonist);
                 }
-                _hud.ShowToast(converted ? $"{activatedName} became {newName}." : $"{activatedName} activated.");
+                _hud.ShowToast(said, 3f);
             }
         }
 
@@ -1080,6 +1187,7 @@ public partial class GameManager : Node2D
         {
             dlg.QueueFree();
             WriteBackHp();
+            SetLooseDdFree();   // leaving the node: a DD not reclaimed is set free
             RunState.Instance.EndDay();
         };
         dlg.Canceled += dlg.QueueFree;
@@ -1142,6 +1250,9 @@ public partial class GameManager : Node2D
         WriteBackHp();
         if (_player != null && _protagonist != null)
             _player.SaveCooldownsToState(_protagonist);
+        // Quitting after the goal resolved leaves the node for good (no battle to resume):
+        // a DD still loose is set free, as Finish the Day would.
+        if (_goalResolved) SetLooseDdFree();
         return RunState.Instance.SaveAndQuit(resumeUnfinishedBattle: !_goalResolved);
     }
 

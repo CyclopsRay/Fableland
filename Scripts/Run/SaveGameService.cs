@@ -317,6 +317,9 @@ public sealed class RunSaveData
     /// <summary>The run's zone 6 (Docs/Zone6.gdd §7). Optional: null in a save written before
     /// v0.12.0, which loads as an empty zone 6 — so the save version stays 4.</summary>
     public Zone6SaveData Zone6 { get; set; }
+    /// <summary>The wonder items' ledger — perish clocks, enchantments, plots, VOID phantoms,
+    /// mushrooms (ITEMS.gdd §4, §7). Optional: null before v0.12.8, which loads an empty ledger.</summary>
+    public ItemLedgerSaveData ItemLedger { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement> ExtensionData { get; set; }

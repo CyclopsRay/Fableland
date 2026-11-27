@@ -190,6 +190,59 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A resumed battle re-enters through `BeginAdventure` — a once-per-challenge effect must not run again (v0.12.8, THE VOID; caught before it landed)
+- **Symptom (in review):** THE VOID's phantoms step toward a combat node when you challenge it,
+  in `BeginAdventure`. A battle left with Save & Quit restarts through `ResumeLoadedRun` →
+  `BeginAdventure` on Continue, so the same challenge would have stepped every phantom a second
+  time — and a phantom one road away would have touched the party twice for one fight.
+- **Rule:** anything `BeginAdventure` does *once per challenge* (as opposed to setting up the
+  scene) is skipped on a resume: `RunState` raises `_resumingBattle` around that call. The
+  stamina drain is harmless to repeat (it is already 0); a phantom step, a touch, a toll or a
+  count is not.
+
+### A `MapNode` held across a load is a stranger to the new graph (v0.12.8, the run check's phantom walk)
+- **Symptom:** the run check kept the `MapNode` it fought on, saved and loaded the run, then
+  measured roads from that node: −1 — "unreachable". A load regenerates the map from the seed
+  into new objects, and `MapGraph`'s adjacency is keyed by node object, so the old node has no
+  edges in the new graph.
+- **Rule:** across a load (`TryLoadRunFromSlot`, TwistedReality's rewind, anything that runs
+  `HydrateSave`) hold node **ids**, and look nodes up again with `RunState.FindNode`. The ledger,
+  the save and the adventure handshake already store ids only.
+
+### Taking nodes out of the graph leaves `FindNode`'s index stale (v0.12.8, the QiongFeng Claw; caught before it landed)
+- **Symptom (in review):** the Claw cracks a realm down, and `Graph.BreakRealityBridgesAtDevouredEndpoints()`
+  then *removes* each Eidolon Shelter whose bridge touched it. `RunState.FindNode` reads a
+  dictionary built from the graph, so it would still have returned the removed shelters — a
+  phantom or a saved position could have pointed at a node no longer on the map.
+- **Rule:** after anything that adds or removes graph nodes, call `RunState.RebuildNodeIndex()`
+  (`EnterVoid`, the bridge verbs and the Claw do). Devouring a node does not remove it; only a
+  collapsing bridge shelter does.
+
+### A Possession runtime for the item the body already holds would double its passive (v0.12.8; caught before it landed)
+- **Symptom (in review):** the arena puts every Possession item's passive on the body in play
+  (ITEMS §4.4). Built naively, the held item — if it is Possession or enchanted — got both its
+  held runtime and a passive-only one. Scales are keyed by source and would have deduplicated,
+  but event-subscribed passives (FanChen's heal, the Kashaya's reflect, DD's core heal) fire
+  once per subscription: twice.
+- **Rule:** `RunState.PossessionItems(exceptInstanceId)` leaves out the instance the active
+  body holds; the arena passes it (`GameManager.BindPossessions`). "Applied once party-wide,
+  never twice to the holder" is the GDD's own line.
+
+### `HoldItem` takes the first backpack instance of that kind, not the one you just added (v0.12.8, the item check)
+- **Symptom:** the item check added two Weird Mushrooms, held "one", and assumed the held one
+  was the second. `RunState.HoldItem(p, defId, …)` takes the **first** backpack instance with
+  that definition id, so its perish clock and identity were the other one's.
+- **Rule:** after `HoldItem`, read the held instance from `p.HeldItemInstanceId`; never infer
+  it from the order things were added. (Instances of one kind are interchangeable to the UI
+  today; a per-instance verb — plant, enchant, set free — takes an instance id.)
+
+### A thing that hits on touch every tick must remember whom it hit (v0.12.8, DD; designed in)
+- **Rule:** DD tests every hostile target each physics tick. It records each one it devours
+  (`TargetId`) and never hits it again in that release; an invincible target is skipped, not
+  recorded, so it can still be devoured once its shield drops. Re-hitting every tick a target
+  stays in reach would stun-lock it (each `TakeHit` re-applies knockback and hitstun) even
+  where the damage is mitigated to nothing.
+
 ### Clamping to a floor with Max lifts a value already under it (v0.12.6, the events' HurtParty; caught before it landed)
 - **Symptom (in review):** `HpRatio = Max(0.05, HpRatio − cost)` "never below 5 %" would
   have raised a fighter at 2 % to 5 %. An event that costs HP would have healed.

@@ -150,7 +150,9 @@ public sealed class ItemCdsStep : IDayStep
 public sealed class PerishStep : IDayStep
 {
     public string Name => "Perish";
-    public void Run(RunState rs) { /* TODO(v0.6.0): tick PerishRemaining, expire/convert at 0. */ }
+    // v0.12.8: the item layer's day — perishing, the plantation, the Weird Mushroom's morning
+    // after and THE VOID's phantom clock (RunState.RunItemDay; ITEMS.gdd §4, §7).
+    public void Run(RunState rs) => rs.RunItemDay();
 }
 
 /// <summary>Traders/wanderers whose 5-day window elapsed leave. Stub — NPCs land in a later phase.</summary>

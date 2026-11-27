@@ -7,6 +7,7 @@ using Godot;
 using Fableland.Bosses;
 using Fableland.Data;
 using Fableland.Items;
+using Fableland.Map;
 
 /// <summary>
 /// Headless check for the gaps a player would hit (Docs/Research/AUDIT-v0.11.1.md Part 2) —
@@ -22,6 +23,9 @@ using Fableland.Items;
 ///   head credit their thrower with what they deal.
 /// • #15 — the Fire Tornado replaces Slash 1, spins in place, burns nothing.
 /// • #11 — a seagull's puddle hits each body once.
+/// • #19 — the wonder items live: perishing, the plantation, the Blessing's enchant, THE VOID's
+///   phantoms, the Feather's rewind, the mushroom, the Claw, the ledger's save; DD on a real
+///   stage; the passives and the mushroom's day on a real body.
 ///
 /// Each failure prints on its own `FAIL` line.
 /// </summary>
@@ -55,6 +59,7 @@ public partial class FlowCheck : Node
             CheckShelterExits();
             CheckRewardsNamed();
             CheckEvents();
+            CheckItemLedger();
             await CheckHudFaces();
             await CheckSettings();
             Engine.PhysicsTicksPerSecond = ticksPerSecond * SpeedUp;
@@ -67,6 +72,8 @@ public partial class FlowCheck : Node
             await ProbeDamageCredit();
             await ProbeFireTornado();
             await ProbePoopPuddle();
+            await ProbeDd();
+            await ProbeItemBodies();
         }
         catch (Exception e)
         {
@@ -517,6 +524,282 @@ public partial class FlowCheck : Node
         float lost = hp - pome.CurrentHP;
         Expect(Mathf.IsEqualApprox(lost, 30f, 0.5f), $"puddle: standing in a seagull's puddle for its 3 s cost {lost:0} HP; FOES §4 says 30 on contact (#11)");
         GD.Print($"  flow     puddle         standing in a puddle for its 3 s costs {lost:0} HP (it hit four times a second before)");
+        await Strike(stage);
+    }
+
+    // ---------------------------------------------------------------- #19 the wonder items
+
+    private static List<string> InstancesOf(RunState run, string defId) =>
+        run.Items.FindAll(item => item.DefId == defId).ConvertAll(item => item.InstanceId);
+
+    /// <summary>
+    /// The item layer's run verbs on real runs (ITEMS.gdd §4, §7): a Weird Mushroom rots in two
+    /// days wherever it lies; a Rotten Mushroom planted at a hub gives four after four; the
+    /// Blessing of Shieldon enchants Possession (not on an Eternal item) and is spent; THE VOID
+    /// raises a phantom every four days that a challenge draws nearer and whose touch costs a
+    /// quarter of HP; Pixolotl's Feather turns the day back and becomes a Wish; a mushroom eaten
+    /// grows max HP and rolls the morning after; the QiongFeng Claw loots a fallen realm, cracks
+    /// it and throws you clear; and the ledger survives a save. Never touches <c>user://</c>.
+    /// </summary>
+    private void CheckItemLedger()
+    {
+        RunState run = RunState.Instance;
+        string savesBefore = SaveGameService.DirectoryOverride;
+        string scratch = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fableland-items-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(scratch);
+        SaveGameService.DirectoryOverride = scratch;
+        try
+        {
+            run.NewRun("ITEMLEDGER");
+            ProtagonistState lead = run.FindProtagonist(run.ActiveBuild[0]);
+
+            // ── perishing: held or in the backpack, two day ends rot a mushroom ──
+            run.AddItem("weird_mushroom");
+            run.AddItem("weird_mushroom");
+            run.HoldItem(lead, "weird_mushroom", fromBackpack: true);
+            string held = lead.HeldItemInstanceId;
+            string bagged = InstancesOf(run, "weird_mushroom")[0];
+            Expect(run.Ledger.PerishDaysLeft.TryGetValue(bagged, out int clock) && clock == ItemLedger.WeirdMushroomPerishDays,
+                $"items: a new Weird Mushroom must start a {ItemLedger.WeirdMushroomPerishDays}-day clock ({clock})");
+            run.DayEndNotes.Clear();
+            run.RunItemDay();
+            Expect(run.ItemDefIdOf(bagged) == "weird_mushroom" && run.ItemDefIdOf(held) == "weird_mushroom", "items: after one day end the mushrooms are still fresh");
+            run.RunItemDay();
+            Expect(run.ItemDefIdOf(bagged) == "rotten_mushroom" && run.ItemDefIdOf(held) == "rotten_mushroom",
+                $"items: after two day ends both mushrooms — held and bagged — must have rotted ({run.ItemDefIdOf(held)}, {run.ItemDefIdOf(bagged)}) (ITEMS §4.1)");
+            Expect(run.DayEndNotes.Exists(note => note.Contains("went bad")), "items: the day summary must say a mushroom went bad");
+
+            // ── the plantation: a Rotten Mushroom at a hub gives four Weird Mushrooms in four days ──
+            MapNode hub = run.Graph.Nodes.Find(node => node.Kind == NodeKind.TransportHub && !node.Devoured && node.WorldIndex >= 0);
+            run.CurrentNodeId = hub.Id;
+            Expect(!run.TryPlant(0, held, out _), "items: a held item must not be planted (only the backpack's)");
+            Expect(run.TryPlant(0, bagged, out string why), $"items: a Rotten Mushroom from the backpack must plant at a hub ({why})");
+            Expect(run.ItemDefIdOf(bagged) == null && run.Ledger.PlotsAt(hub.Id)[0].DefId == "rotten_mushroom", "items: planting takes the item out of the inventory");
+            for (int day = 0; day < 3; day++) run.RunItemDay();
+            Expect(!run.TryHarvest(0, out _), "items: nothing is ripe after three days of a four-day crop");
+            run.RunItemDay();
+            int before = InstancesOf(run, "weird_mushroom").Count;
+            Expect(run.TryHarvest(0, out why) && InstancesOf(run, "weird_mushroom").Count - before == 4 && run.Ledger.PlotsAt(hub.Id)[0].Empty,
+                $"items: a ripe Rotten Mushroom must give four Weird Mushrooms and free its plot ({why})");
+
+            // ── the Blessing of Shieldon: Possession onto another item, never an Eternal one ──
+            run.UnholdItem(lead);
+            run.AddItem(RunState.BlessingOfShieldonId);
+            run.HoldItem(lead, RunState.BlessingOfShieldonId, fromBackpack: true);
+            run.AddItem("fanchens_heart");
+            run.AddItem(RunState.VoidItemId);
+            string heart = InstancesOf(run, "fanchens_heart")[0];
+            string voidId = InstancesOf(run, RunState.VoidItemId)[0];
+            Expect(!run.TryEnchantPossession(voidId, out _), "items: THE VOID is Eternal — the Blessing must not take to it");
+            Expect(run.TryEnchantPossession(heart, out why) && lead.HeldItemDefId == null,
+                $"items: the Blessing must enchant FanChen's Heart and be spent ({why})");
+            Expect(run.PossessionItems(null).Exists(item => item.InstanceId == heart), "items: an enchanted heart must work party-wide from the backpack");
+
+            // ── THE VOID: a phantom every four days, at least three roads away; drawn nearer by a challenge ──
+            run.Ledger.Phantoms.Clear();
+            run.Ledger.PhantomClock = ItemLedger.PhantomEveryDays;
+            MapNode start = run.Graph.StartNode;
+            run.CurrentNodeId = start.Id;
+            for (int day = 0; day < ItemLedger.PhantomEveryDays - 1; day++) run.RunItemDay();
+            Expect(run.Ledger.Phantoms.Count == 0, "items: no phantom before its fourth day");
+            run.RunItemDay();
+            Expect(run.Ledger.Phantoms.Count == 1, $"items: THE VOID must raise a phantom on its fourth day ({run.Ledger.Phantoms.Count})");
+            if (run.Ledger.Phantoms.Count == 1)
+            {
+                Dictionary<MapNode, int> roads = ItemLedger.Distances(run.Graph, start);
+                int far = roads[run.FindNode(run.Ledger.Phantoms[0])];
+                Expect(far >= ItemLedger.PhantomSpawnMinDistance, $"items: a phantom must rise at least {ItemLedger.PhantomSpawnMinDistance} roads away ({far})");
+                run.Ledger.StepPhantoms(run.Graph, start.Id);
+                int nearer = roads[run.FindNode(run.Ledger.Phantoms[0])];
+                Expect(nearer == far - 1, $"items: a challenge must draw a phantom one road nearer ({far} → {nearer})");
+            }
+            MapNode fight = run.Graph.Nodes.Find(node => node.IsCombat && !node.Devoured && node.WorldIndex >= 0 && !run.CompletedNodeIds.Contains(node.Id));
+            MapNode beside = null;
+            foreach (MapEdge edge in run.Graph.EdgesOf(fight)) { beside = edge.Other(fight); break; }
+            run.Ledger.Phantoms.Clear();
+            run.Ledger.Phantoms.Add(beside.Id);
+            foreach (ProtagonistState p in run.Owned) p.HpRatio = 1f;
+            run.OnChallengeNode(fight);
+            Expect(run.Ledger.Phantoms.Count == 0 && Mathf.IsEqualApprox(lead.HpRatio, 1f - ItemLedger.PhantomTouchHpShare) && run.LastPhantomNote.Length > 0,
+                $"items: a phantom that reaches you must touch the party for a quarter of its HP, and go ({lead.HpRatio:0.00} HP, {run.Ledger.Phantoms.Count} left)");
+
+            // ── the ledger in a save: everything above round-trips; an old save loads empty ──
+            run.Ledger.Phantoms.Add(start.Id);
+            run.Ledger.MushroomEaten.Add(lead.Id);
+            run.Ledger.MushroomToday[lead.Id] = MushroomOutcome.Springy;
+            run.AddItem("rotten_mushroom");
+            run.TryPlant(1, InstancesOf(run, "rotten_mushroom")[^1], out _);
+            string written = System.Text.Json.JsonSerializer.Serialize(run.Ledger.ToSave());
+            RunSaveData copy = SaveGameService.CloneRunSave(new RunSaveData { ItemLedger = run.Ledger.ToSave() });
+            string read = System.Text.Json.JsonSerializer.Serialize(ItemLedger.FromSave(copy?.ItemLedger).ToSave());
+            Expect(written == read, $"items: the ledger must survive a save unchanged\n    wrote {written}\n    read  {read}");
+            ItemLedger old = ItemLedger.FromSave(null);
+            Expect(old.Phantoms.Count == 0 && old.Plots.Count == 0 && old.PhantomClock == ItemLedger.PhantomEveryDays, "items: a save from before v0.12.8 must load an empty ledger");
+
+            // ── Pixolotl's Feather: back to this morning — place, HP, stamina — and a Wish ──
+            run.NewRun("ITEMFEATHER");
+            lead = run.FindProtagonist(run.ActiveBuild[0]);
+            run.AddItem(RunState.FeatherItemId);
+            run.HoldItem(lead, RunState.FeatherItemId, fromBackpack: true);
+            MapNode morning = run.Graph.StartNode;
+            MapNode away = null;
+            foreach (MapEdge edge in run.Graph.EdgesOf(morning)) { away = edge.Other(morning); break; }
+            run.CurrentNodeId = away.Id;
+            run.Stamina = 0;
+            foreach (ProtagonistState p in run.Owned) p.HpRatio = 0.3f;
+            int dayBefore = run.Day;
+            Expect(run.TryRewindToday(out why), $"items: a held Feather must turn the day back ({why})");
+            Expect(run.CurrentNodeId == morning.Id && run.Stamina == RunState.MaxStamina && Mathf.IsEqualApprox(lead.HpRatio, 1f) && run.Day == dayBefore,
+                $"items: the rewind must restore this morning's place, stamina and HP, not the day ({run.CurrentNodeId}, {run.Stamina}, {lead.HpRatio:0.00}, day {run.Day})");
+            Expect(lead.HeldItemDefId == "pixolotls_wish" && !run.CanRewindToday(out _), "items: the Feather must become Pixolotl's Wish, which cannot rewind");
+
+            // ── a Weird Mushroom eaten: +20 for good; the morning after, one roll ──
+            run.AddItem("weird_mushroom");
+            run.HoldItem(lead, "weird_mushroom", fromBackpack: true);
+            int points = lead.MaxHpPercentPoints;
+            Expect(run.TryEatMushroom(lead, out why) && lead.MaxHpPercentPoints == points + ItemLedger.MushroomMaxHpPoints && lead.HeldItemDefId == null,
+                $"items: eating the mushroom must give +{ItemLedger.MushroomMaxHpPoints} max-HP points and use it up ({why})");
+            run.RunItemDay();
+            MushroomOutcome after = run.MushroomToday(lead.Id);
+            Expect(after != MushroomOutcome.None || lead.MaxHpPercentPoints == points + 2 * ItemLedger.MushroomMaxHpPoints,
+                "items: the morning after a mushroom brings a one-day effect, or 20 more points for good");
+            Expect(after != MushroomOutcome.Frail || run.EffectiveMaxHpPoints(lead) == lead.MaxHpPercentPoints - ItemLedger.MushroomFrailPoints,
+                "items: a frail day must take 40 points off the body's max HP");
+            run.RunItemDay();
+            Expect(run.MushroomToday(lead.Id) == MushroomOutcome.None, "items: a mushroom's effect lasts one day");
+            var rolls = new int[6];
+            for (int i = 0; i < 6000; i++) rolls[(int)ItemLedger.RollMushroom(new DetRandom("mushroom-roll-" + i))]++;
+            bool spread = rolls[(int)MushroomOutcome.Hearty] is > 1500 and < 1860;
+            for (int o = 1; o <= 4; o++) spread &= rolls[o] is > 900 and < 1260;
+            Expect(spread, $"items: the mushroom's roll must be 18 % for each of (a)–(d) and 28 % for (e)+(f) — {string.Join(" ", rolls)} of 6000");
+
+            // ── the QiongFeng Claw: a fallen capital's realm pays its unopened chests, cracks, throws you ──
+            run.NewRun("ITEMCLAW");
+            lead = run.FindProtagonist(run.ActiveBuild[0]);
+            run.AddItem(RunState.ClawItemId);
+            run.HoldItem(lead, RunState.ClawItemId, fromBackpack: true);
+            MapNode capital = run.Graph.Nodes.Find(node => node.Kind == NodeKind.Boss && node.Level == 4 && node.WorldIndex >= 1 && node.Zone != RunState.ClawWorldAbbr);
+            int chests = 0, cores = 0, atk = 0;
+            foreach (MapNode node in run.Graph.Nodes)
+            {
+                if (node.Zone != capital.Zone || !node.IsCombat || node == capital || node.Devoured || run.CompletedNodeIds.Contains(node.Id)) continue;
+                chests++;
+                switch (RunState.EffectiveMission(node))
+                {
+                    case MissionType.Collection: cores += Missions.MissionTable.CollectionCores(node.Level); break;
+                    case MissionType.Protect: cores += 10; break;
+                    case MissionType.Slaughter: atk += 10; break;
+                }
+            }
+            int coresBefore = run.WonderCores, atkBefore = lead.BonusAtk;
+            run.CurrentNodeId = capital.Id;
+            run.CompletedNodeIds.Add(capital.Id);
+            run.OnCapitalWon(capital, firstTime: true);
+            MapNode landed = run.FindNode(run.CurrentNodeId);
+            bool cracked = run.Graph.Nodes.TrueForAll(node => node.Zone != capital.Zone || node.WorldIndex < 0 || node.Devoured);
+            Expect(!run.OwnsItem(RunState.ClawItemId), "items: the claw must faint after it fires");
+            Expect(cracked, "items: the fallen capital's realm must crack down (every node of it devoured)");
+            Expect(landed != null && landed.Kind == NodeKind.TransportHub && landed.Zone != capital.Zone && !landed.Devoured,
+                $"items: the claw must throw you to a hub of another realm ({landed?.Id})");
+            Expect(run.WonderCores - coresBefore == cores && lead.BonusAtk - atkBefore == atk,
+                $"items: {chests} unopened chests must pay {cores} cores and +{atk} ATK (paid {run.WonderCores - coresBefore} and +{lead.BonusAtk - atkBefore})");
+            bool plFound = false;
+            for (int s = 0; s < 12 && !plFound; s++)
+            {
+                run.NewRun("ITEMPALACE" + s);
+                MapNode palace = run.Graph.Nodes.Find(node => node.Kind == NodeKind.Boss && node.Level == 4 && node.Zone == RunState.ClawWorldAbbr);
+                if (palace == null) continue;
+                plFound = true;
+                run.CompletedNodeIds.Add(palace.Id);
+                run.OnCapitalWon(palace, firstTime: true);
+                Expect(run.OwnsItem(RunState.ClawItemId), "items: the Palace of LOOING's first fall must yield the QiongFeng Claw");
+            }
+            Expect(plFound, "items: no seed of twelve dealt the Palace of LOOING — the claw's grant went untested");
+            GD.Print($"  flow     items          mushrooms rot in {ItemLedger.WeirdMushroomPerishDays} days and grow back in 4; the Blessing enchants; " +
+                     $"THE VOID's phantoms rise, close in and touch for {ItemLedger.PhantomTouchHpShare:P0}; the Feather rewinds; the Claw loots {chests} chests and cracks the realm");
+        }
+        finally
+        {
+            SaveGameService.DirectoryOverride = savesBefore;
+            try { System.IO.Directory.Delete(scratch, true); } catch { /* a leftover temp folder is harmless */ }
+        }
+    }
+
+    /// <summary>DD let go (ITEMS.gdd §7.3): it crawls to the target, devours it for 200 once,
+    /// turns at the wall, comes back and is reclaimed by walking into it; its two days start.</summary>
+    private async Task ProbeDd()
+    {
+        Node2D stage = BuildStage(600f, 2200f);
+        CharacterController pome = Fighter(stage, "Pomegraknight", new Vector2(1000f, FloorY - 32f), out VirtualPad pad);
+        CharacterController target = Dummy(stage, new Vector2(1400f, FloorY - 32f));
+        await Ticks(20);
+        var state = new ProtagonistState("Pomegraknight") { HeldItemDefId = RunState.DdItemId, HeldItemInstanceId = "dd-check" };
+        var dd = new ItemRuntime(pome, state);
+        pad.Facing = 1f;
+        pad.Hold(ControlAction.MoveRight);
+        await Ticks(2);
+        pad.ReleaseAll();
+        await Ticks(4);
+        float hp = target.CurrentHP;
+        bool used = dd.TryUse(out string reason);
+        Expect(used && DdCreature.IsLoose("dd-check"), $"dd: DD must be let go ({reason})");
+        string again = null;
+        Expect(state.HeldItemDayCooldownRemaining == 2 && !dd.TryUse(out again) && (again ?? "").Contains("day"),
+            $"dd: letting DD go must start its two days ({state.HeldItemDayCooldownRemaining}, '{again}')");
+        DdCreature creature = DdCreature.Loose.Find(c => c.InstanceId == "dd-check");
+        float afterFirst = -1f;
+        bool turned = false, home = false;
+        int ticks = 0;
+        for (; ticks < 1600 && !home; ticks++)
+        {
+            await Ticks(1);
+            if (creature != null && IsInstanceValid(creature) && creature.Direction < 0f) turned = true;
+            if (afterFirst < 0f && target.CurrentHP < hp) afterFirst = target.CurrentHP;
+            home = !DdCreature.IsLoose("dd-check");
+        }
+        float dealt = afterFirst < 0f ? 0f : hp - afterFirst;
+        Expect(dealt >= 100f, $"dd: DD must devour a target in its path for {DdCreature.Damage:0} (it dealt {dealt:0})");
+        Expect(turned, "dd: DD must turn around at the wall");
+        Expect(home, "dd: walking into DD must reclaim it");
+        Expect(afterFirst < 0f || Mathf.IsEqualApprox(target.CurrentHP, afterFirst), $"dd: a target is devoured once per release ({target.CurrentHP:0} after {afterFirst:0})");
+        dd.Dispose();
+        GD.Print($"  flow     dd             DD devours the target for {dealt:0}, turns at the wall and is reclaimed {ticks / 60f:0.0} s after it was let go");
+        await Strike(stage);
+    }
+
+    /// <summary>The items' passives and the mushroom's day on a real body: a Possession Feather
+    /// lightens it and lets go; the Blessing hastens it; a mushroom asks the run to be eaten and
+    /// its max HP grows keeping its share; swapped keys walk it the other way.</summary>
+    private async Task ProbeItemBodies()
+    {
+        Node2D stage = BuildStage(0f, 4000f);
+        CharacterController body = Fighter(stage, "Pomegraknight", new Vector2(2000f, FloorY - 32f), out VirtualPad pad);
+        await Ticks(10);
+        ItemRuntime feather = ItemRuntime.ForPossession(body, RunState.FeatherItemId, "feather-check");
+        Expect(Mathf.IsEqualApprox(body.GravityScale, 0.8f) && !feather.IsUsable && !feather.TryUse(out _),
+            $"items: a Possession Feather must lighten the body (gravity ×{body.GravityScale:0.00}) and lend no skill");
+        feather.Dispose();
+        Expect(Mathf.IsEqualApprox(body.GravityScale, 1f), "items: unbinding the Feather must give the body its weight back");
+        var blessing = new ItemRuntime(body, new ProtagonistState("Pomegraknight") { HeldItemDefId = RunState.BlessingOfShieldonId, HeldItemInstanceId = "blessing-check" });
+        Expect(Mathf.IsEqualApprox(body.MoveSpeedScale, 1.1f), $"items: the Blessing of Shieldon must add 10% move speed (×{body.MoveSpeedScale:0.00})");
+        blessing.Dispose();
+        var mushroom = new ItemRuntime(body, new ProtagonistState("Pomegraknight") { HeldItemDefId = RunState.WeirdMushroomId, HeldItemInstanceId = "mushroom-check" });
+        Expect(mushroom.TryUse(out _) && mushroom.PendingVerb == ItemRunVerb.EatMushroom && mushroom.RebindRequested,
+            "items: using a Weird Mushroom must ask the run to eat it");
+        mushroom.Dispose();
+        body.HydrateRun(body.MaxHP, 0, 0.5f, 0, 0);
+        float max = body.MaxHP;
+        body.RescaleMaxHp(max * 1.2f);
+        Expect(Mathf.IsEqualApprox(body.MaxHP, max * 1.2f) && Mathf.IsEqualApprox(body.HpRatio, 0.5f, 1e-4f),
+            $"items: a mushroom eaten mid-fight must grow max and current HP together ({body.CurrentHP:0}/{body.MaxHP:0})");
+        body.UseControls(new MirroredControls(pad));
+        float x0 = body.GlobalPosition.X;
+        pad.Hold(ControlAction.MoveRight);
+        await Ticks(30);
+        pad.ReleaseAll();
+        Expect(body.GlobalPosition.X < x0 - Units.Px(1f), $"items: with left and right swapped, holding right must walk left ({M(body.GlobalPosition.X - x0)} m)");
+        body.UseControls(pad);
+        GD.Print("  flow     item bodies    a Possession Feather lightens and lets go; the Blessing hastens; a mushroom grows max HP keeping its share; swapped keys walk the other way");
         await Strike(stage);
     }
 }

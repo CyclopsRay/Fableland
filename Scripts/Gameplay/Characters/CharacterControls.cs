@@ -70,6 +70,32 @@ public sealed class PlayerControls : ICharacterControls
 }
 
 /// <summary>
+/// Another controller with left and right swapped — a Weird Mushroom's morning after
+/// (ITEMS.gdd §7.13 (b)). Movement and the facing hint are mirrored; aim and every other
+/// button pass through untouched. Orchestration installs it (<see cref="CharacterController.UseControls"/>);
+/// the kit never knows.
+/// </summary>
+public sealed class MirroredControls : ICharacterControls
+{
+    private readonly ICharacterControls _inner;
+
+    public MirroredControls(ICharacterControls inner) => _inner = inner ?? PlayerControls.Instance;
+
+    private static ControlAction Mirror(ControlAction action) => action switch
+    {
+        ControlAction.MoveLeft => ControlAction.MoveRight,
+        ControlAction.MoveRight => ControlAction.MoveLeft,
+        _ => action,
+    };
+
+    public bool Held(ControlAction action) => _inner.Held(Mirror(action));
+    public bool JustPressed(ControlAction action) => _inner.JustPressed(Mirror(action));
+    public bool JustReleased(ControlAction action) => _inner.JustReleased(Mirror(action));
+    public Vector2 AimPoint(Node2D body) => _inner.AimPoint(body);
+    public float FacingHint => -_inner.FacingHint;
+}
+
+/// <summary>
 /// A controller with no hands on it: something else (a boss brain, a test) says which
 /// buttons are down. Pure state — whoever owns it calls <see cref="StepProcess"/> once per
 /// process frame and <see cref="StepPhysics"/> once per physics tick, BEFORE the body it

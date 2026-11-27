@@ -20,7 +20,17 @@ public static class ItemBehaviorId
     public const string ForgottenKashaya = "forgotten_kashaya";
     public const string PomesBravery = "pomes_bravery";
     public const string PomesSeed = "pomes_seed";
+    // v0.12.8 (ITEMS.gdd §7): the rest of the catalog's combat halves.
+    public const string Dd = "dd";
+    public const string WeirdMushroom = "weird_mushroom";
+    public const string PixolotlsFeather = "pixolotls_feather";
+    public const string PixolotlsWish = "pixolotls_wish";
+    public const string Shieldon = "blessing_of_shieldon";
 }
+
+/// <summary>A consequence of a use that belongs to the run, not the fight: the arena carries it
+/// to RunState (the item layer never writes the run's ledger itself).</summary>
+public enum ItemRunVerb { None, EatMushroom }
 
 /// <summary>Godot-free catalog definition. Mutable cooldowns and future rolled stats live on
 /// ItemInstance, never here.</summary>

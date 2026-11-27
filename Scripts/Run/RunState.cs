@@ -107,6 +107,9 @@ public partial class RunState : Node
     private RunSaveData _lastDayCheckpoint;
     public int ActiveSaveSlot { get; private set; } = -1;
     private string _pendingBattleResumeNodeId;
+    // True only while ResumeLoadedRun re-enters a saved battle: BeginAdventure then sets the
+    // scene up again but must not repeat what a challenge does once (THE VOID's phantom step).
+    private bool _resumingBattle;
     private int _nextItemInstanceOrdinal = 1;
 
     public override void _EnterTree()
@@ -213,7 +216,9 @@ public partial class RunState : Node
         _pendingBattleResumeNodeId = null;
         if (!string.IsNullOrEmpty(battleNodeId))
         {
-            BeginAdventure(battleNodeId);
+            _resumingBattle = true;
+            try { BeginAdventure(battleNodeId); }
+            finally { _resumingBattle = false; }
             return;
         }
         ReturnToMap();
@@ -257,6 +262,8 @@ public partial class RunState : Node
         WonderCores = 0;
         Items.Clear();
         _nextItemInstanceOrdinal = 1;
+        Ledger = new ItemLedger();   // perish clocks, plots, phantoms, mushrooms (ITEMS.gdd §4, §7)
+        LastPhantomNote = "";
 
         NodesTraversed = 0;
         GoalsSucceeded = 0;
@@ -300,6 +307,11 @@ public partial class RunState : Node
 
         if (node != null) MarkVisited(node);
         CurrentNodeId = nodeId;
+        // THE VOID's phantoms take a road toward a challenged node — before the battle team's
+        // HP is captured, so a phantom's touch is felt in this fight (ITEMS.gdd §7.2). A saved
+        // battle resumed on Continue is the same challenge: they took that road already.
+        if (_resumingBattle) LastPhantomNote = "";
+        else OnChallengeNode(node);
 
         var kind = node?.Kind ?? NodeKind.Combat;
         var adventure = new AdventureContext
@@ -403,6 +415,8 @@ public partial class RunState : Node
                     DayEndNotes.Add("The capital yields TwistedReality.");
                     LastRewardLine = ItemCatalog.DisplayName(TwistedRealityItemId);
                 }
+                // A realm capital's fall: the QiongFeng Claw fires, the Palace of LOOING yields one.
+                OnCapitalWon(node, newlyDone);
             }
             int ownedBefore = Owned.Count;
             ApplyRewards(rewards);
@@ -666,7 +680,11 @@ public partial class RunState : Node
     }
 
     private ItemInstance CreateItemInstance(string defId)
-        => new(defId, $"item-{_nextItemInstanceOrdinal++}");
+    {
+        var item = new ItemInstance(defId, $"item-{_nextItemInstanceOrdinal++}");
+        Ledger.OnCreated(defId, item.InstanceId);   // a perishable item starts its clock
+        return item;
+    }
 
     private void NoteLoadedInstanceId(string instanceId)
     {
@@ -1168,6 +1186,7 @@ public partial class RunState : Node
         save.ItemsCollected = ItemsCollected;
         save.WorldsVisited = SortedIds(_worldsSet);
         save.Zone6 = Zone6?.ToSave();
+        save.ItemLedger = Ledger?.ToSave();
 
         save.Map ??= new MapSaveData();
         var devoured = new List<string>();
@@ -1263,6 +1282,9 @@ public partial class RunState : Node
         // variant its seed draws (no save-version bump — Zone6.gdd §7).
         Zone6 = Zone6State.FromSave(save.Zone6, Seed);
         LastZone6Note = "";
+        // Optional since v0.12.8: an older save loads an empty ledger (no save-version bump).
+        Ledger = ItemLedger.FromSave(save.ItemLedger);
+        LastPhantomNote = "";
 
         Day = Math.Max(1, save.Day);
         Stamina = Math.Clamp(save.Stamina, 0, MaxStamina);

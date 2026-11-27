@@ -546,6 +546,17 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 					NotifyHpChanged();
 	}
 
+	/// <summary>Change max HP mid-fight, keeping the share of it this body has (a Weird Mushroom
+	/// eaten in combat grows max and current HP together — ITEMS.gdd §7.13).</summary>
+	public void RescaleMaxHp(float newMaxHp)
+	{
+		if (newMaxHp <= 0f || MaxHP <= 0f) return;
+		float ratio = HpRatio;
+		MaxHP = newMaxHp;
+		CurrentHP = ratio * MaxHP;
+		NotifyHpChanged();
+	}
+
 	/// <summary>Current HP as a fraction of max — written back to ProtagonistState on scene exit.</summary>
 	public float HpRatio => MaxHP > 0f ? CurrentHP / MaxHP : 0f;
 
