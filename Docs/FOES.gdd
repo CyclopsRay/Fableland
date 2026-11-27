@@ -246,6 +246,19 @@ PATROL ──(player in sight)──▶ AGGRO ──(3 consecutive misses)──
 After 3 consecutive misses, the foe resumes its Patrol behaviour from its current
 position. The miss counter resets to 0 on re-aggro.
 
+### Crowd control laid on a foe (PumpKing's Black Prison, `PumpKing.gdd`)
+
+A skill can lay four rules on a foe, each held by a named source (`ICombatTarget`):
+- **a move-speed share** — its walking or flying speed (`CurrentMoveSpeed`), not a skill's own
+  fixed speed (the gull's dash);
+- **a jump-height share** — the crab's Jump rises that share as high;
+- **silence** — no skill starts (`Skill1Ready` / `Skill2Ready` say no); its body blow, the
+  gull's poop (its basic attack) and its passives still go; a dash already telegraphed goes;
+- **a sight cap** (metres from its centre; 0 = blind) — the player past it is a miss. A capped
+  foe that misses **drops aggro at once**, not after three misses, and it looks again on the
+  tick the cap is laid; a hit does not turn it on a player it cannot see. THE VOID's "all foes
+  lose vision" is this cap at 0 (the items work).
+
 ---
 
 ## 7. Loot & drops (hook only — content TBD)

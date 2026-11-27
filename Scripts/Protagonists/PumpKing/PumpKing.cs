@@ -14,6 +14,11 @@ using Fableland.Run;
 /// SHIFT    Soul Form (12s CD, 0.5s windup) — 6s free-flight ghost form; a live head
 ///          becomes autonomous (visual bounce only, no AoE on its own explosion).
 /// E        Pump Up (0.5s inner CD, max 5 stacks) — Normal state only.
+/// Q        The Black Prison (黑狱, a full ult ring) — a circle the size of his head's blast,
+///          where he aims (8 m at most): 1 s of warning, then 4 s in which every foe inside is
+///          slowed, jumps low, is silenced and blind past one cell, while pumpkins fly out of it.
+///          Q again while it stands (free, once): its mouth opens, he blinks into it and his head
+///          goes off there at its biggest. <see cref="BlackPrison"/>.
 ///
 /// Animation automata mirrors the Unity "PumpKing" animator — only idle/walk/jump/
 /// soul body clips exist in the source art (no dead/stun clip); the neck-head child
@@ -63,6 +68,18 @@ public partial class PumpKing : CharacterController
     // Designer knob: head visual scale per pump-stack count (index = stacks).
     [Export] public float[] HeadScales = { 1.0f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f };
 
+    // ── Q — the Black Prison (PumpKing.gdd; first pass). The prison's own timings and what it
+    // does to whoever is inside are BlackPrison's constants. ──
+    /// <summary>How far from him the prison's centre may be: an aim farther off is pulled back
+    /// along the same line. About where a level throw of his head comes down (7.7 m).</summary>
+    public const float PrisonCastRangeM = 8f;
+    /// <summary>The recast's blast is his head's at its biggest: the prison's radius (the head's
+    /// blast radius) and this many times the head's damage. It shoves nobody: the prison keeps
+    /// its prisoners.</summary>
+    public const float UltBlastDamageScale = 2f;
+    /// <summary>How finely the blink looks for room for his body near the mouth, px.</summary>
+    private const float BlinkSearchStep = 8f;
+
     // Unity's headNeckOffset (0.6 m ⇒ 19 px) put the head at chest/waist height on
     // our sprites — the body art's collar sits ~28 px above origin (measured from the
     // idle frame's alpha bounds) and the head graphic's own half-height (~21.5 px at
@@ -92,6 +109,7 @@ public partial class PumpKing : CharacterController
     private float _baTelegraph;
 
     private PumpKingHead _activeHead;
+    private BlackPrison _prison;
     private bool _neckShown = true;
     private Sprite2D _neckHead;
     private AtlasTexture _neckAtlas;
@@ -111,6 +129,10 @@ public partial class PumpKing : CharacterController
     public bool SoulCommitted => _soulWindup > 0f || CurrentState == PKState.Soul;
     /// <summary>Where a fired head leaves his body.</summary>
     public Vector2 HeadLaunchPoint => FirePoint != null ? FirePoint.GlobalPosition : GlobalPosition + NeckOffset;
+    /// <summary>The Black Prison he opened, while it stands (warning included); null otherwise.</summary>
+    public BlackPrison Prison => _prison != null && IsInstanceValid(_prison) && !_prison.Over ? _prison : null;
+    /// <summary>Q would open a prison now: the ring is full and none of his stands.</summary>
+    public bool UltReady => UltCharge >= MaxUltCharge && Prison == null;
 
     // HUD skill-icon cooldowns: Shift = Soul Form, E = Pump Up.
     public override (float Remaining, float Max) ShiftCooldown => (_soulCd, ScaleCooldown(SoulCooldown));
@@ -302,7 +324,107 @@ public partial class PumpKing : CharacterController
         RefreshHeadVisual(_pumpStacks);
     }
 
-    protected override void HandleSkillUlt() { }
+    // ── Q — the Black Prison (黑狱) ──────────────────────────────────────────
+    /// <summary>
+    /// With a full ring and no prison of his standing: open one where he aims, at most
+    /// <see cref="PrisonCastRangeM"/> away, and spend the whole ring. While his prison stands:
+    /// the recast — free, once, only after its warning (<see cref="BlackPrison.Recast"/>). One
+    /// prison at a time: a full ring waits for the standing one to end.
+    /// </summary>
+    protected override void HandleSkillUlt()
+    {
+        BlackPrison standing = Prison;
+        if (standing != null)
+        {
+            // NOTE(animation): the recast's windup clip (he is drawn toward the mouth) starts here.
+            if (standing.Recast()) CueBus.Emit(this, "ult.recast", magnitude: BlackPrison.MouthSeconds,
+                direction: (standing.Centre - GlobalPosition).Normalized());
+            return;
+        }
+        if (UltCharge < MaxUltCharge || GetParent() == null) return;
+
+        Vector2 centre = ClampPrisonCentre(GlobalPosition, Controls.AimPoint(this), Units.Px(PrisonCastRangeM));
+        DrainUltCharge(UltCharge);
+        var prison = new BlackPrison { Name = "BlackPrison" };
+        GetParent().AddChild(prison);
+        prison.Begin(this, centre, ExplosionRadius, DamageDealtMultiplier);
+        _prison = prison;
+        // NOTE(animation): the cast clip (he reaches toward the circle) starts here.
+        CueBus.Emit(this, "ult.cast", size: ExplosionRadius, magnitude: BlackPrison.WarnSeconds,
+            direction: (centre - GlobalPosition).Normalized());
+    }
+
+    /// <summary>Where a prison aimed at <paramref name="aim"/> from <paramref name="from"/> goes:
+    /// the aim itself, or the point <paramref name="range"/> along the same line when the aim is
+    /// farther. Static so a brain (and a check) can ask before pressing.</summary>
+    public static Vector2 ClampPrisonCentre(Vector2 from, Vector2 aim, float range)
+    {
+        Vector2 to = aim - from;
+        return to.Length() <= range ? aim : from + to.Normalized() * range;
+    }
+
+    /// <summary>
+    /// The recast lands (<see cref="BlackPrison"/>, when its mouth has opened): he blinks to the
+    /// nearest spot to its centre his body fits — the centre itself unless it is inside solid
+    /// ground, then up, sideways, down, within the prison — arriving still, and his head goes off
+    /// at the centre at its biggest: the prison's radius, <see cref="UltBlastDamageScale"/>× the
+    /// head's damage, no shove. It costs no head: the magazine is not touched. With no room
+    /// anywhere in the prison he stays where he is; the blast still goes off at the centre.
+    /// </summary>
+    public void LandInPrisonMouth(BlackPrison prison)
+    {
+        if (prison == null) return;
+        Vector2 from = GlobalPosition;
+        Vector2 spot = FreeSpotNear(prison.Centre, prison.Radius) ?? from;
+        GlobalPosition = spot;
+        RestoreMovementVelocityState(Vector2.Zero, Vector2.Zero);
+        CueBus.Emit(this, "ult.blink", magnitude: from.DistanceTo(spot), direction: (spot - from).Normalized(), at: spot);
+
+        float damage = ExplosionDamage * UltBlastDamageScale * DamageDealtMultiplier;
+        Vector2 at = prison.Centre;
+        CueBus.EmitAt(FeedbackId, "ult.blast", at, this, Side, size: prison.Radius, magnitude: damage,
+            ownerClass: FeedbackClass);
+        foreach (ICombatTarget target in CombatTargets.HostileTo(GetTree(), Side))
+        {
+            if (target.GlobalPosition.DistanceTo(at) - target.HitRadius > prison.Radius) continue;
+            ReportDamageDealt(target.TakeHit(new HitInfo(damage, Vector2.Zero).FromRanged(this, "ult.blast"), at));
+        }
+    }
+
+    // Up first (a centre in the floor), then sideways, then down.
+    private static readonly Vector2[] BlinkSearch =
+    {
+        Vector2.Up, Vector2.Left, Vector2.Right, new(-0.7071f, -0.7071f), new(0.7071f, -0.7071f), Vector2.Down,
+    };
+
+    /// <summary>The nearest spot to <paramref name="centre"/>, within <paramref name="within"/>,
+    /// where his collision shape overlaps no solid ground; null when there is none.</summary>
+    private Vector2? FreeSpotNear(Vector2 centre, float within)
+    {
+        CollisionShape2D shape = null;
+        foreach (Node child in GetChildren())
+        {
+            if (child is CollisionShape2D { Shape: not null, Disabled: false } found) { shape = found; break; }
+        }
+        PhysicsDirectSpaceState2D space = IsInsideTree() ? GetWorld2D()?.DirectSpaceState : null;
+        if (shape == null || space == null) return centre;
+
+        var query = new PhysicsShapeQueryParameters2D { Shape = shape.Shape, CollisionMask = 1u << (Units.LayerGround - 1) };
+        Transform2D placed = shape.GlobalTransform;
+        Vector2 offset = placed.Origin - GlobalPosition;
+        for (float d = 0f; d <= within; d += BlinkSearchStep)
+        {
+            foreach (Vector2 dir in BlinkSearch)
+            {
+                Vector2 spot = centre + dir * d;
+                placed.Origin = spot + offset;
+                query.Transform = placed;
+                if (space.IntersectShape(query, 1).Count == 0) return spot;
+                if (d == 0f) break;   // the centre is one spot, not six
+            }
+        }
+        return null;
+    }
 
     private void RefreshPassive()
     {
@@ -355,9 +477,11 @@ public partial class PumpKing : CharacterController
         }
 
         // Accepted simplification: during Soul, transient knockback/gravity don't
-        // apply; source-keyed environmental movement (such as a Blackhole) does.
+        // apply; source-keyed environmental movement (such as a Blackhole) does. A soul flies
+        // at the share of speed the rules leave a walker (a Black Prison, a seal): flying is
+        // moving too.
         Vector2 dir = new Vector2(h, v);
-        Velocity = (dir != Vector2.Zero ? dir.Normalized() * SoulMoveSpeed : Vector2.Zero)
+        Velocity = (dir != Vector2.Zero ? dir.Normalized() * SoulMoveSpeed * MoveSpeedScale : Vector2.Zero)
             + ContinuousExternalVelocity;
         MoveAndSlide();
 
@@ -435,5 +559,14 @@ public partial class PumpKing : CharacterController
 
         // Explosion radius ring around self.
         DrawArc(Vector2.Zero, ExplosionRadius, 0f, Mathf.Tau, 48, new Color(1f, 0.5f, 0.1f, 0.4f), 2f);
+
+        // TODO(art): the Black Prison's aim preview (PumpKing.gdd). While Q would open one: where
+        // it would go, and how far it can. The player's only: a boss's aim is his brain's business.
+        if (UltReady && !Dead && Side == CombatSide.Player)
+        {
+            Vector2 centre = ClampPrisonCentre(GlobalPosition, Controls.AimPoint(this), Units.Px(PrisonCastRangeM)) - GlobalPosition;
+            DrawArc(centre, ExplosionRadius, 0f, Mathf.Tau, 48, new Color(0.85f, 0.2f, 0.23f, 0.7f), 2f);
+            DrawArc(Vector2.Zero, Units.Px(PrisonCastRangeM), 0f, Mathf.Tau, 96, new Color(0.85f, 0.2f, 0.23f, 0.18f), 1f);
+        }
     }
 }

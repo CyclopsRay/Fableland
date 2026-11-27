@@ -74,7 +74,9 @@ public partial class CrabFoe : BaseFoe
             StartSkill2Cooldown(5f);
             // Launch so the apex reaches the player's current height above the crab.
             float h = Mathf.Max(Units.Px(1f), GlobalPosition.Y - player.GlobalPosition.Y);
-            IntentVel.Y = -Mathf.Sqrt(2f * Gravity * h);   // no landing damage (pure reposition)
+            // No landing damage (pure reposition). A jump-height share a skill laid on it
+            // (the Black Prison) lowers the apex: the launch scales by its root.
+            IntentVel.Y = -Mathf.Sqrt(2f * Gravity * h) * JumpLaunchScale;
         }
     }
 
