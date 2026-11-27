@@ -9,6 +9,16 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.12** — **THE VOID darkens a fight** — the last wonder-item behaviour (`ITEMS.gdd` §7.2).
+  - Held, **F** starts its 2 days and casts `VoidBlindness` into the arena. For 10 s every
+    hostile target — foes, objectives, a boss — has a sight cap of 0 under the cast's own source.
+    This is the Black Prison's reaction: a capped foe drops the player at once, and a boss brain
+    finds no one.
+  - A foe that arrives in the dark is blinded as it comes.
+  - The darkness lives in the arena, not on the body, so a Tab switch does not lift it. When it
+    ends, or the arena goes, every cap it laid is cleared.
+  - **Checks:** the flow check grows to 87 — a boss and two crabs, one arriving late, blind
+    through a switch and seeing again after 10 s. Four mutants, all caught. Every suite is clean.
 - **0.12.11** — **PumpKing's ultimate, the Black Prison (黑狱)** — the game's first ultimate (the
   owner's design, built in the `pumpking-ult` session, branch
   `claude/pumpking-black-prison-f31091` at `370d1cd`, merged here on the owner's "合并").

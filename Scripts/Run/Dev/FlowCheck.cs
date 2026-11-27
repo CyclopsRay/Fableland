@@ -25,7 +25,7 @@ using Fableland.Map;
 /// • #11 — a seagull's puddle hits each body once.
 /// • #19 — the wonder items live: perishing, the plantation, the Blessing's enchant, THE VOID's
 ///   phantoms, the Feather's rewind, the mushroom, the Claw, the ledger's save; DD on a real
-///   stage; the passives and the mushroom's day on a real body.
+///   stage; the passives and the mushroom's day on a real body; THE VOID's darkness (v0.12.12).
 ///
 /// Each failure prints on its own `FAIL` line.
 /// </summary>
@@ -74,6 +74,7 @@ public partial class FlowCheck : Node
             await ProbePoopPuddle();
             await ProbeDd();
             await ProbeItemBodies();
+            await ProbeTheVoid();
         }
         catch (Exception e)
         {
@@ -800,6 +801,50 @@ public partial class FlowCheck : Node
         Expect(body.GlobalPosition.X < x0 - Units.Px(1f), $"items: with left and right swapped, holding right must walk left ({M(body.GlobalPosition.X - x0)} m)");
         body.UseControls(pad);
         GD.Print("  flow     item bodies    a Possession Feather lightens and lets go; the Blessing hastens; a mushroom grows max HP keeping its share; swapped keys walk the other way");
+        await Strike(stage);
+    }
+
+    /// <summary>A crab on the floor, sturdy enough that nothing here ends it.</summary>
+    private static CrabFoe Crab(Node2D stage, float x, ulong seed)
+    {
+        var crab = ResourceLoader.Load<PackedScene>("res://Scenes/Foes/CrabFoe.tscn").Instantiate<CrabFoe>();
+        crab.Rng = new RandomNumberGenerator { Seed = seed };
+        stage.AddChild(crab);
+        crab.GlobalPosition = new Vector2(x, FloorY - 22f);
+        crab.Init(1);
+        crab.OverrideMaxHp(5000f);
+        return crab;
+    }
+
+    /// <summary>THE VOID's skill (ITEMS §7.2, v0.12.12): a boss and a crab lose their sight at
+    /// once (a cap of 0); a crab that arrives in the dark loses it too; the holder switching out
+    /// (its runtime disposed) does not lift it; after 10 s every foe sees again, and the player's
+    /// side never went dark; its two days start.</summary>
+    private async Task ProbeTheVoid()
+    {
+        Node2D stage = BuildStage(0f, 4000f);
+        CharacterController pome = Fighter(stage, "Pomegraknight", new Vector2(1000f, FloorY - 32f), out _);
+        CharacterController boss = Dummy(stage, new Vector2(1800f, FloorY - 32f));
+        CrabFoe crab = Crab(stage, 2400f, 7);
+        await Ticks(10);
+        var state = new ProtagonistState("Pomegraknight") { HeldItemDefId = RunState.VoidItemId, HeldItemInstanceId = "void-check" };
+        var theVoid = new ItemRuntime(pome, state);
+        bool used = theVoid.TryUse(out string reason);
+        Expect(used && boss.SightLimitPx == 0f && crab.SightLimitPx == 0f,
+            $"void: THE VOID must blind every foe at once — the boss sees {M(boss.SightLimitPx)} m, the crab {M(crab.SightLimitPx)} m ({reason})");
+        Expect(state.HeldItemDayCooldownRemaining == 2, $"void: its two days must start ({state.HeldItemDayCooldownRemaining})");
+        theVoid.Dispose();                     // the holder is switched out: the darkness stays
+        await Ticks(120);
+        CrabFoe late = Crab(stage, 3000f, 9);  // a foe that arrives in the dark
+        await Ticks(2);
+        Expect(late.SightLimitPx == 0f && boss.SightLimitPx == 0f,
+            $"void: a foe arriving in the dark must be blinded too, and a switch must not lift it (late {M(late.SightLimitPx)} m, boss {M(boss.SightLimitPx)} m)");
+        await Ticks(8 * 60 + 30);              // past the 10 s
+        Expect(float.IsPositiveInfinity(boss.SightLimitPx) && float.IsPositiveInfinity(crab.SightLimitPx)
+               && float.IsPositiveInfinity(late.SightLimitPx) && VoidBlindness.Active.Count == 0,
+            $"void: after {VoidBlindness.Seconds:0} s every foe must see again (boss {boss.SightLimitPx}, crab {crab.SightLimitPx}, late {late.SightLimitPx}; {VoidBlindness.Active.Count} darkness left)");
+        Expect(float.IsPositiveInfinity(pome.SightLimitPx), "void: the player's own side must never go dark");
+        GD.Print($"  flow     the void       every foe blind for {VoidBlindness.Seconds:0} s (a boss, a crab, one arriving in the dark), through a switch; then all see again");
         await Strike(stage);
     }
 }

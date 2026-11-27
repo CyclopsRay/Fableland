@@ -7,18 +7,18 @@ his wheel and his kit, art in placeholder), **v0.12.4** (the audit's run-stoppin
 kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events, small rules),
 **v0.12.8** (the wonder items) and, on 2026-11-28, **v0.12.9** (recruitment and the walkable
 shelter, merged from a parallel session), **v0.12.10** (the plantation and the enchanting
-altar in the hub's room) and **v0.12.11** (PumpKing's ultimate, the Black Prison, merged from the
-other parallel session). **Replace this file at every hand-off:** it describes
+altar in the hub's room), **v0.12.11** (PumpKing's ultimate, the Black Prison, merged from the
+other parallel session) and **v0.12.12** (THE VOID's darkness — every item now has its behaviour). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.11**, nineteen commits and two merges
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.12**, twenty commits and two merges
   on top of v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
   owner asks for each fast-forward; until then it trails the branch.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.11, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.12, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -61,9 +61,10 @@ other parallel session). **Replace this file at every hand-off:** it describes
 | 0.12.8 | `3052f28` | **The wonder items live — all fourteen, each with a source.** One `ItemLedger` (perish, enchantments, plots, VOID phantoms, mushroom days) written by `RunState.Items.cs`; DD's creature, the mushroom, the Feather's rewind button, the Claw's loot-crack-throw, Possession passives from the backpack; five new events | `ITEMS.gdd` (status block, each *Built* note, §9 v0.12.8), KNOWLEDGE v0.12.8 |
 | 0.12.9 | `51722a3` | **Recruitment, and the shelter as a walkable room** (from the `recruit-shelter` session, `13f097d`, merged): a run starts with its home protagonist alone and each realm's 4-1 recruits that realm's own; the shelter is a side-view room whose stations (road, team board, lantern, campfire, whetstone, anvil) replace the buttons; three shelter bugs fixed in passing | `NODES.gdd` §3.1, §4.5, §5.0, KNOWLEDGE v0.12.9 |
 | 0.12.10 | `092ec07` | **The plantation and the enchanting altar** stand in the hub's room: sow and harvest, enchant Possession with the Blessing of Shieldon, each through its own panel | `ITEMS.gdd` §4.3, §7.1, `NODES.gdd` §5.0, KNOWLEDGE v0.12.10 |
-| 0.12.11 | — | **PumpKing's ultimate, the Black Prison** (from the `pumpking-ult` session, `370d1cd`, merged): a 3 m prison ≤ 8 m away, 1 s warning, 4 s of half speed, half jumps, silence and a 3 m sight cap on the other side, pumpkins every 0.5 s, a free recast that blinks him in for a 100-damage blast; crowd control (slow, low jump, silence, sight cap) as a reaction every target takes | `PumpKing.gdd` (Q, how it is built, decisions), `FOES.gdd` §crowd control, `Feedback.gdd` §6.6, KNOWLEDGE v0.12.11 |
+| 0.12.11 | `be10b44` | **PumpKing's ultimate, the Black Prison** (from the `pumpking-ult` session, `370d1cd`, merged): a 3 m prison ≤ 8 m away, 1 s warning, 4 s of half speed, half jumps, silence and a 3 m sight cap on the other side, pumpkins every 0.5 s, a free recast that blinks him in for a 100-damage blast; crowd control (slow, low jump, silence, sight cap) as a reaction every target takes | `PumpKing.gdd` (Q, how it is built, decisions), `FOES.gdd` §crowd control, `Feedback.gdd` §6.6, KNOWLEDGE v0.12.11 |
+| 0.12.12 | — | **THE VOID darkens a fight**: held, F blinds every foe for 10 s (a sight cap of 0, foes arriving in the dark included), surviving a switch — the last item behaviour | `ITEMS.gdd` §7.2 *Built* |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.11, all passing:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.12, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
@@ -74,7 +75,7 @@ other parallel session). **Replace this file at every hand-off:** it describes
 | Boss | `Scenes/Bosses/BossFightCheck.tscn` | 259 at v0.12.11 (the Black Prison; ~23 s) |
 | Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
 | Run | `Scenes/Run/RunWalkCheck.tscn` | 2019 at v0.12.9 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
-| Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 82 at v0.12.8 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives |
+| Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 87 at v0.12.12 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives, THE VOID's darkness |
 | Recruit + shelter (new, v0.12.9) | `Scenes/Run/RecruitShelterCheck.tscn` | 418 at v0.12.10 — homes, the starting roster, recruits at the capitals, saves keep their roster, the station table, every station against the exits rule, each kind of shelter walked with the keys, the plantation and the altar used (`-- --shots=dir` in a window for pictures) |
 
 **Look and listen without a fight:**
@@ -91,9 +92,8 @@ other parallel session). **Replace this file at every hand-off:** it describes
 - **Ultimates (#5):** PumpKing's is built (v0.12.11, the Black Prison); the other four still do
   nothing on Q. Every other character GDD defers its ultimate, so write the designs first
   (TBD #21). The ring itself is not kept across a switch or a fight (TBD #83).
-- **Items (#19): done in v0.12.8**, their shelter screens in v0.12.10 (the plantation and the
-  enchanting altar), except THE VOID's combat skill (needs the foes' sight limit — the
-  PumpKing ult session's).
+- **Items (#19): done** — v0.12.8, their shelter screens in v0.12.10 (the plantation and the
+  enchanting altar), THE VOID's darkness in v0.12.12 (on the Black Prison's sight cap).
   Also open: rolled 60–140 % inheritance on harvests, the mushroom's outcome (f), and the
   phantom's BOSS fight (a −25 % HP touch stands in). `ITEMS.gdd` marks each.
 - **Zone 6:** the other eight guardians, and the Unwritten's Borrowed Shapes and Blank Page
@@ -204,8 +204,8 @@ other parallel session). **Replace this file at every hand-off:** it describes
 - **Two parallel sessions started 2026-11-27 from v0.12.7** (each wrote
   `Docs/_handoff/<name>.md`; this branch integrates them, on the owner's "合并"):
   **`recruit-shelter`** — merged as v0.12.9 (its reserved spots filled in v0.12.10);
-  **`pumpking-ult`** — merged as v0.12.11. Next: THE VOID's skill onto the sight cap
-  (`SetSightLimit(source, 0)` on every foe for 10 s).
+  **`pumpking-ult`** — merged as v0.12.11; its sight cap carries THE VOID's skill since
+  v0.12.12. Both sessions are finished; their branches are merged and can be archived.
 - **v0.12.9's calls for the owner to confirm** (written into the GDDs; each changes code if
   answered otherwise):
   - a run starts with its home protagonist alone (Pomegraknight — every run's home is

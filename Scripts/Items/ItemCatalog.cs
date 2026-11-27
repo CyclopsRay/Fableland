@@ -43,6 +43,7 @@ public static class ItemCatalog
             skillDescription: "No active skill. Plant it at a Transportation Hub: two Pome's Bravery after 7 days.",
             iconPath: IconRoot + "05_pomos_seed.png", displayOrder: 5),
         new("the_void", "THE VOID", ItemDomain.Hybrid, ItemTags.Possession | ItemTags.Eternal, dayCooldownDays: 2,
+            combatBehaviorId: ItemBehaviorId.TheVoid,
             passiveDescription: "Eternal, Possession: every 4 days a VOID phantom rises on the map; each node you challenge, every phantom takes a road toward you.",
             skillDescription: "Combat — every foe loses its sight for 10 seconds (2-day cooldown).",
             iconPath: IconRoot + "11_the_void.png", displayOrder: 20),

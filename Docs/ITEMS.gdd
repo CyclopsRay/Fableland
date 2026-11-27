@@ -16,9 +16,10 @@ one held slot, and Transportation-Hub equipment management.
 > behaviours: DD (a creature, `Scripts/Items/DdCreature.cs`), the mushroom, the Feather/Wish
 > and Blessing passives; a Possession item's passive is put on the body in play from wherever
 > it lies (passive-only runtimes). Since **v0.12.10** the hub's room has a **plantation** and an
-> **enchanting altar** station (`PlantationPanel`, `EnchantPanel`). **Still open:** THE VOID's
-> combat skill (foes' sight — lands with the PumpKing ult's sight API), the phantom's BOSS fight (a −25 % HP touch stands in), rolled
-> inheritance (60–140 %) on harvests, and the mushroom's outcome (f). Each is marked below.
+> **enchanting altar** station (`PlantationPanel`, `EnchantPanel`), and since **v0.12.12** THE
+> VOID's skill darkens a fight (`VoidBlindness`, on the Black Prison's sight cap). **Still open:**
+> the phantom's BOSS fight (a −25 % HP touch stands in), rolled inheritance (60–140 %) on
+> harvests, and the mushroom's outcome (f). Each is marked below.
 >
 > *(v0.10.0: every held item is an instance with persistent day/second cooldowns; FanChen's
 > Heart, Yukai's Rope, The Forgotten Kashaya, Pome's Bravery and Pome's Seed live; TwistedReality
@@ -344,8 +345,15 @@ each status application received by the holder, not once to the aggregate stack.
 > fight:** a phantom that reaches you touches the party for **25 % of every fighter's HP**
 > (`HurtParty`, never below 5 %) and is gone; the arena says so as it opens. Phantoms are drawn
 > on the map (a hooded shape with pale eyes — **TODO(art)**), and the map's info line counts
-> them and the days to the next. **Still open:** the combat skill — every foe loses its sight
-> for 10 s — waits for the foes' sight limit the PumpKing ult (Black Prison) brings.
+> them and the days to the next.
+>
+> **The skill (v0.12.12):** held, **F** in a fight starts its 2 days and darkens the fight for
+> **10 s** (`VoidBlindness`): every hostile target — foes, objectives, a boss — gets a sight cap
+> of 0 under the cast's own source (the reaction the Black Prison brought: a capped foe drops
+> the player at once and a blow does not turn it; a boss brain finds no one). A foe that arrives
+> during the darkness is blinded as it comes. The darkness lives in the arena, so a Tab switch
+> does not lift it; when it ends, or the arena goes, every cap it laid is cleared. TODO(art): the
+> darkness itself.
 
 ### 7.3 DD
 
@@ -693,5 +701,5 @@ each status application received by the holder, not once to the aggregate stack.
     held in the team to be spent.
   - **DD devours each target once per release**, and only the body the player wears reclaims it.
   - **Planting and enchanting screens** waited for the shelter map — built in v0.12.10 as its
-    plantation and enchanting altar; THE VOID's combat skill waits for the foes' sight limit
-    (the PumpKing ult).
+    plantation and enchanting altar; THE VOID's combat skill waited for the foes' sight limit —
+    built in v0.12.12 on the Black Prison's cap.

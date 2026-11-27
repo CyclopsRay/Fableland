@@ -190,6 +190,16 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### An item effect that must outlast a Tab switch lives in the arena, not in its `ItemRuntime` (v0.12.12, THE VOID; designed in)
+- **Rule:** an `ItemRuntime` is disposed whenever the body in play changes (a Tab switch, a
+  debug swap, the scene's end), and `OnUnequip` runs then. An effect meant to last its own time
+  regardless — THE VOID's 10 s darkness, a loose DD — is a node the behaviour adds beside the
+  holder (`VoidBlindness`, `DdCreature`). It keeps its own clock, and it undoes what it did in
+  its own `_ExitTree`. A *passive* belongs in the runtime and goes with the body.
+- **Why:** with the darkness's clock in the behaviour's `Tick`, a switch would dispose it with
+  the caps still laid (foes blind for good), or lift them early in `OnUnequip`. The flow check
+  switches the holder out mid-darkness to hold this.
+
 ### A release and the body's reaction share a physics frame — a probe counted a jump "during" the prison (v0.12.11, caught in the check)
 - **Symptom:** "a silenced crab beside him jumped". It jumped on the tick the prison let go: the
   prison (earlier in the tree) released it, and the crab, later in the same physics frame,

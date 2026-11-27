@@ -26,6 +26,8 @@ public static class ItemBehaviorId
     public const string PixolotlsFeather = "pixolotls_feather";
     public const string PixolotlsWish = "pixolotls_wish";
     public const string Shieldon = "blessing_of_shieldon";
+    // v0.12.12: THE VOID's skill, on the sight cap the Black Prison brought.
+    public const string TheVoid = "the_void";
 }
 
 /// <summary>A consequence of a use that belongs to the run, not the fight: the arena carries it

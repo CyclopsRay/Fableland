@@ -23,6 +23,7 @@ public sealed class ItemRuntime : IDisposable
         [ItemBehaviorId.PixolotlsFeather] = () => new PixolotlsFeatherBehavior(),
         [ItemBehaviorId.PixolotlsWish] = () => new PixolotlsWishBehavior(),
         [ItemBehaviorId.Shieldon] = () => new ShieldonBehavior(),
+        [ItemBehaviorId.TheVoid] = () => new TheVoidBehavior(),
     };
 
     public CharacterController Holder { get; }
@@ -445,6 +446,30 @@ internal sealed class PixolotlsWishBehavior : PixolotlsLineageBehavior
         reason = "Pixolotl's Wish has no combat skill — plant it at a Transportation Hub.";
         return false;
     }
+}
+
+/// <summary>THE VOID (ITEMS.gdd §7.2): its passive is the run's (the phantoms); its skill, held
+/// and on a 2-day cooldown, darkens the fight — every foe loses its sight for 10 s
+/// (<see cref="VoidBlindness"/>, which outlives a switch of the body that cast it).</summary>
+internal sealed class TheVoidBehavior : ICombatItemBehavior
+{
+    public void OnEquip(ItemRuntime runtime) { }
+    public void Tick(ItemRuntime runtime, float dt) { }
+
+    public bool TryUse(ItemRuntime runtime, out string reason)
+    {
+        Node parent = runtime.Holder.GetParent();
+        if (parent == null)
+        {
+            reason = "There is nothing here for THE VOID to darken.";
+            return false;
+        }
+        VoidBlindness.Cast(parent, runtime.Holder.Side, runtime.SourceKey + ":blind");
+        reason = null;
+        return true;
+    }
+
+    public void OnUnequip(ItemRuntime runtime) { }
 }
 
 /// <summary>The Blessing of Shieldon (ITEMS.gdd §7.1): +10 % move speed; its enchant is spent
