@@ -393,10 +393,23 @@ public partial class MapController : Node2D
         }
         // Inside the VOID, time is unknowable — the black hole ate the clock.
         string day = _inVoid ? "???" : _day.ToString();
+        string zone6 = Zone6Line();
         _infoLabel.Text = $"Day {day}   Stamina {_stamina}/{MaxStamina}\n" +
                           $"Traversed {_visited.Count}\n" +
-                          $"fights {fights}  hubs {hubs}  shelter {shelters}  ? {marks}";
+                          $"fights {fights}  hubs {hubs}  shelter {shelters}  ? {marks}" +
+                          (zone6.Length > 0 ? "\n" + zone6 : "");
         UpdateTwistedRealityButton();
+    }
+
+    /// <summary>Where zone 6 stands (Docs/Zone6.gdd §6) — its gravity, the seals on you, what
+    /// Māra has lost — once the run has crossed into it or carries anything from it.</summary>
+    private static string Zone6Line()
+    {
+        RunState run = RunState.Instance;
+        Fableland.Run.Zone6State zone6 = run?.Zone6;
+        if (zone6?.Variant == null) return "";
+        bool reached = run.InVoid || zone6.Nodes.Count > 0 || zone6.PlayerSeals.Count > 0;
+        return reached ? zone6.StatusLine() : "";
     }
 
     /// <summary>Adjust the current day by <paramref name="delta"/> (debug only, clamped to ≥1).

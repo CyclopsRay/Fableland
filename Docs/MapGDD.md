@@ -132,6 +132,24 @@ produce is ever dealt (**no orphan map**). Zone 6 has no maps of its own yet: it
 the maps of the run's five worlds (§7). Open questions — Cleopastar's home world, whether
 Gui Lin is the Banboo Maze — are listed in the style bible §10.
 
+### 2.3 Realm laws (v0.12.0, provisional)
+
+A realm may have a **law**: one rule unique to it, in force in every fight on its maps — so
+crossing a river can change how bodies move, not only the art and the arena's shape. A law is a
+data row (`Scripts/Data/RealmLawTable.cs`), applied by the arena as source-keyed modifiers with
+source `realm:<code>` to **every fighter on both sides** (protagonists and a Foe-side boss
+alike) and to ordinary foes **only if the row says so**. It is shown as one line when a fight
+opens and listed on the HUD for the whole fight. A kit never learns which realm it is in: the
+run hands the arena the rules (`AdventureContext.Rules`), the arena puts them on the bodies
+(`Docs/Zone6.gdd` §2 has the mechanism).
+
+| World | Realm | Law | Rule |
+|-------|-------|-----|------|
+| Banboo Maze | Wulin (武林) | **Qinggong (轻功)** — the owner's | **one more jump** on top of each kit's own, and **every jump 0.75 as high** (launch ×√0.75): ground jumps, air jumps and swim strokes; coyote time and the jump cooldown unchanged. Fighters only, not foes. Measured: 8.3 m → 6.2 m, twice |
+| the other seven | — | **TBD #62** | — |
+
+Zone 6 never applies the law of a world whose map it borrows (§7): it has rules of its own.
+
 ## 3. The seed
 
 Every run has an **8-character seed** (`[0-9A-Z]`). **All** map/game randomness flows
@@ -277,13 +295,31 @@ each zone-6 combat node is dealt an authored map from one of **this run's five w
 - **How it looks.** The map is drawn *VOID-touched*: its art and backdrop drained almost to
   grey and darkened toward violet, with no new art. Fighters, foes, projectiles, pickups,
   hazard sprites, telegraphs and the HUD keep their full colour.
-- **What does not change.** Foe levels (7 and 8), timers, rewards, and the core's boss — still
-  the stand-in crab (`FOES.gdd` §8.1), staged on one of the arena's perches.
+- **What does not change.** Foe levels (7 and 8), timers, and which map each node is dealt:
+  *since v0.12.0 every zone-6 combat node is fought as a boss (below), but a gate keeps the map
+  its rolled mission deals, and only a variant may fix its final boss's arena (the Void
+  Frontier's: Starland's sea-level plain, until its own is painted).*
 - The legacy arena opens only when nothing matches (it cannot with the shipped maps — the
   content check walks every world × mission) and when `Arena.tscn` is run directly.
 - **Saves.** Nothing new is saved: the map is derived from the seed and the node, as it is in
   the outer worlds. A save taken inside a zone-6 fight resumes that node as before — a fresh
   encounter — now on the map this rule deals it, where an older build opened the legacy arena.
+
+**Zone 6 is a stage of its own, and it rotates (v0.12.0, provisional — `Docs/Zone6.gdd`).** Not
+a recolour of the outer five: each run's zone 6 is one of a rotation of **variants**, each with
+its own mechanic, story, bosses and look, drawn once from the seed on a stream of its own
+(`seed:zone6:variant` — nothing any other system draws moves). The geography above is
+unchanged; what the nodes hold is the variant's:
+- **The five LV5 nodes are its five mini-bosses** (`XX-5-1` … `XX-5-5`, in order). Losing to one
+  does **not** end the run: the team comes back with at least 25 % HP, the node stays
+  unconquered, the variant's penalty applies, and the player is back on the map. A first win
+  pays the variant's reward.
+- **The core is its final boss**, and keeps permadeath.
+- **The Void Frontier (虚无边境):** beyond the Styx. Gravity ×0.8 per win, ×1.1 per loss
+  (the owner's numbers), on every fighter, foe and thrown thing; the final boss, the Unwritten,
+  sweeps an empty floor with the Styx Tide — a wave only a jump clears, easily at low gravity.
+- **Avīci (无间地狱):** the five poisons hold the gates. Beat one and Māra, its lord, loses a
+  power; lose to one and it seals you — an uncleansable debuff on every protagonist.
 
 ## 8. Time, stamina, and the VOID
 

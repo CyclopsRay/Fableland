@@ -51,6 +51,12 @@ Player confirms "Finish the Day" ──▶ RunState.EndDay()   (the ordered pipe
   — it's what keeps each layer testable in isolation.
 - Nothing inside the arena mutates RunState except through the `Report*` API. No
   reaching in to decrement stamina from a foe script.
+- **The rules of a place travel in the handshake (v0.12.0).** `AdventureContext.Rules`
+  (`ArenaRules`) is computed by `BeginAdventure` — a realm's law, zone 6's variant, gravity and
+  role, the seals the run carries — and the arena puts it on every body that enters its tree
+  (`ArenaRulesApplier`, through `SceneTree.NodeAdded`) as source-keyed modifiers. A kit never
+  reads the map or the run to learn where it is; it calls `ScaleCooldown` where it starts a
+  cooldown and is otherwise unaware (`Docs/Zone6.gdd` §2, §8).
 
 ## 4. The damage pipeline (fixed stage order — extend, don't fork)
 

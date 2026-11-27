@@ -71,6 +71,15 @@ public partial class RunState : Node
     // ---- adventure handshake ----
     public AdventureContext CurrentAdventure;                 // null ⇒ debug-launched scene
 
+    // ---- zone 6 (Docs/Zone6.gdd) ----
+    /// <summary>This run's zone 6: its variant (drawn from the seed on a stream of its own),
+    /// the Void Frontier's gravity, Avīci's seals, wins and losses per node. Written here only,
+    /// when a zone-6 fight resolves (<see cref="ReportGoal"/>) or by a debug knob.</summary>
+    public Zone6State Zone6 = new();
+    /// <summary>What the last zone-6 fight changed, in a player's words ("gravity ×0.80 (was
+    /// ×1.00)") — the arena's toast and the map's next note. "" when nothing did.</summary>
+    public string LastZone6Note = "";
+
     // ---- run lifecycle ----
     public bool RunFinished;                                  // guards double scene-swaps
     public RunEndKind LastEndKind;
@@ -105,6 +114,16 @@ public partial class RunState : Node
         if (OS.IsDebugBuild())
             foreach (string failure in LocalTime.SelfTest())
                 GD.PushError($"[RunState] Local-time self-test failed: {failure}");
+        // Realm laws and zone 6 (Docs/Zone6.gdd): every violation is reported at boot.
+        if (OS.IsDebugBuild())
+        {
+            foreach (string problem in RealmLawTable.Validate()) GD.PushError("[RunState] " + problem);
+            foreach (string problem in Zone6Table.Validate()) GD.PushError("[RunState] " + problem);
+            foreach (string failure in Zone6State.SelfTest()) GD.PushError("[RunState] Zone-6 self-test failed: " + failure);
+        }
+        // A tester can pin every new run's zone 6 to one variant from outside the game.
+        string forced = OS.GetEnvironment("FABLELAND_ZONE6");
+        if (Zone6Table.Variant(forced) != null) Zone6State.ForcedVariantId = Zone6Table.Variant(forced).Id;
     }
     public override void _ExitTree() { if (Instance == this) Instance = null; }
 
@@ -217,6 +236,9 @@ public partial class RunState : Node
         _lastDayCheckpoint = null;
         _pendingBattleResumeNodeId = null;
         if (ActiveSaveSlot < 0) ActiveSaveSlot = 0;
+        // Its own stream (seed:zone6:variant): the draw moves nothing the generator made.
+        Zone6 = Zone6State.ForSeed(seed);
+        LastZone6Note = "";
 
         VisitedNodeIds.Clear();
         CompletedNodeIds.Clear();
@@ -292,6 +314,18 @@ public partial class RunState : Node
         // now, in every realm).
         if (kind == NodeKind.Boss && node != null && node.Level == 4)
             adventure.BossId = BossTable.ForWorld(node.Zone)?.Id ?? "";
+        // Zone 6 is a stage of its own (Docs/Zone6.gdd §3): each LV5 node is one of the
+        // variant's five mini-bosses, the LV6 core its final boss. The mission the generator
+        // rolled for an LV5 node stays in the graph untouched (no draw moves); the handshake
+        // overrides it here.
+        Zone6Role zone6Role = Zone6RoleOf(node);
+        if (zone6Role != Zone6Role.None)
+        {
+            adventure.Mission = MissionType.Boss;
+            adventure.BossId = zone6Role == Zone6Role.MiniBoss
+                ? Zone6.MiniBossAt(node.Id)
+                : Zone6.Variant?.FinalBossId ?? "";
+        }
         // The overworld selects an authored combat map once and snapshots only its path into
         // the handshake. The arena never reaches back into the map graph or rolls selection.
         if (node?.IsCombat == true)
@@ -300,9 +334,10 @@ public partial class RunState : Node
             // (MapGDD §7) — a map of one of the run's five, by the node's mission, drawn from a
             // stream of its own. An outer node is dealt its own world's, by level and band.
             bool inVoid = node.WorldIndex == -1;
-            var selected = inVoid
-                ? CombatMapCatalog.SelectForVoid(Seed, node.Id, Graph?.Worlds.ConvertAll(world => world.Abbr), adventure.Mission)
-                : CombatMapCatalog.Select(Seed, node.Id, node.Zone, node.Level, adventure.Mission, adventure.Terrain);
+            // Dealt for the mission the NODE rolled — a zone-6 gate's map is the one it was
+            // dealt before v0.12.0 (no map moves, none is orphaned); the fight on it is a boss's.
+            var selected = DealCombatMap(Seed, node, Graph?.Worlds.ConvertAll(world => world.Abbr), Zone6.Variant,
+                node.Mission, adventure.Terrain);
             adventure.CombatMapPath = selected?.AbsolutePath ?? "";
             adventure.VoidTouched = inVoid && selected != null;
             if (selected == null)
@@ -310,6 +345,10 @@ public partial class RunState : Node
         }
         bool isCombat = kind == NodeKind.Combat || kind == NodeKind.Boss;
         if (isCombat) adventure.BattleTeam = CaptureBattleTeam();
+        // The rules of this place (Docs/Zone6.gdd §7), computed here so the arena never asks:
+        // an outer node carries its realm's law, a zone-6 node its variant's rules; seals the
+        // run carries go everywhere.
+        if (isCombat && node != null) adventure.Rules = ArenaRules.Build(node.Zone, Zone6, zone6Role);
         CurrentAdventure = adventure;
         if (isCombat) Stamina = 0; // entering any combat node depletes all stamina (NODES §2.3)
 
@@ -333,6 +372,20 @@ public partial class RunState : Node
     public void ReportGoal(bool success, RewardBundle rewards)
     {
         var node = FindNode(CurrentAdventure?.NodeId);
+        LastZone6Note = "";
+        bool zone6Mini = node != null && CurrentAdventure?.Rules?.Zone6Role == Zone6Role.MiniBoss;
+        if (zone6Mini)
+        {
+            // Docs/Zone6.gdd §3: a mini-boss decides the variant's ladder — a first victory
+            // pays it once; every defeat costs, and the battle team limps home on at least a
+            // quarter of its HP instead of the run ending.
+            if (success && !CompletedNodeIds.Contains(node.Id)) LastZone6Note = Zone6.RecordWin(node.Id);
+            else if (!success)
+            {
+                LastZone6Note = Zone6.RecordLoss(node.Id);
+                FloorBattleTeamHp(Zone6Table.DefeatHpFloor);
+            }
+        }
         if (success)
         {
             if (node != null)
@@ -359,6 +412,52 @@ public partial class RunState : Node
             Stamina = 0;
         }
     }
+
+    /// <summary>Every member of the battle that just ended keeps at least this share of HP
+    /// (a zone-6 mini-boss defeat, Docs/Zone6.gdd §3).</summary>
+    private void FloorBattleTeamHp(float floor)
+    {
+        string[] ids = CurrentAdventure?.BattleTeam?.MemberIds ?? Array.Empty<string>();
+        foreach (string id in ids)
+        {
+            ProtagonistState member = FindProtagonist(id);
+            if (member != null) member.HpRatio = Math.Max(member.HpRatio, floor);
+        }
+    }
+
+    /// <summary>Which zone-6 fight a node is: an LV5 node's mini-boss, the LV6 core's final
+    /// boss, or none (any node outside zone 6, and its river hub).</summary>
+    public static Zone6Role Zone6RoleOf(MapNode node)
+    {
+        if (node == null || node.WorldIndex != -1 || !node.IsCombat) return Zone6Role.None;
+        if (node.Level >= 6) return Zone6Role.Final;
+        return Zone6Table.MiniBossSlot(node.Id) >= 0 ? Zone6Role.MiniBoss : Zone6Role.None;
+    }
+
+    /// <summary>
+    /// The authored map a combat node is dealt — the one rule <see cref="BeginAdventure"/> and
+    /// the run check share. An outer node gets one of its own world's maps by level, band and
+    /// mission; a zone-6 node wears one of the run's worlds (MapGDD §7) for the mission the
+    /// generator rolled into it (a gate's boss fights on the map the gate was always dealt) —
+    /// except a variant's final boss with a fixed arena of its own (Zone6.gdd §3).
+    /// Null ⇒ nothing matched; the arena opens its legacy stage.
+    /// </summary>
+    public static CombatMapSelection DealCombatMap(string seed, MapNode node, IReadOnlyList<string> runWorlds,
+        Zone6VariantDef zone6Variant, MissionType mission, string terrain)
+    {
+        if (node == null || !node.IsCombat) return null;
+        string fixedArena = Zone6RoleOf(node) == Zone6Role.Final ? zone6Variant?.FinalArenaMapId : null;
+        if (!string.IsNullOrEmpty(fixedArena)) return CombatMapCatalog.ById(fixedArena);
+        return node.WorldIndex == -1
+            ? CombatMapCatalog.SelectForVoid(seed, node.Id, runWorlds, mission)
+            : CombatMapCatalog.Select(seed, node.Id, node.Zone, node.Level, mission, terrain);
+    }
+
+    /// <summary>The mission a node is actually fought as: the generator's roll, except in zone
+    /// 6, where every combat node is a boss (the run check reads this, not the graph).</summary>
+    public static MissionType EffectiveMission(MapNode node) =>
+        node == null ? MissionType.Collection
+        : Zone6RoleOf(node) != Zone6Role.None ? MissionType.Boss : node.Mission;
 
     private void ApplyRewards(RewardBundle r)
     {
@@ -1019,6 +1118,7 @@ public partial class RunState : Node
         save.ProtagonistsCollected = ProtagonistsCollected;
         save.ItemsCollected = ItemsCollected;
         save.WorldsVisited = SortedIds(_worldsSet);
+        save.Zone6 = Zone6?.ToSave();
 
         save.Map ??= new MapSaveData();
         var devoured = new List<string>();
@@ -1109,6 +1209,11 @@ public partial class RunState : Node
             }
             RebuildNodeIndex();
         }
+
+        // Optional since v0.12.0: an older save has none and starts an empty zone 6 on the
+        // variant its seed draws (no save-version bump — Zone6.gdd §7).
+        Zone6 = Zone6State.FromSave(save.Zone6, Seed);
+        LastZone6Note = "";
 
         Day = Math.Max(1, save.Day);
         Stamina = Math.Clamp(save.Stamina, 0, MaxStamina);

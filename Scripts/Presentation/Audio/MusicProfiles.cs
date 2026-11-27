@@ -230,6 +230,8 @@ public static class MusicProfiles
     /// world is the VOID from node level 5 up, and home otherwise.</summary>
     public static MusicProfile ForArena(string world, int nodeLevel)
     {
+        // Zone 6's variants (Docs/Zone6.gdd §6) are scored as the VOID, whatever map they borrow.
+        if (world is "void_frontier" or "avici") return Get("VOID");
         MusicProfile named = Get(world);
         if (named != null && named.RestIntensity < 0f) return named;
         return nodeLevel >= 5 ? Get("VOID") : Get("VK");

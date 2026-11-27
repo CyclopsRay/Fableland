@@ -30,6 +30,7 @@ public partial class Hud : CanvasLayer
     private Button _defChoiceButton;
 
     private Button _finishDayButton;
+    private Label _rulesLabel;
     private Label _toastLabel;
     private string _toastToken;
 
@@ -96,6 +97,8 @@ public partial class Hud : CanvasLayer
         _finishDayButton = GetNode<Button>("FinishDayButton");
         _finishDayButton.Pressed += () => FinishDayPressed?.Invoke();
 
+        _rulesLabel = GetNodeOrNull<Label>("RulesLabel");
+        if (_rulesLabel != null) _rulesLabel.Visible = false;
         _toastLabel = GetNode<Label>("ToastLabel");
         _toastLabel.Visible = false;
 
@@ -228,6 +231,19 @@ public partial class Hud : CanvasLayer
     // ── Mission panel (G4) ────────────────────────────────────────────────────────────────
 
     public void SetMissionTitle(string text) => _missionTitleLabel.Text = text;
+
+    /// <summary>The rules of this place, one per line, under the HP bar for the whole fight: a
+    /// realm's law, zone 6's state, the seals on you (Docs/Zone6.gdd §6). None hides it.</summary>
+    public void SetRulesLines(System.Collections.Generic.IReadOnlyList<string> lines)
+    {
+        if (_rulesLabel == null) return;
+        bool any = lines != null && lines.Count > 0;
+        _rulesLabel.Text = any ? string.Join("\n", lines) : "";
+        _rulesLabel.Visible = any;
+    }
+
+    /// <summary>What the rules label shows right now (checks read it).</summary>
+    public string RulesText => _rulesLabel != null && _rulesLabel.Visible ? _rulesLabel.Text : "";
     public void SetProgress(string text) => _progressLabel.Text = text;
 
     public void SetTimer(bool hasTimer, float remaining)

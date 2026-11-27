@@ -43,6 +43,7 @@ public partial class PumpKingHead : CharacterBody2D
 
     private Vector2 _velocity;
     private Node2D _owner;
+    private float _gravityScale = 1f;   // the thrower's share of gravity at the throw (Zone6.gdd §7)
     private string _cueOwner = "pumpking";   // whose style the head's cues and hits take
     private float _dmgMult = 1f;
     private Action _onResolved;
@@ -76,6 +77,7 @@ public partial class PumpKingHead : CharacterBody2D
         float explosionRadius, float explosionDamage, float explosionKnockback, Action onResolved,
         CombatSide side = CombatSide.Player)
     {
+        _gravityScale = owner is CharacterController launcher ? launcher.GravityScale : 1f;
         _owner = owner;   // kept for reference/debug only — the mask below never includes the
                            // launcher's own layer, so no physical collision exception is needed.
         // The head looks for bodies on the other side: the Foes layer when the player's
@@ -113,7 +115,7 @@ public partial class PumpKingHead : CharacterBody2D
         if (_age >= Lifetime) { Explode(); return; }
         _ticksSinceRoll++;
 
-        _velocity.Y += FallGravity * dt;
+        _velocity.Y += FallGravity * _gravityScale * dt;
         // MaxRollSpeed models tangential rolling friction, not flight drag — clamping it
         // unconditionally used to eat the entire launch impulse on the very first tick
         // (Init() → this runs before the head has moved at all), so the head could never

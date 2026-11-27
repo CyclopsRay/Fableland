@@ -187,6 +187,41 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A fight the run survives must stop the fallen body writing its HP back (v0.12.0, zone 6)
+- **Symptom (caught in design):** a zone-6 mini-boss defeat floors the battle team at 25 % HP in
+  `RunState.ReportGoal`, but the arena writes the active body's HP back again on Finish the Day
+  and on Save & Quit — a dead body writes 0 over the floor.
+- **Rule:** after a survivable defeat `GameManager` sets `_hpSettled`, and `WriteBackHp` does
+  nothing from then on. Any rule that changes the run's HP after resolution needs the same.
+- **Why:** the arena's write-back assumed the body is the truth until the scene ends.
+
+### Changing what a node is fought as must not change which map it is dealt (v0.12.0, zone 6)
+- **Symptom (caught before landing):** making every zone-6 gate a boss fight and dealing it a
+  boss arena would have orphaned `vk_seashore_5` — an LV4 non-boss map reachable *only* through
+  zone 6's ordinary missions — and failed the content check's no-orphan walk.
+- **Rule:** the handshake overrides the mission; the map is still dealt for the mission the
+  generator rolled (`RunState.DealCombatMap(..., node.Mission, ...)`), shared with the run check.
+- **Why:** map reachability is a property of the dealing rule, not of the fight.
+
+### A check that teleports into zone 6 must also cross the singularity (v0.12.0, run check)
+- **Symptom:** the Avīci walk ended in `VoidDevoured` after its eighth day end: a lost gate sent
+  the player back to `PreviousNodeId` — the start node, never left — and the VOID ate it.
+- **Rule:** a check that enters zone-6 nodes with `BeginAdventure` first calls `EnterVoid` and
+  stands the player on the river hub (`XX-R`), as a real run does.
+- **Why:** `BeginAdventure` never sets `PreviousNodeId`; the map screen does.
+
+### Compare cooldowns by their start, not by what is left (v0.12.0, zone-6 check)
+- **Symptom:** PumpKing's 0.5 s Pump read 0.57 / 0.45 s left after four ticks — ×1.27, not the
+  seal's ×1.25 — because both had run the same 0.07 s.
+- **Rule:** assert the max's ratio and that both have run equally long (max − left equal); a
+  ratio of remaining times is not scale-invariant.
+
+### A validation of constants is "unreachable code" to the compiler (v0.12.0, build)
+- **Symptom:** `if (!(GravityWinFactor > 0f && …)) problems.Add(…)` on `const` values raised
+  CS0162 four times — the build must be 0 warnings.
+- **Rule:** ask through a local function (`Require(bool ok, string what)`); the rule is still
+  checked if a constant changes.
+
 ### A voice the engine was told to stop is free only after its next mix — and a one-shot ends in the engine's time, not yours (v0.11.7, audio check)
 - **Symptom:** the first allocation probe raised 13 500 cues on a made-up clock and started
   **0** voices; the engine had refused 22 765. `AudioStreamPlaybackPolyphonic.PlayStream`

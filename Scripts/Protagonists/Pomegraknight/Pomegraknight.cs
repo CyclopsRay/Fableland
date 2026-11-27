@@ -108,8 +108,8 @@ public partial class Pomegraknight : CharacterController
     private float _eTelegraph;
 
     // HUD skill-icon cooldowns: Shift = Blush, E = Pome Seed Eruption.
-    public override (float Remaining, float Max) ShiftCooldown => (_blushCd, BlushCooldown);
-    public override (float Remaining, float Max) ESkillCooldown => (_eCd, ECooldown);
+    public override (float Remaining, float Max) ShiftCooldown => (_blushCd, ScaleCooldown(BlushCooldown));
+    public override (float Remaining, float Max) ESkillCooldown => (_eCd, ScaleCooldown(ECooldown));
 
     protected override void InitCharacter()
     {
@@ -188,7 +188,7 @@ public partial class Pomegraknight : CharacterController
         if (_blushCd > 0f) return;
         SetBurning(BlushDuration);         // ignites passive (no self-damage; immune)
         _tornadoCharge = TornadoChargeWindow;
-        _blushCd = BlushCooldown;
+        _blushCd = ScaleCooldown(BlushCooldown);
         PlayAnim("ignite", restart: true);
         CueBus.Emit(this, "s1.cast", magnitude: BlushDuration);
     }
@@ -255,7 +255,7 @@ public partial class Pomegraknight : CharacterController
     protected override void HandleSkill2()
     {
         if (_eCd > 0f || PomeSeedScene == null) return;
-        _eCd = ECooldown;
+        _eCd = ScaleCooldown(ECooldown);
         _eTelegraph = 2.6f;
         // Erupt is a 1s idle-frame hold — Unity's erupt clip was empty (showed
         // the default sprite), so this is a faithful port, not a placeholder.

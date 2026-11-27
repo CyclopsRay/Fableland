@@ -27,8 +27,8 @@ public partial class Cleopastar : CharacterController
     private float _shiftCooldown;
     private float _blackholeCooldown;
 
-    public override (float Remaining, float Max) ShiftCooldown => (_shiftCooldown, ShiftCooldownSeconds);
-    public override (float Remaining, float Max) ESkillCooldown => (_blackholeCooldown, BlackholeCooldownSeconds);
+    public override (float Remaining, float Max) ShiftCooldown => (_shiftCooldown, ScaleCooldown(ShiftCooldownSeconds));
+    public override (float Remaining, float Max) ESkillCooldown => (_blackholeCooldown, ScaleCooldown(BlackholeCooldownSeconds));
 
     protected override void InitCharacter()
     {
@@ -81,7 +81,7 @@ public partial class Cleopastar : CharacterController
         if (_shiftCooldown > 0f) return;
         PruneStars();
 
-        _shiftCooldown = ShiftCooldownSeconds;
+        _shiftCooldown = ScaleCooldown(ShiftCooldownSeconds);
         Vector2 capturedAim = Controls.AimPoint(this);
         var volley = new CleoGlideVolley();
 
@@ -118,7 +118,7 @@ public partial class Cleopastar : CharacterController
         }
 
         if (best == null || !best.ToggleBlackhole()) return;
-        _blackholeCooldown = BlackholeCooldownSeconds;
+        _blackholeCooldown = ScaleCooldown(BlackholeCooldownSeconds);
     }
 
     protected override void HandleSkillUlt()

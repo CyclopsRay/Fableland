@@ -51,9 +51,9 @@ public partial class SifuPangda : CharacterController
     public override bool CanUseHeldItem => _state == PangdaState.Normal;
     public override bool LocksPhysicalMotion => _state is PangdaState.HeliDive or PangdaState.HeliShift;
     public override (float Remaining, float Max) ShiftCooldown => IsOnFloor()
-        ? (_fuhuShiftCd, Def.FuhuShiftCooldown) : (_heliShiftCd, Def.HeliShiftCooldown);
+        ? (_fuhuShiftCd, ScaleCooldown(Def.FuhuShiftCooldown)) : (_heliShiftCd, ScaleCooldown(Def.HeliShiftCooldown));
     public override (float Remaining, float Max) ESkillCooldown => IsOnFloor()
-        ? (_fuhuECd, Def.FuhuECooldown) : (_heliECd, Def.HeliECooldown);
+        ? (_fuhuECd, ScaleCooldown(Def.FuhuECooldown)) : (_heliECd, ScaleCooldown(Def.HeliECooldown));
 
     public override void _Ready()
     {
@@ -293,7 +293,7 @@ public partial class SifuPangda : CharacterController
     private void StartFuhuShift()
     {
         if (_fuhuShiftCd > 0f) return;
-        _fuhuShiftCd = Def.FuhuShiftCooldown;
+        _fuhuShiftCd = ScaleCooldown(Def.FuhuShiftCooldown);
         _state = PangdaState.FuhuShiftWindup;
         _stateTimer = Def.FuhuShiftWindup;
         ControlsLocked = true;
@@ -314,7 +314,7 @@ public partial class SifuPangda : CharacterController
     private void StartHeliShift()
     {
         if (_heliShiftCd > 0f) return;
-        _heliShiftCd = Def.HeliShiftCooldown;
+        _heliShiftCd = ScaleCooldown(Def.HeliShiftCooldown);
         Vector2 aim = Controls.AimPoint(this) - GlobalPosition;
         _dashDirection = aim.LengthSquared() > 0.01f ? aim.Normalized() : new Vector2(Facing, 0f);
         _dashDistanceRemaining = Units.Px(Def.HeliDashDistanceM);
@@ -361,7 +361,7 @@ public partial class SifuPangda : CharacterController
     private void StartFuhuDrink()
     {
         if (_fuhuECd > 0f) return;
-        _fuhuECd = Def.FuhuECooldown;
+        _fuhuECd = ScaleCooldown(Def.FuhuECooldown);
         _state = PangdaState.FuhuDrink;
         _stateTimer = Def.DrinkDuration;
         _drinkShieldGranted = false;
@@ -371,7 +371,7 @@ public partial class SifuPangda : CharacterController
     private void ThrowHeliBottle()
     {
         if (_heliECd > 0f || BottleScene == null || GetParent() == null) return;
-        _heliECd = Def.HeliECooldown;
+        _heliECd = ScaleCooldown(Def.HeliECooldown);
         Vector2 origin = FirePoint != null ? FirePoint.GlobalPosition : GlobalPosition;
         Vector2 aim = Controls.AimPoint(this) - origin;
         Vector2 direction = aim.LengthSquared() > 0.01f ? aim.Normalized() : new Vector2(Facing, 0f);

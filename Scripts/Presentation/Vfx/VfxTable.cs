@@ -68,6 +68,10 @@ public static class VfxTable
         ["CC"] = Realm("enamel"),
         ["VOID"] = Realm("void"),
         ["Z6"] = Realm("void"),
+        // Zone 6's variants (Docs/Zone6.gdd §6): an arena there is tagged with its variant, and
+        // every one is drawn in the VOID's medium, never the medium of the world it borrows.
+        ["void_frontier"] = Realm("void"),
+        ["avici"] = Realm("void"),
     };
 
     public static VfxLook LookOf(string owner) =>
@@ -170,6 +174,12 @@ public static class VfxTable
         .Add(CueOwners.Hazard, "tsunami", new VfxDef
         {
             Id = "tsunami_hit", Archetype = VfxArchetype.Splash, StyleFrom = VfxStyleFrom.Arena, Element = VfxElement.Water,
+            OwnerColours = false, Size = 30f, Priority = VfxPriority.Critical,
+        })
+        // The Styx Tide (the Unwritten's wave, Zone6.gdd §4.2): the river's own splash.
+        .Add(CueOwners.Hazard, "styx_tide", new VfxDef
+        {
+            Id = "styx_tide_hit", Archetype = VfxArchetype.Splash, StyleFrom = VfxStyleFrom.Arena, Element = VfxElement.Water,
             OwnerColours = false, Size = 30f, Priority = VfxPriority.Critical,
         })
         // Every hit that names nothing — the four kits not wired yet — in its attacker's medium.

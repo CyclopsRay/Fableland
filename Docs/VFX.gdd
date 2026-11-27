@@ -145,7 +145,8 @@ colours of its own.
 | `sifu_pangda` | ink | burnt ink, heavy ink, ink green | **provisional** |
 | `crab` · `seagull` · `boss_crab` | watercolour | crab orange · feather cream and grey · deep red | VK natives |
 | `VK` `SL` `BM` `HC` `TD` `PL` `KH` `TF` | watercolour · poster · ink · realism · linocut · gongbi · scratchboard · pixel | — | the tag of `arena.enter` |
-| `CC` · `VOID` / `Z6` | enamel · void | — | Cloud Court has no world; nothing raises a VOID tag yet (§9). *As merged (v0.11.6) no arena reaches either row: since v0.11.3 the Cloud Court map announces `PL` (gongbi), and a zone-6 fight announces the world whose map it wears — TBD #49, #50* |
+| `CC` · `VOID` / `Z6` | enamel · void | — | Cloud Court has no world (§9). *As merged (v0.11.6) no arena reached either row: since v0.11.3 the Cloud Court map announces `PL` (gongbi) — TBD #50, still open* |
+| `void_frontier` · `avici` | void | — | **v0.12.0:** a zone-6 arena announces its **variant** (`Docs/Zone6.gdd` §6), at its backdrop's lightness **after** the VOID treatment — so every zone-6 fight is drawn in the VOID's medium, never the borrowed world's, and the contrast guard judges the canvas on screen. Closes TBD #49's zone-6 half |
 
 Rules the director applies (`VfxDef.StyleFrom`): **Owner** — the cue's owner; for a hit, the
 attack's owner, else the body that swung, else the player when a foe was hit (the four
@@ -347,7 +348,7 @@ Neither needs a code change; `Assets/Vfx/` does not exist yet.
 | The four other kits' own abilities | Out of scope; their cues are not raised yet. Until then every hit they land is drawn as the generic hit of their home medium, and the attacker is *inferred* (the player, when a foe is hit) |
 | Decals (juice stains, poop splats), trails on projectiles, afterimages | Pooled decals and ≤ 8 trails are budgeted in R2 §4.9 but not built |
 | A cue for a status **ending** with a flourish (Blush's steam puff, a thaw's shatter) | The loop's stop is told; nothing says *how* it ended |
-| `arena.enter` from the map editor's Playtest, and for zone 6 | The Playtest raises none, so its effects use the default medium; no map carries a VOID tag |
+| `arena.enter` from the map editor's Playtest | The Playtest raises none, so its effects use the default medium. (Zone 6 raises its variant's tag since v0.12.0 — §4) |
 | The fan's real angles on `s2.wave`; the swing's cone for the other kits | `CueShapes.Cone` is there to be used when they are wired |
 | Screen-space distortion, glow, 2D lights, `CanvasGroup` outlines | Cost on the Mobile renderer unmeasured [R2 B9.19, *from memory*] |
 | A spawn queue ("wait two frames, then drop") | Over-budget effects are dropped at once; simpler, and nothing Critical is affected |
@@ -430,3 +431,8 @@ the gallery's telegraph cannot show its fill; ambience is still sparse on big sc
 | 2026-11-26 | `arena.enter` carries the arena as its `Source`; the director ends ambience when that node leaves the tree | A loop whose source leaves is ended by listeners already; no new cue |
 | 2026-11-26 | The i-frame blink waits for the hit flash | Found in the captures; visual only |
 | 2026-11-26 | **For the owner:** Cleopastar → poster and Sifu Pangda → ink remain provisional; the VOID style has no bible; Cloud Court (`CC`) keeps the enamel style though no world owns it | One field each in `VfxTable.Looks` |
+
+**v0.12.0 (zone 6).** Two arena tags (`void_frontier`, `avici`) map to the VOID medium, and the
+Unwritten's **Styx Tide** has a hit row of its own — `hazard`/`styx_tide`, a splash in the
+arena's medium like the tsunami's (`VfxTable`). The wave itself is drawn by its hazard until it
+has art (a Prussian-blue wall with a white crest — the Void Frontier's cyanotype).

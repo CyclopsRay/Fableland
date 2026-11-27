@@ -1,0 +1,412 @@
+# Fableland — Zone 6 and the Rules of a Place GDD
+
+Zone 6 (第六区) is not a recoloured copy of the outer five. It is a stage of its own, with its
+own mechanic and its own story, and it **rotates**: each run is one of several variants. This
+document defines the first two — **The Void Frontier (虚无边境)** and **Avīci (无间地狱)** — the
+twelve bosses they field, and the system both are built on: **the rules of a place**, which
+also carries each outer realm's own **law** (Wulin's is the first).
+
+First landed in **v0.12.0** (design + engine, stand-in kits). Every number below is
+**provisional** — recorded in the Decisions log (§10) — except the owner's own: the Void
+Frontier's −20 % / +10 % gravity steps and Wulin's "one more jump, each 0.75 as high".
+
+Code: `Scripts/Data/Zone6Table.cs`, `Scripts/Data/RealmLawTable.cs`, `Scripts/Data/BossTable.cs`
+(the twelve rows), `Scripts/Run/Zone6State.cs`, `Scripts/Run/ArenaRules.cs`,
+`Scripts/Orchestration/Arena/ArenaRulesApplier.cs`, `Scripts/Hazard/StyxTideHazard.cs`.
+Check: `Scenes/Run/Zone6Check.tscn`, and the zone-6 walk of `Scenes/Run/RunWalkCheck.tscn`.
+
+---
+
+## 1. The owner's brief
+
+> 我们的第六区其实并不是前五个区的简单换色，而是有自己的机制和故事线。我们先做两个进行轮换
+> 探索一下美术风格。计划中 每一种第六区都对应一种独特的机制 可能是debuff 可能是地图风格
+> 可能是 接触方式 等等。… 普通的realms也可能有不同的features 是独属于这个realms本身的。…
+> 武林世界 所有角色可以多跳一次 但是每次跳跃高度只有正常的0.75倍。… 虚无边境 … 穿越冥河后
+> 达到的生与死的交界。在这里，每打败一个boss重力就会减少20%，失败则会增加10%，直到最终进入
+> 虚空迎接最后的挑战 … 最终的boss地图将会非常空旷 所以如果受到重力太多可能很难躲避。…
+> 无间地狱的小boss是五毒 贪嗔痴慢疑 … 黑暗佛教风格。每打过一个boss，最终boss就会被封印一种
+> 能力，但是被打败自己却会被封印一种能力（… 无法被清除的debuff …）
+
+What that asks for, and where it lands:
+
+| Ask | Here |
+|-----|------|
+| Zone 6 has its own mechanic and story; two variants rotate | §3, §4, §5 |
+| Each variant: a unique mechanic — a debuff, a map style, a way of touching | Void Frontier: gravity. Avīci: seals |
+| Realms can have features of their own; Wulin: +1 jump, 0.75 height | §2, `MapGDD.md` §2.3 |
+| Void Frontier: −20 % gravity per win, +10 % per loss; an empty final map | §4 |
+| Avīci: the five poisons; a dark Buddhist final boss; win → he loses a power, lose → you gain an uncleansable debuff | §5 |
+| "Think about the rest" — the five guardians, both final bosses | §4.1, §4.2, §5.2 |
+
+---
+
+## 2. The rules of a place
+
+A fight's **rules** are what the place it happens in does to the bodies in it: the realm's law,
+zone 6's variant, the seals a run carries. One record (`ArenaRules`) holds them; the run
+computes it when a node is entered and hands it to the arena with the rest of the handshake
+(`AdventureContext.Rules`, T10 §3). The arena puts it on **every body that enters it** — the
+opening fighter, a switch-in, a boss staged after the countdown, a wave of adds — as
+source-keyed modifiers (golden rule 7). A projectile takes its thrower's share of gravity when
+it is thrown. **A kit never reads the map or the run** (T00): it only finds itself lighter,
+jumping again, slower to reload.
+
+**Realm laws** (`MapGDD.md` §2.3 is their home): one data row per world (`RealmLawTable`),
+applied with source `realm:<code>` to every fighter on both sides — protagonists and a
+Foe-side boss alike — and to ordinary foes only when the row says so (then its gravity only).
+Shown as one line at the start of every fight in that realm, and listed on the HUD for the
+whole fight.
+
+| World | Realm | Law | Rule | Foes? |
+|-------|-------|-----|------|-------|
+| BM | Wulin (武林) | **Qinggong (轻功)** | +1 jump on top of each kit's own; every jump 0.75 as high (launch ×√0.75). Ground jumps, air jumps and swim strokes alike; coyote time and the jump cooldown unchanged | no |
+| the other seven | — | TBD #62 | — | — |
+
+Measured (Zone6Check): Pomegraknight rises **8.3 m** on her one jump; under Qinggong **6.2 m**
+on each of two (×0.75).
+
+**Zone 6 never applies the law of the world whose map it borrows.** It has rules of its own.
+
+**Who takes what.**
+
+| Rule | Fighters (Player side) | Fighters (Foe side: a boss) | Ordinary foes | Projectiles |
+|------|------|------|------|------|
+| A realm's law | yes | yes | only if the row says so, gravity only | — |
+| The Void Frontier's gravity | yes | yes | yes | the thrower's share, at the throw |
+| Avīci's seals | yes — every protagonist | no | no | — |
+| Māra's sealed powers | — | the final boss only | — | — |
+
+---
+
+## 3. Zone 6 as a stage
+
+**The variant.** Chosen once per run, from the seed, on a stream of its own
+(`seed:zone6:variant`): no number any other system draws moves, so every existing seed still
+generates the same world, and a save from before v0.12.0 — which stores no variant — is given
+its seed's. Across 400 seeds the two are dealt 185 / 215. A debug knob (§8) forces one.
+*Rotation as meta-progression — which variants a player meets, unlocks — is TBD #63.*
+
+**Five gates and the core.** The geography is the generator's, untouched (`MapGDD.md` §7):
+
+| Node | Is | Foe level | Timer | Losing it |
+|------|----|-----------|-------|-----------|
+| `XX-5-1` … `XX-5-5` | the variant's five **mini-bosses**, one per node in order (`MiniBossIds[0..4]`) | 7 | 240 s | **survived** (below) |
+| `XX-R` | the river hub | — | — | — |
+| `XX-6-1` | the variant's **final boss** | 8 | 360 s | **the run ends** (TwistedReality aside) |
+
+The mission the generator rolled into an LV5 node stays in the graph; the handshake overrides
+it (`Mission = Boss`, `BossId` = that gate's warden). No draw moves. Mini-bosses scale by the
+node's foe level exactly as a realm's boss scales by the day's (`FOES.gdd` §8.2).
+
+**A mini-boss defeat does not end the run.** A defeat is the fighter in play falling (the arena
+never sends a benched fighter in on a death — `NODES.gdd` §2.2) or the gate's timer running
+out. Then:
+- every member of the battle team comes back with **at least 25 % HP** (`DefeatHpFloor`);
+- the node stays **unconquered**, and the player is sent back to where they came from;
+- the variant's **penalty** applies (§4, §5), and a toast says what it was;
+- the day must still be finished; the gate can be fought again, with no limit.
+
+The **first** victory at a gate pays the variant's **reward**; a gate already conquered pays
+nothing more. A zone-6 boss recruits nobody and gives no item: the reward *is* the variant's.
+
+**Maps.** A gate is fought on the map it was always dealt (`MapGDD.md` §7): a map of one of
+the run's five worlds **for the mission the generator rolled into it**, drawn VOID-touched in
+the variant's look (§6); the mini-boss perches on its Level Goal markers. So no map moves and
+none is orphaned. A variant may give its final boss a **fixed arena** (`FinalArenaMapId`):
+the Void Frontier does; Avīci's core is dealt a run world's boss arena, as before.
+
+---
+
+## 4. The Void Frontier (虚无边境)
+
+*Past the River Styx, the shore where life and death touch.* The far bank is where every
+storybook's dead wash up — and every afterlife sends its ferrymen and judges. Each guardian you
+beat loosens the living world's hold: you grow **lighter**. Lose, and you fall back heavier with
+life. At the end the shore gives out into the Void, where something that was never written
+waits — on a floor with nothing to hide behind but the air.
+
+**Gravity, G.** 1.0 on arrival. **×0.8 per mini-boss victory, ×1.1 per defeat** (the owner's
+numbers), clamped to **[0.25, 2.0]**. G is on every fighter on both sides, every foe, and every
+gravity projectile (a seed, a head, a gull's dropping takes its thrower's G when thrown). **The
+launch speed is unchanged** — so a jump at G = 0.5 goes twice as high and hangs twice as long.
+Five clean wins: ×0.328. A loss first, then five wins: ×0.360.
+
+### 4.1 The five guardians (mini-bosses)
+
+Authoritative look and skills. Every guardian is drawn as a cyanotype photogram with **one spot
+colour** of its own (§7). Until its kit is built each fields the stand-in (§9).
+
+| Node | Guardian | Spot | Look | Skills |
+|------|----------|------|------|--------|
+| XX-5-1 | **The Ferryman (渡魂人)** | amber | a hooded giant in a skiff, an amber lantern, an oar, a string of obols | **Oar Sweep** (BA), **Obol Toss**, **Undertow**, **Skiff Ram** |
+| XX-5-2 | **The Weigher of Hearts (称心官)** | gold | a jackal-headed judge, a gold collar, a balance | **Feather Fan**, **Judgement** — the arena's two scale pans are platforms that tilt; the low pan sinks into a hazard — **Devourer's Jaws** |
+| XX-5-3 | **Meng Po of the Naihe Bridge (孟婆)** | red | a small old woman, an iron ladle, a cauldron, a red lantern, bowls | **Soup Lob** — *Forget*: your next skill press within 4 s fails — **Ladle Sweep**, **Bridge Mist**; her arena is one long bridge |
+| XX-5-4 | **Xolotl, the Soul-Dog of Mictlan (冥犬修洛特)** | jade | a skeletal dog-god on backward feet, a jade collar, lightning | **Pounce**, **Carry** (drags you 1.5 s), **Lightning Howl** |
+| XX-5-5 | **Stingy Jack, the Lantern Wanderer (守灯杰克)** | ember orange | a lanky wanderer, an ember in a carved turnip | **Ember Toss** (sets OnFire), **Lantern Step**, **Lights Out** (3 s of dark) |
+
+**The Ferryman in numbers** (first-pass; built in v0.12.1, `FOES.gdd` §8):
+
+| Skill | What it does |
+|-------|--------------|
+| Oar Sweep (BA) | a cone 5 m deep, ±50°: 30 damage and an 18 m/s horizontal shove; every 1.4 s |
+| Obol Toss (S1, 6 s) | a fan of 3 coins thrown under gravity (and G): 10 damage and **−150 ult charge** each — the toll |
+| Undertow (S2, 12 s) | every fighter within 14 m is dragged toward him at 4 m/s for 2.5 s; then he sweeps |
+| Skiff Ram (below 50 % HP, every 15 s) | a 0.8 s lantern telegraph, then he rides across at 16 m/s: 40 damage and a knock-up |
+| Brain | Undertow when you are beyond 8 m and it is ready; Sweep within 5 m; Obol at 5–14 m; Ram in phase 2 when ready; otherwise hold near the river's edge |
+
+### 4.2 The Unwritten (无名者) — the final boss
+
+*A faceless figure of torn pages and erased ink, with a hole for a face: the one character no
+storybook ever wrote, who tore the books apart looking for a story of its own.* Proposed as the
+run's **dark leader** (TBD #1).
+
+| Skill | What it does |
+|-------|--------------|
+| **Styx Tide** (signature) | the river at the horizon rears up and **sweeps the whole floor from one side**: jump it, or it hits hard (30 % of max HP) and **carries** you with it |
+| **Rising Tide** | below half HP, two waves in succession (1.1 s apart); below a quarter, the second comes from the other side |
+| **Borrowed Shapes** | a phase in which it fights with the kit of one of your own party |
+| **Blank Page** | a white-out: the screen goes blank but for the fighters |
+
+**The Styx Tide punishes high gravity.** A wall of water 5.5 m tall and 3 m deep at 14 m/s.
+Only up escapes it — a slab above it is as safe as the air — so how long a jump hangs is
+everything. Measured with real bodies (Zone6Check §5: Pomegraknight, one jump, lanes jumping at
+every other tick):
+
+| Gravity | Window in which one jump clears it | Target |
+|---------|-----------------------------------|--------|
+| ×0.5 | **1.33 s** | comfortable at ≤ ×0.6 |
+| ×1.0 | **0.30 s** | clearable only with good timing |
+| ×1.5 | **0** | nearly impossible from ×1.3 (one jump cannot; a double-jump kit can) |
+
+Arithmetic (for tuning): a jump launched at 32 m/s stays above 5.5 m for
+2·√(32² − 2·64G·5.5) / (64G) s; the wave takes (3 + 1.5) m / 14 m/s ≈ 0.32 s to pass a body.
+At G ≈ 1.25 the two meet. Schedule: the first wave 6 s after the boss is staged, one every 9 s,
+its side drawn from a stream of its own (`arena:<node>:mission:styx`).
+
+**Its arena.** *An empty floor; the Styx at the horizon; the only escape is up.* Until it is
+painted (Z6-VF-F, §7), the core is fought on **`starfield_sea_level_sl`**: Starland's
+sea-level plain — one unbroken floor and three slabs, drawn VOID-touched in the Void Frontier's
+look. (Not Starland's boss arena: its 12 m plateau would stand above the tide all fight.)
+
+*Implemented in v0.12.0:* the Styx Tide and the Rising Tide, on the stand-in kit.
+*Deferred:* Borrowed Shapes, Blank Page, its own kit.
+
+---
+
+## 5. Avīci (无间地狱)
+
+*The lowest hell, without interval.* Māra, lord of desire and death, keeps the five poisons at
+its gates. Beat a poison and Māra loses the power it fed; lose to one and it **enters you** — a
+seal that nothing can cleanse.
+
+### 5.1 The five poisons (mini-bosses)
+
+Each stack of a seal applies to **every protagonist** of the run, for the rest of the run, in
+every fight; a further defeat by the same poison adds a stack, **up to 3**. Seals cannot be
+cleansed — no blessing, heal, shelter or item removes them (`Zone6State` exposes no way to;
+Zone6Check proves a blessing and a heal leave them). They show on the HUD in every fight and on
+the map.
+
+| Node | Poison | Warden | Seal, per stack | Māra loses |
+|------|--------|--------|-----------------|------------|
+| XX-5-1 | 贪 Greed | **Preta, the Hungry Ghost (饿鬼)** — grey-green, a huge belly, a needle throat. **Gorge** (inhales; swallowed projectiles heal it), **Spew**, **Hungry Grasp** | **Hunger**: reload time +30 % | **Devour** — heals from the damage he deals |
+| XX-5-2 | 嗔 Anger | **Asura of Wrath (修罗)** — three faces, six arms, a tiger skin, a flame aureole. **Six-Arm Flurry**, **Wrath Fire**, **Vajra Throw**, **Rising Wrath** | **Smoulder**: damage taken +15 % | **Wrath** — an enraged phase below half HP |
+| XX-5-3 | 痴 Delusion | **The Boar of Delusion (痴猪)** — a black boar with closed eyes. **Blind Charge** (stuns itself on a wall), **Mirror Herd**, **Mire** (left and right swap) | **Fog**: skill cooldowns +25 % | **Delusion** — mirror images |
+| XX-5-4 | 慢 Pride | **The Fallen Deva (衰天)** — a god in the five decays. **Heavy Halo**, **Wilting Garland**, **Pride's Armour** (poise, and a phase taking 70 % less damage) | **Burden**: move speed −15 % | **Iron Throne** — an invulnerable throne phase |
+| XX-5-5 | 疑 Doubt | **Ox-Head and Horse-Face (牛头马面)** — two wardens. **Two Minds** (only the real one takes damage; they swap), **Chain Hook**, **Trident Feint** | **Hesitation**: attack interval +20 % | **Doubt** — a curse that makes some of your casts fizzle |
+
+How a seal reaches a body: reload and attack interval through the magazine's multipliers,
+damage taken through the defense pool (the defense that makes 100/(100+d) the scale: one stack
+of Smoulder is −13.0), cooldowns through the kits' one cooldown helper, move speed on walking,
+running and swimming. Measured on all five kits of the roster (Zone6Check §4c): every one takes
+×1.15 damage and walks ×0.85 as fast under one stack of each.
+
+**The Asura of Wrath in numbers** (first-pass; built in v0.12.1):
+
+| Skill | What it does |
+|-------|--------------|
+| Six-Arm Flurry (BA) | 3 cone hits 0.12 s apart, 3.5 m reach, 12 damage each; 4 hits when enraged |
+| Wrath Fire (S1, 8 s) | two floor waves, left and right, at 10 m/s for 12 m: 15 damage + 20 OnFire stacks; jumpable |
+| Vajra Throw (S2, 7 s) | flies 12 m and returns: 20 damage each way, a small shove |
+| Rising Wrath (passive) | attack interval and cooldowns × (1 − 0.4 × the share of HP missing); **enraged** below 50 % HP (cue `passive.wrath.enrage`) |
+| Brain | Flurry within 3.5 m; Vajra at 5–12 m; Wrath Fire when you are grounded within 12 m; otherwise close in |
+
+### 5.2 Māra Pāpīyas (天魔波旬) — the final boss
+
+*A black-blue wrathful demon with a crown of five skulls, holding the Wheel of Life in his
+claws.* His five powers are the five above; each gate you win **seals** one. Until his kit is
+built (the five powers are its design), the stand-in loses **12 % of its HP and 10 points of
+damage per sealed power** (`MaraHpPerSeal`, `MaraDamagePerSeal`), applied after his row — at
+foe level 8 with two sealed: 3420 of 4500 HP, damage ×1.60 of ×1.80. Five sealed leaves 40 %.
+
+---
+
+## 6. What the player sees and hears
+
+- **The HUD** lists the place's rules under the HP bar for the whole fight — the realm's law;
+  `The Void Frontier (虚无边境) · gravity ×0.80`; `Sealed in you: Hunger ×1, Burden ×2`;
+  `Sealed in Māra: Wrath, Doubt` — and says the first as a toast when the fight opens. After a
+  zone-6 result the toast says what changed ("gravity ×0.88 (was ×1.10)", "贪 Greed enters you —
+  sealed with Hunger ×1"), and the list gains where zone 6 now stands.
+- **The map's info panel** shows zone 6's status line once the run has crossed into it or
+  carries a seal.
+- **The look.** A gate's borrowed map is drawn VOID-touched in its variant's look
+  (`Zone6Look`: grey = luma(c); out = mix(grey, c, colour kept) × shade + lift):
+
+  | Variant | Colour kept | Shade | Lift | Reads as |
+  |---------|-------------|-------|------|----------|
+  | (none — before v0.12.0) | 0.22 | 0.50 0.44 0.62 | 0 | drained, darkened toward violet |
+  | The Void Frontier | 0.14 | 0.56 0.68 0.70 | 0.10 0.14 0.15 | a cold grey-teal mist |
+  | Avīci | 0.24 | 0.66 0.22 0.16 | 0 | dark; what colour is left is fire |
+
+  Fighters, foes, hazards, telegraphs and the HUD keep their colour.
+- **Cues.** `flow`/`arena.enter` in zone 6 is tagged with the **variant** (`void_frontier`,
+  `avici`), and its magnitude is the backdrop's lightness **after** the treatment — so effects
+  are drawn, and the hit flash chooses dark or light, for the canvas actually on screen. The
+  VFX director and the music both map the two tags to the **VOID** medium (`VfxTable.Looks`,
+  `MusicProfiles.ForArena`). This closes the zone-6 half of TBD #49. The Styx Tide's hit is
+  `hazard`/`styx_tide` (a splash in the arena's medium, like the tsunami).
+
+---
+
+## 7. Art direction — confirmed by the concept images (2026-11-27)
+
+The images are in `Docs/Art/StyleExploration/zone6/img/` (previews; the full-size PNGs are in
+the git-ignored `_originals/`); `manifest.json` beside them holds every prompt in full and
+where each came from (Tripo Studio, GPT Image 2.5). Ids below are the manifest's.
+
+### 7.1 The Void Frontier — **cyanotype (蓝晒)**
+
+Prussian-blue ground; the figures white and pale-cyan **photogram silhouettes**, as if objects
+had been laid on sensitised paper in the sun; a sun-bleached, brushed sensitiser edge; **no
+outlines**. **One spot colour per guardian** — Ferryman amber, Weigher gold, Meng Po red,
+Xolotl jade, Jack ember orange — the only warm thing on the page. The concepts hold it well.
+
+| Id | What |
+|----|------|
+| `Z6-VF-A` | the far shore of the Styx — **cyanotype** (chosen) |
+| `Z6-VF-B` | the same shore — Greek black-figure pottery (explored) |
+| `Z6-VF-C` | the same shore — hand-tinted magic-lantern slide (explored) |
+| `Z6-VF-F` | the final arena: an endless empty floor, the Styx rearing at the horizon into the wave |
+| `Z6-VF-1` … `-6` | the Ferryman, the Weigher, Meng Po, Xolotl, Stingy Jack, the Unwritten |
+| `Z6-SPR-FERRYMAN` | the source of the in-game sprite |
+
+Prompt core (the arena sheets): *"Side-view 2D platform-fighter arena … the far shore of the
+River Styx, where life and death touch — a grey shingle bank, a narrow ferryman's skiff moored
+at a crooked jetty with a lantern on its prow, drowned stone stairs …"* + the medium line;
+the boss sheets: *"Character concept art of a boss for a 2D side-view action game: <who> …
+Full body in a three-quarter view, centred …"*.
+
+### 7.2 Avīci — **Tibetan nagtang (黑唐卡)**
+
+Gold and vermilion line on **black**; flame aureoles; mineral blue and green; the iconography
+of the wrathful protectors; **the Wheel of Life held by Māra**. This is the owner's Tibetan
+request, and the arena and boss sheets read strongly.
+
+| Id | What |
+|----|------|
+| `Z6-AV-A` | the gates of Avīci — **nagtang** (chosen) |
+| `Z6-AV-B` | the same gates — a Japanese hell scroll (地狱草纸) (explored) |
+| `Z6-AV-C` | the same gates — black lacquer with gold leaf (explored) |
+| `Z6-AV-F` | Māra's arena: black stone over a sea of fire, Māra colossal behind it |
+| `Z6-AV-1` … `-6` | Preta, the Asura, the Boar, the Fallen Deva, Ox-Head and Horse-Face, Māra |
+| `Z6-SPR-ASURA` | the source of the in-game sprite |
+
+### 7.3 In-game sprites
+
+Keyed to transparency, 384 px tall, side view facing **left**, no pink fringe:
+`Assets/Sprites/Bosses/Ferryman/ferryman.png` (384 × 384, with the oar) and
+`Assets/Sprites/Bosses/AsuraWrath/asura_wrath.png` (364 × 384, six arms, the aureole). Scaled
+so each boss stands **3.5–4 m** (32 px/m). Used from v0.12.1.
+
+**Not yet decided:** a cyanotype or nagtang *tile kit* for the arenas (each variant's own maps —
+TBD #33 continues); whether the VOID treatment's looks (§6) should move toward these media
+(a Prussian-blue cast for the Frontier; black-and-gold for Avīci) once maps exist.
+
+---
+
+## 8. Engineering
+
+- **Data** (pure C#, `Scripts/Data`): `RealmLawTable` (a row per world with a law),
+  `Zone6Table` (variants, poisons, looks, every number above, `VariantForSeed`, `StepGravity`,
+  `MiniBossSlot`, `Validate`), the twelve rows of `BossTable` (`BossRole.Zone6Mini` /
+  `Zone6Final`, world `XX`, no protagonist, `Signature = "styx_tide"` on the Unwritten).
+- **State** (`Zone6State`, one owner — `RunState`, at mission resolution only): variant,
+  gravity, seals on you, powers sealed in Māra, wins and losses per node. `RecordWin` /
+  `RecordLoss` apply the variant's rule and return the player's line.
+- **Rules** (`ArenaRules.Build(world, zone6, role)`): computed by `RunState.BeginAdventure`
+  for every combat node into `AdventureContext.Rules`; `ArenaRulesApplier` puts it on bodies
+  (`GameManager` applies it to every `CharacterController` and `BaseFoe` that enters its tree,
+  through `SceneTree.NodeAdded`, and to the final boss after its row: `ApplyBossRules`).
+- **Body modifiers** (`CharacterController`, each source-keyed and multiplied): gravity scale,
+  extra jumps, jump-height scale, move-speed scale, skill-cooldown scale (`ScaleCooldown` — the
+  one helper kits call where they start a cooldown, and nowhere else), reload scale and
+  attack-interval scale (forwarded to the magazine, kept across a magazine swap). `BaseFoe`:
+  gravity scale. Projectiles: `PomeSeed`, `PumpKingHead`, `PoopProjectile` take their
+  thrower's gravity scale at the throw.
+- **Resolution** (`GameManager`): in a mini-boss fight, a fall or the timer resolves the
+  mission as failed — never `EndRun` — and `RunState.ReportGoal` records the loss, floors the
+  battle team's HP and sends the player back; the fallen body then writes nothing more.
+- **Save.** `RunSaveData.Zone6` (variant, gravity, seals, Māra's seals, per-node record). It is
+  optional: a version-4 save from before v0.12.0 has none and loads into an empty zone 6 on
+  its seed's variant — **no version bump**. Proven with copies of the owner's own three slots
+  (RunWalkCheck `--saves=`).
+- **Debug** (debug page, key 4 → *Zone 6*): which variant new runs get (seeded / either);
+  a fight with any of the twelve bosses; gravity ×0.8 / ×1.1 / reset; a seal + / −. The knobs
+  edit the run in progress, or — with none — the state a debug fight is dealt. The
+  environment variable `FABLELAND_ZONE6=void_frontier|avici` pins every new run's variant.
+
+---
+
+## 9. Stand-ins and what is deferred
+
+| What | Now (v0.12.0) | To come |
+|------|---------------|---------|
+| All twelve bosses' kits | BOSS PumpKing's kit under each one's own row (name, HP, foe level) | own kits; v0.12.1: the Ferryman and the Asura of Wrath |
+| The Unwritten | the stand-in + the real **Styx Tide / Rising Tide** | Borrowed Shapes, Blank Page; its arena (Z6-VF-F) |
+| Māra | the stand-in, −12 % HP and −10 damage per sealed power | his five powers, each removed by its seal |
+| Zone-6 arenas | run worlds' boss arenas, VOID-touched per variant; the Frontier's core on Starland's sea-level plain | each variant's own maps and tile kit (cyanotype, nagtang) |
+| Meng Po's bridge, the Weigher's pans | — | arenas of their own |
+| HUD seals | text lines | icons (TBD #67) |
+| Laws for seven realms | none | TBD #62 |
+
+---
+
+## 10. Decisions log
+
+Every entry is **provisional** — a first pass to be played and confirmed by the owner.
+
+| Date | Decision | Why |
+|------|----------|-----|
+| 2026-11-27 | The variant is drawn from the seed on a stream of its own (`seed:zone6:variant`); a debug knob and `FABLELAND_ZONE6` force it | Nothing existing moves; a save keeps its seed, so its variant is derivable |
+| 2026-11-27 | The five LV5 nodes are the variant's five mini-bosses in node order; the handshake overrides the rolled mission (no draw) | Deterministic mapping; the graph and its signature unchanged |
+| 2026-11-27 | A gate keeps the map its rolled mission deals (not a boss arena) | Every map zone 6 dealt stays dealt — `vk_seashore_5` is reachable only there; boss arenas are the core's |
+| 2026-11-27 | A mini-boss defeat = the fighter in play falls, or the timer runs out; the team returns with ≥ 25 % HP, the node stays unconquered, the penalty applies, back to the map; no limit on retries | The owner's ladder needs defeats the run survives; 25 % keeps a retry possible |
+| 2026-11-27 | Only a gate's **first** win pays the reward; a zone-6 boss recruits nobody and pays no item | The ladder is the reward; no farming a gate |
+| 2026-11-27 | The core keeps permadeath (TwistedReality still rewinds it) | The final fight stays final |
+| 2026-11-27 | Gravity clamped to [0.25, 2.0] | Multiplicative steps never reach 0 but a losing streak grows without end |
+| 2026-11-27 | G applies to fighters on both sides, foes and gravity projectiles; launch speed unchanged | The owner's "gravity" is the world's, not the player's |
+| 2026-11-27 | Void Frontier guardians: the Ferryman, the Weigher of Hearts, Meng Po, Xolotl, Stingy Jack — five afterlives' border-keepers, one per run world's culture | "The boundary between life and death" — every storybook's dead come here |
+| 2026-11-27 | The Unwritten as the Frontier's final boss, proposed as the dark leader (TBD #1) | A story-eating black hole's last being is one never written |
+| 2026-11-27 | Styx Tide: 5.5 m × 3 m at 14 m/s, 30 % max HP and a carry; first at 6 s, every 9 s; Rising Tide below 50 % / both sides below 25 % | Measured: ×0.5 → 1.33 s, ×1 → 0.30 s, ×1.5 → 0 — the targets |
+| 2026-11-27 | The Frontier's core on `starfield_sea_level_sl` until its own arena exists | The emptiest shipped flat floor; Starland's boss arena has a 12 m plateau the tide cannot reach |
+| 2026-11-27 | Avīci: seals stack to 3; Hunger +30 % reload, Smoulder +15 % damage taken, Fog +25 % cooldowns, Burden −15 % move, Hesitation +20 % attack interval | Each fits its poison; cap 3 keeps Burden from stopping a fighter |
+| 2026-11-27 | Māra Pāpīyas as Avīci's final boss; his five powers are the poisons'; the stand-in loses 12 % HP / 10 damage per seal | The owner's "dark Buddhist" lord; the seal must be felt before his kit exists |
+| 2026-11-27 | Damage taken goes through the defense pool (additive with other defense); attack interval through the magazine's multiplier | One pool per stat (golden rule 7) |
+| 2026-11-27 | A realm's law reaches ordinary foes only if its row says so; Qinggong does not | Crabs with an extra jump would change the foe design |
+| 2026-11-27 | Zone 6 never applies a borrowed world's law | It has rules of its own |
+| 2026-11-27 | Per-variant VOID looks (grey-teal mist; fire on black); `arena.enter` tagged with the variant at the drained lightness | Closes TBD #49's zone-6 half |
+| 2026-11-27 | Art: the Void Frontier in **cyanotype** with one spot colour per guardian; Avīci in **Tibetan nagtang**. Explored and kept on file: black-figure pottery, magic-lantern slide; hell scroll, black lacquer and gold | Confirmed by the concept images (§7) |
+
+---
+
+## 11. TBDs
+
+In the registry (`Docs/Instructions/10-DESIGN.md` §6): **#1** (the dark leader — proposed: the
+Unwritten), **#33** (zone 6's own maps), **#49** (zone-6 half closed), and new: **#62** laws
+for the other seven realms · **#63** rotation as meta-progression · **#64** the ten other zone-6
+kits and both final bosses' full kits · **#65** whether a mini-boss defeat should cost more
+than the day (an item, a shelter's blessing) · **#66** the seal and ladder numbers, played ·
+**#67** seal icons on the HUD and the map · **#68** whether a seal or the gravity should show
+on the fighters themselves.

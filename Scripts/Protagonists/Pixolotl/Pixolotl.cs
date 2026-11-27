@@ -43,8 +43,8 @@ public partial class Pixolotl : CharacterController
         ? CharacterTable.Pixolotl.ELocalTimeRate
         : LocalTime.DefaultRate;
 
-    public override (float Remaining, float Max) ShiftCooldown => (_shiftCd, CharacterTable.Pixolotl.ShiftCooldown);
-    public override (float Remaining, float Max) ESkillCooldown => (_eCd, CharacterTable.Pixolotl.ESkillCooldown);
+    public override (float Remaining, float Max) ShiftCooldown => (_shiftCd, ScaleCooldown(CharacterTable.Pixolotl.ShiftCooldown));
+    public override (float Remaining, float Max) ESkillCooldown => (_eCd, ScaleCooldown(CharacterTable.Pixolotl.ESkillCooldown));
     // E expressly permits movement and Branquias, but no other arena action. Shift and
     // its recovery lock controls as well, so all three non-Normal states reject these.
     public override bool CanSwitchProtagonist => _state == TemporalState.Normal;
@@ -154,7 +154,7 @@ public partial class Pixolotl : CharacterController
     {
         if (_state != TemporalState.Normal || _eCd > 0f) return;
         _state = TemporalState.EActive;
-        _eCd = CharacterTable.Pixolotl.ESkillCooldown;
+        _eCd = ScaleCooldown(CharacterTable.Pixolotl.ESkillCooldown);
         _eRealTimer = 0f;
         _eFramesGenerated = 0;
     }
@@ -241,7 +241,7 @@ public partial class Pixolotl : CharacterController
         float rewindSeconds = _shiftJumps == 1 ? _frameTimer : CharacterTable.Pixolotl.FrameInterval;
         RewindOwnedBubbles(rewindSeconds);
 
-        if (_shiftCd <= 0f) _shiftCd = CharacterTable.Pixolotl.ShiftCooldown;
+        if (_shiftCd <= 0f) _shiftCd = ScaleCooldown(CharacterTable.Pixolotl.ShiftCooldown);
         if (_frames.Count == 0)
         {
             ResolveShift();

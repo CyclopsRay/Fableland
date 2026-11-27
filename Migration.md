@@ -9,6 +9,28 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.0** — **Zone 6 is a stage of its own, and realms have laws.** Design: `Docs/Zone6.gdd`
+  (every number provisional, logged). **Realm laws:** a data row per world, applied to every
+  fighter on both sides as source-keyed modifiers; the first is Wulin's **Qinggong (轻功)** — one
+  more jump, each 0.75 as high (measured 8.3 m → 6.2 m twice) — shown as one line when a fight
+  opens and listed on the HUD. **Zone 6 rotates:** each run's is one variant, drawn from the seed
+  on its own stream (no seed's world moves). Its five LV5 nodes are the variant's five
+  **mini-bosses** and its core the **final boss**; losing to a mini-boss **does not end the
+  run** — the team returns with ≥ 25 % HP, the node stays unconquered, the variant's penalty is
+  paid. **The Void Frontier (虚无边境):** gravity ×0.8 per win, ×1.1 per loss, on every fighter,
+  foe and thrown thing; guardians the Ferryman, the Weigher of Hearts, Meng Po, Xolotl, Stingy
+  Jack; the final boss **the Unwritten** sweeps an empty floor with the **Styx Tide** — a 5.5 m
+  wave a jump clears in a 1.33 s window at ×0.5, 0.30 s at ×1, never at ×1.5. **Avīci
+  (无间地狱):** the five poisons guard the gates; losing to one seals you (reload, damage taken,
+  cooldowns, move speed, attack interval — stacks to 3, never cleansed); beating one seals a
+  power in **Māra Pāpīyas**. Every zone-6 boss fields BOSS PumpKing's kit under its own row for
+  now. Zone-6 arenas are drawn in each variant's look and announced as the variant
+  (`void_frontier`, `avici`) at their drained lightness — effects and music treat both as the
+  VOID (closes TBD #49's zone-6 half). Art direction confirmed by 22 concept images
+  (`Docs/Art/StyleExploration/zone6/`): **cyanotype** for the Frontier, **Tibetan nagtang** for
+  Avīci; two keyed boss sprites (Ferryman, Asura) for v0.12.1. New check `Zone6Check`; the run
+  check plays both variants through; old saves (the owner's three) load. Debug page: variant,
+  any zone-6 boss, gravity, seals; `FABLELAND_ZONE6`.
 - **0.11.8** — **A hand-off for the next session.** Docs only. `HANDOFF.md` at the repo root replaces reading the previous session. It says where the work is: this branch; `main` at v0.11.0; the owner's editor on an old worktree; full-size concept originals only on disk. It gives one line per version from v0.11.1 to v0.11.7 with what to read before touching each, and what is not done in priority order with the `KNOWLEDGE.md` caveats to read for each. It also lists what waits on the owner and how to work on this machine (model routing, usage limits, Python, scratch `HOME`, integrating parallel branches). Nothing in the game changed.
 - **0.11.7** — **The game has sound: an audio director, a synthesis toolkit, music for every
   world.** Design, the ten media, every rule and the budgets: `Docs/Audio.gdd`; research

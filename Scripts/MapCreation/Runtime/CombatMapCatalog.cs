@@ -145,6 +145,22 @@ public static class CombatMapCatalog
         return candidates;
     }
 
+    /// <summary>
+    /// A shipped map by its id, whatever its world, level or goals say: the one arena a fight
+    /// is always fought on (a zone-6 variant's final boss, Docs/Zone6.gdd §3). Shipped maps
+    /// only — a fixed arena is content, never what one developer saved in the editor. Null when
+    /// no shipped map has the id; the caller falls back as for any unmatched node.
+    /// </summary>
+    public static CombatMapSelection ById(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        var loaded = new List<CombatMapSelection>();
+        LoadDirectory(ProjectSettings.GlobalizePath(BuiltInDirectory), true, loaded, new HashSet<string>());
+        foreach (CombatMapSelection map in loaded)
+            if (string.Equals(map.Document?.Id, id.Trim(), StringComparison.Ordinal)) return map;
+        return null;
+    }
+
     /// <summary>Load the exact selection stored in AdventureContext. A missing/corrupt map is a
     /// content error, not a run-ending error: callers fall back to the legacy Arena scene.</summary>
     public static MapDocument LoadDocument(string absolutePath)

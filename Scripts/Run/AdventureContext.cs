@@ -22,11 +22,16 @@ public sealed class AdventureContext
     /// draws it as the VOID has left it — drained and dark (<c>VoidTreatment</c>). False in
     /// the outer worlds, and in zone 6 when nothing matched and the legacy arena opens.</summary>
     public bool VoidTouched;
-    /// <summary><c>BossTable</c> id of the boss holding this node, when the node is a realm's
-    /// 4-1 — every realm names one, its own boss or the stand-in (<c>BossTable.ForWorld</c>).
-    /// Empty (the LV6 core) ⇒ the arena fields the placeholder (FOES §8.1).</summary>
+    /// <summary><c>BossTable</c> id of the boss holding this node: a realm's 4-1 (its own boss
+    /// or the stand-in, <c>BossTable.ForWorld</c>), a zone-6 LV5 node (the variant's mini-boss
+    /// for that gate) or the zone-6 core (the variant's final boss) — Docs/Zone6.gdd §3.
+    /// Empty ⇒ the arena fields the placeholder (FOES §8.1).</summary>
     public string BossId = "";
     /// <summary>Frozen party order captured exactly once at combat entry. The Arena
     /// owns its live switch cursor; shelter edits affect the next battle only.</summary>
     public BattleTeamSnapshot BattleTeam;
+    /// <summary>The rules of this place (Docs/Zone6.gdd §7): the realm's law, zone 6's gravity
+    /// and role, the seals the run carries. Computed by <see cref="RunState"/> at entry; the
+    /// arena applies it to every body and never asks the run why.</summary>
+    public ArenaRules Rules = ArenaRules.None;
 }

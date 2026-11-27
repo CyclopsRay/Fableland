@@ -214,6 +214,23 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
         if (!string.IsNullOrWhiteSpace(source)) _continuousExternalVelocity.Remove(source);
     }
 
+    // Rules of a place (Docs/Zone6.gdd §7): source-keyed shares of gravity, multiplied —
+    // the Void Frontier's ladder, a realm law that binds foes. Set by orchestration only.
+    private readonly Dictionary<string, float> _gravityScales = new();
+
+    /// <summary>Share of gravity this foe feels (all sources multiplied; 1 when none).</summary>
+    public float GravityScale
+    {
+        get { float m = 1f; foreach (float v in _gravityScales.Values) m *= v; return m; }
+    }
+
+    public void SetGravityScale(string source, float scale)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+        if (Mathf.IsEqualApprox(scale, 1f)) _gravityScales.Remove(source);
+        else _gravityScales[source] = Mathf.Max(0f, scale);
+    }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────────
     public override void _Ready()
     {
@@ -429,7 +446,7 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
         {
             // a buoyant medium leaves only part of gravity. Foes are carried passively by a
             // soft volume; a fighter swims in one instead (SoftVolume.cs)
-            if (!IsOnFloor()) IntentVel.Y += Gravity * _softVolumes.GravityScale * dt;
+            if (!IsOnFloor()) IntentVel.Y += Gravity * GravityScale * _softVolumes.GravityScale * dt;
             else if (IntentVel.Y > 0f) IntentVel.Y = 0f;
         }
         // no-gravity foes: IntentVel is fully controlled by the subclass movement/skills.

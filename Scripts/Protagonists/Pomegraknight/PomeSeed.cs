@@ -22,6 +22,7 @@ public partial class PomeSeed : Area2D
     private bool _burning;
     private float _life = 6f;
     private float _dmgMult = 1f;
+    private float _gravityScale = 1f;   // the owner's share of gravity at the throw (Zone6.gdd §7)
     private CharacterController _damageOwner;
     private CombatSide _side = CombatSide.Player;
     // The owner's content id, kept as a string: a seed outlives a Tab switch, and its hit
@@ -38,6 +39,7 @@ public partial class PomeSeed : Area2D
         _burning = burning;
         _dmgMult = dmgMult;
         _damageOwner = damageOwner;
+        _gravityScale = damageOwner?.GravityScale ?? 1f;
         // A seed fights for whoever fired it, and looks for bodies on the other side.
         _side = damageOwner?.Side ?? CombatSide.Player;
         if (damageOwner != null) _cueOwner = damageOwner.FeedbackId;
@@ -59,7 +61,7 @@ public partial class PomeSeed : Area2D
     {
         float dt = (float)delta;
 
-        _velocity.Y += FallGravity * dt;
+        _velocity.Y += FallGravity * _gravityScale * dt;
         Position += _velocity * dt;
         _life -= dt;
         if (_life <= 0f) QueueFree();

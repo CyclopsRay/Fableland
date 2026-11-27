@@ -43,6 +43,10 @@ public sealed class BossMission : Mission
     private bool _timedOut;
     private Vector2 _bossPosition;           // where the boss last stood — where it fell
     private string _bossCueId = "";          // the boss's content id, the tag of its flow cues
+    private StyxTideSchedule _styx;          // the Unwritten's signature (Docs/Zone6.gdd §4.2)
+
+    /// <summary>The Styx Tide's schedule when this boss runs it (read-only: checks).</summary>
+    public StyxTideSchedule StyxTide => _styx;
 
     public override void Setup(GameManager arena, int nodeLevel, DetRandom rng)
     {
@@ -106,10 +110,15 @@ public sealed class BossMission : Mission
         body.GlobalPosition = perches[home];
         body.SetSpawnPoint(perches[home]);                    // _Ready latched the scene origin
         fighter.BeginFight(_def, _arena.FoeLevel, new BossArena(perches, home));   // AFTER AddChild (caveat)
+        // What the run took from this boss (Māra's sealed powers) comes off its row now.
+        _arena.ApplyBossRules(body);
 
         _boss = body;
         _fighter = fighter;
-        _alreadyRecruited = RunState.Instance?.FindProtagonist(_def.ProtagonistId) != null;
+        _alreadyRecruited = _def.Recruits && RunState.Instance?.FindProtagonist(_def.ProtagonistId) != null;
+        // A field attack the fight runs whatever kit stands in: the Styx rising from the
+        // horizon on the Unwritten's floor, from a stream of its own.
+        if (_def.Signature == "styx_tide") _styx = new StyxTideSchedule(RaiseStyxTide, _rng.Sub("styx"));
         DebugManager.Instance?.LogMission($"Boss staged: {_def.Id} at perch {home + 1}/{perches.Count}, HP {body.MaxHP:0}");
         return true;
     }
@@ -168,6 +177,8 @@ public sealed class BossMission : Mission
             return;
         }
 
+        _styx?.Tick(dt, BossMaxHp > 0f ? BossHp / BossMaxHp : 1f);
+
         if (!_addWaveSpawned && BossMaxHp > 0f && BossHp <= BossMaxHp * 0.5f)
         {
             _addWaveSpawned = true;
@@ -189,19 +200,34 @@ public sealed class BossMission : Mission
         if (_boss != null && BossAlive) _fighter?.StandDown();
     }
 
+    /// <summary>One wave of the Styx Tide on this arena's main floor.</summary>
+    private StyxTideHazard RaiseStyxTide(float direction)
+    {
+        if (_arena.HazardLayer == null) return null;
+        var wave = new StyxTideHazard { Name = "StyxTide" };
+        wave.Configure(direction, _arena.FloorY, _arena.ArenaLeft, _arena.ArenaRight);
+        _arena.HazardLayer.AddChild(wave);
+        return wave;
+    }
+
+    /// <summary>True when the boss on the field is one of zone 6's (Docs/Zone6.gdd).</summary>
+    private bool Zone6Boss => _def != null && _def.Role != BossRole.Realm;
+
     // LV6 is irrelevant — victory ends the run before any reward would matter. Beating the
-    // named boss recruits its protagonist (NODES §4.5); the stand-in recruits nobody.
+    // named boss recruits its protagonist (NODES §4.5); the stand-in recruits nobody. A zone-6
+    // mini-boss's reward is its variant's (gravity, a seal on Māra — RunState), nothing else.
     public override RewardBundle Reward()
     {
-        var reward = _nodeLevel >= 6 ? new RewardBundle() : new RewardBundle { ItemDefIds = { "yukais_rope" } };
-        if (FieldsRealBoss && _nodeLevel < 6) reward.ProtagonistGrants.Add(_def.ProtagonistId);
+        if (Zone6Boss || _nodeLevel >= 6) return new RewardBundle();
+        var reward = new RewardBundle { ItemDefIds = { "yukais_rope" } };
+        if (FieldsRealBoss && _def.Recruits) reward.ProtagonistGrants.Add(_def.ProtagonistId);
         return reward;
     }
 
     // Recruiting happens once (RunState.GrantProtagonist), so it is announced once: a boss
-    // standing in for a realm whose own is not built, or met again, simply falls.
+    // standing in for a realm whose own is not built, met again, or of zone 6 simply falls.
     public override string SuccessToast => !FieldsRealBoss ? base.SuccessToast
-        : _alreadyRecruited ? $"{_def.DisplayName} falls!"
+        : _alreadyRecruited || !_def.Recruits ? $"{_def.DisplayName} falls!"
         : $"{_def.DisplayName} falls — {_def.ProtagonistId} joins you!";
 
     private string BossName => FieldsRealBoss ? _def.DisplayName : "the BOSS";

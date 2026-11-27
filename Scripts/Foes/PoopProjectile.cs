@@ -24,6 +24,9 @@ public partial class PoopProjectile : Area2D
     /// <summary>Called by the seagull right after AddChild (so it runs after _Ready).</summary>
     public void Init(float damage) => _damage = damage;
 
+    /// <summary>The dropper's share of gravity at the drop (Docs/Zone6.gdd §7).</summary>
+    public float GravityScale = 1f;
+
     public override void _Ready()
     {
         SetCollisionLayerValue(Units.LayerProjectile, true);
@@ -38,7 +41,7 @@ public partial class PoopProjectile : Area2D
     {
         if (_spent) return;
         float dt = (float)delta;
-        _vel.Y += FallGravity * dt;
+        _vel.Y += FallGravity * GravityScale * dt;
         Position += _vel * dt;
         _life -= dt;
         if (_life <= 0f) QueueFree();

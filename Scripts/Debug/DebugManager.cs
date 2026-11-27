@@ -244,17 +244,18 @@ public partial class DebugManager : CanvasLayer
         vbox.AddChild(clearBtn);
 
         // Boss fights (FOES.gdd §8): stage any boss without the overworld. One button per
-        // BossTable row, so a new boss appears here by existing.
+        // realm boss row, so a new boss appears here by existing; zone 6's twelve share a picker.
         var bossTitle = new Label { Text = "Boss fights (from the title screen — no run in progress)" };
         bossTitle.AddThemeFontSizeOverride("font_size", 14);
         vbox.AddChild(bossTitle);
-        foreach (BossDef boss in BossTable.All)
+        foreach (BossDef boss in BossTable.RealmBosses())
         {
             BossDef def = boss;   // captured per-iteration for the closure
             var fight = new Button { Text = "Fight " + def.DisplayName };
             fight.Pressed += () => StageBossFight(def);
             vbox.AddChild(fight);
         }
+        BuildZone6Section(vbox);
         var clearBoss = new Button { Text = "Clear staged boss" };
         clearBoss.Pressed += ClearStagedBoss;
         vbox.AddChild(clearBoss);
@@ -386,6 +387,7 @@ public partial class DebugManager : CanvasLayer
         {
             RepositionProtagonistPanel();
             RefreshProtagonistButtons();
+            RefreshZone6Status();
         }
         _protagonistPanel.Visible = _protagonistPageVisible;
     }
@@ -394,7 +396,7 @@ public partial class DebugManager : CanvasLayer
     {
         var vp = GetViewport().GetVisibleRect().Size;
         float w = vp.X * 0.40f;
-        float h = vp.Y * 0.68f;      // roster + the boss-fight section
+        float h = vp.Y * 0.92f;      // roster, the boss-fight section and zone 6's knobs
         float x = (vp.X - w) / 2f;
         float y = (vp.Y - h) / 2f;
         _protagonistPanel.Position = new Vector2(x, y);
@@ -452,6 +454,101 @@ public partial class DebugManager : CanvasLayer
         if (_protagonistPageVisible) ToggleProtagonistPage();
         GetTree().Paused = false;
         GetTree().ChangeSceneToFile("res://Scenes/Arena.tscn");
+    }
+
+    // ---- zone 6 (Docs/Zone6.gdd §8) -------------------------------------------------
+
+    private Label _zone6Status;
+
+    /// <summary>Zone 6's knobs: which variant new runs get, a fight with any of its twelve
+    /// bosses, the Void Frontier's gravity and Avīci's seals — on the run in progress, or on
+    /// the state a debug fight is dealt when there is none.</summary>
+    private void BuildZone6Section(VBoxContainer vbox)
+    {
+        var title = new Label { Text = "Zone 6" };
+        title.AddThemeFontSizeOverride("font_size", 14);
+        vbox.AddChild(title);
+
+        var variantRow = new HBoxContainer();
+        variantRow.AddChild(new Label { Text = "New runs:" });
+        var variant = new OptionButton();
+        variant.AddItem("Seeded");
+        foreach (Zone6VariantDef v in Zone6Table.Variants) variant.AddItem(v.Name + " (" + v.NameZh + ")");
+        int forced = Array.FindIndex(Zone6Table.Variants, v => v.Id == Zone6State.ForcedVariantId);
+        variant.Selected = forced + 1;
+        variant.ItemSelected += index =>
+        {
+            Zone6State.ForcedVariantId = index <= 0 ? null : Zone6Table.Variants[index - 1].Id;
+            LogSystem("Zone 6 variant for new runs: " + (Zone6State.ForcedVariantId ?? "seeded"));
+            RefreshZone6Status();
+        };
+        variantRow.AddChild(variant);
+        vbox.AddChild(variantRow);
+
+        var fightRow = new HBoxContainer();
+        var bosses = new OptionButton { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        List<BossDef> zone6 = BossTable.Zone6Bosses();
+        foreach (BossDef boss in zone6) bosses.AddItem((boss.Role == BossRole.Zone6Final ? "★ " : "") + boss.DisplayName);
+        fightRow.AddChild(bosses);
+        var fight = new Button { Text = "Fight" };
+        fight.Pressed += () => { if (bosses.Selected >= 0) StageBossFight(zone6[bosses.Selected]); };
+        fightRow.AddChild(fight);
+        vbox.AddChild(fightRow);
+
+        var gravityRow = new HBoxContainer();
+        gravityRow.AddChild(new Label { Text = "Gravity:" });
+        foreach ((string text, float factor) in new[] { ("×0.8 (win)", Zone6Table.GravityWinFactor), ("×1.1 (loss)", Zone6Table.GravityLossFactor), ("Reset", 0f) })
+        {
+            float f = factor;
+            var button = new Button { Text = text };
+            button.Pressed += () =>
+            {
+                Zone6State state = EditableZone6();
+                state.DebugSetGravity(f > 0f ? state.Gravity * f : Zone6Table.GravityOnArrival);
+                LogSystem($"Zone 6 gravity ×{state.Gravity:0.00}");
+                RefreshZone6Status();
+            };
+            gravityRow.AddChild(button);
+        }
+        vbox.AddChild(gravityRow);
+
+        var sealRow = new HBoxContainer();
+        sealRow.AddChild(new Label { Text = "Seal:" });
+        var poison = new OptionButton();
+        foreach (Zone6PoisonDef p in Zone6Table.Poisons) poison.AddItem(p.Glyph + " " + p.SealName);
+        poison.Selected = 0;
+        sealRow.AddChild(poison);
+        foreach ((string text, int delta) in new[] { ("+", 1), ("−", -1) })
+        {
+            int d = delta;
+            var button = new Button { Text = text, CustomMinimumSize = new Vector2(32, 0) };
+            button.Pressed += () =>
+            {
+                Zone6State state = EditableZone6();
+                state.DebugAddSeal(Zone6Table.Poisons[Math.Max(0, poison.Selected)].Id, d);
+                LogSystem("Zone 6 seals: " + state.StatusLine());
+                RefreshZone6Status();
+            };
+            sealRow.AddChild(button);
+        }
+        vbox.AddChild(sealRow);
+
+        _zone6Status = new Label { Text = "", AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        vbox.AddChild(_zone6Status);
+        RefreshZone6Status();
+    }
+
+    /// <summary>The zone 6 the knobs edit: the run's when one exists, else the debug state.
+    /// A change lands in the next arena entered — a fight already running keeps its rules.</summary>
+    private static Zone6State EditableZone6() =>
+        RunState.Instance?.Graph != null ? RunState.Instance.Zone6 : Zone6State.Debug;
+
+    private void RefreshZone6Status()
+    {
+        if (_zone6Status == null) return;
+        Zone6State state = EditableZone6();
+        string whose = RunState.Instance?.Graph != null ? "this run" : "debug fights";
+        _zone6Status.Text = $"{whose}: {state.StatusLine()}";
     }
 
     private void ClearStagedBoss()

@@ -11,6 +11,8 @@ using Fableland.Run;
 public sealed class AmmoController
 {
     private readonly Dictionary<string, float> _attackIntervalMultipliers = new();
+    // Source-keyed multipliers on the reload delay (a zone-6 seal: Docs/Zone6.gdd §4).
+    private readonly Dictionary<string, float> _reloadMultipliers = new();
 
     public CharacterAmmoDef Definition { get; }
     public int Current { get; private set; }
@@ -51,8 +53,30 @@ public sealed class AmmoController
     {
         if (Current >= Capacity) return;
         ReloadActive = true;
-        ReloadRemaining = Definition.ReloadDelaySec;
+        ReloadRemaining = EffectiveReloadDelay;
         Changed?.Invoke();
+    }
+
+    /// <summary>The reload delay after every source-keyed multiplier (product; 1 when none).</summary>
+    public float ReloadMultiplier
+    {
+        get { float m = 1f; foreach (float v in _reloadMultipliers.Values) m *= v; return m; }
+    }
+
+    public float EffectiveReloadDelay => Definition.ReloadDelaySec * ReloadMultiplier;
+
+    /// <summary>The basic-attack interval after every source-keyed multiplier (read-only).</summary>
+    public float EffectiveAttackIntervalSeconds => EffectiveAttackInterval();
+
+    public void SetReloadMultiplier(string source, float multiplier)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+        _reloadMultipliers[source] = Math.Max(0.01f, multiplier);
+    }
+
+    public void ClearReloadMultiplier(string source)
+    {
+        if (!string.IsNullOrWhiteSpace(source)) _reloadMultipliers.Remove(source);
     }
 
     public void SetAttackIntervalMultiplier(string source, float multiplier)
@@ -89,7 +113,7 @@ public sealed class AmmoController
                 if (restored > 0) ReloadCompleted?.Invoke(restored);
 
                 if (Definition.RepeatReloadWhileMissing && Current < Capacity)
-                    ReloadRemaining += Definition.ReloadDelaySec;
+                    ReloadRemaining += EffectiveReloadDelay;
                 else
                 {
                     ReloadActive = false;
@@ -106,7 +130,7 @@ public sealed class AmmoController
         AttackCooldownRemaining = 0f;
         Current = Definition.RespawnMode == AmmoRespawnMode.Full ? Capacity : 0;
         ReloadActive = Current < Capacity && Definition.RepeatReloadWhileMissing;
-        ReloadRemaining = ReloadActive ? Definition.ReloadDelaySec : 0f;
+        ReloadRemaining = ReloadActive ? EffectiveReloadDelay : 0f;
         Changed?.Invoke();
     }
 

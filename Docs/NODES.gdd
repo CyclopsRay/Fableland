@@ -101,6 +101,12 @@ Reach the **level-6 node** (`XX-6-1`) in zone 6 and defeat the **final BOSS**
 This is a **rogue-like**. If the player **dies in combat**, the run is over — permadeath,
 no continue, no restart-from-shelter. A new run starts from scratch with a fresh seed.
 
+**The one exception (v0.12.0, provisional): a zone-6 mini-boss** (an LV5 node — `Docs/Zone6.gdd`
+§3). Falling to one, or its timer running out, loses the fight and not the run: the battle team
+comes back with at least 25 % HP, the node stays unconquered, the zone-6 variant's penalty
+applies (heavier gravity; a seal), and the player is sent back as for a non-death failure
+(§2.3). The LV6 core keeps permadeath.
+
 Additionally, **running out of time in a BOSS fight** (LV4 or LV6) is **immediate death**
 (§4.5).
 
@@ -119,7 +125,7 @@ For all other mission types, failing to achieve the goal is **not fatal**:
 | Protect | Condensed Wonder Core destroyed | The mission ends **immediately**. No victory loot. Player survives. Node is **not** marked as completed. |
 | Destroy | Timer expires, objectives not all destroyed | No reward. Node is **not** marked as completed. Player survives. |
 | Slaughter | Timer expires, waves not all cleared | No reward. Node is **not** marked as completed. Player survives. |
-| BOSS | Timer expires | **Immediate death** (permadeath). |
+| BOSS | Timer expires | **Immediate death** (permadeath) — except a zone-6 mini-boss (LV5), whose timer is a defeat the run survives (§2.2). |
 
 (Dying during *any* mission is permadeath, as always — the table lists the non-death
 failure conditions.)
@@ -348,8 +354,15 @@ that affect allies, they may work on the core (TBD per ability).
   > needs both a boss encounter kit and a balanced player-character kit. This is a
   > major feature, not a line item.
 
+- **LV5 mini-bosses (v0.12.0, provisional):** every LV5 node of zone 6 is a boss fight — one of
+  the zone-6 variant's five mini-bosses, in node order (`Docs/Zone6.gdd` §3). **Time limit:
+  240 s.** Not recruitable, no item: a first win pays the variant's reward (lighter gravity;
+  a power sealed in the final boss); a defeat is survived (§2.2) and pays its penalty.
+
 - **LV6 BOSS:** the final BOSS of the run (the dark leader in zone 6). **Time limit:
-  360 s (6 min).** Defeating it **wins the run**. This boss is not recruitable.
+  360 s (6 min).** Defeating it **wins the run**. This boss is not recruitable. *Since
+  v0.12.0 it is the zone-6 variant's final boss — the Unwritten (the Void Frontier) or Māra
+  Pāpīyas (Avīci) — on its stand-in kit (`Docs/Zone6.gdd` §4.2, §5.2).*
 
 - **Timer expiry in any BOSS fight = immediate death** (permadeath; §2.2).
 
@@ -660,6 +673,10 @@ are tracked:
 How these elements gate or modify the LV5/LV6 experience is **TBD** and will be
 designed in a future content pass.
 
+*v0.12.0:* LV5 and LV6 now hold a zone-6 **variant**'s five mini-bosses and its final boss,
+the variant drawn from the seed (`Docs/Zone6.gdd`). Whether run performance should choose or
+shape the variant is part of TBD #63 (rotation as meta-progression).
+
 ---
 
 ## 9. Integration with other GDDs
@@ -786,3 +803,8 @@ designed in a future content pass.
   only if it is not already owned: under the prototype roster policy every protagonist is,
   and a second copy on the roster would be two HP pools and two held-item slots for one
   character.
+- **(v0.12.0, provisional) A zone-6 mini-boss defeat is survived.** The owner's zone-6 ladders
+  (gravity up on a defeat; a seal on a defeat) need defeats the run lives through. A defeat is
+  the fighter in play falling or the gate's timer; the battle team returns with ≥ 25 % HP, the
+  node stays unconquered, the penalty is paid and the player is sent back. The core keeps
+  permadeath. Rewards (lighter gravity, a sealed power) are paid on the first win only.

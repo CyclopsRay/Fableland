@@ -215,7 +215,7 @@ public partial class BossPumpKing : PumpKing, IBossFighter
         float x = Mathf.Abs(to.X - from.X);
         float rise = from.Y - to.Y;                      // how far ABOVE the launch point the target is
         float v = HeadLaunchSpeed;
-        float g = Units.Gravity;
+        float g = Units.Gravity * GravityScale;   // the head falls as its thrower does (Zone6.gdd §7)
 
         float angle;
         float reach = v * v * v * v - g * (g * x * x + 2f * rise * v * v);

@@ -152,6 +152,14 @@ public static class SaveGameService
                 {
                     new() { Id = "Pixolotl", HpRatio = 0.75f, BonusAtk = 10 },
                 },
+                Zone6 = new Zone6SaveData
+                {
+                    VariantId = "avici",
+                    Gravity = 0.8f,
+                    PlayerSeals = new Dictionary<string, int> { ["pride"] = 2 },
+                    MaraSealed = new List<string> { "greed" },
+                    Nodes = new List<Zone6NodeSaveData> { new() { NodeId = "XX-5-4", Wins = 0, Losses = 2 } },
+                },
                 ExtensionData = new Dictionary<string, JsonElement>
                 {
                     ["futureValue"] = futureJson.RootElement.GetProperty("futureValue").Clone(),
@@ -164,6 +172,8 @@ public static class SaveGameService
                 || restored.WorldPool?.Count != 5 || restored.WorldPool[1] != "KH"
                 || restored.Owned?.Count != 1 || restored.Owned[0].BonusAtk != 10
                 || restored.Map?.DevouredNodeIds?.Count != 1
+                || restored.Zone6?.VariantId != "avici" || restored.Zone6.PlayerSeals?.GetValueOrDefault("pride") != 2
+                || restored.Zone6.MaraSealed?.Count != 1 || restored.Zone6.Nodes?.Count != 1 || restored.Zone6.Nodes[0].Losses != 2
                 || restored.ExtensionData == null || !restored.ExtensionData.ContainsKey("futureValue"))
             {
                 error = "Save DTO round-trip lost a durable field.";
@@ -304,6 +314,9 @@ public sealed class RunSaveData
     public List<string> WorldsVisited { get; set; } = new();
     /// <summary>Start-of-current-day state, stored without recursively embedding itself.</summary>
     public RunSaveData LastDayCheckpoint { get; set; }
+    /// <summary>The run's zone 6 (Docs/Zone6.gdd §7). Optional: null in a save written before
+    /// v0.12.0, which loads as an empty zone 6 — so the save version stays 4.</summary>
+    public Zone6SaveData Zone6 { get; set; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement> ExtensionData { get; set; }

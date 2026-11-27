@@ -65,4 +65,8 @@ public abstract class Mission
     /// <summary>QA cheat (40-QA §1): force the goal to Succeeded. Debug builds only — called by
     /// GameManager on F9. Skips any pending reward choice (the mission's default reward applies).</summary>
     public void DebugForceComplete() => Status = MissionStatus.Succeeded;
+
+    /// <summary>The fight is lost though the mission's own rule has not decided it: the
+    /// player fell in a fight the run survives (a zone-6 mini-boss, Docs/Zone6.gdd §3).</summary>
+    public void Concede() { if (Status == MissionStatus.Running) Status = MissionStatus.Failed; }
 }

@@ -125,8 +125,13 @@ public partial class BossFightCheck : Node
             Node node = scene.Instantiate();
             Expect(node is CharacterController { Side: CombatSide.Foe }, $"{def.Id}: its scene is not rooted in a Foe-side fighter");
             Expect(node is IBossFighter, $"{def.Id}: its scene's root does not implement IBossFighter");
-            Expect(Debug.ProtagonistRoster.GetScene(def.ProtagonistId) != null,
-                $"{def.Id}: recruits '{def.ProtagonistId}', which is not a protagonist");
+            // A realm boss recruits its protagonist; a zone-6 boss (Docs/Zone6.gdd) recruits nobody.
+            if (def.Recruits)
+                Expect(Debug.ProtagonistRoster.GetScene(def.ProtagonistId) != null,
+                    $"{def.Id}: recruits '{def.ProtagonistId}', which is not a protagonist");
+            else
+                Expect(def.Role != BossRole.Realm && string.IsNullOrEmpty(def.ProtagonistId),
+                    $"{def.Id}: a boss that recruits nobody must be a zone-6 boss with no protagonist (role {def.Role}, '{def.ProtagonistId}')");
             node.Free();
         }
     }

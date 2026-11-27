@@ -384,6 +384,14 @@ public static class SfxTable
             c.Medium.Whoosh(c, 0f, 0.6f, 0.2f, 0.7f, 0.8f);
         }).OfRealm().Vary(1, 0.5f, 1f).Voices(1, 0.3f, 90).Level(0f, -4f);
 
+        // The Styx Tide (Zone6.gdd §4.2): the same body of water, a deeper fall.
+        Attack(Hazard, "styx_tide", 0.9f, (c, _, _) =>
+        {
+            Puff(c, 0f, 0.9f, Tex.Water, Env.Swell(0.25f, 0.1f, 0.5f), 0.95f);
+            c.Medium.Thump(c, 0.25f, 1f, 0.85f);
+            c.Medium.Whoosh(c, 0f, 0.7f, 0.18f, 0.75f, 0.8f);
+        }).OfRealm().Vary(1, 0.5f, 1f).Voices(1, 0.3f, 90).Level(0f, -4f);
+
         // The extra weight under a Heavy or Massive blow.
         Row(Any, HitHeavy, 0.3f, (c, _, _) =>
         {

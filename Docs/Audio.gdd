@@ -235,7 +235,7 @@ looping PCM (about 100 ms on the worker), re-seeded for every fight, and played 
 | State | Raised by | Music |
 |---|---|---|
 | Menu · Overworld · Shelter · Event | `menu.enter` · `map.enter` · `shelter.enter` · `event.enter` | the screen's own profile at a resting intensity (0.5 · 0.35 · 0.3 · 0.45) |
-| Combat | `arena.enter` (tag = world; none = home, or the VOID from node level 5) | the realm's profile; intensity 0.15 through the countdown, then the blackboard's |
+| Combat | `arena.enter` (tag = world; none = home, or the VOID from node level 5; **a zone-6 variant's tag — `void_frontier`, `avici` — is the VOID**, v0.12.0) | the realm's profile; intensity 0.15 through the countdown, then the blackboard's |
 | Boss | `boss.intro` | intensity floor 0.6; **the boss's motif as a two-bar layer in the boss character's home medium**, entering on the next bar |
 | Victory · Defeat | `mission.success`, `boss.defeated` · `mission.fail`, `player.down` | stems out in 0.5–1.5 s (a defeat sinks under a closing filter), then the stinger |
 | Silent | `runover.enter` | none |
@@ -526,3 +526,8 @@ real cue bus.
 | 2026-11-26 | The blackboard's HP is coarse | Only what the bus and `IFeedbackBody` say; the contract was not widened under the VFX work |
 | 2026-11-26 | The director is dormant in a headless run | The other checks run fights at 8× and must not be given sound to make; `FABLELAND_AUDIO` wakes it |
 | 2026-11-26 | **Provisional**, inherited: Cleopastar's medium is Starland's, Sifu Pangda's the Banboo Maze's | `Feedback.gdd` §11 — the owner has not confirmed either |
+
+**v0.12.0 (zone 6).** `MusicProfiles.ForArena` scores both zone-6 variants (`void_frontier`,
+`avici` — `Docs/Zone6.gdd` §6) as the VOID, whatever map they borrow. The Styx Tide's hit,
+`hazard`/`styx_tide`, has its own row beside the tsunami's: the same body of water, a deeper
+fall (`SfxTable`). Neither variant has music of its own yet; the VOID's profile serves both.

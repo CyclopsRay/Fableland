@@ -3,6 +3,16 @@ using System.Collections.Generic;
 
 namespace Fableland.Data;
 
+/// <summary>What a boss row is for. A realm boss holds a world's 4-1 and recruits its
+/// protagonist; a zone-6 boss (Docs/Zone6.gdd) is a character of the run's last stage — a
+/// mini-boss on an LV5 node or the final boss on the core — and recruits nobody.</summary>
+public enum BossRole
+{
+    Realm,
+    Zone6Mini,
+    Zone6Final,
+}
+
 /// <summary>
 /// One BOSS: the protagonist a realm's 4-1 node pits you against, and — once beaten —
 /// recruits to your roster (NODES.gdd §4.5, FOES.gdd §8).
@@ -54,6 +64,24 @@ public sealed class BossDef
 
     /// <summary>How often the boss's brain makes a decision — its reaction time.</summary>
     public float DecisionSeconds { get; init; } = 0.15f;
+
+    /// <summary>Realm boss, or a zone-6 mini-boss / final boss (Docs/Zone6.gdd).</summary>
+    public BossRole Role { get; init; } = BossRole.Realm;
+
+    /// <summary>The <c>Zone6Table</c> variant a zone-6 boss belongs to; empty for a realm boss.</summary>
+    public string Zone6Variant { get; init; } = "";
+
+    /// <summary>Whether beating it puts <see cref="ProtagonistId"/> on the roster. Only a realm
+    /// boss recruits; a zone-6 boss fields another kit as its stand-in and recruits nobody.</summary>
+    public bool Recruits => Role == BossRole.Realm && !string.IsNullOrWhiteSpace(ProtagonistId);
+
+    /// <summary>One line on who it is (zone 6: the look and skills its own kit is built from —
+    /// Docs/Zone6.gdd §4–§5 is the authority).</summary>
+    public string Concept { get; init; } = "";
+
+    /// <summary>A field attack the fight runs whatever kit the boss fields (Docs/Zone6.gdd):
+    /// "styx_tide" — the Unwritten's floor-sweeping wave. Empty for none.</summary>
+    public string Signature { get; init; } = "";
 }
 
 /// <summary>
@@ -94,7 +122,79 @@ public static class BossTable
         DecisionSeconds = 0.15f,
     };
 
-    private static readonly BossDef[] Rows = { PumpKing };
+    // ── Zone 6 (Docs/Zone6.gdd) ───────────────────────────────────────────────────────────
+    // Every zone-6 boss fields the stand-in kit — BOSS PumpKing's scene — until its own kit is
+    // built, the same interim rule every realm's boss follows (v0.11.0). The concept line is
+    // what its kit is to be. Numbers are first-pass: a mini-boss is a realm boss's bulk at its
+    // zone-6 foe level (7), the final bosses a half again at level 8.
+
+    private static BossDef Zone6Boss(string id, string name, BossRole role, string variant, string concept,
+        float baseHp = 600f, float damageScale = 0.6f, string signature = "") => new()
+    {
+        Id = id,
+        DisplayName = name,
+        ProtagonistId = "",
+        WorldAbbr = "XX",
+        ScenePath = PumpKing.ScenePath,
+        BaseHp = baseHp,
+        DamageScale = damageScale,
+        KnockbackTaken = PumpKing.KnockbackTaken,
+        StunTaken = PumpKing.StunTaken,
+        CooldownScale = 1f,
+        Ammo = new CharacterAmmoDef
+        {
+            CharacterId = id,
+            Capacity = PumpKing.Ammo.Capacity,
+            ReloadSize = PumpKing.Ammo.ReloadSize,
+            ReloadDelaySec = PumpKing.Ammo.ReloadDelaySec,
+            RepeatReloadWhileMissing = PumpKing.Ammo.RepeatReloadWhileMissing,
+            BaseAttackIntervalSec = PumpKing.Ammo.BaseAttackIntervalSec,
+            RespawnMode = PumpKing.Ammo.RespawnMode,
+        },
+        DecisionSeconds = PumpKing.DecisionSeconds,
+        Role = role,
+        Zone6Variant = variant,
+        Concept = concept,
+        Signature = signature,
+    };
+
+    private const string VF = "void_frontier";
+    private const string AV = "avici";
+
+    public static readonly BossDef Ferryman = Zone6Boss("z6_ferryman", "The Ferryman (渡魂人)", BossRole.Zone6Mini, VF,
+        "A hooded giant in a skiff: amber lantern, oar, obols. Oar Sweep, Obol Toss (the toll drains ult charge), Undertow, Skiff Ram.");
+    public static readonly BossDef Weigher = Zone6Boss("z6_weigher", "The Weigher of Hearts (称心官)", BossRole.Zone6Mini, VF,
+        "A jackal-headed judge, gold collar, a balance. Feather Fan, Judgement (tilting pan platforms; the low pan sinks into a hazard), Devourer's Jaws.");
+    public static readonly BossDef MengPo = Zone6Boss("z6_meng_po", "Meng Po of the Naihe Bridge (孟婆)", BossRole.Zone6Mini, VF,
+        "A small old woman: iron ladle, cauldron, red lantern, bowls. Soup Lob (Forget: your next skill press within 4 s fails), Ladle Sweep, Bridge Mist; one long bridge.");
+    public static readonly BossDef Xolotl = Zone6Boss("z6_xolotl", "Xolotl, the Soul-Dog of Mictlan (冥犬修洛特)", BossRole.Zone6Mini, VF,
+        "A skeletal dog-god on backward feet, jade collar, lightning. Pounce, Carry (a 1.5 s drag), Lightning Howl.");
+    public static readonly BossDef StingyJack = Zone6Boss("z6_stingy_jack", "Stingy Jack, the Lantern Wanderer (守灯杰克)", BossRole.Zone6Mini, VF,
+        "A lanky wanderer with an ember in a carved turnip. Ember Toss (sets OnFire), Lantern Step, Lights Out (3 s of dark).");
+    public static readonly BossDef Unwritten = Zone6Boss("z6_unwritten", "The Unwritten (无名者)", BossRole.Zone6Final, VF,
+        "A faceless figure of torn pages and erased ink, a hole for a face. Styx Tide (jump the wave or be carried), Rising Tide, Borrowed Shapes, Blank Page.",
+        baseHp: 900f, signature: "styx_tide");
+
+    public static readonly BossDef Preta = Zone6Boss("z6_preta", "Preta, the Hungry Ghost (饿鬼)", BossRole.Zone6Mini, AV,
+        "贪 Greed. A grey-green ghost, a huge belly, a needle throat. Gorge (inhales; swallowed projectiles heal it), Spew, Hungry Grasp.");
+    public static readonly BossDef Asura = Zone6Boss("z6_asura", "Asura of Wrath (修罗)", BossRole.Zone6Mini, AV,
+        "嗔 Anger. Three faces, six arms, tiger skin, a flame aureole. Six-Arm Flurry, Wrath Fire, Vajra Throw, Rising Wrath.");
+    public static readonly BossDef Boar = Zone6Boss("z6_boar", "The Boar of Delusion (痴猪)", BossRole.Zone6Mini, AV,
+        "痴 Delusion. A black boar with closed eyes. Blind Charge (stuns itself on a wall), Mirror Herd, Mire (left and right swap).");
+    public static readonly BossDef FallenDeva = Zone6Boss("z6_fallen_deva", "The Fallen Deva (衰天)", BossRole.Zone6Mini, AV,
+        "慢 Pride. A god in the five decays. Heavy Halo, Wilting Garland, Pride's Armour (poise, and a phase that takes 70% less damage).");
+    public static readonly BossDef OxHorse = Zone6Boss("z6_ox_horse", "Ox-Head and Horse-Face (牛头马面)", BossRole.Zone6Mini, AV,
+        "疑 Doubt. Two wardens. Two Minds (only the real one takes damage; they swap), Chain Hook, Trident Feint.");
+    public static readonly BossDef Mara = Zone6Boss("z6_mara", "Māra Pāpīyas (天魔波旬)", BossRole.Zone6Final, AV,
+        "A black-blue wrathful demon, a crown of five skulls, the Wheel of Life in his claws. Devour, Wrath, Delusion, Iron Throne, Doubt — each warden you beat seals one.",
+        baseHp: 900f);
+
+    private static readonly BossDef[] Rows =
+    {
+        PumpKing,
+        Ferryman, Weigher, MengPo, Xolotl, StingyJack, Unwritten,
+        Preta, Asura, Boar, FallenDeva, OxHorse, Mara,
+    };
 
     public static IReadOnlyList<BossDef> All => Rows;
 
@@ -122,15 +222,21 @@ public static class BossTable
     public static BossDef StandIn => PumpKing;
 
     /// <summary>The boss whose home this world is, or null while that world's protagonist
-    /// has no boss kit yet.</summary>
+    /// has no boss kit yet. Realm bosses only: zone 6's characters hold no world.</summary>
     public static BossDef HomeBossOf(string worldAbbr)
     {
         if (string.IsNullOrWhiteSpace(worldAbbr)) return null;
         string wanted = worldAbbr.Trim();
         foreach (BossDef row in Rows)
-            if (string.Equals(row.WorldAbbr, wanted, StringComparison.OrdinalIgnoreCase)) return row;
+            if (row.Role == BossRole.Realm && string.Equals(row.WorldAbbr, wanted, StringComparison.OrdinalIgnoreCase)) return row;
         return null;
     }
+
+    /// <summary>The realm bosses — the rows that hold a world's 4-1.</summary>
+    public static List<BossDef> RealmBosses() => new List<BossDef>(Rows).FindAll(row => row.Role == BossRole.Realm);
+
+    /// <summary>The zone-6 bosses, mini-bosses before final bosses, in table order.</summary>
+    public static List<BossDef> Zone6Bosses() => new List<BossDef>(Rows).FindAll(row => row.Role != BossRole.Realm);
 
     /// <summary>The boss that holds a world's LV4 node: the world's own, else
     /// <see cref="StandIn"/>. Null only for no world at all.</summary>
@@ -148,9 +254,19 @@ public static class BossTable
             string name = string.IsNullOrWhiteSpace(row.Id) ? "(no id)" : row.Id;
             if (string.IsNullOrWhiteSpace(row.Id)) problems.Add("BossTable: a row has no id");
             else if (!ids.Add(row.Id)) problems.Add($"BossTable: id '{row.Id}' is used twice");
-            if (string.IsNullOrWhiteSpace(row.WorldAbbr)) problems.Add($"BossTable {name}: no world");
-            else if (!worlds.Add(row.WorldAbbr)) problems.Add($"BossTable {name}: world '{row.WorldAbbr}' already has a boss");
-            if (string.IsNullOrWhiteSpace(row.ProtagonistId)) problems.Add($"BossTable {name}: no protagonist to recruit");
+            if (row.Role == BossRole.Realm)
+            {
+                if (string.IsNullOrWhiteSpace(row.WorldAbbr)) problems.Add($"BossTable {name}: no world");
+                else if (!worlds.Add(row.WorldAbbr)) problems.Add($"BossTable {name}: world '{row.WorldAbbr}' already has a boss");
+                if (string.IsNullOrWhiteSpace(row.ProtagonistId)) problems.Add($"BossTable {name}: no protagonist to recruit");
+            }
+            else
+            {
+                // A zone-6 boss holds no world and recruits nobody: its kit is a stand-in.
+                if (!string.Equals(row.WorldAbbr, "XX", StringComparison.Ordinal)) problems.Add($"BossTable {name}: a zone-6 boss belongs to zone 6 (XX), not '{row.WorldAbbr}'");
+                if (!string.IsNullOrWhiteSpace(row.ProtagonistId)) problems.Add($"BossTable {name}: a zone-6 boss recruits nobody");
+                if (string.IsNullOrWhiteSpace(row.Zone6Variant)) problems.Add($"BossTable {name}: names no zone-6 variant");
+            }
             if (string.IsNullOrWhiteSpace(row.ScenePath)) problems.Add($"BossTable {name}: no scene");
             if (string.IsNullOrWhiteSpace(row.DisplayName)) problems.Add($"BossTable {name}: no display name");
             if (!(row.BaseHp > 0f)) problems.Add($"BossTable {name}: BaseHp must be positive");

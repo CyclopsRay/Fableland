@@ -165,6 +165,7 @@ public partial class SeagullFoe : BaseFoe
         GetParent().AddChild(poop);
         poop.GlobalPosition = GlobalPosition + new Vector2(0f, 12f);
         poop.Init(EffectiveDamage(PoopBaseDamage));   // Init after AddChild
+        poop.GravityScale = GravityScale;             // it falls as the seagull would
     }
 
     // ── Sight: movement-facing cone, 60°/10 m (120°/12 m improved) ──────────────────

@@ -72,6 +72,13 @@ def find_harvest(path):
                 except Exception:
                     pass
             cut = text.find(MARK)
+            if cut > 0 and text[cut - 1] == '"':
+                # a quoted result inside a batch's text ("[tool] \"TRIPO…\""): decode that string
+                try:
+                    text, _ = json.JSONDecoder().raw_decode(text[cut - 1:])
+                    continue
+                except Exception:
+                    pass
             text = text[cut:]
         body = text.strip()[len(MARK):]
         try:

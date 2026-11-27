@@ -31,8 +31,13 @@ using Fableland.Missions;
 ///    through the Adventure handshake, played to its goal and ended with the day; then the
 ///    world's 4-1, on a different day for each world, where the boss's HP, its bar and its
 ///    damage must be the day's (FOES.gdd §2, §8.2). Cloud Court, entered through a run's own
-///    high-ground Palace of LOOING node. Then zone 6: all five LV5 nodes and the core, each
-///    on an authored map of one of the run's worlds, drawn VOID-touched (MapGDD §7).
+///    high-ground Palace of LOOING node. Then zone 6, once per variant (Docs/Zone6.gdd): all
+///    five gates and the core, each a boss of the variant's on an authored map drawn
+///    VOID-touched in the variant's look and tagged as the variant; a gate lost and the run
+///    going on (HP floored, the node unconquered, the penalty paid), won and the reward paid;
+///    the Void Frontier's gravity on the bodies of the next fight; Avīci's seals on every body,
+///    through a switch, a day's end and a save and a load; Māra weakened by what was sealed;
+///    the Unwritten's Styx Tide on its empty floor; victory, and the core's permadeath.
 ///
 /// It drives the real scenes (Arena, Map, RunOver) through real scene changes, so it lives
 /// under the root, not as the current scene. It never touches the player's saves or maps:
@@ -241,8 +246,11 @@ public partial class RunWalkCheck : Node
     /// <summary>
     /// Zone 6 wears the run's worlds (MapGDD §7). For a seed, each of its six combat nodes is
     /// dealt the same map every time it is asked — whatever order the run's worlds are handed
-    /// over in — and always a map of one of THAT run's five worlds, for the node's own
-    /// mission: a boss arena for the core, never one for anything else.
+    /// over in — and always a map of one of THAT run's five worlds, for the mission the node
+    /// rolled: a boss arena for the core, never one for a gate. Since v0.12.0 every one is
+    /// FOUGHT as a boss (the variant's five mini-bosses and its final boss, Docs/Zone6.gdd §3),
+    /// and a variant's final boss with an arena of its own is always dealt that one. The rule
+    /// asked is the run's own (<see cref="RunState.DealCombatMap"/>), so the two cannot disagree.
     /// </summary>
     private void CheckWhatZoneSixIsDealt()
     {
@@ -257,24 +265,36 @@ public partial class RunWalkCheck : Node
             List<string> worlds = graph.Worlds.ConvertAll(world => world.Abbr);
             var reversed = new List<string>(worlds);
             reversed.Reverse();
+            Zone6VariantDef variant = Zone6Table.Variant(Zone6State.VariantFor(seed));
 
             foreach (MapNode node in graph.Nodes)
             {
                 if (node.WorldIndex != -1 || !node.IsCombat) continue;
                 nodes++;
-                string where = $"zone 6: seed '{seed}' {node.Id} ({node.Mission})";
+                MissionType mission = RunState.EffectiveMission(node);
+                string where = $"zone 6: seed '{seed}' {node.Id} ({variant?.Id}, rolled {node.Mission}, fought as {mission})";
+                Expect(mission == MissionType.Boss, $"{where}: every zone-6 combat node is a boss fight");
                 string goal = CombatMapCatalog.GoalFor(node.Mission);
-                CombatMapSelection dealt = CombatMapCatalog.SelectForVoid(seed, node.Id, worlds, node.Mission);
+                CombatMapSelection dealt = RunState.DealCombatMap(seed, node, worlds, variant, node.Mission, node.Terrain);
                 Expect(dealt != null, $"{where}: was dealt no map and would open the legacy arena");
                 if (dealt == null) continue;
 
-                CombatMapSelection again = CombatMapCatalog.SelectForVoid(seed, node.Id, reversed, node.Mission);
+                CombatMapSelection again = RunState.DealCombatMap(seed, node, reversed, variant, node.Mission, node.Terrain);
+                string fixedArena = RunState.Zone6RoleOf(node) == Zone6Role.Final ? variant?.FinalArenaMapId : null;
+                if (!string.IsNullOrEmpty(fixedArena))
+                {
+                    Expect(dealt.Document.Id == fixedArena && again?.Document.Id == fixedArena,
+                        $"{where}: the final boss must always fight on '{fixedArena}', not '{dealt.Document.Id}'");
+                    maps.Add(dealt.Document.Id);
+                    continue;
+                }
                 Expect(again != null && again.AbsolutePath == dealt.AbsolutePath && again.World == dealt.World,
                     $"{where}: was dealt '{dealt.Document.Name}' and then '{again?.Document.Name ?? "nothing"}'; for a seed the choice must be the same every time, whatever order its worlds are listed in");
                 Expect(worlds.Contains(dealt.World) && dealt.Document.Worlds.Contains(dealt.World),
                     $"{where}: was dealt '{dealt.Document.Name}' (worlds {string.Join("/", dealt.Document.Worlds)}) as '{dealt.World}'; this run's worlds are {string.Join(",", worlds)}");
                 Expect(dealt.Document.Goals.Contains(goal),
                     $"{where}: was dealt '{dealt.Document.Name}' (goals {string.Join("/", dealt.Document.Goals)}), which is not a '{goal}' map");
+                Expect(again != null && again.AbsolutePath == dealt.AbsolutePath, $"{where}: the run's rule dealt two different maps");
                 worn[dealt.World] = worn.GetValueOrDefault(dealt.World) + 1;
                 maps.Add(dealt.Document.Id);
             }
@@ -289,7 +309,7 @@ public partial class RunWalkCheck : Node
             tally.Add($"{world.Abbr} {worn.GetValueOrDefault(world.Abbr)}");
         }
         Expect(never.Count == 0, $"zone 6: across {Seeds} seeds it never wore {string.Join(", ", never)}");
-        GD.Print($"  run      zone 6 dealt   {nodes} zone-6 nodes of {Seeds} seeds: each dealt the same map twice, a map of one of its run's own five worlds, for its mission · {maps.Count} different maps · worn: {string.Join(" · ", tally)}");
+        GD.Print($"  run      zone 6 dealt   {nodes} zone-6 nodes of {Seeds} seeds, every one fought as a boss: each dealt the same map twice — a map of one of its run's own five worlds for the mission it rolled, or its variant's own final arena · {maps.Count} different maps · worn: {string.Join(" · ", tally)}");
     }
 
     /// <summary>What a save relies on: the realms, and every node's id, kind, level and
@@ -685,6 +705,7 @@ public partial class RunWalkCheck : Node
                 Expect(arena.FoeLevel == FoeStats.LevelForDay(day), $"{where}: foe level {arena.FoeLevel}, the day gives {FoeStats.LevelForDay(day)}");
                 Expect(arena.CurrentMission is { Status: MissionStatus.Running }, $"{where}: the mission is not running");
                 ExpectPlayerStands(where, arena, Player(GetTree()));
+                ExpectRealmLaw(where, world.Abbr, arena, Player(GetTree()));
 
                 arena.CurrentMission.DebugForceComplete();
                 for (int i = 0; i < 300 && !arena.GoalResolved; i++) await Ticks(1);
@@ -749,6 +770,8 @@ public partial class RunWalkCheck : Node
                     Expect(Mathf.IsEqualApprox(mission.TimeRemaining, MissionTable.BossTimeLimit(4), 2f),
                         $"{where}: the boss timer reads {mission.TimeRemaining:0} s; an LV4 boss is {MissionTable.BossTimeLimit(4):0} s");
                     ExpectPlayerStands(where, arena, Player(GetTree()));
+                    ExpectRealmLaw(where, world.Abbr, arena, Player(GetTree()));
+                    ExpectRealmLaw(where + " (the boss)", world.Abbr, arena, boss);
                     bossLines.Add($"{world.Abbr} day {run.Day} L{level.Level}: {boss.MaxHP:0} HP ×{boss.DamageDealtScale:0.00}");
 
                     // Beating him: the node completes, the first capital of the home realm
@@ -769,6 +792,22 @@ public partial class RunWalkCheck : Node
 
         GD.Print($"  run      the walk       {nodesWalked} fights entered through the run across {WorldDef.Pool.Count} worlds — each altitude band and each capital — and played to their goal · {stopsWalked} hubs and events opened");
         GD.Print($"  run      boss by day    {string.Join(" · ", bossLines)}");
+    }
+
+    /// <summary>A realm's law (MapGDD §2.3) is on every fighter in its realm's fights — the
+    /// player's and a boss alike — and shown on the HUD; a realm with no law yet shows none.</summary>
+    private void ExpectRealmLaw(string where, string world, GameManager arena, CharacterController body)
+    {
+        RealmLawDef law = RealmLawTable.ForWorld(world);
+        Expect(arena.Rules.HasLaw == (law != null) && (law == null || arena.Rules.LawId == law.Id),
+            $"{where}: the fight carries {(arena.Rules.HasLaw ? arena.Rules.LawId : "no law")}; {world}'s realm has {law?.Id ?? "none"}");
+        if (body == null) return;
+        int jumps = law?.ExtraJumps ?? 0;
+        float height = law?.JumpHeightScale ?? 1f;
+        Expect(body.ExtraJumps == jumps && Mathf.IsEqualApprox(body.JumpHeightScale, height),
+            $"{where}: {body.Name} has {body.ExtraJumps} extra jump(s) at ×{body.JumpHeightScale:0.00} height; {world}'s law gives {jumps} at ×{height:0.00}");
+        string shown = arena.GetNodeOrNull<global::Hud>("Hud")?.RulesText ?? "";
+        Expect(law == null ? shown.Length == 0 : shown.Contains(law.Line), $"{where}: the HUD shows '{shown}'");
     }
 
     // ---------------------------------------------------------------- 5. Cloud Court
@@ -867,7 +906,8 @@ public partial class RunWalkCheck : Node
     /// art drained, and nothing that fights or warns: not a hazard's sprite, not a hazard,
     /// not a foe, not the player.
     /// </summary>
-    private MapDocument ExpectVoidMap(string where, GameManager arena, List<string> worlds, MissionType mission)
+    private MapDocument ExpectVoidMap(string where, GameManager arena, List<string> worlds, MissionType mission,
+        Zone6VariantDef variant = null, string fixedArena = null)
     {
         AdventureContext adventure = RunState.Instance.CurrentAdventure;
         MapDocument dealt = CombatMapCatalog.LoadDocument(adventure?.CombatMapPath);
@@ -875,10 +915,24 @@ public partial class RunWalkCheck : Node
         if (dealt == null) return null;
 
         string goal = CombatMapCatalog.GoalFor(mission);
-        Expect(dealt.Worlds.Exists(worlds.Contains),
-            $"{where}: was dealt '{dealt.Name}' (worlds {string.Join("/", dealt.Worlds)}); this run's worlds are {string.Join(",", worlds)}");
-        Expect(dealt.Goals.Contains(goal), $"{where}: was dealt '{dealt.Name}' (goals {string.Join("/", dealt.Goals)}), which is not a '{goal}' map");
+        if (!string.IsNullOrEmpty(fixedArena))
+            Expect(dealt.Id == fixedArena, $"{where}: was dealt '{dealt.Id}'; this fight is always on '{fixedArena}'");
+        else
+        {
+            Expect(dealt.Worlds.Exists(worlds.Contains),
+                $"{where}: was dealt '{dealt.Name}' (worlds {string.Join("/", dealt.Worlds)}); this run's worlds are {string.Join(",", worlds)}");
+            Expect(dealt.Goals.Contains(goal), $"{where}: was dealt '{dealt.Name}' (goals {string.Join("/", dealt.Goals)}), which is not a '{goal}' map");
+        }
         Expect(adventure.VoidTouched, $"{where}: the handshake does not say the map is VOID-touched");
+        if (variant != null && arena.GetNodeOrNull<ColorRect>("Background")?.Material is ShaderMaterial look)
+        {
+            float kept = look.GetShaderParameter("colour_kept").AsSingle();
+            Vector3 shade = look.GetShaderParameter("shade").AsVector3();
+            Vector3 lift = look.GetShaderParameter("lift").AsVector3();
+            Expect(Mathf.IsEqualApprox(kept, variant.Look.ColourKept) && shade.IsEqualApprox(new Vector3(variant.Look.ShadeR, variant.Look.ShadeG, variant.Look.ShadeB))
+                   && lift.IsEqualApprox(new Vector3(variant.Look.LiftR, variant.Look.LiftG, variant.Look.LiftB)),
+                $"{where}: the map is drained with colour {kept:0.00}, shade {shade}, lift {lift}; {variant.Id}'s look is {variant.Look.ColourKept:0.00}");
+        }
 
         int art = 0, drained = 0, hazardArt = 0, hazardDrained = 0;
         TallyTreatment(arena.GetNodeOrNull("World/AuthoredMapVisuals"), false, ref art, ref drained, ref hazardArt, ref hazardDrained);
@@ -892,77 +946,309 @@ public partial class RunWalkCheck : Node
 
     private async Task WalkTheVoid()
     {
-        RunState run = RunState.Instance;
-        run.NewRun("WALKVOID");
-        MapNode core = run.FindNode("XX-6-1");
-        List<MapNode> ring = run.Graph.Nodes.FindAll(node => node.WorldIndex == -1 && node.IsCombat && node.Level == 5);
-        ring.Sort((a, b) => string.CompareOrdinal(a.Id, b.Id));
-        Expect(ring.Count == 5 && core != null, $"void: the run has {ring.Count} LV5 nodes and {(core == null ? "no" : "a")} core; zone 6 is five and one");
-        if (ring.Count == 0 || core == null) return;
-        List<string> worlds = run.Graph.Worlds.ConvertAll(world => world.Abbr);
-
         // The treatment is a shader. The walk below proves which nodes carry its material;
         // this proves the engine accepts it (the headless renderer parses shaders too).
         Expect(VoidTreatment.ShaderCompiles(), "void: the VOID treatment's shader does not compile; a zone-6 map would be drawn wrong");
-
-        // Zone 6 wears the run's worlds (MapGDD §7): each LV5 node opens an authored map of
-        // one of them, for its own mission, VOID-touched, and its foes come out of that map's
-        // nests. Their level is the NODE's, whatever the day (FOES.gdd §2).
-        run.Day = 3;
-        var opened = new List<string>();
-        foreach (MapNode node in ring)
+        var entered = new List<Cue>();
+        void Heard(Cue cue)
         {
-            string where = $"void: {node.Id} ({node.Mission})";
-            GameManager arena = await Enter(where, node);
-            if (arena == null) continue;
-            await Ticks(60 * 4);                                             // past the 3 s countdown
+            if (cue.Owner == CueOwners.Flow && cue.Action == "arena.enter") entered.Add(cue);
+        }
+        CueBus.Raised += Heard;
+        try
+        {
+            await WalkZoneSix(Zone6Table.VoidFrontier, entered);
+            await WalkZoneSix(Zone6Table.Avici, entered);
+        }
+        finally
+        {
+            CueBus.Raised -= Heard;
+        }
+    }
 
-            MapDocument dealt = ExpectVoidMap(where, arena, worlds, node.Mission);
-            Expect(arena.FoeLevel == 7, $"{where}: an LV5 node fights at foe level {arena.FoeLevel}; the design fixes it at 7");
-            Expect(arena.CurrentMission is { Status: MissionStatus.Running }, $"{where}: the mission is not running");
-            ExpectPlayerStands(where, arena, Player(GetTree()));
+    /// <summary>A seed whose zone 6 is this variant, drawn the way a run draws it.</summary>
+    private static string SeedFor(Zone6VariantDef variant)
+    {
+        for (int i = 0; i < 200; i++)
+        {
+            string seed = i == 0 ? "WALKVOID" : "WALKVOID" + i;
+            if (Zone6Table.VariantForSeed(seed) == variant.Id) return seed;
+        }
+        return null;
+    }
 
-            // The first foe: the ambient trickle's arrives 4 s after the gate, a wave at once.
-            Godot.Collections.Array<Node> foes = GetTree().GetNodesInGroup("foe");
-            for (int t = 0; t < 60 * 6 && foes.Count == 0; t++)
+    /// <summary>
+    /// One zone 6, played through the run: the five gates — each the variant's mini-boss on a
+    /// boss arena of one of the run's worlds — with defeats the run survives, then the core.
+    /// The Void Frontier: lose the first gate (gravity ×1.1), win it and the rest (×0.8 each),
+    /// meet the Unwritten on its empty floor at the gravity earned, the Styx rising, and win.
+    /// Avīci: lose Greed and Pride (a seal each) and Doubt twice — once by falling, once by its
+    /// timer — win the other four, carry the seals through a switch, a day's end and a save
+    /// and a load, and fall to Māra, weakened by four sealed powers: the core keeps permadeath.
+    /// </summary>
+    private async Task WalkZoneSix(Zone6VariantDef variant, List<Cue> entered)
+    {
+        RunState run = RunState.Instance;
+        string seed = SeedFor(variant);
+        Expect(seed != null, $"void: no seed among 200 draws {variant.Id}");
+        if (seed == null) return;
+        run.NewRun(seed);
+        string tag = $"void {variant.Id} ({seed})";
+        Expect(run.Zone6.VariantId == variant.Id && run.Zone6.Nodes.Count == 0, $"{tag}: a new run of this seed is not an empty {variant.Id}");
+        MapNode core = run.FindNode("XX-6-1");
+        List<MapNode> ring = run.Graph.Nodes.FindAll(node => node.WorldIndex == -1 && node.IsCombat && node.Level == 5);
+        ring.Sort((a, b) => string.CompareOrdinal(a.Id, b.Id));
+        Expect(ring.Count == 5 && core != null, $"{tag}: the run has {ring.Count} LV5 nodes and {(core == null ? "no" : "a")} core; zone 6 is five and one");
+        if (ring.Count != 5 || core == null) return;
+        List<string> worlds = run.Graph.Worlds.ConvertAll(world => world.Abbr);
+        MapGraph untouched = MapGenerator.Generate(seed);
+        bool frontier = variant.Id == Zone6Table.VoidFrontierId;
+        run.Day = 3;
+        // Across the singularity, as a run gets here: the outer ring is gone and the player
+        // walks the gates from the river hub — where a lost gate sends them back to. (Standing
+        // on an outer node instead, a later day's VOID would eat the ground under them.)
+        run.EnterVoid();
+        run.MarkNodeVisited("XX-R");
+        run.CurrentNodeId = run.PreviousNodeId = "XX-R";
+
+        // Each gate's plan: how many times it is lost before it is won (-1: never won).
+        int[] losses = frontier ? new[] { 1, 0, 0, 0, 0 } : new[] { 1, 0, 0, 1, 2 };
+        bool[] wins = frontier ? new[] { true, true, true, true, true } : new[] { true, true, true, true, false };
+        var opened = new List<string>();
+        bool switched = false, reloaded = false;
+        for (int k = 0; k < ring.Count; k++)
+        {
+            MapNode node = ring[k];
+            int fights = losses[k] + (wins[k] ? 1 : 0);
+            for (int f = 0; f < fights; f++)
             {
-                await Ticks(1);
-                foes = GetTree().GetNodesInGroup("foe");
-            }
-            Vector2 size = arena.AuthoredMapSize;
-            int outside = 0;
-            foreach (Node foe in foes)
-                if (foe is Node2D body && (body.GlobalPosition.X <= 0f || body.GlobalPosition.X >= size.X || body.GlobalPosition.Y <= 0f || body.GlobalPosition.Y >= size.Y)) outside++;
-            Expect(foes.Count > 0 && outside == 0, $"{where}: ten seconds in there are {foes.Count} foes, {outside} of them outside the map; they must come out of the map's own nests");
+                bool win = f == losses[k];
+                string where = $"{tag}: {node.Id} ({variant.MiniBossIds[k]}, fight {f + 1}: {(win ? "won" : "lost")})";
+                (GameManager arena, CharacterController boss) = await EnterGate(where, node, variant, k, worlds, entered);
+                if (arena == null) continue;
+                Expect(untouched.Nodes.Find(n => n.Id == node.Id)?.Mission == node.Mission,
+                    $"{where}: entering the gate changed the mission the generator rolled into the graph");
+                ExpectRulesOnBodies(where, arena, boss, run.Zone6);
 
-            arena.CurrentMission.DebugForceComplete();
-            for (int i = 0; i < 300 && !arena.GoalResolved; i++) await Ticks(1);
-            Expect(arena.GoalResolved && run.CompletedNodeIds.Contains(node.Id), $"{where}: reaching the goal did not complete the node");
-            if (dealt != null) opened.Add($"{node.Id} {node.Mission} on {dealt.Name}");
+                // Avīci's seals are on every protagonist: the one switched in mid-fight too.
+                if (!frontier && !switched && run.Zone6.SealCount > 0)
+                {
+                    switched = true;
+                    CharacterController before = Player(GetTree());
+                    Input.ActionPress("switch_protagonist");
+                    await Ticks(3);
+                    Input.ActionRelease("switch_protagonist");
+                    await Ticks(10);
+                    CharacterController after = Player(GetTree());
+                    Expect(after != null && after != before, $"{where}: the switch did not bring another protagonist in");
+                    if (after != null && after != before) ExpectRulesOnBodies(where + " (switched in)", arena, boss, run.Zone6);
+                }
+
+                if (win) await WinGate(where, arena, node, variant, k);
+                else await LoseGate(where, arena, node, variant, k, byTimer: !frontier && k == 4 && f == 1);
+                if (arena.GoalResolved) opened.Add($"{node.Id} {(win ? "won" : "lost")} on {CombatMapCatalog.LoadDocument(run.CurrentAdventure?.CombatMapPath)?.Name ?? "?"}");
+
+                run.EndDay();
+                Expect(await SceneIs<MapController>(600) != null && !run.RunFinished, $"{where}: the day did not end back on the map");
+
+                // A save and a load in the middle of Avīci: the seals and Māra's seals hold.
+                if (!frontier && !reloaded && run.Zone6.SealCount > 0 && run.Zone6.MaraSealed.Count > 0)
+                {
+                    reloaded = true;
+                    string status = run.Zone6.StatusLine();
+                    Expect(run.TryLoadRunFromSlot(run.ActiveSaveSlot, out string error), $"{where}: the run did not load from its own day-end save: {error}");
+                    Expect(run.Zone6.StatusLine() == status, $"{where}: zone 6 was '{status}' and loads as '{run.Zone6.StatusLine()}'");
+                    run.ResumeLoadedRun();
+                    await SceneIs<MapController>(600);
+                }
+            }
         }
 
-        // The core: a boss arena of one of the run's worlds, the stand-in on one of its perches.
-        GameManager throne = await Enter("void: XX-6-1", core);
+        // The ladder and the seals as the run carries them to the core.
+        if (frontier)
+        {
+            float expected = 1.1f * Mathf.Pow(0.8f, 5);
+            Expect(Mathf.IsEqualApprox(run.Zone6.Gravity, expected, 1e-4f),
+                $"{tag}: a loss then five wins must leave gravity ×{expected:0.000}, not ×{run.Zone6.Gravity:0.000}");
+        }
+        else
+        {
+            Expect(run.Zone6.SealStacks("greed") == 1 && run.Zone6.SealStacks("pride") == 1 && run.Zone6.SealStacks("doubt") == 2
+                   && run.Zone6.MaraSealed.Count == 4 && !run.Zone6.MaraSealed.Contains("doubt"),
+                $"{tag}: after the gates zone 6 is '{run.Zone6.StatusLine()}'; it must be Hunger ×1, Burden ×1, Hesitation ×2, four powers sealed in Māra and Doubt not");
+        }
+
+        // The core.
+        GameManager throne = await Enter($"{tag}: XX-6-1", core);
         if (throne == null) return;
         var mission = throne.CurrentMission as BossMission;
-        await Ticks(60 * 4);
-        MapDocument arenaDealt = ExpectVoidMap("void: XX-6-1 (the core)", throne, worlds, MissionType.Boss);
-        Expect(throne.FoeLevel == 8, $"void: the core fights at foe level {throne.FoeLevel}; the design fixes it at 8");
-        Expect(mission is { IsFinalBoss: true, HasSecondaryBar: true }, "void: the core is not a final-boss fight with a boss on the field");
-        float coreHp = mission?.SecondaryMax ?? 0f;
+        for (int i = 0; i < 600 && mission is { FieldsRealBoss: false }; i++) await Ticks(1);
+        await Ticks(20);
+        CharacterController final = BossOf(GetTree());
+        CharacterController player = Player(GetTree());
+        BossDef finalDef = BossTable.TryGet(variant.FinalBossId, out BossDef d) ? d : null;
+        string coreWhere = $"{tag}: XX-6-1 ({variant.FinalBossId})";
+        MapDocument arenaDealt = ExpectVoidMap(coreWhere, throne, worlds, MissionType.Boss, variant, variant.FinalArenaMapId);
+        Expect(throne.FoeLevel == 8, $"{coreWhere}: the core fights at foe level {throne.FoeLevel}; the design fixes it at 8");
+        Expect(throne.BossId == variant.FinalBossId && mission is { IsFinalBoss: true, FieldsRealBoss: true } && final != null,
+            $"{coreWhere}: the core must field {variant.FinalBossId} (arena names '{throne.BossId}', staged: {final != null})");
+        Expect(throne.Rules.Zone6Role == Zone6Role.Final && !throne.Rules.SurvivableDefeat, $"{coreWhere}: the core is not a final, permadeath fight");
         Expect(mission != null && Mathf.IsEqualApprox(mission.TimeRemaining, MissionTable.BossTimeLimit(6), 5f),
-            $"void: the final boss timer reads {mission?.TimeRemaining:0} s; the design gives {MissionTable.BossTimeLimit(6):0} s");
-        BossCrab crab = StandIn(GetTree());
-        Vector2 map = throne.AuthoredMapSize, at = crab?.GlobalPosition ?? Vector2.Zero;
-        Expect(crab != null && at.X > 0f && at.X < map.X && at.Y > 0f && at.Y < map.Y,
-            $"void: the core's stand-in boss is {(crab == null ? "missing" : $"at ({M(at.X)}, {M(at.Y)}) m, outside the {M(map.X)} × {M(map.Y)} m arena")}");
-        ExpectPlayerStands("void: XX-6-1 (the core)", throne, Player(GetTree()));
+            $"{coreWhere}: the final boss timer reads {mission?.TimeRemaining:0} s; the design gives {MissionTable.BossTimeLimit(6):0} s");
+        ExpectPlayerStands(coreWhere, throne, player);
+        ExpectRulesOnBodies(coreWhere, throne, final, run.Zone6);
+        string coreLine;
+        if (frontier)
+        {
+            // The Unwritten's Styx Tide rises from the horizon and runs along the floor.
+            if (player != null) player.Invincible = true;
+            StyxTideHazard wave = null;
+            for (int t = 0; t < 60 * 9 && wave == null; t++)
+            {
+                await Ticks(1);
+                foreach (Node child in throne.HazardLayer.GetChildren())
+                    if (child is StyxTideHazard rising) wave = rising;
+            }
+            Expect(mission?.StyxTide != null && wave != null, $"{coreWhere}: no Styx Tide rose in nine seconds");
+            float feet = player != null ? player.GlobalPosition.Y + 32f : 0f;
+            if (wave != null)
+                Expect(Mathf.Abs(wave.FloorY - throne.FloorY) < 1f && player != null && Mathf.Abs(feet - throne.FloorY) < 6f,
+                    $"{coreWhere}: the wave runs at y {wave.FloorY:0}, the floor is at {throne.FloorY:0} and the player stands at {feet:0}");
+            coreLine = $"the Unwritten on {arenaDealt?.Name ?? "no map"} at gravity ×{run.Zone6.Gravity:0.000}, the Styx rising ({mission?.StyxTide?.WavesLaunched} wave(s))";
+            throne.CurrentMission.DebugForceComplete();
+            RunOverController over = await SceneIs<RunOverController>(900);
+            Expect(over != null && run.RunFinished && run.LastEndKind == RunEndKind.Victory, $"{coreWhere}: beating the final boss did not end the run in victory");
+        }
+        else
+        {
+            // Māra, weakened by the four powers sealed in him.
+            FoeStats.LevelStats level = FoeStats.ForLevel(8);
+            float hp = finalDef.BaseHp * level.HpMult * (1f - Zone6Table.MaraHpPerSeal * 4);
+            float damage = finalDef.DamageScale * level.AtkMult - Zone6Table.MaraDamagePerSeal * 4;
+            Expect(final != null && Mathf.IsEqualApprox(final.MaxHP, hp, 0.5f) && Mathf.IsEqualApprox(mission.SecondaryMax, final.MaxHP, 0.5f),
+                $"{coreWhere}: with four powers sealed Māra has {final?.MaxHP:0} HP (bar {mission?.SecondaryMax:0}); his row gives {finalDef.BaseHp:0} × {level.HpMult} × 0.52 = {hp:0}");
+            Expect(final != null && Mathf.IsEqualApprox(final.DamageDealtScale, damage, 1e-3f),
+                $"{coreWhere}: Māra deals ×{final?.DamageDealtScale:0.00}; his row gives {finalDef.DamageScale} × {level.AtkMult} − 0.40 = ×{damage:0.00}");
+            coreLine = $"Māra on {arenaDealt?.Name ?? "no map"} with {final?.MaxHP:0} HP and damage ×{final?.DamageDealtScale:0.00} ({throne.Rules.FinalBossLine})";
+            // The core keeps permadeath: falling to Māra ends the run.
+            player?.TakeHit(new HitInfo(player.MaxHP * 100f + 1e5f, Vector2.Zero), player.GlobalPosition);
+            RunOverController over = await SceneIs<RunOverController>(900);
+            Expect(over != null && run.RunFinished && run.LastEndKind == RunEndKind.Death, $"{coreWhere}: falling to the final boss must end the run (finished {run.RunFinished}, {run.LastEndKind})");
+        }
+        Expect(!File.Exists(Path.Combine(SaveGameService.DirectoryOverride, "slot_1.json")), $"{coreWhere}: a finished run left its save behind");
+        GD.Print($"  run      {variant.Id,-14} seed {seed} ({string.Join(",", worlds)}): {string.Join(" · ", opened)}");
+        GD.Print($"  run      {variant.Id,-14} then {run.Zone6.StatusLine()} · {coreLine}");
+    }
 
-        throne.CurrentMission.DebugForceComplete();
-        RunOverController over = await SceneIs<RunOverController>(900);
-        Expect(over != null && run.RunFinished && run.LastEndKind == RunEndKind.Victory, "void: beating the core did not end the run in victory");
-        Expect(!File.Exists(Path.Combine(SaveGameService.DirectoryOverride, "slot_1.json")), "void: a finished run left its save behind");
-        GD.Print($"  run      the void       seed WALKVOID ({string.Join(",", worlds)}): {string.Join(" · ", opened)} · the core on {arenaDealt?.Name ?? "no map"} — every one VOID-touched, none on the legacy stage");
-        GD.Print($"  run      the void       LV5 fights at foe level 7, the core at 8 whatever the day · the final boss (still the stand-in crab) has {coreHp:0} HP · beating it ends the run in victory and clears its save");
+    /// <summary>Enters a zone-6 gate and waits for its mini-boss; checks what the gate is.</summary>
+    private async Task<(GameManager Arena, CharacterController Boss)> EnterGate(string where, MapNode node, Zone6VariantDef variant, int slot,
+        List<string> worlds, List<Cue> entered)
+    {
+        RunState run = RunState.Instance;
+        entered.Clear();
+        GameManager arena = await Enter(where, node);
+        if (arena == null) return (null, null);
+        var mission = arena.CurrentMission as BossMission;
+        for (int i = 0; i < 600 && mission is { FieldsRealBoss: false }; i++) await Ticks(1);
+        await Ticks(20);
+        CharacterController boss = BossOf(GetTree());
+        string expected = variant.MiniBossIds[slot];
+
+        Expect(run.CurrentAdventure?.Mission == MissionType.Boss && arena.BossId == expected && mission is { FieldsRealBoss: true, IsFinalBoss: false } && boss != null,
+            $"{where}: the gate must field {expected} (arena names '{arena.BossId}', mission {run.CurrentAdventure?.Mission}, staged: {boss != null})");
+        Expect(arena.FoeLevel == 7, $"{where}: an LV5 node fights at foe level {arena.FoeLevel}; the design fixes it at 7");
+        Expect(mission != null && Mathf.IsEqualApprox(mission.TimeRemaining, MissionTable.BossTimeLimit(5), 5f),
+            $"{where}: the mini-boss timer reads {mission?.TimeRemaining:0} s; the design gives {MissionTable.BossTimeLimit(5):0} s");
+        Expect(arena.Rules.Zone6Role == Zone6Role.MiniBoss && arena.Rules.SurvivableDefeat && !arena.Rules.HasLaw,
+            $"{where}: the rules are not a survivable zone-6 mini-boss fight without a borrowed law");
+        ExpectVoidMap(where, arena, worlds, node.Mission, variant);   // the map the gate rolled; a boss's fight on it
+        ExpectPlayerStands(where, arena, Player(GetTree()));
+
+        // flow/arena.enter names the variant and says how light the drained backdrop is.
+        Cue? cue = entered.Count > 0 ? entered[entered.Count - 1] : null;
+        var backdrop = arena.GetNodeOrNull<ColorRect>("Background");
+        float lightness = backdrop != null ? VoidTreatment.DrawnLightness(backdrop.Color, variant.Look) : -1f;
+        Expect(cue.HasValue && cue.Value.Tag == variant.Id && Mathf.IsEqualApprox(cue.Value.Magnitude, lightness, 1e-3f),
+            $"{where}: flow/arena.enter said '{cue?.Tag}' at lightness {cue?.Magnitude:0.000}; zone 6 is '{variant.Id}' at {lightness:0.000} once drained");
+        return (arena, boss);
+    }
+
+    /// <summary>The rules on the bodies in a zone-6 fight: the Void Frontier's gravity on the
+    /// fighter and the boss, Avīci's seals on the fighter only — whatever the zone-6 state.</summary>
+    private void ExpectRulesOnBodies(string where, GameManager arena, CharacterController boss, Zone6State zone6)
+    {
+        CharacterController player = Player(GetTree());
+        if (player == null) return;
+        ArenaRules rules = arena.Rules;
+        float gravity = zone6.IsVoidFrontier ? zone6.Gravity : 1f;
+        Expect(Mathf.IsEqualApprox(player.GravityScale, gravity, 1e-4f) && (boss == null || Mathf.IsEqualApprox(boss.GravityScale, gravity, 1e-4f)),
+            $"{where}: the fighter feels gravity ×{player.GravityScale:0.000} and the boss ×{boss?.GravityScale:0.000}; zone 6 is at ×{gravity:0.000}");
+        Expect(Mathf.IsEqualApprox(player.ReloadScale, rules.SealReloadScale, 1e-4f) && Mathf.IsEqualApprox(player.MoveSpeedScale, rules.SealMoveSpeedScale, 1e-4f)
+               && Mathf.IsEqualApprox(player.CooldownScale, rules.SealCooldownScale, 1e-4f),
+            $"{where}: the fighter carries reload ×{player.ReloadScale}, move ×{player.MoveSpeedScale}, cooldowns ×{player.CooldownScale}; the seals give ×{rules.SealReloadScale}, ×{rules.SealMoveSpeedScale}, ×{rules.SealCooldownScale}");
+        Expect(boss == null || (Mathf.IsEqualApprox(boss.ReloadScale, 1f) && Mathf.IsEqualApprox(boss.MoveSpeedScale, 1f)),
+            $"{where}: a seal is on the boss; seals are on the player's side only");
+        string expected = zone6.StatusLine();
+        Expect(arena.GetNodeOrNull<global::Hud>("Hud") is not { } hud || (hud.RulesText.Contains(zone6.Variant.Name) && (!rules.HasSeals || hud.RulesText.Contains(rules.SealLine))),
+            $"{where}: the HUD's rules read '{(arena.GetNodeOrNull<global::Hud>("Hud")?.RulesText ?? "")}'");
+    }
+
+    /// <summary>Beats a gate: the node is conquered and the variant pays its reward.</summary>
+    private async Task WinGate(string where, GameManager arena, MapNode node, Zone6VariantDef variant, int slot)
+    {
+        RunState run = RunState.Instance;
+        float gravity = run.Zone6.Gravity;
+        int sealedInMara = run.Zone6.MaraSealed.Count;
+        int roster = run.Owned.Count;
+        arena.CurrentMission.DebugForceComplete();
+        for (int i = 0; i < 300 && !arena.GoalResolved; i++) await Ticks(1);
+        Expect(arena.GoalResolved && run.CompletedNodeIds.Contains(node.Id) && !run.RunFinished, $"{where}: beating the gate did not conquer it");
+        Expect(run.Owned.Count == roster && !run.Items.Exists(item => item.DefId == "yukais_rope"), $"{where}: a zone-6 boss recruited someone or paid Yukai's Rope");
+        if (variant.Id == Zone6Table.VoidFrontierId)
+            Expect(Mathf.IsEqualApprox(run.Zone6.Gravity, Mathf.Max(Zone6Table.GravityMin, gravity * Zone6Table.GravityWinFactor), 1e-4f),
+                $"{where}: gravity went ×{gravity:0.000} → ×{run.Zone6.Gravity:0.000}; a win takes 20%");
+        else
+            Expect(run.Zone6.MaraSealed.Contains(Zone6Table.Poisons[slot].Id) && run.Zone6.MaraSealed.Count == sealedInMara + 1,
+                $"{where}: beating {Zone6Table.Poisons[slot].Name} did not seal {Zone6Table.Poisons[slot].MaraAbility} in Māra ({run.Zone6.StatusLine()})");
+        Expect(run.Zone6.Nodes.TryGetValue(node.Id, out Zone6NodeRecord record) && record.Wins == 1, $"{where}: the gate's record does not count the win");
+    }
+
+    /// <summary>Loses a gate — by falling, or by its timer — and the run goes on.</summary>
+    private async Task LoseGate(string where, GameManager arena, MapNode node, Zone6VariantDef variant, int slot, bool byTimer)
+    {
+        RunState run = RunState.Instance;
+        float gravity = run.Zone6.Gravity;
+        int stacks = run.Zone6.SealStacks(Zone6Table.Poisons[slot].Id);
+        string[] team = run.CurrentAdventure?.BattleTeam?.MemberIds ?? Array.Empty<string>();
+        if (byTimer)
+        {
+            // The mini-boss's own clock runs out: a defeat, never the fatal timer of a realm's boss.
+            var timer = typeof(BossMission).GetField("_timer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            timer?.SetValue(arena.CurrentMission, 0.05f);
+        }
+        else
+        {
+            CharacterController player = Player(GetTree());
+            player?.TakeHit(new HitInfo(player.MaxHP * 100f + 1e5f, Vector2.Zero), player.GlobalPosition);
+        }
+        for (int i = 0; i < 300 && !arena.GoalResolved; i++) await Ticks(1);
+        string how = byTimer ? "the timer running out" : "falling";
+        Expect(arena.GoalResolved && !run.RunFinished && arena.CurrentMission.Status == MissionStatus.Failed,
+            $"{where}: {how} to a mini-boss must lose the fight and not the run (resolved {arena.GoalResolved}, run finished {run.RunFinished})");
+        Expect(!run.CompletedNodeIds.Contains(node.Id) && run.CurrentNodeId == "XX-R",
+            $"{where}: after {how} the gate must stay unconquered and the player be sent back to the river (stands on {run.CurrentNodeId})");
+        int floored = 0;
+        foreach (string id in team)
+            if (run.FindProtagonist(id) is { } member && member.HpRatio >= Zone6Table.DefeatHpFloor - 1e-4f) floored++;
+        Expect(team.Length > 0 && floored == team.Length, $"{where}: after {how} {floored} of {team.Length} fighters came back with at least a quarter of their HP");
+        if (variant.Id == Zone6Table.VoidFrontierId)
+            Expect(Mathf.IsEqualApprox(run.Zone6.Gravity, Mathf.Min(Zone6Table.GravityMax, gravity * Zone6Table.GravityLossFactor), 1e-4f),
+                $"{where}: gravity went ×{gravity:0.000} → ×{run.Zone6.Gravity:0.000}; a loss adds 10%");
+        else
+            Expect(run.Zone6.SealStacks(Zone6Table.Poisons[slot].Id) == Math.Min(Zone6Table.SealStackCap, stacks + 1),
+                $"{where}: losing to {Zone6Table.Poisons[slot].Name} did not seal {Zone6Table.Poisons[slot].SealName} in you ({run.Zone6.StatusLine()})");
+        Expect(run.Zone6.Nodes.TryGetValue(node.Id, out Zone6NodeRecord record) && record.Losses >= 1, $"{where}: the gate's record does not count the loss");
+        Expect(!string.IsNullOrEmpty(run.LastZone6Note), $"{where}: the defeat left no line for the player");
+        await Ticks(2);
     }
 }

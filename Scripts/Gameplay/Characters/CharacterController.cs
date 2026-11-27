@@ -347,7 +347,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		FloorSnapLength = Mathf.Max(FloorSnapLength, Units.FloorSnapPx);
 
 		InitCharacter();
-		_jumpsRemaining = MaxJumps;
+		_jumpsRemaining = MaxJumps + ExtraJumps;
 		NotifyHpChanged();
 		UltChargeChanged?.Invoke(UltCharge, MaxUltCharge);
 	}
@@ -381,6 +381,9 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		}
 		Ammo = new AmmoController(def);
 		Ammo.ReloadCompleted += OnAmmoReloaded;
+		// The rules of a place outlive a magazine swap (a BOSS installs its own row's).
+		foreach (KeyValuePair<string, float> scale in _reloadScales) Ammo.SetReloadMultiplier(scale.Key, scale.Value);
+		foreach (KeyValuePair<string, float> scale in _placeAttackIntervalScales) Ammo.SetAttackIntervalMultiplier(scale.Key, scale.Value);
 	}
 
 	/// <summary>Subclass hook for visual/combo state that changes when a reload completes.</summary>
@@ -420,6 +423,81 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	{
 		if (!string.IsNullOrWhiteSpace(source)) _continuousExternalVelocity.Remove(source);
 	}
+
+	// ── Rules of a place (Docs/Zone6.gdd §7): a realm's law, zone 6, the run's seals ────────
+	// Source-keyed like every modifier (golden rule 7), set by orchestration (ArenaRulesApplier)
+	// before or after the body is ready. A kit never reads the map or the run (T00): it only
+	// finds itself lighter, jumping more often, slower to reload…  Respawn keeps them.
+	private readonly Dictionary<string, float> _gravityScales = new();
+	private readonly Dictionary<string, int> _extraJumps = new();
+	private readonly Dictionary<string, float> _jumpHeightScales = new();
+	private readonly Dictionary<string, float> _moveSpeedScales = new();
+	private readonly Dictionary<string, float> _cooldownScales = new();
+	private readonly Dictionary<string, float> _reloadScales = new();
+	private readonly Dictionary<string, float> _placeAttackIntervalScales = new();
+
+	/// <summary>Share of gravity this body feels (all sources multiplied; 1 = Units.Gravity's).</summary>
+	public float GravityScale => ScaleOf(_gravityScales);
+	/// <summary>Jumps added on top of <see cref="MaxJumps"/>.</summary>
+	public int ExtraJumps
+	{
+		get { int n = 0; foreach (int v in _extraJumps.Values) n += v; return n; }
+	}
+	/// <summary>Jumps this body has before touching down again, all rules counted.</summary>
+	public int JumpCharges => MaxJumps + ExtraJumps;
+	/// <summary>Jump charges left right now (for checks and tooling).</summary>
+	public int JumpsRemaining => _jumpsRemaining;
+	/// <summary>Share of a jump's height that is left; the launch speed is scaled by its root.</summary>
+	public float JumpHeightScale => ScaleOf(_jumpHeightScales);
+	public float JumpLaunchScale => Mathf.Sqrt(Mathf.Max(0f, JumpHeightScale));
+	/// <summary>Share of move speed that is left (walking, running, swimming).</summary>
+	public float MoveSpeedScale => ScaleOf(_moveSpeedScales);
+	/// <summary>Multiplier on every skill cooldown the kit starts (<see cref="ScaleCooldown"/>).</summary>
+	public float CooldownScale => ScaleOf(_cooldownScales);
+	/// <summary>Multiplier on the magazine's reload time.</summary>
+	public float ReloadScale => ScaleOf(_reloadScales);
+	/// <summary>The magazine's reload time and basic-attack interval as they stand, every
+	/// rule counted (read-only: checks and tooling; 0 without a magazine).</summary>
+	public float ReloadSeconds => Ammo?.EffectiveReloadDelay ?? 0f;
+	public float AttackIntervalSeconds => Ammo?.EffectiveAttackIntervalSeconds ?? 0f;
+
+	public void SetGravityScale(string source, float scale) => SetScale(_gravityScales, source, scale);
+	public void SetJumpHeightScale(string source, float scale) => SetScale(_jumpHeightScales, source, scale);
+	public void SetMoveSpeedScale(string source, float scale) => SetScale(_moveSpeedScales, source, scale);
+	public void SetCooldownScale(string source, float scale) => SetScale(_cooldownScales, source, scale);
+
+	/// <summary>Set or clear (0) a named number of extra jumps. Charges already in hand change
+	/// with it, so a body given a law in mid-air gets its jump now, not after landing.</summary>
+	public void SetExtraJumps(string source, int jumps)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		int before = ExtraJumps;
+		if (jumps == 0) _extraJumps.Remove(source);
+		else _extraJumps[source] = jumps;
+		_jumpsRemaining = Mathf.Max(0, _jumpsRemaining + ExtraJumps - before);
+	}
+
+	public void SetReloadScale(string source, float scale)
+	{
+		SetScale(_reloadScales, source, scale);
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (_reloadScales.TryGetValue(source, out float stored)) Ammo?.SetReloadMultiplier(source, stored);
+		else Ammo?.ClearReloadMultiplier(source);
+	}
+
+	/// <summary>A place's multiplier on the basic-attack interval (a seal), kept across a
+	/// magazine swap — unlike a kit's own <see cref="SetAttackIntervalMultiplier"/>.</summary>
+	public void SetAttackIntervalScale(string source, float scale)
+	{
+		SetScale(_placeAttackIntervalScales, source, scale);
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (_placeAttackIntervalScales.TryGetValue(source, out float stored)) Ammo?.SetAttackIntervalMultiplier(source, stored);
+		else Ammo?.ClearAttackIntervalMultiplier(source);
+	}
+
+	/// <summary>The cooldown a kit starts, after the place's rules (a seal can lengthen it).
+	/// Every kit calls this where it starts a skill cooldown — and nowhere else.</summary>
+	protected float ScaleCooldown(float seconds) => seconds * CooldownScale;
 
 	/// <summary>
 	/// Hydrate the live character from its run-state (T30 §1) — called by GameManager after
@@ -632,7 +710,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		// NOTE(animation): `swimming` and `rise` are the state a swim / float clip would read.
 		bool controllable = !Frozen && !Trapped;
 		bool swimming = _softVolumes.Swims && !_dead;
-		float swimSpeed = MoveSpeed * MoveMultiplier;
+		float swimSpeed = MoveSpeed * MoveMultiplier * MoveSpeedScale;
 		float rise = 0f;   // −1 swims up, +1 swims down
 		if (swimming && controllable)
 		{
@@ -649,7 +727,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		if (!IsOnFloor())
 		{
 			if (swimming) _intentVel.Y = SwimVertical(rise, swimSpeed, dt);
-			else _intentVel.Y += Gravity * _softVolumes.GravityScale * dt;
+			else _intentVel.Y += Gravity * GravityScale * _softVolumes.GravityScale * dt;
 
 			// Coyote time: leaving a surface doesn't cost a jump for CoyoteTime
 			// seconds (so you can still edge-jump), but if that window elapses
@@ -693,12 +771,15 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 					// Off the ground (or its coyote grace) it is a ground jump; inside a soft
 					// volume a stroke; anything else is an air jump.
 					bool fromGround = IsOnFloor() || (!_jumpedSinceGrounded && !_coyoteConsumed);
-					_intentVel.Y = JumpVelocity;
+					// A place may make every jump lower or higher: the launch scales by the
+					// root of the height share (h = v²/2g), whatever the gravity here.
+					float launch = JumpVelocity * JumpLaunchScale;
+					_intentVel.Y = launch;
 					if (spentNormalJump) _jumpsRemaining--;
 					_jumpCdTimer = JumpCooldown;
 					_jumpedSinceGrounded = true;
 					_jumpOrdinal++;
-					CueBus.Emit(this, "jump", variant: _jumpOrdinal, magnitude: -JumpVelocity,
+					CueBus.Emit(this, "jump", variant: _jumpOrdinal, magnitude: -launch,
 						direction: Vector2.Up, tag: _softVolumes.InMedium ? "swim" : fromGround ? null : "air",
 						at: Feet);
 				}
@@ -710,7 +791,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 
 		// Horizontal intent with momentum: accelerate toward the target, friction to stop.
 		// OnFire/Frozen only scale MoveSpeed — accel/friction are untouched.
-		float target = inputDir * MoveSpeed * _speedPenaltyMult * MoveMultiplier;
+		float target = inputDir * MoveSpeed * _speedPenaltyMult * MoveMultiplier * MoveSpeedScale;
 		float rate = Mathf.Abs(inputDir) > 0.01f ? (IsOnFloor() ? GroundAccel : AirAccel)
 												 : (IsOnFloor() ? GroundFriction : AirFriction);
 		_intentVel.X = Mathf.MoveToward(_intentVel.X, target, rate * dt);
@@ -753,7 +834,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	/// whenever a solid surface (ground/platform) or active SoftVolume supports a jump.</summary>
 	private void RefreshJumps()
 	{
-		_jumpsRemaining = MaxJumps;
+		_jumpsRemaining = MaxJumps + ExtraJumps;
 		_airborneTimer = 0f;
 		_coyoteConsumed = false;
 		_jumpedSinceGrounded = false;
@@ -813,7 +894,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 
 	private float SwimVertical(float rise, float swimSpeed, float dt) =>
 		_softVolumes.SwimVertical(_intentVel.Y, rise, swimSpeed * _speedPenaltyMult, swimSpeed,
-			AirAccel, AirFriction, Gravity, dt);
+			AirAccel, AirFriction, Gravity * GravityScale, dt);
 
 	public void EnterSoftVolume(SoftVolume v)
 	{

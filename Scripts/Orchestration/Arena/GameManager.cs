@@ -108,6 +108,22 @@ public partial class GameManager : Node2D
     /// <summary>Where the player's body is right now (the origin when there is none).</summary>
     public Vector2 PlayerPosition => _player != null && IsInstanceValid(_player) ? _player.GlobalPosition : Vector2.Zero;
 
+    /// <summary>The body the player is fighting with right now (null between bodies).</summary>
+    public CharacterController PlayerBody => _player != null && IsInstanceValid(_player) ? _player : null;
+
+    /// <summary>The rules of this place (Docs/Zone6.gdd §7): the handshake's, or — with no run —
+    /// the ones a staged debug fight would be dealt. Applied to every body that enters.</summary>
+    public ArenaRules Rules => _rules;
+
+    /// <summary>The node hazards are parented under (a boss's field attacks join it).</summary>
+    public Node2D HazardLayer => _hazards;
+
+    /// <summary>The arena's main floor — the broadest lowest ground — as a line: its height
+    /// and the arena's left and right edges, in px. What a floor-sweeping attack runs along.</summary>
+    public float FloorY => _floorY;
+    public float ArenaLeft => _usingAuthoredMap ? 0f : ArenaBuilder.PlayLeft - Units.Px(6f);
+    public float ArenaRight => _usingAuthoredMap ? _authoredMapWidth : ArenaBuilder.PlayRight + Units.Px(6f);
+
     private Node2D _world;
     private Node2D _hazards;
     private Hud _hud;
@@ -127,6 +143,12 @@ public partial class GameManager : Node2D
 
     private DetRandom _rng;
     private Mission _mission;
+    private ArenaRules _rules = ArenaRules.None;
+    private bool _voidTouched;           // the map is drawn as the VOID left it (zone 6)
+    private float _floorY = ArenaBuilder.GroundTopY;
+    // A zone-6 defeat has floored the battle team's HP (RunState): the fallen body must not
+    // write its 0 back over that afterwards (Finish the Day, a save-and-quit).
+    private bool _hpSettled;
     private ProtagonistState _protagonist;   // hydrated protagonist for HP write-back
     // Captured once from AdventureContext on arena entry. The shelter's editable
     // ActiveBuild is intentionally never consulted by the live battle loop.
@@ -162,6 +184,8 @@ public partial class GameManager : Node2D
         var rs = RunState.Instance;
         var adv = rs?.CurrentAdventure;
         _hasRun = adv != null;
+        _rules = _hasRun ? adv.Rules ?? ArenaRules.None : ArenaRules.None;
+        _voidTouched = _hasRun && adv.VoidTouched;
 
         // A real battle starts from the immutable team snapshot in its adventure
         // handoff, not the authoring placeholder baked into Arena.tscn and not the
@@ -181,12 +205,14 @@ public partial class GameManager : Node2D
 
         _foeSpawnMarkers = GetTree().GetNodesInGroup("enemy_spawn");
 
-        // Debug mode's boss page: a staged boss turns any no-run Arena into its fight.
+        // Debug mode's boss page: a staged boss turns any no-run Arena into its fight. A
+        // zone-6 boss is fought at its node's level (5 for a mini-boss, 6 for a final boss).
         if (!_hasRun && !string.IsNullOrWhiteSpace(StagedDebugBossId))
         {
             DebugBossId = StagedDebugBossId;
             DebugMission = MissionType.Boss;
-            DebugNodeLevel = 4;
+            DebugNodeLevel = BossTable.TryGet(StagedDebugBossId, out BossDef staged) && staged.Role != BossRole.Realm
+                ? (staged.Role == BossRole.Zone6Final ? 6 : 5) : 4;
             DebugCombatMapPath = "";
         }
 
@@ -210,12 +236,31 @@ public partial class GameManager : Node2D
         string combatMapPath = !string.IsNullOrWhiteSpace(adv?.CombatMapPath)
             ? adv.CombatMapPath : (!_hasRun ? DebugCombatMapPath : "");
         // A debug boss fight with no map named asks the run's own selection for that boss's
-        // world: the same rule, and so the same arena, a real 4-1 would be dealt.
-        if (!_hasRun && string.IsNullOrWhiteSpace(combatMapPath) && _missionType == MissionType.Boss
-            && BossTable.TryGet(BossId, out BossDef debugBoss))
+        // world: the same rule, and so the same arena, a real 4-1 would be dealt. A zone-6
+        // boss gets what its node would: the variant's fixed arena, or a world's boss arena
+        // drawn as the VOID left it — with the rules a run would carry (Zone6State.Debug).
+        if (!_hasRun && _missionType == MissionType.Boss && BossTable.TryGet(BossId, out BossDef debugBoss))
         {
-            combatMapPath = CombatMapCatalog.Select("debug", nodeId, debugBoss.WorldAbbr, _nodeLevel,
-                _missionType, CombatMapTerrain.SeaLevel)?.AbsolutePath ?? "";
+            if (debugBoss.Role != BossRole.Realm)
+            {
+                _rules = DebugZone6Rules(debugBoss);
+                if (string.IsNullOrWhiteSpace(combatMapPath))
+                {
+                    Zone6VariantDef variant = Zone6Table.Variant(debugBoss.Zone6Variant);
+                    CombatMapSelection dealt = debugBoss.Role == BossRole.Zone6Final && !string.IsNullOrEmpty(variant?.FinalArenaMapId)
+                        ? CombatMapCatalog.ById(variant.FinalArenaMapId)
+                        : CombatMapCatalog.SelectForVoid("debug", nodeId, WorldDef.PoolAbbrs(), _missionType);
+                    combatMapPath = dealt?.AbsolutePath ?? "";
+                    _voidTouched = dealt != null;
+                }
+            }
+            else
+            {
+                _rules = ArenaRules.Build(debugBoss.WorldAbbr, null, Zone6Role.None);
+                if (string.IsNullOrWhiteSpace(combatMapPath))
+                    combatMapPath = CombatMapCatalog.Select("debug", nodeId, debugBoss.WorldAbbr, _nodeLevel,
+                        _missionType, CombatMapTerrain.SeaLevel)?.AbsolutePath ?? "";
+            }
         }
         _usingAuthoredMap = TryBuildSelectedMap(combatMapPath);
         if (!_usingAuthoredMap)
@@ -232,7 +277,47 @@ public partial class GameManager : Node2D
         DebugManager.Instance?.LogMission($"Mission start: {MissionName(_missionType)} LV{_nodeLevel} foeLV{FoeLevel} day{day} node{nodeId}");
         SetupPlayer(rs);
         SetupHud();
+        ApplyRulesToArena();
         RaiseArenaEntered();
+    }
+
+    /// <summary>
+    /// Puts this place's rules on every body in the arena now, and on every one that enters it
+    /// later (a switch-in, a boss staged after the countdown, adds) — Docs/Zone6.gdd §7.
+    /// Nothing here reads the map or the run: the rules came in the handshake.
+    /// </summary>
+    private void ApplyRulesToArena()
+    {
+        GetTree().NodeAdded += OnNodeAdded;
+        if (_player != null) ArenaRulesApplier.ApplyToFighter(_player, _rules);
+        foreach (Node node in GetTree().GetNodesInGroup("foe"))
+            if (node is BaseFoe foe) ArenaRulesApplier.ApplyToFoe(foe, _rules);
+        if (_rules.HasLaw || _rules.InZone6 || _rules.HasSeals)
+            DebugManager.Instance?.LogMission("Rules: " + string.Join(" | ", _rules.HudLines()));
+    }
+
+    private void OnNodeAdded(Node node)
+    {
+        if (node is CharacterController body) ArenaRulesApplier.ApplyToFighter(body, _rules);
+        else if (node is BaseFoe foe) ArenaRulesApplier.ApplyToFoe(foe, _rules);
+    }
+
+    /// <summary>Called by the boss mission once a boss's row is on it: what the run took from a
+    /// final boss (Māra's sealed powers) comes off now, after its HP was set.</summary>
+    public void ApplyBossRules(CharacterController boss)
+    {
+        if (_rules.Zone6Role == Zone6Role.Final) ArenaRulesApplier.ApplyToFinalBoss(boss, _rules);
+    }
+
+    /// <summary>The rules a debug fight with a zone-6 boss is dealt: its variant's, from the
+    /// run's zone 6 when a run of that variant exists, else from the debug state the debug
+    /// page's knobs edit (gravity, seals).</summary>
+    private static ArenaRules DebugZone6Rules(BossDef boss)
+    {
+        Zone6State state = RunState.Instance?.Zone6 is { } runZone6 && runZone6.VariantId == boss.Zone6Variant
+            ? runZone6 : Zone6State.Debug;
+        if (state.VariantId != boss.Zone6Variant) state.VariantId = boss.Zone6Variant;
+        return ArenaRules.Build("XX", state, boss.Role == BossRole.Zone6Final ? Zone6Role.Final : Zone6Role.MiniBoss);
     }
 
     /// <summary>
@@ -246,10 +331,20 @@ public partial class GameManager : Node2D
     private void RaiseArenaEntered()
     {
         var backdrop = GetNodeOrNull<ColorRect>("Background");
-        float luminance = backdrop != null ? backdrop.Color.Luminance : -1f;
+        float luminance = backdrop == null ? -1f
+            : _voidTouched && VoidTreatment.IsOn(backdrop) ? VoidTreatment.DrawnLightness(backdrop.Color, CurrentLook())
+            : backdrop.Color.Luminance;
         CueBus.EmitAt(CueOwners.Flow, "arena.enter", PlayerPosition, this, CombatSide.Player,
-            variant: _nodeLevel, size: _authoredMapWidth, magnitude: luminance, tag: _mapWorld);
+            variant: _nodeLevel, size: _authoredMapWidth, magnitude: luminance, tag: ArenaTag);
     }
+
+    /// <summary>What this arena's cues call it (flow/arena.enter's tag): in zone 6 the variant
+    /// ("void_frontier", "avici") — presentation draws and scores every zone-6 fight in the
+    /// VOID's medium, never the medium of the world whose map it borrows; elsewhere the world
+    /// the map was authored for.</summary>
+    public string ArenaTag => _rules.InZone6 ? _rules.Zone6VariantId : _voidTouched ? "VOID" : _mapWorld;
+
+    private Zone6Look CurrentLook() => Zone6Table.Variant(_rules.Zone6VariantId)?.Look ?? Zone6Table.DefaultLook;
 
     /// <summary>The mission type as a cue tag: lower-case, constant strings.</summary>
     private static string MissionTag(MissionType t) => t switch
@@ -267,6 +362,7 @@ public partial class GameManager : Node2D
 
     public override void _ExitTree()
     {
+        GetTree().NodeAdded -= OnNodeAdded;
         // DebugManager is an autoload and outlives this arena scene; without this the
         // subscription added in SetupHud() leaks a handler pointing at a disposed GameManager,
         // and a later SKIP press (from a different arena visit) would invoke it.
@@ -308,6 +404,7 @@ public partial class GameManager : Node2D
         _authoredLevelGoalSpawns.AddRange(build.LevelGoalSpawns);
         _authoredRespawnSpawns.AddRange(build.RespawnSpawns);
         _authoredFoeSpawnRules = document.FoeSpawnRules;
+        _floorY = MainFloorY(document);
         // The arena is never told which world it is in (T00); the map says whose art it wears.
         _mapWorld = document.Worlds != null && document.Worlds.Count > 0 ? document.Worlds[0] ?? ""
             : document.World ?? "";
@@ -375,9 +472,36 @@ public partial class GameManager : Node2D
     /// </summary>
     private void ApplyVoidTreatment(CombatMapBuild build, ColorRect backdrop)
     {
-        if (RunState.Instance?.CurrentAdventure is not { VoidTouched: true }) return;
-        int drained = VoidTreatment.Apply(build.ParallaxLayers, backdrop);
-        DebugManager.Instance?.LogMission("Zone 6: the map is VOID-touched (" + drained + " pieces of art drained)");
+        if (!_voidTouched) return;
+        int drained = VoidTreatment.Apply(build.ParallaxLayers, backdrop, CurrentLook());
+        DebugManager.Instance?.LogMission("Zone 6: the map is VOID-touched (" + drained + " pieces of art drained, look '" + (_rules.Zone6VariantId.Length > 0 ? _rules.Zone6VariantId : "default") + "')");
+    }
+
+    /// <summary>
+    /// The height of a map's main floor in px: the top of the ground that most columns stand
+    /// on (full-height side walls ignored) — the broad floor a fight happens on, not a ledge
+    /// or a tower. Read from the document, so it is known before physics has run.
+    /// </summary>
+    public static float MainFloorY(MapDocument document)
+    {
+        MapLayerData battlefield = null;
+        foreach (MapLayerData layer in document?.Layers ?? new System.Collections.Generic.List<MapLayerData>())
+            if (layer.Role == MapLayerData.RoleBattlefield) { battlefield = layer; break; }
+        if (battlefield == null) return ArenaBuilder.GroundTopY;
+
+        var top = new System.Collections.Generic.Dictionary<int, int>();
+        foreach (PlacedTile tile in battlefield.Tiles)
+        {
+            if (tile?.DefId == null || !tile.DefId.StartsWith("ground.", System.StringComparison.Ordinal)) continue;
+            top[tile.X] = top.TryGetValue(tile.X, out int y) ? Mathf.Min(y, tile.Y) : tile.Y;
+        }
+        var votes = new System.Collections.Generic.Dictionary<int, int>();
+        foreach (int row in top.Values)
+            if (row > 1) votes[row] = votes.TryGetValue(row, out int n) ? n + 1 : 1;   // row ≤ 1: a side wall
+        int best = -1, bestVotes = 0;
+        foreach (var vote in votes)
+            if (vote.Value > bestVotes || (vote.Value == bestVotes && vote.Key > best)) { best = vote.Key; bestVotes = vote.Value; }
+        return best < 0 ? ArenaBuilder.GroundTopY : best * MapGrid.PixelsPerCell;
     }
 
     private static void ClearChildren(Node parent)
@@ -671,6 +795,11 @@ public partial class GameManager : Node2D
     {
         string title = $"{FoeStats.DifficultyName(FoeLevel)} {MissionTable.DifficultyName(_nodeLevel)} — {MissionName(_missionType)}";
         _hud.SetMissionTitle(title);
+        // The rules of this place: listed for the whole fight, and the first said once as the
+        // fight opens (the law of a realm, or which zone 6 this is).
+        var ruleLines = _rules.HudLines();
+        _hud.SetRulesLines(ruleLines);
+        if (ruleLines.Count > 0) _hud.ShowToast(ruleLines[0], 4f);
         _hud.ConfigureFinishDay(_hasRun);
         _hud.SetFinishDayEnabled(false);
         _hud.FinishDayPressed += OnFinishDayPressed;
@@ -857,7 +986,9 @@ public partial class GameManager : Node2D
         {
             WriteBackHp();
 
-            if (_mission.Status == MissionStatus.Failed && _mission.FatalTimeout)
+            // A zone-6 mini-boss is survivable (Docs/Zone6.gdd §3): its timer running out is a
+            // defeat the run lives through, not a kill — that branch is for every other boss.
+            if (_mission.Status == MissionStatus.Failed && _mission.FatalTimeout && !_rules.SurvivableDefeat)
             {
                 // A fatal boss timer is a real boss kill. TwistedReality may consume itself to
                 // return the run to its last completed day; every other timer loss is terminal.
@@ -869,6 +1000,8 @@ public partial class GameManager : Node2D
 
             bool success = _mission.Status == MissionStatus.Succeeded;
             RunState.Instance.ReportGoal(success, success ? _mission.Reward() : null);
+            // RunState has floored the battle team's HP; the fallen body writes nothing more.
+            if (!success && _rules.SurvivableDefeat) _hpSettled = true;
 
             // Goal and non-fatal timer expiry are checkpoints. This happens after ReportGoal so
             // node completion/rewards/failure bounce are durable before the player can Finish Day.
@@ -882,7 +1015,10 @@ public partial class GameManager : Node2D
                 return;
             }
 
-            _hud.ShowToast(success ? _mission.SuccessToast : "Mission failed.");
+            string note = RunState.Instance.LastZone6Note;
+            string toast = success ? _mission.SuccessToast : _rules.SurvivableDefeat ? "Defeated — you wake back on the map." : "Mission failed.";
+            _hud.ShowToast(string.IsNullOrEmpty(note) ? toast : toast + " " + note, string.IsNullOrEmpty(note) ? 2.5f : 6f);
+            if (_rules.InZone6) _hud.SetRulesLines(RulesAfterResult());
             _hud.SetFinishDayEnabled(true);
         }
         else
@@ -890,6 +1026,16 @@ public partial class GameManager : Node2D
             bool success = _mission.Status == MissionStatus.Succeeded;
             EndGameDebug(success ? "GOAL ACHIEVED!\nPress R to play again" : "MISSION FAILED\nPress R to try again");
         }
+    }
+
+    /// <summary>The rules label once a zone-6 fight has changed the run: the fight's own lines,
+    /// then where zone 6 stands now.</summary>
+    private System.Collections.Generic.List<string> RulesAfterResult()
+    {
+        var lines = _rules.HudLines();
+        string status = RunState.Instance?.Zone6?.StatusLine() ?? "";
+        if (status.Length > 0) lines.Add("Now: " + status);
+        return lines;
     }
 
     private void OnFinishDayPressed()
@@ -945,7 +1091,7 @@ public partial class GameManager : Node2D
 
     private void WriteBackHp()
     {
-        if (_hasRun && _player != null)
+        if (_hasRun && _player != null && !_hpSettled)
             _player.WriteBackToState(_protagonist);
     }
 
@@ -978,6 +1124,15 @@ public partial class GameManager : Node2D
         if (_hasRun)
         {
             WriteBackHp();   // CurrentHP is already 0 here, so this writes back ~0
+            // A zone-6 mini-boss beats you without ending the run (Docs/Zone6.gdd §3): the fight
+            // is lost, the run goes on — resolved as a failed mission, which RunState turns
+            // into the variant's penalty and a battle team on at least a quarter of its HP.
+            if (_rules.SurvivableDefeat && _mission != null && !_goalResolved)
+            {
+                _mission.Concede();
+                OnMissionResolved();
+                return;
+            }
             if (RunState.Instance.CurrentAdventure?.Kind == NodeKind.Boss
                 && RunState.Instance.TryRecoverFromBossFailure()) return;
             // Permadeath — no lives, no respawn in a run (NODES §2.2).
@@ -999,6 +1154,7 @@ public partial class GameManager : Node2D
         {
             _player.SetSpawnPoint(NextRespawnPoint());
             _player.Respawn();
+            ArenaRulesApplier.ApplyToFighter(_player, _rules);   // Respawn clears the defense pool
         }
     }
 

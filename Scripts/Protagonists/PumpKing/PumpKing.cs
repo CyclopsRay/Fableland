@@ -113,8 +113,8 @@ public partial class PumpKing : CharacterController
     public Vector2 HeadLaunchPoint => FirePoint != null ? FirePoint.GlobalPosition : GlobalPosition + NeckOffset;
 
     // HUD skill-icon cooldowns: Shift = Soul Form, E = Pump Up.
-    public override (float Remaining, float Max) ShiftCooldown => (_soulCd, SoulCooldown);
-    public override (float Remaining, float Max) ESkillCooldown => (_pumpCd, PumpInnerCD);
+    public override (float Remaining, float Max) ShiftCooldown => (_soulCd, ScaleCooldown(SoulCooldown));
+    public override (float Remaining, float Max) ESkillCooldown => (_pumpCd, ScaleCooldown(PumpInnerCD));
 
     /// <summary>The magazine this body uses. The BOSS variant answers with its own
     /// table row: it is not the protagonist (FOES.gdd §8).</summary>
@@ -246,7 +246,7 @@ public partial class PumpKing : CharacterController
     {
         if (_soulCd > 0f || CurrentState == PKState.Soul) return;
 
-        _soulCd = SoulCooldown;
+        _soulCd = ScaleCooldown(SoulCooldown);
         if (_activeHead != null && IsInstanceValid(_activeHead))
         {
             _activeHead.SetAutonomous(true);
@@ -294,7 +294,7 @@ public partial class PumpKing : CharacterController
         if (_pumpStacks >= MaxPumpStacks) return;
         if (_pumpCd > 0f) return;   // pumping during reload IS allowed, as in Unity
 
-        _pumpCd = PumpInnerCD;
+        _pumpCd = ScaleCooldown(PumpInnerCD);
         _pumpStacks++;
         _shield = Mathf.Min(_shield + ShieldPerPump, MaxPumpStacks * ShieldPerPump);
         NotifyHpChanged();

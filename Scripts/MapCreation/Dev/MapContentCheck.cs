@@ -463,6 +463,13 @@ public partial class MapContentCheck : Node
                 $"{world.Abbr} ({world.Name}): zone 6's core would be dealt an ordinary map of this world, not its boss arena");
         }
 
+        // A zone-6 variant that fights its final boss on one fixed arena (Docs/Zone6.gdd §3) must
+        // name a shipped map, or its core would open the legacy arena.
+        foreach (Fableland.Data.Zone6VariantDef variant in Fableland.Data.Zone6Table.Variants)
+            if (!string.IsNullOrEmpty(variant.FinalArenaMapId))
+                Expect(CombatMapCatalog.ById(variant.FinalArenaMapId) != null,
+                    $"zone 6: {variant.Id}'s final arena '{variant.FinalArenaMapId}' is not a shipped map");
+
         string dir = ProjectSettings.GlobalizePath("res://Maps");
         if (!Directory.Exists(dir)) return;
         string[] paths = Directory.GetFiles(dir, "*.json", SearchOption.TopDirectoryOnly);

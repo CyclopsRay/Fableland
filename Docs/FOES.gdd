@@ -332,7 +332,7 @@ reads the boss it finds:
 | The day → **ATK** ×1 / 1.2 / 1.5 / 1.5 / 1.5 / 2 | yes | **yes** — ×0.60 / 0.72 / 0.90 / 0.90 / 0.90 / 1.20 of the kit's damage | every band, in a run |
 | The day → **SPD** ×1 / 1.2 / 1.2 / 1.2 / 1.5 / 1.5 | yes | **no** — he walks and flies at the protagonist's speeds on every day | open, TBD #31 |
 | **Evolution** (§5): not eliminated within 25 s → +1 level, max HP re-derived, healed 30% | yes — the crab stand-in did | **no** | open, TBD #31 |
-| Zone 6: the node fixes the level (LV5 → 7, the core → 8), whatever the day | yes | not his case (he is an LV4 boss); the core's final boss is still the crab stand-in, 560 × 5 = **2800** HP | yes |
+| Zone 6: the node fixes the level (LV5 → 7, the core → 8), whatever the day | yes | not his case (he is an LV4 boss); *since v0.12.0 zone 6's bosses are its variant's own rows (§8.7)* — on his kit: a gate's 600 × 4 = **2400** HP, the core's 900 × 5 = **4500** | yes |
 | Skills unlocked by level (§2) | yes | no — his whole rule list on every day (§8.4) | — |
 | The kit's own state | — | Pump Up: +20 shell per stack, **not** scaled by the day, and slower while pumped | — |
 | The player's own PumpKing (HP, held item, Sharpen bonuses) | — | **nothing carries over** — only the player's body is hydrated from the run | HP exact, in a run |
@@ -458,6 +458,35 @@ A boss map takes its boss's side.
   (`RunState.EnsurePrototypeRoster`), PumpKing included, so recruiting him today changes
   nothing. When that policy ends, recruitable protagonists leave the starting roster; the
   reward path is already in place.
+
+### 8.7 Zone 6's bosses (v0.12.0, provisional — `Docs/Zone6.gdd` is their home)
+
+Zone 6 is a rotating stage (`MapGDD.md` §7): each variant fields **five mini-bosses** on its
+LV5 nodes and **one final boss** on the core. They are `BossTable` rows like any boss, with
+`Role` = `Zone6Mini` / `Zone6Final`, world `XX`, the variant they belong to, and **no
+protagonist**: they recruit nobody and pay no item (`BossDef.Recruits` is false).
+
+| Variant | Mini-bosses (XX-5-1 … 5) | Final boss (XX-6-1) |
+|---------|--------------------------|---------------------|
+| The Void Frontier | the Ferryman · the Weigher of Hearts · Meng Po · Xolotl · Stingy Jack | **the Unwritten** — signature **Styx Tide** |
+| Avīci | Preta (贪) · Asura of Wrath (嗔) · the Boar of Delusion (痴) · the Fallen Deva (慢) · Ox-Head and Horse-Face (疑) | **Māra Pāpīyas** — loses a power per gate won |
+
+- **Stand-in.** Until its own kit is built, every one fields BOSS PumpKing's kit under its own
+  row: its name on the bar, its HP (600 for a mini-boss, 900 for a final boss, at foe level 1,
+  × the node's level — 7 or 8), damage share 0.6, PumpKing's poise and magazine. The concept
+  line in each row is what its kit is to be (`Zone6.gdd` §4–§5).
+- **Level.** The node fixes it (§2): 7 at a gate, 8 at the core — a gate's mini-boss has
+  600 × 4 = 2400 HP, the core's 900 × 5 = 4500.
+- **Losing to a mini-boss is survived** (`NODES.gdd` §2.2): the run goes on, the variant's
+  penalty is paid. Its timer (240 s) is a defeat, not a death. The final boss keeps both.
+- **A signature** is a field attack the fight runs whatever kit stands in (`BossDef.Signature`):
+  the Unwritten's **Styx Tide** — a 5.5 m wave across the whole floor every 9 s; two in a row
+  below half HP, the second from the other side below a quarter (`Zone6.gdd` §4.2).
+- **Māra's seals** come off after his row: −12 % HP and −10 points of damage per sealed power,
+  until his five powers are his kit (`Zone6.gdd` §5.2).
+- **Debug.** The debug page (key 4) lists realm bosses one button each, and zone 6's twelve in
+  one picker with a Fight button; a zone-6 fight is staged at its node's level, on the map its
+  node would be dealt, with the rules a run would carry.
 
 ---
 

@@ -88,6 +88,11 @@ adding it on day one is three lines. Unknown fields are preserved on rewrite
 (forward-compat), unknown ids are skipped with a logged warning (content removed
 between versions must not corrupt a save).
 
+An **optional** field needs no version bump when its absence means "empty": `RunSaveData.Zone6`
+(v0.12.0) is null in every older save and loads as an empty zone 6 on the seed's variant —
+proved against the owner's own slots (`RunWalkCheck --saves=`). A field whose absence would be
+misread needs a migration step instead.
+
 ## 6. Deprecation protocol
 
 Old code is removed in daylight, not left to rot (case study: `Scripts/Enemy.cs` at
