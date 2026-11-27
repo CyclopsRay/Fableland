@@ -9,6 +9,7 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.11.8** — **A hand-off for the next session.** Docs only. `HANDOFF.md` at the repo root replaces reading the previous session. It says where the work is: this branch; `main` at v0.11.0; the owner's editor on an old worktree; full-size concept originals only on disk. It gives one line per version from v0.11.1 to v0.11.7 with what to read before touching each, and what is not done in priority order with the `KNOWLEDGE.md` caveats to read for each. It also lists what waits on the owner and how to work on this machine (model routing, usage limits, Python, scratch `HOME`, integrating parallel branches). Nothing in the game changed.
 - **0.11.7** — **The game has sound: an audio director, a synthesis toolkit, music for every
   world.** Design, the ten media, every rule and the budgets: `Docs/Audio.gdd`; research
   behind it: `Docs/Research/R1-audio-research.md`. **Nobody has heard it yet** — there are no
