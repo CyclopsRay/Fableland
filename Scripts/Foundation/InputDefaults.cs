@@ -16,11 +16,21 @@ public static class InputDefaults
     /// <c>move_down</c> (S / Down arrow), which <c>project.godot</c> defines.</summary>
     public const string MoveUp = "move_up";
 
+    /// <summary>Use the station you stand at in a shelter (NODES §5.0): E, or W / Up arrow —
+    /// "go in". A shelter is the one place nobody fights, so E (Skill 2 in a fight) is free
+    /// there: the shelter's walker cannot use skills. Shown on screen from the InputMap.</summary>
+    public const string Interact = "interact";
+
     /// <summary>Registers any missing action. Cheap and repeatable. The player's controls
     /// call it before they first read input (<see cref="PlayerControls"/> — fighters read
-    /// their buttons through <c>Controls</c>, never from <c>Input</c>); a test that presses
-    /// one of these actions itself calls it first.</summary>
-    public static void Ensure() => EnsureKeys(MoveUp, Key.W, Key.Up);
+    /// their buttons through <c>Controls</c>, never from <c>Input</c>); the shelter calls it
+    /// before it reads <see cref="Interact"/>; a test that presses one of these actions itself
+    /// calls it first.</summary>
+    public static void Ensure()
+    {
+        EnsureKeys(MoveUp, Key.W, Key.Up);
+        EnsureKeys(Interact, Key.E, Key.W, Key.Up);
+    }
 
     private static void EnsureKeys(string action, params Key[] physicalKeys)
     {

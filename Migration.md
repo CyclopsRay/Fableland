@@ -9,6 +9,49 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.9** — **Recruitment, and the shelter as a walkable room** (the owner's "做招募系统，然后给休息站做一个地图…
+  把现在的按钮功能融合到地图里"; built in the `recruit-shelter` session, branch
+  `claude/recruitment-shelter-map-4f6988` at `13f097d`, merged here with v0.12.8's items).
+  Decisions it made for the owner are listed in HANDOFF §4 and written into the GDDs.
+  - **Recruitment** (`NODES.gdd` §3.1, §4.5). A run starts with its home world's protagonist
+    alone: Pomegraknight, fielded, with slots 2 and 3 empty. The prototype roster (all five
+    from day one, in a team Pomegraknight was not in) is gone.
+    - A realm's 4-1 recruits **that realm's own** protagonist, whichever boss kit holds it. The
+      handshake carries `AdventureContext.RecruitId` (from `RunState.RecruitOf` and the world
+      data) and `BossMission` pays it. The stand-in BOSS PumpKing beaten in Starland brings
+      Cleopastar; HollowCastle, TheDeserted and the Palace of LOOING bring nobody.
+    - Homes are world data (`WorldDef.HomeProtagonistId`).
+    - A recruit takes the first empty team slot (else the bench) and joins at full HP with the
+      Blessings the roster shares, once. The toast, the reward line and the day's summary say so.
+    - Saves keep their roster: loading no longer tops a save up to five.
+    - Debug page (key 4): *Recruit all five into this run* and *New runs start with all five*
+      (also `FABLELAND_ROSTER=all`); the page now scrolls.
+    - Team Build's locked faces say where each one can be recruited this run.
+  - **The shelter is a room** (`NODES.gdd` §5.0). `Scenes/Shelter.tscn` is a walkable side-view
+    room (root `Node2D`, UI in its `Ui` layer). The team's lead walks it on their own walk and
+    jump, with the kit shut by `ShelterWalkControls`.
+    - **E** (also W / ↑, the new `interact` action registered in `InputDefaults`) uses a
+      **station**: the road (Back / Continue into the VOID), the team board (Team Build), the
+      lantern (Finish the Day), the campfire (Rest), the whetstone (Sharpen Weapon), the anvil
+      (Sharpen Armor).
+    - Stations are data (`ShelterTable`: rows, and one room per world — the default for now)
+      with behaviours (`ShelterStations`). A station with no behaviour is not built, so the
+      plantation, the enchanting altar and the wanderer keep empty spots until their systems
+      register one.
+    - `ShelterController.Exits` stays the one rule for the ways out; the confirmations and "a
+      Blessing ends the day" are unchanged.
+    - All three kinds: Transportation Hub, Eidolon Shelter (no lantern), Last Shelter.
+    - Everything is drawn in code; the TODO(art) list is in `NODES.gdd` §5.0.
+  - **Fixed in passing:**
+    - A spent Eidolon Shelter entered with no stamina was a dead end: its Back was enabled and
+      did nothing.
+    - An Eidolon Shelter's Back read "Continue into the VOID".
+    - Every key on the pause menu's controls card and under the countdown read "… - Physical".
+  - **Checks:** a new `Scenes/Run/RecruitShelterCheck.tscn` (398 checks, ~15 s; `-- --shots=dir`
+    in a window saves pictures of each kind of shelter; 18 mutations, each caught). The run
+    check expects each capital to recruit its realm's own and sets a party for the zone-6 walk:
+    2019 with v0.12.8's phantom walk. Every suite is clean on the merge.
+  - **New TBDs:** #69–#74 (`10-DESIGN.md` §6), and #75–#78 for v0.12.8's open item questions.
 - **0.12.8** — **The wonder items live: all fourteen, each with a source** (audit Part 2 #19;
   the owner's "先实现道具"). Decisions the GDD left open are logged in `ITEMS.gdd` §9 (v0.12.8).
   - **One ledger** (`Scripts/Run/ItemLedger.cs`) holds what the items do to the run: perish

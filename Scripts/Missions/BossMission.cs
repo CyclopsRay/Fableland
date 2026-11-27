@@ -13,7 +13,9 @@ namespace Fableland.Missions;
 ///
 /// The boss is the one the handshake names (<see cref="GameManager.BossId"/> →
 /// <see cref="BossTable"/>): a protagonist's kit on the Foe side, driven by a rule-based
-/// brain, staged on its arena's perches. Beating it recruits that protagonist — once. Every
+/// brain, staged on its arena's perches. Beating a realm's 4-1 recruits that REALM's own
+/// protagonist — once, whichever kit held it (<see cref="GameManager.RecruitId"/>, from the
+/// handshake; NODES §4.5). Every
 /// realm's 4-1 names a boss (its own, or the stand-in: <see cref="BossTable.ForWorld"/>);
 /// the placeholder (S3, <see cref="BossCrab"/>) is left for a node that names none — the LV6
 /// core — and for a boss whose scene fails to load.
@@ -35,7 +37,8 @@ public sealed class BossMission : Mission
     private CharacterController _boss;       // the real boss, once staged
     private IBossFighter _fighter;
     private BossCrab _placeholder;
-    private bool _alreadyRecruited;          // the run owned this protagonist before the fight
+    private string _recruitId = "";          // whom beating this node recruits (the realm's own)
+    private bool _alreadyRecruited;          // the run owned that protagonist before the fight
     private bool _staged;
     private bool _bossWasAlive;
     private bool _addWaveSpawned;
@@ -61,6 +64,11 @@ public sealed class BossMission : Mission
 
         if (!string.IsNullOrWhiteSpace(arena.BossId) && !BossTable.TryGet(arena.BossId, out _def))
             GD.PushError($"[BossMission] unknown boss '{arena.BossId}'; fielding the placeholder.");
+        // Who this realm's 4-1 recruits is the handshake's call (NODES §4.5), not the kit's: a
+        // stand-in PumpKing beaten in Starland recruits Starland's own. Read before the fight,
+        // so the toast can tell a newcomer from someone already on the roster.
+        _recruitId = arena.RecruitId ?? "";
+        _alreadyRecruited = _recruitId.Length > 0 && RunState.Instance?.FindProtagonist(_recruitId) != null;
 
         arena.Spawner.Enabled = false;   // boss owns the field (ambient trickle off)
     }
@@ -117,7 +125,6 @@ public sealed class BossMission : Mission
 
         _boss = body;
         _fighter = fighter;
-        _alreadyRecruited = _def.Recruits && RunState.Instance?.FindProtagonist(_def.ProtagonistId) != null;
         // A field mechanic the fight runs whatever kit stands in: the Styx rising from the
         // horizon on the Unwritten's floor, from a stream of its own; Māra's wheel behind his.
         if (_def.Signature == "styx_tide") _styx = new StyxTideSchedule(RaiseStyxTide, _rng.Sub("styx"));
@@ -242,23 +249,25 @@ public sealed class BossMission : Mission
     /// <summary>True when the boss on the field is one of zone 6's (Docs/Zone6.gdd).</summary>
     private bool Zone6Boss => _def != null && _def.Role != BossRole.Realm;
 
-    // LV6 is irrelevant — victory ends the run before any reward would matter. Beating the
-    // named boss recruits its protagonist (NODES §4.5); the stand-in recruits nobody. A zone-6
+    // LV6 is irrelevant — victory ends the run before any reward would matter. Beating a
+    // realm's 4-1 recruits the realm's own protagonist (NODES §4.5) — whoever held it, the
+    // stand-in kit or the placeholder included; a realm with none recruits nobody. A zone-6
     // mini-boss's reward is its variant's (gravity, a seal on Māra — RunState), nothing else.
     public override RewardBundle Reward()
     {
         if (Zone6Boss || _nodeLevel >= 6) return new RewardBundle();
         var reward = new RewardBundle { ItemDefIds = { "yukais_rope" } };
-        if (FieldsRealBoss && _def.Recruits) reward.ProtagonistGrants.Add(_def.ProtagonistId);
+        if (_recruitId.Length > 0) reward.ProtagonistGrants.Add(_recruitId);
         return reward;
     }
 
     // Recruiting happens once (RunState.GrantProtagonist), so it is announced once: a boss
-    // standing in for a realm whose own is not built, met again, or of zone 6 simply falls.
-    public override string SuccessToast => !FieldsRealBoss ? base.SuccessToast
-        : _wheel is { Liberated: true } ? "The wheel stops. You step off it."
-        : _alreadyRecruited || !_def.Recruits ? $"{_def.DisplayName} falls!"
-        : $"{_def.DisplayName} falls — {_def.ProtagonistId} joins you!";
+    // met again, of a realm with no protagonist yet, or of zone 6 simply falls.
+    public override string SuccessToast =>
+        _wheel is { Liberated: true } ? "The wheel stops. You step off it."
+        : Zone6Boss || _nodeLevel >= 6 || _recruitId.Length == 0 || _alreadyRecruited
+            ? (FieldsRealBoss ? $"{_def.DisplayName} falls!" : base.SuccessToast)
+            : $"{BossName} falls — {_recruitId} joins you!";
 
     private string BossName => FieldsRealBoss ? _def.DisplayName : "the BOSS";
 

@@ -40,27 +40,51 @@ public sealed class WorldDef
     public string Abbr;
     public Color Color;
 
-    public WorldDef(string name, string abbr, Color color)
+    /// <summary>The protagonist whose home this world is (`MapGDD.md` §2, `NODES.gdd` §3.1):
+    /// the one a run that starts here starts with, and the one beating this realm's 4-1
+    /// recruits — whichever boss kit fights there. Null for a world with no protagonist yet.
+    /// Not part of any seed: it changes who joins, never what a map generates.</summary>
+    public string HomeProtagonistId;
+
+    public WorldDef(string name, string abbr, Color color, string homeProtagonistId = null)
     {
         Name = name;
         Abbr = abbr;
         Color = color;
+        HomeProtagonistId = homeProtagonistId;
     }
 
+    // Homes (v0.12.9): Pomegraknight, PumpKing and Pixolotl from their GDDs and the world
+    // table; Cleopastar → Starland and Sifu Pangda → Banboo Maze are PROVISIONAL — the same
+    // calls her effects and his sounds already wear (`Feedback.gdd` §8, TBD #37/#38; the
+    // presentation's `Medium.HomeOf` must agree, and the recruit check says so).
     public static readonly List<WorldDef> Pool = new()
     {
-        new WorldDef("Starland",         "SL", new Color(0.95f, 0.55f, 0.15f)),
+        new WorldDef("Starland",         "SL", new Color(0.95f, 0.55f, 0.15f), "Cleopastar"),
         new WorldDef("HollowCastle",     "HC", new Color(0.55f, 0.55f, 0.62f)),
-        new WorldDef("VanillaKindom",    "VK", new Color(0.95f, 0.55f, 0.75f)),
+        new WorldDef("VanillaKindom",    "VK", new Color(0.95f, 0.55f, 0.75f), "Pomegraknight"),
         new WorldDef("TheDeserted",      "TD", new Color(0.85f, 0.75f, 0.40f)),
         new WorldDef("Palace of LOOING", "PL", new Color(0.62f, 0.38f, 0.78f)),
-        new WorldDef("Banboo Maze",      "BM", new Color(0.20f, 0.48f, 0.28f)),
+        new WorldDef("Banboo Maze",      "BM", new Color(0.20f, 0.48f, 0.28f), "Sifu Pangda"),
         // v0.11.0 — the two worlds whose realms were built in v0.10.9 join the pool. Their
         // colours are the two hues the first six left free (blue is the rivers' and the
         // sea's): the Dark Wood's danger red, and the jade of the Forgotten City's canals.
-        new WorldDef("Kingdom of Horror", "KH", new Color(0.78f, 0.20f, 0.24f)),
-        new WorldDef("The Forgotten",     "TF", new Color(0.10f, 0.66f, 0.62f)),
+        new WorldDef("Kingdom of Horror", "KH", new Color(0.78f, 0.20f, 0.24f), "PumpKing"),
+        new WorldDef("The Forgotten",     "TF", new Color(0.10f, 0.66f, 0.62f), "Pixolotl"),
     };
+
+    /// <summary>The protagonist whose home this world is, or null (no such world, or a world
+    /// with no protagonist yet — HollowCastle, TheDeserted, the Palace of LOOING, zone 6).</summary>
+    public static string HomeProtagonistOf(string abbr) => ByAbbr(abbr)?.HomeProtagonistId;
+
+    /// <summary>The pool world that is this protagonist's home, or null.</summary>
+    public static WorldDef HomeOf(string protagonistId)
+    {
+        if (string.IsNullOrWhiteSpace(protagonistId)) return null;
+        foreach (WorldDef world in Pool)
+            if (string.Equals(world.HomeProtagonistId, protagonistId, StringComparison.Ordinal)) return world;
+        return null;
+    }
 
     public static readonly Color VoidColor = new(0.05f, 0.05f, 0.07f);
 

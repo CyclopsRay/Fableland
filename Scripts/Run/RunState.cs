@@ -130,6 +130,11 @@ public partial class RunState : Node
         // A tester can pin every new run's zone 6 to one variant from outside the game.
         string forced = OS.GetEnvironment("FABLELAND_ZONE6");
         if (Zone6Table.Variant(forced) != null) Zone6State.ForcedVariantId = Zone6Table.Variant(forced).Id;
+        // …and start every new run with all five protagonists (the debug page's switch).
+        if (string.Equals(OS.GetEnvironment("FABLELAND_ROSTER"), "all", StringComparison.OrdinalIgnoreCase))
+            DebugAllProtagonistsOnNewRun = true;
+        if (OS.IsDebugBuild())
+            foreach (string problem in ShelterTable.Validate()) GD.PushError("[RunState] " + problem);
     }
     public override void _ExitTree() { if (Instance == this) Instance = null; }
 
@@ -254,11 +259,9 @@ public partial class RunState : Node
         ResolvedEventIds.Clear();
         _worldsSet.Clear();
 
-        Owned.Clear();
-        // Prototype-debug roster: every implemented protagonist is granted on a
-        // fresh run so Team Build can exercise every valid party combination.
-        EnsurePrototypeRoster();
-        ApplyPrototypeDefaultTeam();
+        // NODES §3.1: a run starts with its home world's protagonist alone; the others are
+        // recruited (§4.5). The debug page can still start runs with all five.
+        StartRoster(MapGenerator.PomegraknightHome);
         WonderCores = 0;
         Items.Clear();
         _nextItemInstanceOrdinal = 1;
@@ -328,7 +331,10 @@ public partial class RunState : Node
         // whose own is not built yet fields the stand-in (BossTable.ForWorld — PumpKing, for
         // now, in every realm).
         if (kind == NodeKind.Boss && node != null && node.Level == 4)
+        {
             adventure.BossId = BossTable.ForWorld(node.Zone)?.Id ?? "";
+            adventure.RecruitId = RecruitOf(node);
+        }
         // Zone 6 is a stage of its own (Docs/Zone6.gdd §3): each LV5 node is one of the
         // variant's five mini-bosses, the LV6 core its final boss. The mission the generator
         // rolled for an LV5 node stays in the graph untouched (no draw moves); the handshake
@@ -1109,9 +1115,10 @@ public partial class RunState : Node
         return null;
     }
 
-    /// <summary>Recruit a protagonist (a beaten LV4 boss, NODES §4.5). Idempotent: one
-    /// already on the roster — every protagonist is, under the prototype roster policy
-    /// below — is not added twice and not counted again. Returns true when it was new.</summary>
+    /// <summary>Recruit a protagonist (a realm's beaten 4-1, NODES §4.5). Idempotent: one
+    /// already on the roster is not added twice and not counted again. A recruit joins at
+    /// full HP with the Blessings the roster shares, and takes an empty team slot if there is
+    /// one (else the bench). Returns true when it was new.</summary>
     public bool GrantProtagonist(string id)
     {
         if (string.IsNullOrWhiteSpace(id) || FindProtagonist(id) != null) return false;
@@ -1120,24 +1127,101 @@ public partial class RunState : Node
             GD.PushError($"[RunState] cannot recruit '{id}': no such protagonist.");
             return false;
         }
-        Owned.Add(new ProtagonistState(id));
+        Owned.Add(JoiningState(id));
         ProtagonistsCollected++;
-        DayEndNotes.Add($"{id} joins your roster.");
+        DayEndNotes.Add(FieldIfRoom(id)
+            ? $"{id} joins your team."
+            : $"{id} joins your roster — field them with Team Build at a shelter.");
         return true;
     }
 
-    /// <summary>Grant every currently implemented protagonist exactly once. This is a
-    /// prototype debugging policy, so the debug registry remains its single roster source.</summary>
-    private bool EnsurePrototypeRoster()
+    /// <summary>Debug (the debug page, or <c>FABLELAND_ROSTER=all</c>): new runs start with
+    /// every implemented protagonist and the prototype's team, as every run did before v0.12.9.
+    /// Not saved — a tester's switch; a run started this way keeps its five like any roster.</summary>
+    public static bool DebugAllProtagonistsOnNewRun;
+
+    /// <summary>The protagonist a run that starts in this world starts with (NODES §3.1): the
+    /// world's home protagonist. A home world always has one; the first roster entry stands
+    /// in for one that does not.</summary>
+    public static string StarterOf(string homeAbbr) =>
+        WorldDef.HomeProtagonistOf(homeAbbr) ?? ProtagonistRoster.Entries[0].Id;
+
+    /// <summary>Who beating this node recruits: a realm's 4-1 recruits the realm's home
+    /// protagonist (none for a realm with no protagonist yet); nothing else recruits.</summary>
+    public static string RecruitOf(MapNode node) =>
+        node != null && node.Kind == NodeKind.Boss && node.Level == 4 && node.WorldIndex >= 0
+            ? WorldDef.HomeProtagonistOf(node.Zone) ?? "" : "";
+
+    /// <summary>A new run's roster: its home world's protagonist alone, fielded (NODES §3.1) —
+    /// or, with the debug switch on, every implemented protagonist and the prototype's team.</summary>
+    private void StartRoster(string homeAbbr)
     {
-        bool added = false;
+        Owned.Clear();
+        ActiveBuild.Clear();
+        ActiveProtagonistIndex = 0;
+        if (DebugAllProtagonistsOnNewRun)
+        {
+            foreach ((string id, _) in ProtagonistRoster.Entries) Owned.Add(new ProtagonistState(id));
+            ApplyPrototypeDefaultTeam();
+            return;
+        }
+        string starter = StarterOf(homeAbbr);
+        Owned.Add(new ProtagonistState(starter));
+        ActiveBuild.Add(starter);
+    }
+
+    /// <summary>Debug (the debug page): every implemented protagonist joins the run in
+    /// progress, empty team slots filled in roster order, so a tester can play with all five
+    /// without beating a realm. No day notes — nothing happened in the story. Returns how
+    /// many joined.</summary>
+    public int DebugRecruitAll()
+    {
+        int joined = 0;
         foreach ((string id, _) in ProtagonistRoster.Entries)
         {
             if (FindProtagonist(id) != null) continue;
-            Owned.Add(new ProtagonistState(id));
-            added = true;
+            Owned.Add(JoiningState(id));
+            ProtagonistsCollected++;
+            FieldIfRoom(id);
+            joined++;
         }
-        return added;
+        DebugManager.Instance?.LogSystem($"Debug roster: {joined} protagonist(s) joined; team {string.Join(", ", ActiveBuild)}");
+        return joined;
+    }
+
+    /// <summary>A protagonist joining mid-run: full HP, and the Blessings every fighter
+    /// already shares — ATK, DEF and max HP are global (NODES §3.3), so a newcomer gets what
+    /// the whole roster has in common (the least any one of them has).</summary>
+    private ProtagonistState JoiningState(string id)
+    {
+        var joining = new ProtagonistState(id);
+        if (Owned.Count == 0) return joining;
+        int atk = int.MaxValue, def = int.MaxValue, hp = int.MaxValue;
+        foreach (ProtagonistState member in Owned)
+        {
+            atk = Math.Min(atk, member.BonusAtk);
+            def = Math.Min(def, member.BonusDef);
+            hp = Math.Min(hp, member.MaxHpPercentPoints);
+        }
+        joining.BonusAtk = atk;
+        joining.BonusDef = def;
+        joining.MaxHpPercentPoints = Math.Max(0, hp);
+        return joining;
+    }
+
+    /// <summary>A recruit takes the first empty team slot — the party cap is never exceeded
+    /// (NODES §4.5) — and waits on the bench when the team is full. The fighter who opens the
+    /// next battle stays the same. True when the recruit is in the team.</summary>
+    private bool FieldIfRoom(string id)
+    {
+        List<string> team = ValidActiveBuild();
+        if (team.Contains(id)) return true;
+        if (team.Count >= PartyCap()) return false;
+        string opener = ActiveProtagonistIndex >= 0 && ActiveProtagonistIndex < ActiveBuild.Count ? ActiveBuild[ActiveProtagonistIndex] : null;
+        team.Add(id);
+        if (!TrySetActiveBuild(team, out _)) return false;
+        ActiveProtagonistIndex = Math.Max(0, ActiveBuild.IndexOf(opener ?? ""));
+        return true;
     }
 
     private void ApplyPrototypeDefaultTeam()
@@ -1331,32 +1415,21 @@ public partial class RunState : Node
         }
         if (Owned.Count == 0)
         {
-            GD.PushWarning("[RunState] save had no valid protagonists; restored Pixolotl.");
-            Owned.Add(new ProtagonistState("Pixolotl"));
+            string starter = StarterOf(Graph.Worlds.Count > 0 ? Graph.Worlds[0].Abbr : MapGenerator.PomegraknightHome);
+            GD.PushWarning($"[RunState] save had no valid protagonists; restored the run's starter, {starter}.");
+            Owned.Add(new ProtagonistState(starter));
         }
 
-        // Existing prototype saves predate the completed five-character roster. Upgrade
-        // them once on load, including the requested debug default; the next save stores
-        // the expanded roster and later Team Build choices normally.
-        bool upgradedPrototypeRoster = EnsurePrototypeRoster();
-
+        // A save keeps the roster it was saved with: loading never recruits (NODES §3.1).
+        // Until v0.12.9 every load topped a save up to all five — the prototype roster.
         ActiveBuild.Clear();
-        if (upgradedPrototypeRoster)
-        {
-            ApplyPrototypeDefaultTeam();
-        }
-        else
-        {
-            var activeSeen = new HashSet<string>(StringComparer.Ordinal);
-            if (save.ActiveBuild != null)
-                foreach (string id in save.ActiveBuild)
-                    if (FindProtagonist(id) != null && activeSeen.Add(id) && ActiveBuild.Count < PartyCap())
-                        ActiveBuild.Add(id);
-            if (ActiveBuild.Count == 0) ActiveBuild.Add(Owned[0].Id);
-        }
-        ActiveProtagonistIndex = upgradedPrototypeRoster
-            ? 0
-            : Math.Clamp(save.ActiveProtagonistIndex, 0, ActiveBuild.Count - 1);
+        var activeSeen = new HashSet<string>(StringComparer.Ordinal);
+        if (save.ActiveBuild != null)
+            foreach (string id in save.ActiveBuild)
+                if (FindProtagonist(id) != null && activeSeen.Add(id) && ActiveBuild.Count < PartyCap())
+                    ActiveBuild.Add(id);
+        if (ActiveBuild.Count == 0) ActiveBuild.Add(Owned[0].Id);
+        ActiveProtagonistIndex = Math.Clamp(save.ActiveProtagonistIndex, 0, ActiveBuild.Count - 1);
 
         WonderCores = Math.Max(0, save.WonderCores);
         Items.Clear();

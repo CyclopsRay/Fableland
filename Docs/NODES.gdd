@@ -49,8 +49,10 @@ Two buttons live in the top-right corner during Adventure mode:
 
 **Service node (Transportation Hub, Eidolon Shelter, or the zone-6 Shelter):**
 - Transportation Hubs and the zone-6 Shelter expose Map and Finish-the-Day normally.
-- An Eidolon Shelter exposes only Rest, both Sharpen actions, and Team Build. Its Map/Back and
-  Finish-the-Day exits are disabled; spending its Blessing immediately crosses the bridge.
+- An Eidolon Shelter exposes only Rest, both Sharpen actions, and Team Build. Its Map/Back exit
+  is closed while its Blessing can still carry you across, and it has no Finish the Day;
+  spending its Blessing immediately crosses the bridge. Once the Blessing is spent or the
+  crossing blocked, the road back to the map opens, at any stamina (v0.12.4, #16; v0.12.9).
 - The player may open the map and **move to other nodes** as long as stamina remains
   (entering a shelter does not automatically end the day).
 - Clicking `Finish the Day` ends the day immediately and returns to Exploration mode.
@@ -148,20 +150,57 @@ covered in a future persistence/account GDD.
 
 ### 3.1 Protagonists
 
-The player initially controls a **single protagonist** (the one whose home world starts
-the run; see `MapGDD.md` §2). Over the course of a run, additional protagonists can be
-recruited:
+**A run starts with one protagonist: its home world's** (v0.12.9 — `MapGDD.md` §2: the
+home world is the start zone, so today every run starts with Pomegraknight, alone, in
+VanillaKindom). The team is that one fighter; slots 2 and 3 are empty. The others are
+recruited during the run:
 
-| Source | How |
-|--------|-----|
-| **Jousting** | Win a joust against a wanderer at a shelter node (§5.4) |
-| **LV4 BOSS** | Defeat the world boss in a level-4 combat node (§4.5) |
-| **Question-mark event** | Some `?` nodes may grant a protagonist |
+| Source | How | Status |
+|--------|-----|--------|
+| **A realm's 4-1** | The first time you beat a realm's LV4 boss, **that realm's home protagonist** joins (§4.5) — whichever boss kit held the capital | built (v0.12.9) |
+| **Jousting** | Win a joust against a wanderer at a Transportation Hub (§5.4) | designed, not built |
+| **Question-mark event** | Some `?` nodes may grant a protagonist | not designed |
+
+**Homes** — world data (`WorldDef.HomeProtagonistId`, `Scripts/Map/MapData.cs`):
+
+| World | Home protagonist |
+|-------|------------------|
+| VanillaKindom (VK) | Pomegraknight — every run's starter today |
+| Kingdom of Horror (KH) | PumpKing |
+| The Forgotten (TF) | Pixolotl |
+| Starland (SL) | Cleopastar — **provisional**: her GDD says the Palace of LOOING; her effects and sounds already wear Starland's medium (TBD #37) — one home per fighter |
+| Banboo Maze (BM) | Sifu Pangda — **provisional**: his GDD says Gui Lin, which has no world (TBD #38, #19) |
+| HollowCastle, TheDeserted, Palace of LOOING | nobody yet — their 4-1 recruits nobody |
+
+A run draws four worlds besides its home from the seven others, and only three of those
+have nobody, so every run holds at least one capital that recruits (2.3 on average). The
+protagonists whose homes a run did not draw are the wanderers' to bring (§5.4).
+
+**Joining.**
+- A recruit takes the **first empty team slot**; with the team full (the cap, 3) it waits on
+  the **bench**, and Team Build at any shelter fields it. The fighter who opens the next
+  battle does not change.
+- A recruit joins at **full HP** with **the Blessings the roster shares** — ATK, DEF and
+  max HP are global (§3.3), so a newcomer gets what every fighter already has.
+- **Once:** a protagonist already on the roster is never added again.
+- **Told:** the boss's toast ("BOSS PumpKing falls — Cleopastar joins you!"), the reward
+  line, and the day's summary ("Cleopastar joins your team." — or, benched, "… joins your
+  roster — field them with Team Build at a shelter.").
+
+**Saves keep their roster.** Loading never adds anyone. (Until v0.12.9 every load topped a
+save up to all five — the prototype roster; a run saved under it keeps its five.) A save
+with nobody valid in it gets the run's starter.
+
+**Testing with all five.** The debug page (key 4, with debug on): *Recruit all five into
+this run* — everyone missing joins the run in progress, empty slots filled; *New runs start
+with all five* — new runs start as every run did before v0.12.9 (all five; team Sifu Pangda ·
+Pixolotl · Cleopastar). `FABLELAND_ROSTER=all` in the environment ticks the second.
 
 - **Party cap:** 3 protagonists in the active build by default (some mechanisms or
   wonder items may change this).
 - **Bench:** the player may own more than 3 protagonists, but only 3 can be fielded.
-- **Build changes:** at any shelter node, Blessed or Mundane (§5.1).
+- **Build changes:** at any shelter node, Blessed or Mundane (§5.1) — at its team board
+  (§5.0).
 
 ### 3.2 Wonder items
 
@@ -196,7 +235,7 @@ Arena scene's authoring placeholder before combat starts.
 | **Landing effect** | When a protagonist is switched **in**, they trigger their unique **Protagonist Landing Effect** (defined per-character; see character GDDs). |
 | **Item CDs** | Held items on background protagonists tick at the same 1/(2n−2) rate (day-based CDs are unaffected — only combat second-based CDs are penalized). |
 | **Death** | If the active protagonist dies, the run is over (permadeath; §2.2) — the bench does not serve as extra lives. |
-| **Short party** | With 2 protagonists, Tab switches back and forth. With 1 protagonist, Tab is **unavailable** (greyed out). |
+| **Short party** | With 2 protagonists, Tab switches back and forth. With 1 protagonist — how every run starts (§3.1) — Tab does nothing and the HUD has **no Switch slot**: it appears, with the next fighter's face, once a second one joins (v0.12.9; the slot was always hidden with nobody to switch to). |
 | **Mid-air switch** | Position and velocity are **preserved** — the incoming protagonist appears exactly where the outgoing one was, continuing any existing trajectory. No reset, no ground-snap. |
 
 **Projectile persistence:** all active projectiles (seeds, stars, bubbles, heads, etc.)
@@ -336,10 +375,10 @@ that affect allies, they may work on the core (TBD per ability).
 ### 4.5 Boss fights
 
 - **LV4 BOSS:** the world boss of the current world. **Time limit: 240 s (4 min).**
-  Defeating it recruits that BOSS as a playable protagonist (added to the bench; does
-  not exceed the party cap — the player may swap at the next shelter). The boss
-  character has a full player kit (movement, abilities, animations) in addition to
-  its boss-kit used during the fight.
+  Defeating it recruits **the realm's own protagonist** (§3.1) — into the first empty team
+  slot, else the bench (it never exceeds the party cap; the player may swap at the next
+  shelter). The boss character has a full player kit (movement, abilities, animations) in
+  addition to its boss-kit used during the fight.
 
   **Built in v0.10.11** (`FOES.gdd` §8): the boss *is* the protagonist's kit, inherited and
   fighting on the other side, with its own table row for everything that differs; a
@@ -349,6 +388,17 @@ that affect allies, they may work on the core (TBD per ability).
   owned is not added again. PumpKing is the first, and since v0.11.0 he **stands in at every
   realm's 4-1** until each realm has its own boss (`FOES.gdd` §8.1); every realm also has a
   boss arena of its own. Only the LV6 core still fields the placeholder.
+
+  **The recruit belongs to the realm, not the kit (v0.12.9).** The handshake names the
+  recruit too (`AdventureContext.RecruitId`: the realm's home protagonist, looked up by
+  `RunState` from the world data — the arena never asks which world it is in), and the boss
+  mission pays it. So the stand-in PumpKing beaten in Starland brings **Cleopastar**, not
+  himself; in the Kingdom of Horror he is the realm's own boss and brings himself; beaten in
+  VanillaKindom he brings Pomegraknight, who is already there; beaten where nobody lives yet (HollowCastle,
+  TheDeserted, the Palace of LOOING) he brings nobody. Yukai's Rope is paid either way, and the
+  first capital's TwistedReality as before. When a realm's own boss kit is built, its row's
+  protagonist must be the realm's home protagonist (the recruit check holds the two tables
+  together).
 
   > **Scope note:** boss-as-protagonist doubles the design burden — each LV4 boss
   > needs both a boss encounter kit and a balanced player-character kit. This is a
@@ -399,8 +449,10 @@ The current generated map uses **Transportation Hubs** in every outer realm. A
 `TwistedReality` bridge may additionally create an **Eidolon Shelter** at its midpoint; it is
 not seeded content and exists only while that bridge exists. Transportation Hubs expose **Rest**,
 **Sharpen Weapon**, **Sharpen Armor**, **Team Build**, and leave/finish-the-day. Eidolon Shelters
-expose only the first four: their Blessing is the crossing action. Plantations, traders, jousting,
-wishes, and other optional services are not generated or available at either type.
+expose only the first four: their Blessing is the crossing action. Since v0.12.9 each action is
+a **station** in the shelter's room, walked to and used (§5.0). Plantations, traders, jousting,
+wishes, and other optional services are not generated or available at either type (the room
+keeps spots for a plantation, an enchanting altar and a wanderer).
 
 Legacy optional-service designs below are retained as future reference only and are explicitly
 overridden by this current-map contract. See `MapGDD.md` §§6–8 for placement, one-way traversal,
@@ -417,6 +469,71 @@ may either:
 
 Day-ending actions can be taken after the Team Build action, then the player may leave or finish
 the day.
+
+### 5.0 The shelter is a place (v0.12.9)
+
+A shelter is a small side-view **room** the player walks through as the team's lead — the
+fighter who would open the next battle, on their own walk and jump. Nobody fights in a
+shelter, so no attack, skill or ultimate works there. Each action is a **station**: walk up
+to it and press **E** (also W / ↑ — the `interact` action, which the game registers itself in
+`InputDefaults`, so it ships with the code that reads it). The station in reach lights up with
+the key over it, and a prompt at the bottom of the screen says what it does — or, when it is
+closed, why. The keys are shown bottom left. Team Build and every confirmation hold the walker
+still. Built by `ShelterController` (`Scenes/Shelter.tscn`), its stations by `Scripts/Nodes/Shelter/`.
+
+| Station | Action — the old button | Open when | Stands in |
+|---------|-------------------------|-----------|-----------|
+| **The road** (a door in the left wall) | Back to the map · *Continue into the VOID* in the Last Shelter | Back | every kind |
+| **Team board** | Team Build | always | every kind |
+| **Lantern** | Finish the Day | Finish | hubs, the Last Shelter |
+| **Campfire** | Rest | the Blessing | every kind |
+| **Whetstone** | Sharpen Weapon | the Blessing | every kind |
+| **Anvil** | Sharpen Armor | the Blessing | every kind |
+| Plantation (two plots) | *reserved* — planting (`ITEMS.gdd`, TBD #5) | — | hubs |
+| Enchanting altar | *reserved* — possession enchanting (`ITEMS.gdd`) | — | hubs |
+| Wanderer | *reserved* — the joust (§5.4) | — | hubs |
+
+- **One rule for the ways out.** *Back*, *Finish* and *the Blessing* are
+  `ShelterController.Exits(eidolon, blessed, canCross, stamina)` — §1.2's rule and audit #16's
+  fix; the stations only show it. A hub (and the Last Shelter): the Blessing while blessed,
+  Finish always, Back while stamina lasts. An Eidolon Shelter: the Blessing is the way across
+  while it can cross; once spent or blocked, the road opens **at any stamina**, because the map
+  has Finish the Day. (The old Back button also refused when stamina was 0, so a spent Eidolon
+  Shelter entered on the last stamina point was a screen with no way out — fixed with the road.)
+- **The rules stay.** A Blessing asks "You will use all your stamina and the Blessing of this
+  shelter…"; at a hub or the Last Shelter it ends the day; at an Eidolon Shelter it carries you
+  across without ending it. The lantern asks "Finish the Day?". The road does not ask.
+- **The three kinds.** A Transportation Hub; an Eidolon Shelter (a bridge's midpoint: no
+  lantern); the Last Shelter (a Shelter node that is no bridge — zone 6's; the generator makes
+  none today, the room still serves it).
+- **One room now** (`ShelterTable.Default`, 48 × 16 m; you arrive at 5.5 m): the road at
+  2.5 m, the team board at 8, the lantern at 12.5, the campfire at 17, the whetstone at 22, the
+  anvil at 27; the plantation (33), the altar (39) and the wanderer (44) keep their spots. No
+  two stations share floor (the table refuses it).
+- **Every world's shelter will differ.** A room is a row in `ShelterTable` with its world's
+  abbreviation — its size, where you arrive, a spot for each station; a world without one uses
+  the default. Until then the default is drawn toward each world's map colour (drained past the
+  singularity, violet on a bridge).
+- **Adding a station** is a row and a callback: a `ShelterTable` station row (name, action,
+  width, the kinds it stands in) with a spot in each room, and a behaviour in `ShelterStations`
+  (what it offers in this visit; what using it does — the shelter screen's dialogs, Team Build,
+  the status line, or a panel of its own via `ShowPanel`). A station with no behaviour is not
+  built: its spot stays empty (an outline in debug mode).
+
+**Placeholders — TODO(art).** All drawn in code; art direction belongs to the Fable model.
+
+| What | Placeholder now |
+|------|-----------------|
+| The room | a paper wall tinted toward the world's colour, plank floor, beams, two windows onto the world's colour |
+| The road | a doorway in the left wall and an arrow |
+| Team board | a board on two posts, with the team's own mugshots pinned on it (the mugshots are real art) |
+| Lantern | a lantern on a post, its glow breathing |
+| Campfire | crossed logs, a three-triangle flame, a bedroll |
+| Whetstone | a stone wheel on a wooden frame |
+| Anvil | an anvil on a stump |
+| Plantation · altar · wanderer | two tilled plots · a stone altar with a ring · (nothing) — drawn once they have behaviours |
+| The prompt, the key over a station | plain panels (the shared paper-and-ink `Theme` is still to come) |
+| The walker | the lead's own sprite (real art) |
 
 ### 5.1 Always available (any shelter, Blessed or Mundane)
 
@@ -509,6 +626,15 @@ purpose as the player — to find the cause of the VOID — and will join if pro
 
 **Departure:** like traders, wanderers remain at a shelter for **5 days** from the
 day the player first enters that shelter, then leave.
+
+**Who wanders (v0.12.9 — designed, not built).** A run recruits only at the capitals of the
+worlds it drew (§3.1), so the wanderers are **the protagonists whose home realm this run did
+not draw**: each waits at a Transportation Hub, at its wanderer station (§5.0), named, with its
+days left, and joins after a won joust. Which hub and which day are to be drawn from a stream
+of their own (`seed:wanderers`), so no map moves. **Not built**, because a joust needs two
+things that do not exist: the wanderer's AI-driven kit (a BOSS kit — only PumpKing has one;
+the stand-in rule could serve meanwhile) and the joust's mock-fight rules in the arena (copied
+stats, ×2 HP, a KO that is not death, back to the shelter after). TBD.
 
 ### 5.5 Day-ending actions
 
@@ -812,9 +938,31 @@ shape the variant is part of TBD #63 (rotation as meta-progression).
 - **(v0.10.11) The boss is named by the handshake, and recruiting is idempotent.** The arena
   must not read the map, so `BeginAdventure` puts the boss's id in the `AdventureContext`
   (looked up from `BossTable` by the node's world). `GrantProtagonist` adds a protagonist
-  only if it is not already owned: under the prototype roster policy every protagonist is,
-  and a second copy on the roster would be two HP pools and two held-item slots for one
-  character.
+  only if it is not already owned: a second copy on the roster would be two HP pools and two
+  held-item slots for one character. (Under the prototype roster policy, which ended in
+  v0.12.9, every protagonist was already owned, so recruiting changed nothing.)
+- **(v0.12.9) A run starts with its home protagonist alone; a realm's 4-1 recruits the
+  realm's own.** The prototype roster (all five from the first day, a team Pomegraknight was
+  not in) ended: recruiting changed nothing while it lasted (audit v0.11.1 #10, TBD #29). The
+  recruit belongs to the realm, not to the boss kit, so the stand-in PumpKing recruits each
+  realm's own protagonist while the other kits are built; three worlds have nobody yet. Homes
+  are world data; Cleopastar → Starland and Sifu Pangda → Banboo Maze follow the provisional
+  calls her effects and his sounds already make (TBD #37, #38).
+- **(v0.12.9) A recruit takes an empty team slot, at full HP, with the shared Blessings.** The
+  GDD said "added to the bench"; with a team of one that meant a detour to a shelter before the
+  newcomer could fight. "Does not exceed the party cap" is kept: a full team benches them.
+  Blessings are global (§3.3), so a newcomer gets what the whole roster has — otherwise an ATK
+  bought on day 5 would be missing from a fighter met on day 20.
+- **(v0.12.9) Saves keep their roster; the debug page gives all five.** Loading used to top
+  every save up to five; now it never recruits. A tester gets all five from the debug page
+  (the run in progress, or every new run) — the owner tests with all five.
+- **(v0.12.9) The shelter is a room with stations.** The owner's call ("给休息站做一个地图…把
+  现在的按钮功能融合到地图里"): walk the lead to a station and press E. One room for every
+  world now, a row per world later; stations are table rows with behaviours, so the items
+  work's plantation and altar are a row and a callback. `ShelterController.Exits` stays the one
+  rule for the ways out; the road now opens whenever it says Back, which closed a dead end.
+- **(v0.12.9) Wanderers are the protagonists whose homes the run did not draw** — designed,
+  not built (§5.4).
 - **(v0.12.0, provisional) A zone-6 mini-boss defeat is survived.** The owner's zone-6 ladders
   (gravity up on a defeat; a seal on a defeat) need defeats the run lives through. A defeat is
   the fighter in play falling or the gate's timer; the battle team returns with ≥ 25 % HP, the

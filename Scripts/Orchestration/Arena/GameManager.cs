@@ -88,6 +88,11 @@ public partial class GameManager : Node2D
     /// handshake's <c>AdventureContext.BossId</c> (a debug knob when no run exists).</summary>
     public string BossId { get; private set; } = "";
 
+    /// <summary>The protagonist beating this node recruits, or empty — the handshake's
+    /// <c>AdventureContext.RecruitId</c> (a realm's 4-1 recruits the realm's own, whichever
+    /// boss stands in). With no run, a staged realm boss recruits its own world's.</summary>
+    public string RecruitId { get; private set; } = "";
+
     /// <summary>The selected map's Level Goal marker points, in authored order (empty in
     /// the legacy arena). A boss reads them as its perches (FOES §8.5).</summary>
     public System.Collections.Generic.IReadOnlyList<Vector2> LevelGoalPoints => _authoredLevelGoalSpawns;
@@ -237,6 +242,9 @@ public partial class GameManager : Node2D
         _nodeLevel = adv?.NodeLevel ?? Mathf.Clamp(DebugNodeLevel, 1, 6);
         _missionType = adv?.Mission ?? DebugMission;
         BossId = _hasRun ? adv.BossId ?? "" : DebugBossId ?? "";
+        RecruitId = _hasRun ? adv.RecruitId ?? ""
+            : BossTable.TryGet(BossId, out BossDef stagedRealm) && stagedRealm.Role == BossRole.Realm
+                ? WorldDef.HomeProtagonistOf(stagedRealm.WorldAbbr) ?? "" : "";
         int day = adv?.Day ?? DebugDay;
 
         // Foe level (FOES §2): day-based outside zone 6; zone 6 is per-node — LV5 nodes fight

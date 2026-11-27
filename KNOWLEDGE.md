@@ -190,6 +190,64 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Godot 4.3+ names a physical key "E - Physical", not "E (Physical)" (v0.12.9, controls card)
+- **Symptom:** the shelter's prompt read "[E - Physical]". Looking further: since v0.12.5 every
+  line of the pause menu's controls card and the countdown's key line read "Space - Physical",
+  "J - Physical / Left Mouse Button" — `ControlsCard.KeysOf` stripped only " (Physical)", the old
+  format, and the new one passed through.
+- **Rule:** name a key for the player through `ControlsCard.KeysOf` / `FirstKeyOf` (they strip
+  both forms) — never `InputEvent.AsText()` directly.
+- **Why:** the engine's text for an event is for the editor, and its format changed between
+  versions without any error; only a check that reads the words (the recruit check now does)
+  notices.
+
+### An exit's action must ask the same rule that opened it (v0.12.9, the Eidolon Shelter's dead end)
+- **Symptom:** a spent Eidolon Shelter, entered on the last stamina point (or reopened as the
+  current node with none left), showed Back enabled — `Exits()` opens Back at any stamina once
+  the crossing is spent — and pressing it did nothing: `OnBack` still refused when stamina was 0.
+  No Finish the Day there either: a screen with no way out, audit #16 again.
+- **Rule:** the rule lives in one place (`ShelterController.Exits`); the action asks it
+  (`RequestLeave` leaves when `Exits().Back`, nothing else).
+- **Why:** v0.12.4 fixed the rule and its check tested the rule — not the button, which kept a
+  second copy of an older rule.
+
+### An Eidolon Shelter is a `NodeKind.Shelter` too — ask the bridge first (v0.12.9)
+- **Symptom:** in every Eidolon Shelter the old screen's Back read "Continue into the VOID".
+- **Rule:** `ShelterController.KindOf(node)`: a node with a `RealityBridgeId` is an Eidolon
+  Shelter; any other Shelter node is the Last Shelter; everything else a hub.
+- **Why:** the bridge's midpoint reused the zone-6 shelter's kind; title and status asked the
+  bridge first, the button's label did not.
+
+### A fighter who joins later must get the global Blessings (v0.12.9, designed around)
+- **Symptom (avoided):** `AddAtk`, `AddDef` and `RestBlessing` write to every fighter *on the
+  roster at the time*. With five owned from day one nobody could miss one; with recruiting, a
+  fighter met on day 20 would have joined without the ATK bought on day 5.
+- **Rule:** a joining fighter starts with each pool's minimum over the roster
+  (`RunState.JoiningState`) — the part every fighter shares.
+- **Why:** NODES §3.3 says these stats are global, but they are stored per fighter; a stored
+  copy of a global value must be seeded when a new holder appears.
+
+### A lookup's check must ask for "none" as well as for each hit (v0.12.9, recruit check)
+- **Symptom:** a mutation that let the nearest station answer from anywhere (reach ignored)
+  survived: walking past the stations in order still met each one in order.
+- **Rule:** when a check tests a lookup, also stand somewhere it must answer nothing (the
+  shelter's arrival point is out of every station's reach).
+
+### Two mutations in one batch can hide each other (v0.12.9, recruit check)
+- **Symptom:** "a party of one shows a Switch slot" looked caught — but in that batch "a run
+  starts with five" also ran, so the party was three and the slot showed anyway.
+- **Rule:** batch only mutations whose preconditions are independent; rerun any whose catching
+  line could have been tripped by another one, alone. (It was caught alone.)
+
+### Reading the day's summary in a check: right after `EndDay()` (v0.12.9, check-writing)
+- `LastDayEndSummary` is read and cleared by the map when it loads. Read it after `EndDay()`
+  and before waiting for the map scene, or it is "".
+
+### The shelter's UI is the `Ui` layer, not the root (v0.12.9, reference)
+- `Shelter.tscn`'s root is a `Node2D` now (a room with a camera). A `Control` added to it would
+  scroll with the room: add panels to `Ui` — `ShelterController.ShowPanel` does, and freezes the
+  walker while the panel shows. Dialogs go there too.
+
 ### A resumed battle re-enters through `BeginAdventure` — a once-per-challenge effect must not run again (v0.12.8, THE VOID; caught before it landed)
 - **Symptom (in review):** THE VOID's phantoms step toward a combat node when you challenge it,
   in `BeginAdventure`. A battle left with Save & Quit restarts through `ResumeLoadedRun` →

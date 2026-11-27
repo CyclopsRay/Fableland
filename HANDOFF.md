@@ -4,18 +4,19 @@ Written 2026-11-27, at the end of a long multi-agent session (v0.11.1 → v0.11.
 the same day for **v0.12.0** (zone 6 as a stage, realm laws), **v0.12.1** (the first two
 zone-6 kits), **v0.12.2** (Māra's design; the dark leader settled), **v0.12.3** (Māra built:
 his wheel and his kit, art in placeholder), **v0.12.4** (the audit's run-stopping bugs and
-kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events, small rules) and
-**v0.12.8** (the wonder items). **Replace this file at every hand-off:** it describes
+kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events, small rules),
+**v0.12.8** (the wonder items) and, on 2026-11-28, **v0.12.9** (recruitment and the walkable
+shelter, merged from a parallel session). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.8**, seventeen commits on top of
-  v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.9**, eighteen commits and one merge
+  on top of v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
   owner asks for each fast-forward; until then it trails the branch.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.8, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.9, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -55,9 +56,10 @@ kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events
 | 0.12.5 | `a419a6a` | **The player is told what happens**: a Controls card in the pause menu and a key line under the countdown; rewards named in the toast (and the day's notes kept for the summary); wonder cores on the map; each fighter's own face in the portrait and the Switch slot, the magazine as pips; the run-over screen names the dark leader | `Docs/Research/AUDIT-v0.11.1.md` Part 2 status |
 | 0.12.6 | `b149cca` | **The shell, and the road between fights**: a real Settings screen (comfort + volumes, saved beside the slots), Quit on the title, a beat before RUN OVER, the map's mist on by default, debug tools only in a debug build; fifteen "?" events (stray storybook pages) with costs, prices — wonder cores' first use — and stats | `NODES.gdd` §6.1, `Feedback.gdd` §7 |
 | 0.12.7 | `c2424c8` | Collection's grace stops the ambient spawner; a benched fighter's item cools down at the bench rate | NODES §3.3, §4.1 |
-| 0.12.8 | — | **The wonder items live — all fourteen, each with a source.** One `ItemLedger` (perish, enchantments, plots, VOID phantoms, mushroom days) written by `RunState.Items.cs`; DD's creature, the mushroom, the Feather's rewind button, the Claw's loot-crack-throw, Possession passives from the backpack; five new events | `ITEMS.gdd` (status block, each *Built* note, §9 v0.12.8), KNOWLEDGE v0.12.8 |
+| 0.12.8 | `3052f28` | **The wonder items live — all fourteen, each with a source.** One `ItemLedger` (perish, enchantments, plots, VOID phantoms, mushroom days) written by `RunState.Items.cs`; DD's creature, the mushroom, the Feather's rewind button, the Claw's loot-crack-throw, Possession passives from the backpack; five new events | `ITEMS.gdd` (status block, each *Built* note, §9 v0.12.8), KNOWLEDGE v0.12.8 |
+| 0.12.9 | — | **Recruitment, and the shelter as a walkable room** (from the `recruit-shelter` session, `13f097d`, merged): a run starts with its home protagonist alone and each realm's 4-1 recruits that realm's own; the shelter is a side-view room whose stations (road, team board, lantern, campfire, whetstone, anvil) replace the buttons; three shelter bugs fixed in passing | `NODES.gdd` §3.1, §4.5, §5.0, KNOWLEDGE v0.12.9 |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.8, all passing:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.9, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
@@ -67,8 +69,9 @@ kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events
 | Map content | `Scenes/MapCreation/MapContentCheck.tscn` | 1171 |
 | Boss | `Scenes/Bosses/BossFightCheck.tscn` | 192 |
 | Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
-| Run | `Scenes/Run/RunWalkCheck.tscn` | 2002 at v0.12.8 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
+| Run | `Scenes/Run/RunWalkCheck.tscn` | 2019 at v0.12.9 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
 | Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 82 at v0.12.8 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives |
+| Recruit + shelter (new, v0.12.9) | `Scenes/Run/RecruitShelterCheck.tscn` | 398 — homes, the starting roster, recruits at the capitals, saves keep their roster, the station table, every station against the exits rule, each kind of shelter walked with the keys (`-- --shots=dir` in a window for pictures) |
 
 **Look and listen without a fight:**
 - `Scenes/Dev/VfxGallery.tscn`
@@ -78,9 +81,9 @@ kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events
 ## 3. Not done — in the order the owner's request implies
 
 **The big pieces left after v0.12.7** (each needs design calls; the audit's Part 2 numbers):
-- **Realm bosses (#10):** every realm's 4-1 is BOSS PumpKing, so beating it recruits nobody.
-  BOSS variants of Cleopastar, Pixolotl, Sifu Pangda and Pomegraknight are the core loop of
-  recruiting. Whether a run then starts with one protagonist is the owner's call.
+- **Realm bosses (#10):** recruiting works since v0.12.9 — a run starts alone and a realm's 4-1
+  recruits that realm's own — but every realm's 4-1 is still fought as BOSS PumpKing. BOSS
+  variants of Cleopastar, Pixolotl, Sifu Pangda and Pomegraknight are the next step.
 - **Ultimates (#5):** the ring fills and Q does nothing for all five. Every character GDD
   defers its ultimate, so write the designs first (TBD #21).
 - **Items (#19): done in v0.12.8** except three pieces that wait on the two parallel sessions
@@ -190,15 +193,26 @@ kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events
   Zone 6) forces a variant, stages any zone-6 boss, and sets gravity and seals.
 - **Design gaps** (audit Part 2):
   - the ultimate does nothing for all five fighters (PumpKing's is being built — below);
-  - every realm's boss is PumpKing, and beating him recruits nobody (being built — below);
+  - every realm's boss is PumpKing (beating him recruits the realm's own since v0.12.9);
   - ~~8 of 14 items cannot be obtained~~ (v0.12.8: every item has a source);
   - ~~"?" nodes have 3 placeholder events~~ (20 since v0.12.8).
-- **Two parallel sessions started 2026-11-27 from v0.12.7** (each writes
-  `Docs/_handoff/<name>.md`; this branch integrates them): **`pumpking-ult`** — PumpKing's
-  ultimate, the Black Prison (branch `claude/pumpking-black-prison-f31091`); **`recruit-shelter`**
-  — the recruitment system and a walkable shelter map with today's shelter buttons folded in
-  (branch `claude/recruitment-shelter-map-4f6988`). After merging: wire the plantation and
-  enchant screens into the shelter map, and THE VOID's skill onto the ult's sight API.
+- **Two parallel sessions started 2026-11-27 from v0.12.7** (each wrote
+  `Docs/_handoff/<name>.md`; this branch integrates them, on the owner's "合并"):
+  **`recruit-shelter`** — merged as v0.12.9; **`pumpking-ult`** — PumpKing's ultimate, the Black
+  Prison (branch `claude/pumpking-black-prison-f31091`), to merge next. Then: THE VOID's
+  skill onto the ult's sight API.
+- **v0.12.9's calls for the owner to confirm** (written into the GDDs; each changes code if
+  answered otherwise):
+  - a run starts with its home protagonist alone (Pomegraknight — every run's home is
+    VanillaKindom today);
+  - the recruit belongs to the realm, not the boss kit; homes VK Pomegraknight, KH PumpKing, TF
+    Pixolotl, **SL Cleopastar** and **BM Sifu Pangda** (the last two provisional, TBD #37/#38);
+    HollowCastle, TheDeserted and the Palace of LOOING recruit nobody (TBD #70);
+  - a recruit takes the first empty team slot (the GDD said the bench), at full HP, with the
+    roster's shared Blessings;
+  - one fighter: no Switch slot, Tab does nothing;
+  - interact is E, also W / ↑ (TBD #74); one room, 48 × 16 m, for every world until each has
+    its own (TBD #71); a closed station stays, dimmed, and says why.
 
 ## 5. How to work here (each of these cost hours)
 

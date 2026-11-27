@@ -27,6 +27,12 @@ public sealed class AdventureContext
     /// for that gate) or the zone-6 core (the variant's final boss) — Docs/Zone6.gdd §3.
     /// Empty ⇒ the arena fields the placeholder (FOES §8.1).</summary>
     public string BossId = "";
+    /// <summary>The protagonist beating this node recruits (NODES §3.1, §4.5): a realm's 4-1
+    /// recruits that realm's home protagonist — whichever boss kit holds it (the stand-in
+    /// included), because the recruit belongs to the realm, not the kit. Empty for every other
+    /// node, for a realm with no protagonist yet, and in zone 6. Looked up by
+    /// <see cref="RunState"/> from the world data, so the arena never asks which world it is in.</summary>
+    public string RecruitId = "";
     /// <summary>Frozen party order captured exactly once at combat entry. The Arena
     /// owns its live switch cursor; shelter edits affect the next battle only.</summary>
     public BattleTeamSnapshot BattleTeam;
