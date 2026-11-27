@@ -55,6 +55,17 @@ public partial class RecruitShelterCheck : Node
         ShelterTable.Campfire, ShelterTable.Whetstone, ShelterTable.Anvil,
     };
 
+    /// <summary>The wonder items' stations (v0.12.10): built at a hub only, never an exit and
+    /// never the Blessing — kept apart from the shelter's own six, whose offers are the exits rule.</summary>
+    private static readonly string[] ItemStations = { ShelterTable.Plantation, ShelterTable.EnchantingAltar };
+
+    private static HashSet<string> HubStations()
+    {
+        var all = new HashSet<string>(BuiltinStations);
+        all.UnionWith(ItemStations);
+        return all;
+    }
+
     public override void _Ready()
     {
         // Pads step before the bodies they drive (this node is the first scene under the root).
@@ -112,6 +123,8 @@ public partial class RecruitShelterCheck : Node
             await SpentHubAndNoStamina();
             await CrossTheEidolonShelter();
             await TheLastShelter();
+            await TendThePlantation();
+            await EnchantAtTheAltar();
             spareStation = await AStationAddedLater();
         }
         catch (Exception e)
@@ -597,7 +610,7 @@ public partial class RecruitShelterCheck : Node
 
         Expect(shelter.Kind == ShelterKind.Hub, $"{where}: opened as {shelter.Kind}");
         var built = Built(shelter);
-        Expect(built.SetEquals(BuiltinStations), $"{where}: built [{string.Join(", ", built)}]; a hub has the road, the team board, the lantern, the campfire, the whetstone and the anvil — and no reserved spot without a behaviour");
+        Expect(built.SetEquals(HubStations()), $"{where}: built [{string.Join(", ", built)}]; a hub has the road, the team board, the lantern, the campfire, the whetstone, the anvil, the plantation and the enchanting altar — and no reserved spot without a behaviour");
         foreach (ShelterSpot spot in shelter.Layout.Spots)
         {
             ShelterStationNode node = shelter.Station(spot.StationId);
@@ -815,6 +828,106 @@ public partial class RecruitShelterCheck : Node
             await SceneIs<MapController>(600);
         }
         GD.Print("  shelter  last shelter   the road leads into the VOID; the lantern and the Blessing are there");
+    }
+
+    // ---------------------------------------------------------------- the wonder items' stations
+
+    /// <summary>The panel a station showed in the shelter's UI layer, if one is up.</summary>
+    private static T PanelOf<T>(ShelterController shelter) where T : Control
+    {
+        foreach (Node child in shelter.GetNode("Ui").GetChildren())
+            if (child is T panel && panel.Visible && !panel.IsQueuedForDeletion()) return panel;
+        return null;
+    }
+
+    private static void Press(Node panel, string buttonName)
+    {
+        if (panel?.FindChild(buttonName, true, false) is Button button && !button.Disabled)
+            button.EmitSignal(BaseButton.SignalName.Pressed);
+    }
+
+    /// <summary>The plantation (ITEMS §4.3, v0.12.10): walked to and used with the keys, its panel
+    /// sows a Rotten Mushroom from the backpack; four day ends later the station says it is ripe
+    /// and the panel harvests four Weird Mushrooms. Done frees the walker.</summary>
+    private async Task TendThePlantation()
+    {
+        RunState run = RunState.Instance;
+        run.NewRun("SHELTERPLOTS");
+        run.AddItem("rotten_mushroom");
+        MapNode hub = FirstOf(run, MapGenerator.PomegraknightHome, node => node.Kind == NodeKind.TransportHub);
+        string where = $"plantation {hub?.Id}";
+        ShelterController shelter = hub == null ? null : await EnterShelter(where, hub);
+        if (shelter == null) return;
+        VirtualPad pad = Pad(shelter);
+        Expect(await WalkTo(shelter, pad, ShelterTable.Plantation) && shelter.TryUseStation(), $"{where}: the plantation could not be used");
+        PlantationPanel panel = PanelOf<PlantationPanel>(shelter);
+        Expect(panel != null && shelter.WalkerFrozen, $"{where}: using the plantation must open its panel and hold the walker still");
+        Press(panel, "Plant0_rotten_mushroom");
+        PlotState plot = run.Ledger.PlotsAt(hub.Id)[0];
+        Expect(plot.DefId == "rotten_mushroom" && plot.DaysLeft == 4 && !run.Items.Exists(item => item.DefId == "rotten_mushroom"),
+            $"{where}: the panel's Plant must sow the backpack's Rotten Mushroom for 4 days ({plot.DefId}, {plot.DaysLeft})");
+        Press(panel, "Done");
+        await Ticks(2);
+        Expect(!shelter.WalkerFrozen, $"{where}: Done must free the walker");
+
+        for (int day = 0; day < 4; day++) run.RunItemDay();
+        Expect(await WalkTo(shelter, pad, ShelterTable.Plantation) && shelter.TryUseStation(), $"{where}: the plantation could not be used again");
+        string line = shelter.Station(ShelterTable.Plantation).Offer.Line;
+        Expect(line.Contains("1 ripe"), $"{where}: after four days the station must say a plot is ripe ('{line}')");
+        panel = PanelOf<PlantationPanel>(shelter);
+        Press(panel, "Harvest0");
+        int mushrooms = run.Items.FindAll(item => item.DefId == "weird_mushroom").Count;
+        Expect(mushrooms == 4 && run.Ledger.PlotsAt(hub.Id)[0].Empty && panel.NewsText.Contains("Harvested"),
+            $"{where}: Harvest must give four Weird Mushrooms and free the plot ({mushrooms}; '{panel?.NewsText}')");
+        await Shot("hub-plantation");
+        Press(panel, "Done");
+        await Ticks(2);
+        run.ReturnToMap();
+        await SceneIs<MapController>(600);
+        GD.Print("  shelter  plantation     walked to and used: a Rotten Mushroom sown from the panel, ripe after four day ends, harvested as four Weird Mushrooms");
+    }
+
+    /// <summary>The enchanting altar (ITEMS §7.1, v0.12.10): closed, and saying why, until a team
+    /// member holds the Blessing of Shieldon; then its panel refuses THE VOID (Eternal), asks
+    /// once, and enchants FanChen's Heart — spending the Blessing, which closes the altar again.</summary>
+    private async Task EnchantAtTheAltar()
+    {
+        RunState run = RunState.Instance;
+        run.NewRun("SHELTERALTAR");
+        ProtagonistState lead = run.FindProtagonist(run.ActiveBuild[0]);
+        run.AddItem("fanchens_heart");
+        run.AddItem(RunState.VoidItemId);
+        string heart = run.Items.Find(item => item.DefId == "fanchens_heart").InstanceId;
+        string theVoid = run.Items.Find(item => item.DefId == RunState.VoidItemId).InstanceId;
+        MapNode hub = FirstOf(run, MapGenerator.PomegraknightHome, node => node.Kind == NodeKind.TransportHub);
+        string where = $"altar {hub?.Id}";
+        ShelterController shelter = hub == null ? null : await EnterShelter(where, hub);
+        if (shelter == null) return;
+        VirtualPad pad = Pad(shelter);
+        Expect(await WalkTo(shelter, pad, ShelterTable.EnchantingAltar), $"{where}: could not walk to the altar");
+        StationOffer closed = shelter.Station(ShelterTable.EnchantingAltar).Offer;
+        Expect(!closed.Enabled && closed.Reason.Contains("Blessing of Shieldon") && !shelter.TryUseStation(),
+            $"{where}: with no Blessing held the altar must be closed and say why ('{closed.Reason}')");
+
+        run.AddItem(RunState.BlessingOfShieldonId);
+        run.HoldItem(lead, RunState.BlessingOfShieldonId, fromBackpack: true);
+        Expect(shelter.TryUseStation(), $"{where}: with the Blessing held the altar must open");
+        EnchantPanel panel = PanelOf<EnchantPanel>(shelter);
+        Expect(panel?.FindChild("Enchant_" + theVoid, true, false) is Button { Disabled: true },
+            $"{where}: THE VOID is Eternal — its Enchant must be refused");
+        Press(panel, "Enchant_" + heart);
+        Expect(panel?.Asking != null, $"{where}: enchanting must ask once before it spends the Blessing");
+        panel?.Asking?.EmitSignal(AcceptDialog.SignalName.Confirmed);
+        await Ticks(2);
+        Expect(run.Ledger.EnchantedPossession.Contains(heart) && lead.HeldItemDefId == null && panel.NewsText.Contains("whole team"),
+            $"{where}: confirming must enchant FanChen's Heart and spend the Blessing ('{panel?.NewsText}')");
+        await Shot("hub-altar");
+        Press(panel, "Done");
+        await Ticks(2);
+        Expect(!shelter.Station(ShelterTable.EnchantingAltar).Offer.Enabled, $"{where}: with the Blessing spent the altar must close again");
+        run.ReturnToMap();
+        await SceneIs<MapController>(600);
+        GD.Print("  shelter  altar          closed without the Blessing (says why); with it, refuses THE VOID, asks once, enchants FanChen's Heart and closes again");
     }
 
     /// <summary>A reserved station given a behaviour — a row and a callback — is built at its

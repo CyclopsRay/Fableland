@@ -9,6 +9,21 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.10** — **The plantation and the enchanting altar stand in the hub's room** (the last
+  item screens; `ITEMS.gdd` §4.3, §7.1, `NODES.gdd` §5.0).
+  - **The plantation** (two plots): its prompt says how the plots stand; its panel
+    (`PlantationPanel`) shows each plot — empty, ripe in N days, ripe — and sows any plantable
+    kind in the backpack or harvests a ripe plot, through `RunState.TryPlant` / `TryHarvest`.
+  - **The enchanting altar:** open while a team member holds the Blessing of Shieldon, and
+    saying so when not. Its panel (`EnchantPanel`) lists every owned item; Eternal and
+    already-Possession items say why not. It asks once, then `RunState.TryEnchantPossession`
+    spends the Blessing.
+  - Both are behaviours in `ShelterStations` on the spots v0.12.9 reserved. Their panels open
+    below the prompt and hold the walker until **Done**; the altar's list scrolls past seven.
+    Drawn in code, TODO(art).
+  - **Checks:** the recruit/shelter check grows to 418. It walks to each station with the keys
+    and uses it: sow, four day ends, ripe, harvest four; closed altar, THE VOID refused, ask,
+    enchant, closed again. The hub's station set now includes both. Every suite is clean.
 - **0.12.9** — **Recruitment, and the shelter as a walkable room** (the owner's "做招募系统，然后给休息站做一个地图…
   把现在的按钮功能融合到地图里"; built in the `recruit-shelter` session, branch
   `claude/recruitment-shelter-map-4f6988` at `13f097d`, merged here with v0.12.8's items).

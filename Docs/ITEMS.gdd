@@ -15,9 +15,9 @@ one held slot, and Transportation-Hub equipment management.
 > end runs them in `PerishStep` (`RunState.RunItemDay`). Combat halves are `ItemRuntime`
 > behaviours: DD (a creature, `Scripts/Items/DdCreature.cs`), the mushroom, the Feather/Wish
 > and Blessing passives; a Possession item's passive is put on the body in play from wherever
-> it lies (passive-only runtimes). **Still open:** THE VOID's combat skill (foes' sight — lands
-> with the PumpKing ult's sight API), the planting and enchant *screens* (land with the shelter
-> map; the verbs exist), the phantom's BOSS fight (a −25 % HP touch stands in), rolled
+> it lies (passive-only runtimes). Since **v0.12.10** the hub's room has a **plantation** and an
+> **enchanting altar** station (`PlantationPanel`, `EnchantPanel`). **Still open:** THE VOID's
+> combat skill (foes' sight — lands with the PumpKing ult's sight API), the phantom's BOSS fight (a −25 % HP touch stands in), rolled
 > inheritance (60–140 %) on harvests, and the mushroom's outcome (f). Each is marked below.
 >
 > *(v0.10.0: every held item is an instance with persistent day/second cooldowns; FanChen's
@@ -313,8 +313,10 @@ each status application received by the holder, not once to the aggregate stack.
 > enchant is `RunState.TryEnchantPossession(target)`: the Blessing must be held by a team
 > member; the target may be any other item that is not `Eternal` and not already Possession
 > (so not TwistedReality or THE VOID); the enchantment belongs to the item *instance*
-> (`ItemLedger.EnchantedPossession`) and survives its conversions. **TODO(UI):** the enchant
-> screen lands with the shelter map (the verb is ready); in a fight **F** only says so.
+> (`ItemLedger.EnchantedPossession`) and survives its conversions. **The altar (v0.12.10):** a hub's
+> enchanting altar is open while a team member holds the Blessing; its panel lists every owned
+> item (Eternal and already-Possession ones say why not), asks once, and enchants. In a fight
+> **F** only says where it is spent. TODO(art): the altar's glyph, an enchanted item's mark.
 
 ### 7.2 THE VOID
 
@@ -578,8 +580,10 @@ each status application received by the holder, not once to the aggregate stack.
 > the backpack while you stand on the hub; each day end grows every plot a day; a ripe plot is
 > harvested with `TryHarvest` into the backpack. A hub the VOID eats loses its plots (the day
 > summary says what was lost). Harvests: Rotten Mushroom 4 days → 4 Weird Mushrooms; Pixolotl's
-> Wish 7 → 2 Feathers; Pome's Seed 7 → 2 Bravery. **TODO(UI):** the plot screen lands with the
-> shelter map (the verbs are ready). Rolled inheritance waits for per-instance rolled stats.
+> Wish 7 → 2 Feathers; Pome's Seed 7 → 2 Bravery. **The station (v0.12.10):** a hub's
+> plantation shows both plots (empty / ripe in N days / ripe) and sows any plantable kind from the
+> backpack or harvests a ripe plot; its prompt says how the plots stand. TODO(art): the crops as
+> they grow. Rolled inheritance waits for per-instance rolled stats.
 
 ---
 
@@ -688,5 +692,6 @@ each status application received by the holder, not once to the aggregate stack.
   - **Enchantment belongs to the instance** and survives its conversions; the Blessing must be
     held in the team to be spent.
   - **DD devours each target once per release**, and only the body the player wears reclaims it.
-  - **Planting and enchanting screens** wait for the shelter map; THE VOID's combat skill waits
-    for the foes' sight limit (the PumpKing ult). Both verbs/hooks are ready.
+  - **Planting and enchanting screens** waited for the shelter map — built in v0.12.10 as its
+    plantation and enchanting altar; THE VOID's combat skill waits for the foes' sight limit
+    (the PumpKing ult).

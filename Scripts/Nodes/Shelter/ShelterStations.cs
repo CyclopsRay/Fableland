@@ -77,9 +77,49 @@ public static class ShelterStations
         [ShelterTable.Campfire] = Blessing("Rest — restore 30% max HP (excess → permanent max HP)", run => run.RestBlessing()),
         [ShelterTable.Whetstone] = Blessing("Sharpen Weapon — permanently +10 ATK", run => run.AddAtk(10)),
         [ShelterTable.Anvil] = Blessing("Sharpen Armor — permanently +10 DEF", run => run.AddDef(10)),
-        // Reserved spots (ShelterTable): Plantation, EnchantingAltar, Wanderer — their
-        // behaviours arrive with their systems (items; the joust, NODES §5.4).
+        // The wonder items' stations (ITEMS.gdd §4.3, §7.1; v0.12.9): each opens a screen of its
+        // own over the room; neither spends the Blessing or ends the day.
+        [ShelterTable.Plantation] = new()
+        {
+            Offer = OfferPlantation,
+            Use = visit => visit.Shelter?.ShowPanel(PlantationPanel.Create(visit)),
+        },
+        [ShelterTable.EnchantingAltar] = new()
+        {
+            Offer = OfferAltar,
+            Use = visit => visit.Shelter?.ShowPanel(EnchantPanel.Create(visit)),
+        },
+        // Reserved spot (ShelterTable): the Wanderer — its behaviour arrives with the joust
+        // (NODES §5.4).
     };
+
+    /// <summary>The plantation: always open at a hub; its line says how the plots stand.</summary>
+    private static StationOffer OfferPlantation(ShelterVisit visit)
+    {
+        if (visit.Run == null) return StationOffer.Closed("Tend the plots", "There is no run to plant for.");
+        int ripe = 0, growing = 0, empty = 0;
+        foreach (PlotState plot in visit.Run.Ledger.PlotsAt(visit.NodeId))
+        {
+            if (plot.Empty) empty++;
+            else if (plot.Ripe) ripe++;
+            else growing++;
+        }
+        var parts = new List<string>();
+        if (ripe > 0) parts.Add($"{ripe} ripe");
+        if (growing > 0) parts.Add($"{growing} growing");
+        if (empty > 0) parts.Add($"{empty} empty");
+        return StationOffer.Open($"Tend the plots — {string.Join(", ", parts)}");
+    }
+
+    /// <summary>The enchanting altar: open while a team member holds the Blessing of Shieldon.</summary>
+    private static StationOffer OfferAltar(ShelterVisit visit)
+    {
+        const string line = "Enchant Possession onto a wonder item — spends the Blessing of Shieldon";
+        if (visit.Run == null) return StationOffer.Closed(line, "There is no run.");
+        return visit.Run.TeamHolderOf(RunState.BlessingOfShieldonId) != null
+            ? StationOffer.Open(line)
+            : StationOffer.Closed(line, "Equip the Blessing of Shieldon on a fighter in the team (at the team board) to use the altar.");
+    }
 
     private static readonly Dictionary<string, ShelterStationBehaviour> Registered = new(StringComparer.Ordinal);
 

@@ -6,17 +6,18 @@ zone-6 kits), **v0.12.2** (Māra's design; the dark leader settled), **v0.12.3**
 his wheel and his kit, art in placeholder), **v0.12.4** (the audit's run-stopping bugs and
 kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events, small rules),
 **v0.12.8** (the wonder items) and, on 2026-11-28, **v0.12.9** (recruitment and the walkable
-shelter, merged from a parallel session). **Replace this file at every hand-off:** it describes
+shelter, merged from a parallel session) and **v0.12.10** (the plantation and the enchanting
+altar in the hub's room). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.9**, eighteen commits and one merge
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.10**, nineteen commits and one merge
   on top of v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
   owner asks for each fast-forward; until then it trails the branch.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.9, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.10, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -57,9 +58,10 @@ shelter, merged from a parallel session). **Replace this file at every hand-off:
 | 0.12.6 | `b149cca` | **The shell, and the road between fights**: a real Settings screen (comfort + volumes, saved beside the slots), Quit on the title, a beat before RUN OVER, the map's mist on by default, debug tools only in a debug build; fifteen "?" events (stray storybook pages) with costs, prices — wonder cores' first use — and stats | `NODES.gdd` §6.1, `Feedback.gdd` §7 |
 | 0.12.7 | `c2424c8` | Collection's grace stops the ambient spawner; a benched fighter's item cools down at the bench rate | NODES §3.3, §4.1 |
 | 0.12.8 | `3052f28` | **The wonder items live — all fourteen, each with a source.** One `ItemLedger` (perish, enchantments, plots, VOID phantoms, mushroom days) written by `RunState.Items.cs`; DD's creature, the mushroom, the Feather's rewind button, the Claw's loot-crack-throw, Possession passives from the backpack; five new events | `ITEMS.gdd` (status block, each *Built* note, §9 v0.12.8), KNOWLEDGE v0.12.8 |
-| 0.12.9 | — | **Recruitment, and the shelter as a walkable room** (from the `recruit-shelter` session, `13f097d`, merged): a run starts with its home protagonist alone and each realm's 4-1 recruits that realm's own; the shelter is a side-view room whose stations (road, team board, lantern, campfire, whetstone, anvil) replace the buttons; three shelter bugs fixed in passing | `NODES.gdd` §3.1, §4.5, §5.0, KNOWLEDGE v0.12.9 |
+| 0.12.9 | `51722a3` | **Recruitment, and the shelter as a walkable room** (from the `recruit-shelter` session, `13f097d`, merged): a run starts with its home protagonist alone and each realm's 4-1 recruits that realm's own; the shelter is a side-view room whose stations (road, team board, lantern, campfire, whetstone, anvil) replace the buttons; three shelter bugs fixed in passing | `NODES.gdd` §3.1, §4.5, §5.0, KNOWLEDGE v0.12.9 |
+| 0.12.10 | — | **The plantation and the enchanting altar** stand in the hub's room: sow and harvest, enchant Possession with the Blessing of Shieldon, each through its own panel | `ITEMS.gdd` §4.3, §7.1, `NODES.gdd` §5.0, KNOWLEDGE v0.12.10 |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.9, all passing:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.10, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
@@ -71,7 +73,7 @@ shelter, merged from a parallel session). **Replace this file at every hand-off:
 | Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
 | Run | `Scenes/Run/RunWalkCheck.tscn` | 2019 at v0.12.9 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
 | Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 82 at v0.12.8 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives |
-| Recruit + shelter (new, v0.12.9) | `Scenes/Run/RecruitShelterCheck.tscn` | 398 — homes, the starting roster, recruits at the capitals, saves keep their roster, the station table, every station against the exits rule, each kind of shelter walked with the keys (`-- --shots=dir` in a window for pictures) |
+| Recruit + shelter (new, v0.12.9) | `Scenes/Run/RecruitShelterCheck.tscn` | 418 at v0.12.10 — homes, the starting roster, recruits at the capitals, saves keep their roster, the station table, every station against the exits rule, each kind of shelter walked with the keys, the plantation and the altar used (`-- --shots=dir` in a window for pictures) |
 
 **Look and listen without a fight:**
 - `Scenes/Dev/VfxGallery.tscn`
@@ -86,9 +88,9 @@ shelter, merged from a parallel session). **Replace this file at every hand-off:
   variants of Cleopastar, Pixolotl, Sifu Pangda and Pomegraknight are the next step.
 - **Ultimates (#5):** the ring fills and Q does nothing for all five. Every character GDD
   defers its ultimate, so write the designs first (TBD #21).
-- **Items (#19): done in v0.12.8** except three pieces that wait on the two parallel sessions
-  below: the planting and enchanting *screens* (the verbs `TryPlant`/`TryHarvest`/
-  `TryEnchantPossession` exist), and THE VOID's combat skill (needs the foes' sight limit).
+- **Items (#19): done in v0.12.8**, their shelter screens in v0.12.10 (the plantation and the
+  enchanting altar), except THE VOID's combat skill (needs the foes' sight limit — the
+  PumpKing ult session's).
   Also open: rolled 60–140 % inheritance on harvests, the mushroom's outcome (f), and the
   phantom's BOSS fight (a −25 % HP touch stands in). `ITEMS.gdd` marks each.
 - **Zone 6:** the other eight guardians, and the Unwritten's Borrowed Shapes and Blank Page
@@ -198,9 +200,10 @@ shelter, merged from a parallel session). **Replace this file at every hand-off:
   - ~~"?" nodes have 3 placeholder events~~ (20 since v0.12.8).
 - **Two parallel sessions started 2026-11-27 from v0.12.7** (each wrote
   `Docs/_handoff/<name>.md`; this branch integrates them, on the owner's "合并"):
-  **`recruit-shelter`** — merged as v0.12.9; **`pumpking-ult`** — PumpKing's ultimate, the Black
-  Prison (branch `claude/pumpking-black-prison-f31091`), to merge next. Then: THE VOID's
-  skill onto the ult's sight API.
+  **`recruit-shelter`** — merged as v0.12.9 (its reserved spots filled in v0.12.10);
+  **`pumpking-ult`** — PumpKing's ultimate, the Black Prison (branch
+  `claude/pumpking-black-prison-f31091`), to merge next. Then: THE VOID's skill onto the ult's
+  sight API.
 - **v0.12.9's calls for the owner to confirm** (written into the GDDs; each changes code if
   answered otherwise):
   - a run starts with its home protagonist alone (Pomegraknight — every run's home is

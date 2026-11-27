@@ -489,8 +489,8 @@ still. Built by `ShelterController` (`Scenes/Shelter.tscn`), its stations by `Sc
 | **Campfire** | Rest | the Blessing | every kind |
 | **Whetstone** | Sharpen Weapon | the Blessing | every kind |
 | **Anvil** | Sharpen Armor | the Blessing | every kind |
-| Plantation (two plots) | *reserved* — planting (`ITEMS.gdd`, TBD #5) | — | hubs |
-| Enchanting altar | *reserved* — possession enchanting (`ITEMS.gdd`) | — | hubs |
+| **Plantation** (two plots) | *new (v0.12.10)* — sow from the backpack, harvest what is ripe (`ITEMS.gdd` §4.3; its panel) | always (says how the plots stand) | hubs |
+| **Enchanting altar** | *new (v0.12.10)* — spend the Blessing of Shieldon to enchant Possession (`ITEMS.gdd` §7.1; its panel) | a team member holds the Blessing | hubs |
 | Wanderer | *reserved* — the joust (§5.4) | — | hubs |
 
 - **One rule for the ways out.** *Back*, *Finish* and *the Blessing* are
@@ -553,7 +553,8 @@ These specifications are **not active** for Transportation Hubs or the special S
 remain only as deferred designs should a future node type deliberately opt in. The Blessing
 concept is likewise not a source of optional services in the current map:
 
-- **Plantation** (50% chance per shelter): the player may plant seeds in **2 slots**
+- **Plantation** (50% chance per shelter) — *superseded in v0.12.8–v0.12.10: every hub has a
+  plantation station with two plots, no watering (`ITEMS.gdd` §4.3, §5.0 above)*: the player may plant seeds in **2 slots**
   (subject to change and randomness). Drag a seed from inventory onto a slot to plant.
   Every 2 days the player can return to **water** the plants, accelerating growth by
   +1 day per watering. Harvest yields resources (TBD; see separate **Plantation GDD**).

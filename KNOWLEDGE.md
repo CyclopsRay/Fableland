@@ -190,6 +190,23 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Godot drops ":" from a node's name — `FindChild` by the name you gave then finds nothing (v0.12.10, the shelter panels' check)
+- **Symptom:** the plantation's buttons were named `Plant0:rotten_mushroom`, the altar's
+  `Enchant:item-3`; the check's `FindChild` found none of them and pressed nothing (seven
+  failures, no error). Godot sanitises node names — `:`, `.`, `@`, `/`, `"`, `%` are not
+  allowed — and stores `Plant0_rotten_mushroom`.
+- **Rule:** name nodes you will look up with letters, digits, `_` and `-` only
+  (`Plant0_rotten_mushroom`, `Enchant_item-3`). An instance id like `item-3` is safe.
+
+### An autowrapping `Label` in a flow or box container collapses to one letter per line (v0.12.10, the plantation panel)
+- **Symptom:** "Nothing plantable in the backpack…" inside the plot row's `HFlowContainer` ran
+  down the screen one character per line and pushed the panel off it (seen in a `--shots`
+  capture; headless checks passed). A wrapping label has no minimum width of its own, and a
+  flow or `HBoxContainer` gives each child only its minimum.
+- **Rule:** put a wrapping `Label` where its parent hands it a width — a `VBoxContainer` row,
+  or give it `CustomMinimumSize.X` / `SizeFlagsHorizontal = ExpandFill` in an HBox. Look at a
+  new panel in a window (`-- --shots=dir` on the recruit check) before calling it done.
+
 ### Godot 4.3+ names a physical key "E - Physical", not "E (Physical)" (v0.12.9, controls card)
 - **Symptom:** the shelter's prompt read "[E - Physical]". Looking further: since v0.12.5 every
   line of the pause menu's controls card and the countdown's key line read "Space - Physical",
