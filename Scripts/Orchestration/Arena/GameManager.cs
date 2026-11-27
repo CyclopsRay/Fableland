@@ -302,11 +302,25 @@ public partial class GameManager : Node2D
         else if (node is BaseFoe foe) ArenaRulesApplier.ApplyToFoe(foe, _rules);
     }
 
-    /// <summary>Called by the boss mission once a boss's row is on it: what the run took from a
-    /// final boss (Māra's sealed powers) comes off now, after its HP was set.</summary>
-    public void ApplyBossRules(CharacterController boss)
+    /// <summary>A boss signature's backdrop (Māra's wheel, Docs/Mara.gdd §8): drawn over the
+    /// map's art and under every body — it goes in right after the World.</summary>
+    public void AddBackdrop(Node2D backdrop)
     {
-        if (_rules.Zone6Role == Zone6Role.Final) ArenaRulesApplier.ApplyToFinalBoss(boss, _rules);
+        if (backdrop == null) return;
+        AddChild(backdrop);
+        MoveChild(backdrop, _world.GetIndex() + 1);
+    }
+
+    /// <summary>The Tempter's Offering was taken (Docs/Mara.gdd §7.5): one more stack of a
+    /// poison in the party for the rest of this fight — on the body in play now and on every
+    /// body switched in later (they take <see cref="_rules"/> as they enter). The run is not
+    /// touched: the final fight ends it either way.</summary>
+    public void TakeFightSeal(string poisonId)
+    {
+        _rules = _rules.WithFightSeal(poisonId);
+        if (_player != null && IsInstanceValid(_player)) ArenaRulesApplier.ApplyToFighter(_player, _rules);
+        _hud.SetRulesLines(_rules.HudLines());
+        DebugManager.Instance?.LogMission("Offering taken: " + _rules.SealLine);
     }
 
     /// <summary>The rules a debug fight with a zone-6 boss is dealt: its variant's, from the
@@ -936,7 +950,10 @@ public partial class GameManager : Node2D
             }
         }
         _hud.SetSecondaryBar(_mission.HasSecondaryBar, _mission.SecondaryValue, _mission.SecondaryMax, _mission.SecondaryLabel);
+        _hud.SetSecondaryNotch(_mission.HasSecondaryBar ? _mission.SecondaryNotch : 0f);
         _hud.ShowRewardChoice(_mission.NeedsRewardChoice);
+        string said = _mission.ConsumeAnnouncement();
+        if (!string.IsNullOrEmpty(said)) _hud.ShowToast(said, 3.5f);
     }
 
     /// <summary>Push the switch-protagonist slot state to the HUD every frame:

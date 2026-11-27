@@ -316,6 +316,38 @@ radius, magnitude = blast damage, 0 and tag `dud` for a head that only pops) —
 | `ui` / `pause.open` · `pause.close` (v0.11.7) | — | — | — | *PauseMenu.Open · Close* |
 | `ui` / `hover` · `press` · `back` (v0.11.7) | — | — | size = the button's width · at its centre (screen px) | *UiCues ← every BaseButton* (a screen calls `UiCues.Attach(this)`) |
 
+### 6.5 Māra and his wheel — owner `z6_mara` (v0.12.3, `Docs/Mara.gdd`)
+
+His body and his wheel share one owner, so his look and his wheel's look are one style. No
+director has rows for them yet. Every cue below falls back to `boss` / `any` until the art and
+music land (`Mara.gdd` §13 step 3).
+
+| Action | Kind | Variant | Tag | Notes | Raised by |
+|---|---|---|---|---|---|
+| `wheel.tell` | one-shot | the realm landing (`WheelRealm`) | its id | magnitude = the tell's seconds: the sigil flares, the stone grinds | *WheelOfBecomingField.OnTell* |
+| `wheel.turn` | one-shot | the realm landing | its id | the gong as it lands | *…OnLanded* |
+| `wheel.pass` | one-shot | the realm passing | its id | the Last Turn, once per realm | *…OnPassed* |
+| `realm` | loop | the realm | its id | while a non-human realm is in force | *…StartLoops / StopLoops* |
+| `interval` | loop | — | `humans` | while the human realm is in force: the bed cuts to one bell | *…StartLoops / StopLoops* |
+| `last_turn` · `liberation` | one-shot | realms to pass · — | — | magnitude = the spin's seconds | *…OnLastTurn · OnBossDied* |
+| `devour.swallow` | one-shot | — | — | at the swallowed shot · magnitude = its damage | *…Swallows* |
+| `offering` | one-shot | — | the poison | at the bowl | *…TickOffering* |
+| `ba.tell` · `s1.tell` | one-shot | 1, or 2 under Doubt (a false tell shows) | — | magnitude = the tell's seconds | *Mara.BeginTell* |
+| `ba.swing` | one-shot | the swipe (1–3) | — | cone extents | *Mara.TickSwipes* |
+| `s1.cast` · `s1.catch` | one-shot | — | — | the noose thrown · a fighter caught | *Mara.ThrowNoose · NooseCaught* |
+| `s2.cast` · `s2.slam` | one-shot | 1, or 2 under Doubt · — | — | the colossus's hand: its shadow · its slam (at the slam) | *Mara.HandleSkill2 · MaraStrike* |
+| `realm.leap` | one-shot | 1 up, 0 down | — | onto or off the throne | *Mara.LeapTo* |
+| `realm.halo_cast` · `realm.halo` · `realm.garland` | one-shot | — | — | Iron Throne's strikes | *Mara.CastHalo · MaraStrike* |
+| `realm.wrath_fire` · `realm.chain_hooks` · `realm.blind_charge` | one-shot | — | — | the asuras', hell's and the animals' arrivals | *Mara* |
+| `realm.gorge` | loop | — | — | the hungry ghosts' inhale | *Mara.BeginGorge / EndGorge* |
+| `realm.gorge_bite` | one-shot | — | — | the bite at its end | *Mara.GorgeBite* |
+| `ba.image_swing` · `image.pop` | one-shot | — | — | a mirror image's copied swipe · an image popped | *Mara.ImageSwipe · MaraImage.Pop* |
+
+Hits name their attack the same way: `ba.swing`, `s1.bite`, `s2.slam` (ranged: the colossus's
+hand never holds the emanation), `realm.halo`, `realm.gorge_bite`, `realm.chain_hook`,
+`realm.blind_charge` (variant 2 from an image), `ba.image_swing`, `s1.image_catch`, and Wrath
+Fire's `s1.wrath_fire`.
+
 ---
 
 ## 7. Comfort settings

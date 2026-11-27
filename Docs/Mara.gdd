@@ -1,8 +1,11 @@
 # Fableland — Māra Pāpīyas (天魔波旬), Avīci's Dark Leader GDD
 
-**Proposed in v0.12.2, for the owner's review.** Nothing in this document is built yet beyond
-the v0.12.0 stand-in: BOSS PumpKing's kit under Māra's row, losing 12 % HP and 10 points of
-damage per sealed power. Every number is a first pass (§12).
+**Proposed in v0.12.2. Steps 1 and 2 of §13 were built in v0.12.3**, with placeholder art
+drawn in code. The owner asked for it to be built: "先做 不做美术就好了 占位先 可以把prompt写了".
+- **The questions in §14 are still open.** The build follows this design as written, so a
+  different answer means a change to the code.
+- **The art prompts** for step 3 are in `Docs/Art/MaraArtPrompts.md`.
+- **Numbers.** Every number is a first pass (§12, and §13.4 for the ones the build added).
 
 This is Māra's home document. `Zone6.gdd` §5.2 points here; the five poisons and their seals
 are defined in `Zone6.gdd` §5.1.
@@ -497,7 +500,7 @@ The fight gets a music profile of its own (`MusicProfiles`), synthesised like ev
 ## 13. Build plan
 
 The order follows the Unwritten's: the signature first, on the stand-in; then the kit; then the
-art.
+art. **Steps 1 and 2 are built (v0.12.3); step 3 has its prompts.**
 
 ### Step 1: the wheel as a signature, whatever kit stands in
 
@@ -546,9 +549,81 @@ Each gets its rows in BossFightCheck.
 - the arena (`Z6-AV-F`) as a map;
 - the music profile, and the turn and interval cues.
 
+The prompts, drafted for Fable to review, are in `Docs/Art/MaraArtPrompts.md`. Nothing is
+generated yet.
+
+### 13.4 What the build decided (v0.12.3)
+
+Where this design was silent, or where building showed a gap.
+
+**Step 1: the wheel** (`WheelTable`, `WheelOfBecoming`, `WheelOfBecomingField`)
+- **The damage-dealt hook** already existed: a body's `DamageDealt` event, which a kit raises
+  through `ReportDamageDealt`. Devour heals on it.
+  - Every one of Māra's attacks reports what it dealt.
+  - The stand-in's head does not, so on the stand-in Devour's heal never fires.
+- **Two hooks are new** on `CharacterController`, both keyed by source:
+  - an HP floor, which no hit, hazard or damage over time passes, and no execute ignores;
+  - a hit filter, which may swallow a discrete hit whole.
+- **The rules carry two new things:** the party's stacks of each poison (`SealStacks`) and
+  what is sealed in him (`MaraSealedPoisons`).
+- **The Offering is the wheel's,** not the kit's: the bowl sits on the arena, and the stack
+  goes into the fight's rules (`WithFightSeal`), never the run's. The final fight ends the run
+  either way.
+- **The Last Turn's order:** from the realm after the one in force, round the wheel and back to
+  it, then the Interval. The lock does not start it while a turn to the human realm is already
+  under way: that Interval is under a second away.
+- **No adds.** The stand-in's half-HP adds do not come (§7.1).
+- **Where the wheel is drawn:**
+  - **The backdrop.** The colossus and the wheel are drawn over the map's art and under every
+    body.
+  - **The indicator.** A small wheel sits at the top right of the screen, showing the realm
+    in force and the time to the next turn. The colossus can be out of view in a wide arena;
+    the indicator never is.
+  - **The light.** Each realm's light is a faint wash over the arena.
+  - **The lock on the bar.** The boss bar draws the lock as a gold band with a notch.
+  - **The turn.** Each turn is a toast.
+
+**Step 2: the kit** (`Mara.cs`)
+- **His realm before the wheel speaks** is the human realm, which holds no power. A body
+  fielded without the wheel fights with his own hands only (KNOWLEDGE v0.12.3).
+- **Claw Rake: only the last swipe shoves.** A shove gives the player 0.8 s of grace, which
+  would swallow every swipe after it.
+- **The Hand is the colossus's,** so its slam is a ranged hit that never holds the emanation.
+  Doubt doubles it. The mirrored shadow falls about his own position.
+- **The images copy Claw Rake and the Noose only.** An image's noose bites at 40 % and does not
+  yank. The Hand is the colossus's, so it is not copied.
+- **The throne is his perch** until the arena is painted: he leaps there, and back to the spot
+  he left.
+
+**Numbers the build added** (first pass, with §12's)
+
+| What | Value |
+|---|---|
+| Claw Rake | tell 0.35 s; shove 6 m/s on the last swipe |
+| Noose | tell 0.4 s; 20 m/s; a loop 0.1–0.8 m above the floor |
+| Hand of the Wheel | its column runs 8 m up from where it lands |
+| Throne | the leap takes 0.8 s on a 3 m arc |
+| Heavy Halo | the first 1.2 s after landing on the throne; a ring 3 m across, 3 m tall |
+| Wilting Garland | 2 s into the rest; a 6 m lane; 0.6 s of falling petals, then 6 damage a quarter-second for 3 s |
+| Gorge | the bite reaches 3.5 m all round; in the Last Turn the pull lasts 0.8 s |
+| Chain Hooks | from 14 m to either side of you, at 22 m/s |
+| Blind Charge | 14 m/s for up to 1.6 s; the images 5 m ahead and behind, then 3 m either side of him |
+
+**Measured** (the zone-6 and boss checks):
+- **The cycles.** The §4.3 table comes out exactly: 46/38/30/22/14 s (36/30/24/18/12 below
+  half), and the wheel stands still at five sealed.
+- **A 100-point hit** deals 100 in Hell, 150 in the Interval and 30 on the throne.
+- **Devour** heals 113 a hit at foe level 8, and a swallowed shot heals 45.
+- **The Last Turn** with nothing sealed lasts 4.5 s.
+- **Claw Rake's two swipes** both land, for 19.2 at foe level 1.
+- **The Noose** drags a fighter 9 m away 7.1 m in 0.4 s.
+- **The Hand** throws a fighter up at 19.5 m/s.
+
 ### Cues
 
-All are proposed under the owner `z6_mara`, and go into `Feedback.gdd` §6 when they are built:
+All are under the owner `z6_mara`, built in v0.12.3 and listed in `Feedback.gdd` §6.5, with the
+ones the build added (`wheel.tell`, `wheel.pass`, `devour.swallow`, `ba.tell`, `s1.tell`,
+`realm.*`, `ba.image_swing`, `image.pop`). The design's first list:
 
 | Cue | Kind | Carries |
 |---|---|---|

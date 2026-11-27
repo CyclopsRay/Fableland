@@ -30,7 +30,8 @@ public sealed class Zone6PoisonDef
     public float MoveSpeedLossPerStack { get; init; }   // move speed −x
     public float AttackIntervalPerStack { get; init; }  // basic-attack interval +x
 
-    /// <summary>The ability Māra loses when this warden falls ("Devour") and what it was.</summary>
+    /// <summary>The power Māra loses when this warden falls ("Devour") and what it does: the
+    /// power of this poison's realm of his wheel, which a seal makes the wheel skip (Mara.gdd §5).</summary>
     public string MaraAbility { get; init; }
     public string MaraAbilitySummary { get; init; }
 }
@@ -97,44 +98,40 @@ public static class Zone6Table
     // ── Avīci ────────────────────────────────────────────────────────────────────
     /// <summary>A further defeat by the same poison adds a stack, up to this.</summary>
     public const int SealStackCap = 3;
-    /// <summary>Until Māra has a kit, each ability sealed in him costs the stand-in this share
-    /// of its HP and this much of its damage (Zone6.gdd §4.3).</summary>
-    public const float MaraHpPerSeal = 0.12f;
-    public const float MaraDamagePerSeal = 0.10f;
 
     public static readonly Zone6PoisonDef Greed = new()
     {
         Id = "greed", Glyph = "贪", Name = "Greed", MiniBossId = "z6_preta",
         SealName = "Hunger", SealSummary = "reload time +30%", ReloadTimePerStack = 0.30f,
-        MaraAbility = "Devour", MaraAbilitySummary = "heals from the damage he deals",
+        MaraAbility = "Devour", MaraAbilitySummary = "in the hungry ghosts' realm each hit he lands heals him, and shots at his front are swallowed",
     };
 
     public static readonly Zone6PoisonDef Anger = new()
     {
         Id = "anger", Glyph = "嗔", Name = "Anger", MiniBossId = "z6_asura",
         SealName = "Smoulder", SealSummary = "damage taken +15%", DamageTakenPerStack = 0.15f,
-        MaraAbility = "Wrath", MaraAbilitySummary = "an enraged phase below half HP",
+        MaraAbility = "Wrath", MaraAbilitySummary = "in the asuras' realm his cooldowns and attack interval ×0.6",
     };
 
     public static readonly Zone6PoisonDef Delusion = new()
     {
         Id = "delusion", Glyph = "痴", Name = "Delusion", MiniBossId = "z6_boar",
         SealName = "Fog", SealSummary = "skill cooldowns +25%", CooldownPerStack = 0.25f,
-        MaraAbility = "Delusion", MaraAbilitySummary = "mirror images",
+        MaraAbility = "Delusion", MaraAbilitySummary = "in the animals' realm two mirror images copy his attacks",
     };
 
     public static readonly Zone6PoisonDef Pride = new()
     {
         Id = "pride", Glyph = "慢", Name = "Pride", MiniBossId = "z6_fallen_deva",
         SealName = "Burden", SealSummary = "move speed −15%", MoveSpeedLossPerStack = 0.15f,
-        MaraAbility = "Iron Throne", MaraAbilitySummary = "an invulnerable throne phase",
+        MaraAbility = "Iron Throne", MaraAbilitySummary = "in the gods' realm he holds the throne and takes 70% less damage",
     };
 
     public static readonly Zone6PoisonDef Doubt = new()
     {
         Id = "doubt", Glyph = "疑", Name = "Doubt", MiniBossId = "z6_ox_horse",
         SealName = "Hesitation", SealSummary = "attack interval +20%", AttackIntervalPerStack = 0.20f,
-        MaraAbility = "Doubt", MaraAbilitySummary = "a curse that makes some of your casts fizzle",
+        MaraAbility = "Doubt", MaraAbilitySummary = "in hell's realm every attack shows a false tell beside the true one",
     };
 
     /// <summary>The five poisons, in gate (node) order: XX-5-1 is Greed … XX-5-5 is Doubt.</summary>
@@ -277,7 +274,6 @@ public static class Zone6Table
         Require(GravityWinFactor > 0f && GravityWinFactor < 1f, "Zone6Table: a victory must make gravity lighter");
         Require(GravityLossFactor > 1f, "Zone6Table: a defeat must make gravity heavier");
         Require(GravityMin > 0f && GravityMin <= GravityOnArrival && GravityOnArrival <= GravityMax, "Zone6Table: gravity's clamp must hold the arrival value");
-        Require(MaraHpPerSeal * Poisons.Length < 1f, "Zone6Table: five seals would leave Māra's stand-in no HP");
         Require(DefeatHpFloor > 0f && DefeatHpFloor <= 1f, "Zone6Table: the defeat HP floor must be in (0, 1]");
         return problems;
     }

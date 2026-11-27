@@ -14,9 +14,9 @@ using Fableland.Run;
 /// • the Void Frontier's gravity — every fighter, every foe; a projectile inherits its
 ///   owner's share when it is thrown;
 /// • Avīci's seals — Player-side fighters only (every protagonist: each switch-in is a body
-///   entering the tree);
-/// • Māra's sealed powers — the final boss only, after its row is applied
-///   (<see cref="ApplyToFinalBoss"/>).
+///   entering the tree).
+/// What the seals in Māra do is not a modifier: his wheel skips their realms (the boss
+/// mission's signature, <c>WheelOfBecomingField</c>).
 /// </summary>
 public static class ArenaRulesApplier
 {
@@ -24,8 +24,6 @@ public static class ArenaRulesApplier
     public const string Zone6GravitySource = "zone6:gravity";
     /// <summary>Source of Avīci's seals on a protagonist.</summary>
     public const string SealSource = "zone6:seals";
-    /// <summary>Source of what Māra lost to the seals.</summary>
-    public const string MaraSource = "zone6:mara";
 
     /// <summary>A realm law's source: <c>realm:&lt;world code&gt;</c> (lower case).</summary>
     public static string LawSource(ArenaRules rules) => "realm:" + (rules?.LawWorld ?? "").ToLowerInvariant();
@@ -61,15 +59,6 @@ public static class ArenaRulesApplier
         if (foe == null || rules == null) return;
         float gravity = rules.Zone6Gravity * (rules.HasLaw && rules.LawAppliesToFoes ? rules.LawGravityScale : 1f);
         foe.SetGravityScale(Zone6GravitySource, gravity);
-    }
-
-    /// <summary>Māra's stand-in, once its row has set its HP and damage (Zone6.gdd §4.3): each
-    /// power sealed in him costs a share of both. A no-op for any other fight.</summary>
-    public static void ApplyToFinalBoss(CharacterController boss, ArenaRules rules)
-    {
-        if (boss == null || rules == null || rules.SealedBossAbilities.Count == 0) return;
-        boss.SetFullHealth(boss.MaxHP * rules.FinalBossHpScale);
-        boss.SetDamageDealtBonus(MaraSource, rules.FinalBossDamageBonus);
     }
 
     /// <summary>The defense that makes damage taken <paramref name="scale"/>× (DefenseMultiplier

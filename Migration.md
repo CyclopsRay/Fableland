@@ -9,6 +9,39 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.3** — **Māra fights on his own kit, and his wheel turns.** `Docs/Mara.gdd` steps 1
+  and 2, built as designed (the owner: build it, art as placeholders, write the prompts).
+  - **The Wheel of Becoming** is his signature (`BossDef.Signature = "wheel"`), run by the boss
+    mission whatever kit stands in.
+    - It opens on Hell. Each realm rests 8 s (6 s below half HP), plus 1 s for every stack of
+      that realm's poison in you. The Interval rests 6 s.
+    - It skips every realm sealed in him. The §4.3 cycles come out exactly: 46/38/30/22/14 s,
+      and it stands still at five sealed.
+    - The realm in force puts its power on his body as modifiers keyed `zone6:wheel`:
+      - the Interval: ×1.5 damage taken and a protagonist's poise;
+      - Iron Throne: ×0.3 and no stagger;
+      - Wrath: ×0.6;
+      - Devour: a heal for each hit he lands, and shots swallowed at his front.
+  - **The lock.**
+    - His last 5 % falls only in the Interval.
+    - The first time it holds, the Last Turn passes every unsealed realm, 0.9 s each, each
+      with its arrival strike, and lands on the Interval.
+    - Struck down there, the wheel stops. That is Liberation.
+  - **The Tempter's Offering.** Below 30 % HP, once a fight, a bowl on the throne heals to full
+    for one more stack of a poison, for that fight only.
+  - **His kit** (`Mara.cs`):
+    - Claw Rake;
+    - the Noose of Craving, which yanks and bites;
+    - the Hand of the Wheel;
+    - the leap to the throne, with Heavy Halo and the Wilting Garland;
+    - Wrath Fire, the Gorge and the Chain Hooks;
+    - the Blind Charge, with two mirror images that copy his blows;
+    - Doubt's mirrored false tells, the true one marked by the third eye's gaze.
+  - **Retired:** the stand-in's −12 % HP and −10 damage per seal.
+  - **New body hooks:** an HP floor and a hit filter, both keyed by source.
+  - **Art:** placeholders drawn in code. The prompts are in **`Docs/Art/MaraArtPrompts.md`**,
+    drafted by Opus for Fable to review before any credit is spent.
+  - **Checks:** zone-6 115, boss 191, run 1 993, feedback 249. All clean.
 - **0.12.2** — **Each zone-6 variant has its own dark leader, and Māra has a design.** The
   owner settled TBD #1: the dark leader is the final boss of the run's zone-6 variant — the
   Unwritten for the Void Frontier, a different one for Avīci. New **`Docs/Mara.gdd`** proposes

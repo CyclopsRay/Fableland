@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Godot;
+using Fableland.Bosses;
 using Fableland.Data;
 using Fableland.Map;
 using Fableland.MapCreation.Data;
@@ -1121,15 +1122,22 @@ public partial class RunWalkCheck : Node
         }
         else
         {
-            // Māra, weakened by the four powers sealed in him.
+            // Māra on his own kit, his wheel turning behind him: the four powers sealed in him
+            // are four realms it skips — Hell, the one left, and the human realm take turns.
             FoeStats.LevelStats level = FoeStats.ForLevel(8);
-            float hp = finalDef.BaseHp * level.HpMult * (1f - Zone6Table.MaraHpPerSeal * 4);
-            float damage = finalDef.DamageScale * level.AtkMult - Zone6Table.MaraDamagePerSeal * 4;
-            Expect(final != null && Mathf.IsEqualApprox(final.MaxHP, hp, 0.5f) && Mathf.IsEqualApprox(mission.SecondaryMax, final.MaxHP, 0.5f),
-                $"{coreWhere}: with four powers sealed Māra has {final?.MaxHP:0} HP (bar {mission?.SecondaryMax:0}); his row gives {finalDef.BaseHp:0} × {level.HpMult} × 0.52 = {hp:0}");
-            Expect(final != null && Mathf.IsEqualApprox(final.DamageDealtScale, damage, 1e-3f),
-                $"{coreWhere}: Māra deals ×{final?.DamageDealtScale:0.00}; his row gives {finalDef.DamageScale} × {level.AtkMult} − 0.40 = ×{damage:0.00}");
-            coreLine = $"Māra on {arenaDealt?.Name ?? "no map"} with {final?.MaxHP:0} HP and damage ×{final?.DamageDealtScale:0.00} ({throne.Rules.FinalBossLine})";
+            float hp = finalDef.BaseHp * level.HpMult;
+            WheelOfBecomingField wheel = mission?.Wheel;
+            Expect(final is Mara && Mathf.IsEqualApprox(final.MaxHP, hp, 0.5f) && Mathf.IsEqualApprox(mission.SecondaryMax, final.MaxHP, 0.5f),
+                $"{coreWhere}: Māra must field his own kit with his row's {hp:0} HP — the seals no longer cut it ({final?.GetType().Name}, {final?.MaxHP:0} HP, bar {mission?.SecondaryMax:0})");
+            bool skips = wheel != null;
+            if (wheel != null)
+                foreach (WheelRealmDef realm in WheelTable.Realms)
+                    skips &= wheel.Wheel.IsSealed(realm.Realm) == (realm.PoisonId.Length > 0 && run.Zone6.MaraSealed.Contains(realm.PoisonId));
+            Expect(wheel != null && wheel.Realm == WheelRealm.Hell && skips && wheel.Wheel.Next(WheelRealm.Hell) == WheelRealm.Humans
+                   && wheel.Wheel.Next(WheelRealm.Humans) == WheelRealm.Hell && Mathf.IsEqualApprox(final.HpFloor, final.MaxHP * WheelTable.LockShare, 0.5f),
+                $"{coreWhere}: the wheel must turn from Hell, skip the four sealed realms and hold the lock ({wheel?.Realm}, skips {skips}, floor {final?.HpFloor:0})");
+            Expect(mission != null && Mathf.IsEqualApprox(mission.SecondaryNotch, WheelTable.LockShare), $"{coreWhere}: the boss bar must show the lock ({mission?.SecondaryNotch})");
+            coreLine = $"Māra on {arenaDealt?.Name ?? "no map"} with {final?.MaxHP:0} HP, his wheel on {wheel?.Realm} ({throne.Rules.FinalBossLine})";
             // The core keeps permadeath: falling to Māra ends the run.
             player?.TakeHit(new HitInfo(player.MaxHP * 100f + 1e5f, Vector2.Zero), player.GlobalPosition);
             RunOverController over = await SceneIs<RunOverController>(900);

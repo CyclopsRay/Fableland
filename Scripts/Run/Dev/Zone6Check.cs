@@ -18,15 +18,19 @@ using Fableland.Map;
 /// 1. Logic — the tables validate; the gravity ladder, the seals and Māra's seals
 ///    (<see cref="Zone6State.SelfTest"/>); the rules record (<see cref="ArenaRules.Build"/>):
 ///    a Wulin node's law, a zone-6 node's rules and never a borrowed realm's law; which nodes
-///    are zone-6 fights; the Styx Tide's schedule.
+///    are zone-6 fights; the Styx Tide's schedule; the Wheel of Becoming's clock — its order
+///    from Hell, sealed realms skipped, a stack's second, the cycle table of Mara.gdd §4.3, the
+///    Last Turn (<see cref="WheelOfBecoming.SelfTest"/>).
 /// 2. The variant — the same for a seed every time, both variants dealt, drawn from a stream
 ///    of its own: the run's root stream and the map it generates are untouched.
 /// 3. Saves — seals and the ladder survive a save and a load, and nothing a run does clears a
 ///    seal; a save from before v0.12.0 (no zone 6 in it) loads into an empty zone 6.
 /// 4. Bodies, on plain colliders — the Wulin law on a real fighter (one more jump, each 75% as
 ///    high); gravity on a fighter, a foe and a projectile; Avīci's seals on every protagonist
-///    of the roster (reload, damage taken, cooldowns, move speed, attack interval); Māra's
-///    stand-in losing HP and damage for each power sealed in him.
+///    of the roster (reload, damage taken, cooldowns, move speed, attack interval); the wheel
+///    on a real boss — each realm's modifiers, ×1.5 only in the Interval, the lock holding
+///    outside it and opening inside, the Last Turn, Liberation, Devour's heal and swallow, a
+///    wheel with all five sealed standing still; the Tempter's Offering.
 /// 5. The Styx Tide — lanes of fighters jumping a real wave at swept moments, at gravity
 ///    ×0.5, ×1 and ×1.5: the window in which a jump clears it. The numbers print as `zone6`
 ///    lines and are the ones Zone6.gdd quotes.
@@ -87,7 +91,8 @@ public partial class Zone6Check : Node
             await ProbeQinggong();
             await ProbeGravity();
             await ProbeSeals();
-            await ProbeMara();
+            await ProbeWheel();
+            await ProbeOffering();
             await ProbeStyxTide();
         }
         catch (Exception e)
@@ -141,6 +146,8 @@ public partial class Zone6Check : Node
         Absorb("Zone6Table", Zone6Table.Validate());
         Absorb("BossTable", BossTable.Validate());
         Absorb("Zone6State", Zone6State.SelfTest());
+        Absorb("WheelTable", WheelTable.Validate());
+        Absorb("WheelOfBecoming", WheelOfBecoming.SelfTest());
         Expect(SaveGameService.RoundTripSelfTest(out string error), "save DTO: the round trip lost a field: " + error);
 
         // A realm's law, on its realm's nodes only.
@@ -175,9 +182,18 @@ public partial class Zone6Check : Node
         Expect(gate.SealLine.Contains("Hunger ×1") && gate.SealLine.Contains("Burden ×2"), $"rules: the seal line reads '{gate.SealLine}'");
         Expect(ArenaRules.Build("VK", av, Zone6Role.None).HasSeals, "rules: a seal is on you everywhere — an outer realm's fight too");
         ArenaRules mara = ArenaRules.Build("XX", av, Zone6Role.Final);
-        Expect(mara.SealedBossAbilities.Count == 2 && Near(mara.FinalBossHpScale, 0.76f, 1e-5f) && Near(mara.FinalBossDamageBonus, -0.2f, 1e-5f)
+        Expect(string.Join(",", mara.MaraSealedPoisons) == "anger,doubt" && mara.SealedBossAbilities.Count == 2
                && mara.FinalBossLine.Contains("Wrath") && mara.FinalBossLine.Contains("Doubt"),
-            $"rules: two powers sealed in Māra must cost his stand-in 24% HP and 20 points of damage (×{mara.FinalBossHpScale}, {mara.FinalBossDamageBonus:+0.00;-0.00}, '{mara.FinalBossLine}')");
+            $"rules: Wrath and Doubt sealed in Māra must reach the core as anger,doubt ('{string.Join(",", mara.MaraSealedPoisons)}', '{mara.FinalBossLine}')");
+        Expect(mara.SealStacksOf("greed") == 1 && mara.SealStacksOf("pride") == 2 && mara.SealStacksOf("doubt") == 0,
+            "rules: the core must carry the party's stacks of each poison, for the wheel's rests");
+        // The Offering: one more stack for this fight only — a new record, the handshake's untouched.
+        ArenaRules offered = mara.WithFightSeal("greed");
+        ArenaRules capped = mara.WithFightSeal("pride").WithFightSeal("pride").WithFightSeal("pride");
+        Expect(offered.SealStacksOf("greed") == 2 && Near(offered.SealReloadScale, 1.6f, 1e-5f) && mara.SealStacksOf("greed") == 1
+               && Near(mara.SealReloadScale, 1.3f, 1e-5f) && offered.SealLine.Contains("Hunger ×2") && offered.MaraSealedPoisons.Count == 2,
+            $"rules: an Offering of Greed must make Hunger ×2 (reload ×{offered.SealReloadScale}) for the fight and leave the run's record at ×1");
+        Expect(capped.SealStacksOf("pride") == Zone6Table.SealStackCap, $"rules: an Offering must not stack a poison past its cap ({capped.SealStacksOf("pride")})");
         Expect(Near(100f / (100f + ArenaRulesApplier.DefenseForDamageTaken(1.15f)), 1.15f, 1e-4f),
             "rules: the defense a seal sets must make damage taken exactly its scale");
 
@@ -196,6 +212,36 @@ public partial class Zone6Check : Node
             $"nodes: a map holds {minis} zone-6 mini-boss nodes and {finals} final (and {wrong} misfiled); every zone-6 combat node is a boss fight — five gates and the core");
 
         CheckStyxSchedule();
+        CheckWheelCycles();
+    }
+
+    /// <summary>Mara.gdd §4.3: what each gate won buys — the cycle and the Interval's share of
+    /// it, above and below half HP, with nothing in the player.</summary>
+    private void CheckWheelCycles()
+    {
+        string[] order = { "pride", "anger", "greed", "doubt", "delusion" };
+        var rows = new List<string>();
+        for (int k = 0; k <= 5; k++)
+        {
+            var wheel = new WheelOfBecoming(order[..k], null);
+            float above = wheel.CycleSeconds(1f), below = wheel.CycleSeconds(0.4f);
+            if (k < 5)
+            {
+                Expect(Near(above, 46f - 8f * k, 1e-4f) && Near(below, 36f - 6f * k, 1e-4f),
+                    $"wheel: with {k} sealed a cycle is {above} s / {below} s; Mara.gdd §4.3 has {46 - 8 * k} s / {36 - 6 * k} s");
+                rows.Add($"{k}: {above:0} s ({WheelTable.IntervalSeconds / above:P0}) / {below:0} s ({WheelTable.IntervalSeconds / below:P0})");
+            }
+            else
+            {
+                Expect(wheel.Still && wheel.Current == WheelRealm.Humans && above == 0f, "wheel: with all five sealed the wheel must stand on the human realm");
+                rows.Add("5: still — the Interval for good");
+            }
+        }
+        var stacked = new WheelOfBecoming(null, id => id == "doubt" ? 3 : 0);
+        Expect(Near(stacked.RestSeconds(WheelRealm.Hell, 1f), 11f, 1e-4f) && Near(stacked.RestSeconds(WheelRealm.Hell, 0.4f), 9f, 1e-4f)
+               && Near(stacked.RestSeconds(WheelRealm.Humans, 0.4f), WheelTable.IntervalSeconds, 1e-4f),
+            "wheel: three stacks of Doubt must hold Hell 11 s (9 s below half HP); the Interval never changes");
+        GD.Print($"  zone6    the wheel      sealed → cycle above / below half HP (the Interval's share): {string.Join(" · ", rows)}");
     }
 
     private void CheckStyxSchedule()
@@ -544,32 +590,148 @@ public partial class Zone6Check : Node
         GD.Print($"  zone6    seals          every stack once, on every protagonist: {string.Join(" · ", lines)}");
     }
 
-    // ---------------------------------------------------------------- 4d. Māra
+    // ---------------------------------------------------------------- 4d. the wheel
 
-    /// <summary>Māra's stand-in (BOSS PumpKing's kit under Māra's row) at the core's foe level,
-    /// with two powers sealed in him: his row's HP and damage, less 12% and 10 points each.</summary>
-    private async Task ProbeMara()
+    /// <summary>A wheel on a real body: Māra's row on the stand-in kit (BOSS PumpKing's scene),
+    /// which knows nothing of the wheel — so everything measured here is the wheel's own work,
+    /// whatever kit stands in. Its clock is driven by hand, a whole number of ticks a step.</summary>
+    private (CharacterController Boss, WheelOfBecomingField Field) StageWheel(Node2D stage, IEnumerable<string> sealedPoisons,
+        Func<string, int> stacks = null, Func<CharacterController> player = null)
     {
-        Node2D stage = BuildStage(0f, 4000f);
         BossDef def = BossTable.Mara;
-        CharacterController boss = Spawn<CharacterController>(stage, def.ScenePath, new Vector2(2000f, FloorY - 40f));
+        CharacterController boss = Spawn<CharacterController>(stage, BossTable.PumpKing.ScenePath, new Vector2(2000f, FloorY - 32f));
         ((IBossFighter)boss).BeginFight(def, 8, new BossArena(new[] { boss.GlobalPosition }, 0));
         boss.GetNodeOrNull<BossBrain>("BossBrain")?.Sleep();
+        var field = new WheelOfBecomingField { Name = "Wheel" };
+        stage.AddChild(field);
+        field.Begin(boss, def, sealedPoisons, stacks, player, 0f, 4000f, FloorY, new Vector2(2000f, FloorY));
+        return (boss, field);
+    }
 
-        var av = new Zone6State { VariantId = Zone6Table.AviciId };
-        av.RecordWin("XX-5-1");
-        av.RecordWin("XX-5-3");
-        ArenaRules rules = ArenaRules.Build("XX", av, Zone6Role.Final);
-        ArenaRulesApplier.ApplyToFinalBoss(boss, rules);
+    private static void Run(WheelOfBecomingField field, float seconds)
+    {
+        for (float t = 0f; t < seconds; t += Tick) field.Advance(Tick);
+    }
+
+    /// <summary>A hit of <paramref name="damage"/> from behind his back, after his stun has run out.</summary>
+    private static float Struck(CharacterController boss, float damage, bool ranged = false, float fromX = -60f, float fromY = 0f)
+    {
+        HitInfo hit = new HitInfo(damage, Vector2.Zero, 0f);
+        if (ranged) hit = hit.FromRanged("check", "shot");
+        return boss.TakeHit(hit, boss.GlobalPosition + new Vector2(fromX, fromY));
+    }
+
+    private async Task ProbeWheel()
+    {
+        Node2D stage = BuildStage(0f, 4000f);
+        (CharacterController boss, WheelOfBecomingField field) = StageWheel(stage, Array.Empty<string>());
         await Ticks(2);
-
+        float max = boss.MaxHP;
+        var landed = new List<WheelRealm>();
+        field.Wheel.Landed += realm => landed.Add(realm);
         FoeStats.LevelStats level = FoeStats.ForLevel(8);
-        float hp = def.BaseHp * level.HpMult * 0.76f;
-        float damage = def.DamageScale * level.AtkMult - 0.2f;
-        Expect(Near(boss.MaxHP, hp, 0.5f) && Near(boss.CurrentHP, hp, 0.5f),
-            $"māra: with Devour and Delusion sealed his stand-in has {boss.CurrentHP:0}/{boss.MaxHP:0} HP; his row gives {def.BaseHp:0} × {level.HpMult} × 0.76 = {hp:0}");
-        Expect(Near(boss.DamageDealtScale, damage, 1e-3f), $"māra: he deals ×{boss.DamageDealtScale:0.00}; his row gives {def.DamageScale} × {level.AtkMult} − 0.20 = ×{damage:0.00}");
-        GD.Print($"  zone6    māra           at foe level 8 with two powers sealed: {boss.MaxHP:0} HP (of {def.BaseHp * level.HpMult:0}), damage ×{boss.DamageDealtScale:0.00} (of ×{def.DamageScale * level.AtkMult:0.00}) · {rules.FinalBossLine}");
+        Expect(Near(max, BossTable.Mara.BaseHp * level.HpMult, 0.5f), $"wheel: Māra has {max:0} HP; his row gives {BossTable.Mara.BaseHp} × {level.HpMult} — the seals no longer cut it");
+
+        // Hell, as the fight opens: the lock holds, damage is plain.
+        Expect(field.Realm == WheelRealm.Hell && Near(boss.HpFloor, max * WheelTable.LockShare, 0.01f), $"wheel: the fight opens on {field.Realm} with a floor of {boss.HpFloor:0}; Hell, and {max * WheelTable.LockShare:0}");
+        float plain = Struck(boss, 100f);
+        // Each step runs a realm's whole rest and a hair more: it lands just after the turn.
+        Run(field, 16.05f);                                                // the animals, then the humans
+        float interval = Struck(boss, 100f);
+        bool openedLock = boss.HpFloor == 0f;
+        Run(field, 6.05f);                                                 // the gods
+        float throne = Struck(boss, 100f);
+        Run(field, 8.05f);                                                 // the asuras
+        float wrath = boss.CooldownScale;
+        Expect(string.Join(" ", landed) == "Animals Humans Gods Asuras", $"wheel: from Hell it turned {string.Join(" ", landed)}");
+        Expect(Near(plain, 100f, 0.01f) && Near(interval, 150f, 0.01f) && Near(throne, 30f, 0.01f),
+            $"wheel: a 100-point hit dealt {plain:0.#} in Hell, {interval:0.#} in the Interval, {throne:0.#} on the throne; ×1, ×1.5, ×0.3");
+        Expect(openedLock, "wheel: the lock must open in the Interval");
+        Expect(Near(wrath, WheelTable.WrathScale, 1e-4f), $"wheel: in the asuras' realm his cooldowns run ×{wrath}; Wrath is ×{WheelTable.WrathScale}");
+
+        // The hungry ghosts: Devour heals him for what he lands, and his front swallows shots.
+        Run(field, 8.05f);
+        Expect(field.Realm == WheelRealm.HungryGhosts && Near(boss.CooldownScale, 1f, 1e-4f), $"wheel: Wrath must end with its realm ({field.Realm}, cooldowns ×{boss.CooldownScale})");
+        Struck(boss, max * 0.3f);
+        float before = boss.CurrentHP;
+        boss.ReportDamageDealt(12f);
+        float healed = boss.CurrentHP - before;
+        before = boss.CurrentHP;
+        float front = Struck(boss, 50f, ranged: true, fromX: boss.FacingDirection.X * 50f);
+        float swallowedHeal = boss.CurrentHP - before;
+        float back = Struck(boss, 50f, ranged: true, fromX: -boss.FacingDirection.X * 50f);
+        float crown = Struck(boss, 50f, ranged: true, fromX: boss.FacingDirection.X * 50f, fromY: -Units.Px(3f));
+        Expect(Near(healed, max * WheelTable.DevourHealPerHit, 0.05f) && field.DevourHeals == 1,
+            $"wheel: Devour healed {healed:0.#} for a hit he landed; it is {WheelTable.DevourHealPerHit:P1} of {max:0}");
+        Expect(front == 0f && Near(swallowedHeal, max * WheelTable.SwallowHealShare, 0.05f) && back > 0f && crown > 0f && field.Swallowed == 1,
+            $"wheel: a shot at his front must be swallowed and heal {WheelTable.SwallowHealShare:P0} (dealt {front}, healed {swallowedHeal:0.#}); from behind ({back:0}) or onto his crown ({crown:0}) it lands");
+        Run(field, 8.05f);                                                 // Hell again
+        boss.ReportDamageDealt(12f);
+        Expect(field.Realm == WheelRealm.Hell && field.DevourHeals == 1 && Struck(boss, 50f, ranged: true, fromX: boss.FacingDirection.X * 50f) > 0f,
+            "wheel: Devour must end with the hungry ghosts' realm");
+
+        // The lock: a blow far past his HP stops at the floor; the Last Turn passes every realm.
+        Struck(boss, max * 3f);
+        bool locked = !boss.IsDefeated && Near(boss.CurrentHP, max * WheelTable.LockShare, 0.5f);
+        var passed = new List<WheelRealm>();
+        field.Wheel.Passed += realm => passed.Add(realm);
+        field.Advance(Tick);
+        bool spinning = field.Wheel.InLastTurn;
+        Struck(boss, max);
+        bool heldInSpin = !boss.IsDefeated;
+        float spun = 0f;
+        for (; spun < 10f && field.Wheel.InLastTurn; spun += Tick) field.Advance(Tick);
+        Expect(locked && spinning && heldInSpin, $"wheel: outside the Interval the lock must hold at {max * WheelTable.LockShare:0} HP (HP {boss.CurrentHP:0}) and start the Last Turn ({spinning})");
+        Expect(string.Join(" ", passed) == "Animals Gods Asuras HungryGhosts Hell" && field.Realm == WheelRealm.Humans && field.Wheel.InInterval
+               && Near(spun, 5 * WheelTable.LastTurnStepSeconds, 0.05f),
+            $"wheel: the Last Turn from Hell must pass all five realms in {5 * WheelTable.LastTurnStepSeconds:0.0} s and open the Interval ({string.Join(" ", passed)} in {spun:0.00} s → {field.Realm})");
+        Struck(boss, max);
+        Expect(boss.IsDefeated && field.Liberated && field.Wheel.Stopped && field.Realm == WheelRealm.Humans,
+            "wheel: struck in the Interval he must fall, and the wheel stop on the human realm");
+        GD.Print($"  zone6    the wheel      on the stand-in kit: a 100-point hit deals {plain:0} in Hell · {interval:0} in the Interval · {throne:0} on the throne · Wrath ×{wrath:0.0} · Devour +{healed:0} a hit, a swallowed shot +{swallowedHeal:0} · the lock at {max * WheelTable.LockShare:0} HP · the Last Turn {spun:0.0} s · liberated");
+        await Strike(stage);
+
+        // All five sealed: he stands in the Interval the whole fight; the lock never holds.
+        stage = BuildStage(0f, 4000f);
+        (boss, field) = StageWheel(stage, new[] { "greed", "anger", "delusion", "pride", "doubt" });
+        await Ticks(2);
+        int turns = 0;
+        field.Wheel.Landed += _ => turns++;
+        Run(field, 40f);
+        float open = Struck(boss, 100f);
+        Expect(field.Realm == WheelRealm.Humans && turns == 0 && boss.HpFloor == 0f && Near(open, 150f, 0.01f),
+            $"wheel: with all five sealed he must stand in the Interval ({field.Realm}, {turns} turn(s), floor {boss.HpFloor:0}, a 100-point hit dealt {open:0})");
+        await Strike(stage);
+    }
+
+    /// <summary>The Tempter's Offering: when the fighter in play first falls below 30% HP a bowl
+    /// is set on the throne; taking it heals to full and names the poison that enters.</summary>
+    private async Task ProbeOffering()
+    {
+        Node2D stage = BuildStage(0f, 4000f);
+        CharacterController player = Fighter(stage, PlayerScene, new Vector2(1200f, FloorY - 32f), out _);
+        var stacks = new Dictionary<string, int> { ["anger"] = 1, ["pride"] = 3 };
+        (CharacterController boss, WheelOfBecomingField field) = StageWheel(stage, Array.Empty<string>(), id => stacks.GetValueOrDefault(id), () => player);
+        string taken = null;
+        field.OfferingTaken += poison => taken = poison;
+        await Ticks(2);
+        Run(field, 1f);
+        Expect(field.Bowl == null && !field.Offered, "offering: no bowl while the fighter is above 30% HP");
+        player.TakeHit(new HitInfo(player.MaxHP * 0.75f, Vector2.Zero, 0f), player.GlobalPosition + new Vector2(50f, 0f));
+        Run(field, Tick);
+        OfferingBowl bowl = field.Bowl;
+        Expect(bowl != null && bowl.PoisonId == "anger" && bowl.Price.Contains("Anger"),
+            $"offering: below 30% HP a bowl must offer the poison carried most under its cap — Anger, not capped Pride ({bowl?.PoisonId}, '{bowl?.Price}')");
+        bowl?.TakeBy(player);
+        Expect(taken == "anger" && Near(player.CurrentHP, player.MaxHP, 0.01f), $"offering: taking the bowl must heal to full ({player.CurrentHP:0}/{player.MaxHP:0}) and put Anger in ({taken})");
+        player.TakeHit(new HitInfo(player.MaxHP * 0.8f, Vector2.Zero, 0f), player.GlobalPosition + new Vector2(50f, 0f));
+        Run(field, 1f);
+        Expect(field.Bowl == null, "offering: the bowl comes once a fight");
+        string offeredNone = WheelOfBecomingField.OfferingPoisonFor(_ => 0);
+        string offeredAllCapped = WheelOfBecomingField.OfferingPoisonFor(_ => Zone6Table.SealStackCap);
+        Expect(offeredNone == WheelTable.OfferingDefaultPoison && offeredAllCapped == null,
+            $"offering: a fighter who carries nothing must be offered Greed ({offeredNone}); one capped in all five, nothing ({offeredAllCapped})");
+        GD.Print($"  zone6    the offering   below 30% HP the bowl offers Anger (Pride capped) · taken: healed to full, Anger enters · once a fight");
         await Strike(stage);
     }
 

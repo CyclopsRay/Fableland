@@ -187,6 +187,36 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A blow of several hits against the player: only the last may shove (v0.12.3, Māra's Claw Rake)
+- **Symptom:** a two-swipe rake dealt 9.6 damage, not 19.2. The second swipe landed 0.15 s
+  after the first and did nothing. Found by a mutant that shoves on every swipe; the boss
+  check catches it.
+- **Rule:** in a multi-hit blow aimed at the player's side, give knock-back to the last hit
+  only. A hit with no knock-back grants no grace, so every hit of the blow lands.
+- **Why:** a Player-side `TakeHit` arms 0.8 s of i-frames whenever the hit's knock-back is
+  non-zero.
+- **Not changed:** the Asura's Six-Arm Flurry (v0.12.1) shoves on every arm, so only its first
+  arm can hurt a player. Its check counts arms, not damage.
+
+### A kit whose state the arena pushes must start with no power (v0.12.3, Māra)
+- **Symptom:** in the boss check, Māra's rake showed a doubled tell, and his noose missed a
+  player 9 m in front of him.
+- **Cause:** his realm defaulted to Hell, the realm the wheel opens on. A body fielded without
+  the wheel (as the boss check fields it) therefore fought under Doubt for good: half his
+  strikes went to the mirrored side.
+- **Rule:** a kit told its state by the fight (`IWheelFighter`) starts in the neutral state
+  (the human realm). The wheel sets the opening realm itself when it begins.
+
+### A press is read before the physics tick that turns the body (v0.12.3, Māra; designed around)
+- **The order.** A brain rule does `FaceTarget(pad); pad.Tap(...)` in `_Process`, and the body
+  reads the press in that same process step. `FaceByHint`, which turns the body to the pad's
+  facing, runs in the next physics tick. A kit that fixes a direction at the press (a tell's
+  side) would use the old facing.
+- **Rule:** take `Controls.FacingHint` at the press.
+- **The checks cannot see this.** A mutant without the rule survives the boss check: at the
+  checks' 8× physics rate, the ticks that turn the body run before the frame's process step
+  reads the press.
+
 ### A button tapped on a pad is read on the body's process frame — wait for its effect, not for ticks (v0.12.1, boss check)
 - **Symptom:** "Skill2 did not start the Undertow" on one run in three: the check tapped the
   Ferryman's pad and looked two physics ticks later. Skills are read in `_Process`; at the

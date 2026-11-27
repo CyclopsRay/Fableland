@@ -2,16 +2,18 @@
 
 Written 2026-11-27, at the end of a long multi-agent session (v0.11.1 → v0.11.8); updated
 the same day for **v0.12.0** (zone 6 as a stage, realm laws), **v0.12.1** (the first two
-zone-6 kits) and **v0.12.2** (Māra's design; the dark leader settled). **Replace this file at every
-hand-off:** it describes *now*; `Migration.md` §0 describes history.
+zone-6 kits), **v0.12.2** (Māra's design; the dark leader settled) and **v0.12.3** (Māra built:
+his wheel and his kit, art in placeholder). **Replace this file at every hand-off:** it
+describes *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.2**, eleven commits on top of
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.3**, twelve commits on top of
   v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
-- `main` was fast-forwarded to this commit (v0.12.2) on 2026-11-27, **locally, not pushed**.
+- `main` was fast-forwarded to v0.12.2 (`1350e9d`) on 2026-11-27, **locally, not pushed**; it
+  is one commit behind the branch until the owner says to fast-forward again.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.2, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.3, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -45,19 +47,20 @@ hand-off:** it describes *now*; `Migration.md` §0 describes history.
 | 0.11.8 | `9f97e87` | This hand-off | — |
 | 0.12.0 | `1490004` | **Zone 6 is a stage that rotates; realms have laws.** Two variants — the Void Frontier (gravity ladder, the Unwritten's Styx Tide) and Avīci (the five poisons' seals, Māra). Gates are mini-bosses whose defeat the run survives. Wulin's Qinggong. One rules record (`ArenaRules`) applied to every body. Twelve boss rows on the stand-in kit. Art direction confirmed (cyanotype / nagtang) | `Docs/Zone6.gdd`, `MapGDD.md` §2.3, §7 |
 | 0.12.1 | `219bfed` | **The Ferryman and the Asura of Wrath on their own kits** (`Zone6BossFighter`; sprites; Undertow, obol toll, Skiff Ram; flurry, Wrath Fire, vajra, Rising Wrath) | `Zone6.gdd` §4.1, §5.1, `FOES.gdd` §8.7 |
-| 0.12.2 | — | **The dark leader is each variant's final boss** (TBD #1 closed by the owner). **Māra's full design, proposed for review:** the Wheel of Becoming, the human realm as the only interval, the last 5 % falling only there, his kit, arena, look and build plan. Docs only | `Docs/Mara.gdd` |
+| 0.12.2 | `1350e9d` | **The dark leader is each variant's final boss** (TBD #1 closed by the owner). **Māra's full design, proposed for review:** the Wheel of Becoming, the human realm as the only interval, the last 5 % falling only there, his kit, arena, look and build plan. Docs only | `Docs/Mara.gdd` |
+| 0.12.3 | — | **Māra built** (`Mara.gdd` steps 1–2, the owner's "先做…占位先"): the **Wheel of Becoming** as his signature (rests, skips, stacks, the realms' modifiers, the lock, the Last Turn, Liberation, the Offering) and **his own kit** (Claw Rake, Noose, Hand of the Wheel, every realm's arrival strike, Doubt's false tells, Delusion's images). Placeholders drawn in code; **art prompts written, not generated** | `Docs/Mara.gdd` §13.4, `Docs/Art/MaraArtPrompts.md` |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.1, all passing (v0.12.2 changed docs only):
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts, all passing; the bold ones were rerun at v0.12.3, the rest are from v0.12.1:
 
 | Check | Scene | Count |
 |---|---|---|
-| Feedback | `Scenes/Feedback/FeedbackCheck.tscn` | 249 |
+| Feedback | `Scenes/Feedback/FeedbackCheck.tscn` | **249** |
 | VFX | `Scenes/Feedback/VfxCheck.tscn` | 1298 |
 | Audio | `Scenes/Feedback/AudioCheck.tscn` | 1108 |
 | Map content | `Scenes/MapCreation/MapContentCheck.tscn` | 1171 |
-| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 177 |
-| Zone 6 (new) | `Scenes/Run/Zone6Check.tscn` | 86 |
-| Run | `Scenes/Run/RunWalkCheck.tscn` (`-- --saves=<copy of the owner's slots>`) | 2005 |
+| Boss | `Scenes/Bosses/BossFightCheck.tscn` | **191** |
+| Zone 6 | `Scenes/Run/Zone6Check.tscn` | **115** |
+| Run | `Scenes/Run/RunWalkCheck.tscn` | **1993** without `--saves`; 2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>` |
 
 **Look and listen without a fight:**
 - `Scenes/Dev/VfxGallery.tscn`
@@ -104,14 +107,22 @@ hand-off:** it describes *now*; `Migration.md` §0 describes history.
 4. **`arena.enter` should report the realm on screen** (TBD #50). *Zone 6's half is done
    (v0.12.0): it reports its variant at the drained lightness.* Left: the tag becomes
    `MapRealm.Of(map)`, so Cloud Court reports `CC` and gets its enamel effects and music.
-6. **Zone 6's kits** (TBD #64). The Ferryman and the Asura of Wrath have their own (v0.12.1:
-   `Scripts/Bosses/Zone6/`, a `Zone6BossFighter` each); the other ten field BOSS PumpKing's
-   kit under their own rows. Next: the other eight guardians and poisons (designs in
-   `Zone6.gdd` §4.1, §5.1; concept art `Z6-VF-2…5`, `Z6-AV-1, 3…5`, no keyed sprites yet), the
-   Unwritten's Borrowed Shapes and Blank Page, and Māra. Build Māra in `Mara.gdd` §13's
-   order (the wheel as a signature on the stand-in first), but only after the owner has
-   answered its §14. Read first: `FOES.gdd`
-   §8.7, `Zone6.gdd` §8–§9, and the v0.12.1 caveats in `KNOWLEDGE.md`.
+6. **Zone 6's kits** (TBD #64).
+   - **Built:** the Ferryman and the Asura of Wrath (v0.12.1) and Māra (v0.12.3), each a
+     `Zone6BossFighter` in `Scripts/Bosses/Zone6/`. The other nine field BOSS PumpKing's kit
+     under their own rows.
+   - **Next:** the other eight guardians and poisons, and the Unwritten's Borrowed Shapes and
+     Blank Page. Their designs are in `Zone6.gdd` §4.1 and §5.1. The concept art is
+     `Z6-VF-2…5` and `Z6-AV-1, 3…5`; there are no keyed sprites yet.
+   - **Māra's step 3:** Fable reviews `Docs/Art/MaraArtPrompts.md`; then generate the art in
+     Tripo; then key the sheets and swap out the placeholders (`MaraFigure`, the backdrop in
+     `WheelOfBecomingField`). Also left: his arena `Z6-AV-F` as a map, his music profile, and
+     the run-over screen naming the dark leader (it still says "defeated the dark leader").
+   - **A known gap, not changed:** the Asura's Six-Arm Flurry shoves on every arm, so the
+     player's post-hit grace lets only its first arm land. See KNOWLEDGE v0.12.3, "A blow of
+     several hits against the player: only the last may shove".
+   - **Read first:** `FOES.gdd` §8.7, `Zone6.gdd` §8–§9, and the v0.12.1 and v0.12.3 caveats
+     in `KNOWLEDGE.md`.
 5. **Nobody has watched or listened to anything.** Play in the real renderer, then tune the data:
    - `FeedbackTable` / `FeelTable`: light hits barely shake; the flash colour.
    - VFX: mark sizes (4–23 px) and ambience; status loops are timid.
@@ -141,8 +152,17 @@ hand-off:** it describes *now*; `Migration.md` §0 describes history.
   - UI sounds use the beach's watercolour medium;
   - memory policy once kits are wired: party-only cache, or a bigger budget.
 - **`seashore_5`** needs a second Level Goal marker before it can serve as a boss arena.
-- **Māra's design** (`Mara.gdd`, v0.12.2): its six questions in §14 — his name, the
-  last-5 % finish, the Offering, what five gates won should buy, the story frame, the numbers.
+- **Māra** (`Mara.gdd`). Built in v0.12.3 as designed, so the six questions in §14 are still
+  his to answer:
+  - his name;
+  - the last-5 % finish;
+  - the Offering;
+  - what five gates won should buy;
+  - the story frame;
+  - the numbers.
+
+  A different answer changes code, not only the document. Play him from the debug page: key 4
+  → Zone 6 → Māra.
 - **Zone 6 (v0.12.0), every call provisional** (`Zone6.gdd` §10): the twelve bosses; the
   defeat rule (25 % floor, unlimited retries —
   #65); every number (#66); the Frontier's core on Starland's sea-level plain until its own

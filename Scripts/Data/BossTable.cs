@@ -79,8 +79,9 @@ public sealed class BossDef
     /// Docs/Zone6.gdd §4–§5 is the authority).</summary>
     public string Concept { get; init; } = "";
 
-    /// <summary>A field attack the fight runs whatever kit the boss fields (Docs/Zone6.gdd):
-    /// "styx_tide" — the Unwritten's floor-sweeping wave. Empty for none.</summary>
+    /// <summary>A field mechanic the fight runs whatever kit the boss fields (Docs/Zone6.gdd):
+    /// "styx_tide" — the Unwritten's floor-sweeping wave; "wheel" — Māra's Wheel of Becoming
+    /// (Docs/Mara.gdd §4). Empty for none.</summary>
     public string Signature { get; init; } = "";
 }
 
@@ -202,9 +203,13 @@ public static class BossTable
         "慢 Pride. A god in the five decays. Heavy Halo, Wilting Garland, Pride's Armour (poise, and a phase that takes 70% less damage).");
     public static readonly BossDef OxHorse = Zone6Boss("z6_ox_horse", "Ox-Head and Horse-Face (牛头马面)", BossRole.Zone6Mini, AV,
         "疑 Doubt. Two wardens. Two Minds (only the real one takes damage; they swap), Chain Hook, Trident Feint.");
-    public static readonly BossDef Mara = Zone6Boss("z6_mara", "Māra Pāpīyas (天魔波旬)", BossRole.Zone6Final, AV,
-        "A black-blue wrathful demon, a crown of five skulls, the Wheel of Life in his claws. Devour, Wrath, Delusion, Iron Throne, Doubt — each warden you beat seals one.",
-        baseHp: 900f);
+    // Avīci's dark leader on his own kit (v0.12.3): the Wheel of Becoming is his signature — it
+    // turns whatever kit stands in — and each warden you beat seals one realm of it (Mara.gdd).
+    public static readonly BossDef Mara = WithKit(Zone6Boss("z6_mara", "Māra Pāpīyas (天魔波旬)", BossRole.Zone6Final, AV,
+        "Lord of the Wheel of Life: black-blue, three eyes, a crown of five skulls; a colossus behind the arena holds the wheel. The realm under his fangs lends him its poison's power — Iron Throne, Wrath, Devour, Doubt, Delusion; only the human realm opens him. Claw Rake, Noose of Craving, Hand of the Wheel.",
+        baseHp: 900f, signature: WheelTable.Signature),
+        "res://Scenes/Bosses/Mara.tscn",
+        new CharacterAmmoDef { CharacterId = "z6_mara", Capacity = 1, ReloadSize = 1, ReloadDelaySec = 0.2f, RepeatReloadWhileMissing = false, BaseAttackIntervalSec = 1.3f, RespawnMode = AmmoRespawnMode.Full });
 
     private static readonly BossDef[] Rows =
     {

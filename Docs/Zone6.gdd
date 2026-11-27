@@ -75,7 +75,7 @@ on each of two (×0.75).
 | A realm's law | yes | yes | only if the row says so, gravity only | — |
 | The Void Frontier's gravity | yes | yes | yes | the thrower's share, at the throw |
 | Avīci's seals | yes — every protagonist | no | no | — |
-| Māra's sealed powers | — | the final boss only | — | — |
+| Māra's sealed powers | — | the final boss only, as realms his wheel skips (v0.12.3) | — | — |
 
 ---
 
@@ -215,15 +215,14 @@ the map.
 
 | Node | Poison | Warden | Seal, per stack | Māra loses |
 |------|--------|--------|-----------------|------------|
-| XX-5-1 | 贪 Greed | **Preta, the Hungry Ghost (饿鬼)** — grey-green, a huge belly, a needle throat. **Gorge** (inhales; swallowed projectiles heal it), **Spew**, **Hungry Grasp** | **Hunger**: reload time +30 % | **Devour** — heals from the damage he deals |
-| XX-5-2 | 嗔 Anger | **Asura of Wrath (修罗)** — three faces, six arms, a tiger skin, a flame aureole. **Six-Arm Flurry**, **Wrath Fire**, **Vajra Throw**, **Rising Wrath** | **Smoulder**: damage taken +15 % | **Wrath** — an enraged phase below half HP |
-| XX-5-3 | 痴 Delusion | **The Boar of Delusion (痴猪)** — a black boar with closed eyes. **Blind Charge** (stuns itself on a wall), **Mirror Herd**, **Mire** (left and right swap) | **Fog**: skill cooldowns +25 % | **Delusion** — mirror images |
-| XX-5-4 | 慢 Pride | **The Fallen Deva (衰天)** — a god in the five decays. **Heavy Halo**, **Wilting Garland**, **Pride's Armour** (poise, and a phase taking 70 % less damage) | **Burden**: move speed −15 % | **Iron Throne** — an invulnerable throne phase |
-| XX-5-5 | 疑 Doubt | **Ox-Head and Horse-Face (牛头马面)** — two wardens. **Two Minds** (only the real one takes damage; they swap), **Chain Hook**, **Trident Feint** | **Hesitation**: attack interval +20 % | **Doubt** — a curse that makes some of your casts fizzle |
+| XX-5-1 | 贪 Greed | **Preta, the Hungry Ghost (饿鬼)** — grey-green, a huge belly, a needle throat. **Gorge** (inhales; swallowed projectiles heal it), **Spew**, **Hungry Grasp** | **Hunger**: reload time +30 % | **Devour** — in the hungry ghosts' realm each hit he lands heals him; shots at his front are swallowed |
+| XX-5-2 | 嗔 Anger | **Asura of Wrath (修罗)** — three faces, six arms, a tiger skin, a flame aureole. **Six-Arm Flurry**, **Wrath Fire**, **Vajra Throw**, **Rising Wrath** | **Smoulder**: damage taken +15 % | **Wrath** — in the asuras' realm his cooldowns and attack interval ×0.6 |
+| XX-5-3 | 痴 Delusion | **The Boar of Delusion (痴猪)** — a black boar with closed eyes. **Blind Charge** (stuns itself on a wall), **Mirror Herd**, **Mire** (left and right swap) | **Fog**: skill cooldowns +25 % | **Delusion** — in the animals' realm two mirror images copy his attacks |
+| XX-5-4 | 慢 Pride | **The Fallen Deva (衰天)** — a god in the five decays. **Heavy Halo**, **Wilting Garland**, **Pride's Armour** (poise, and a phase taking 70 % less damage) | **Burden**: move speed −15 % | **Iron Throne** — in the gods' realm he holds the throne and takes 70 % less damage |
+| XX-5-5 | 疑 Doubt | **Ox-Head and Horse-Face (牛头马面)** — two wardens. **Two Minds** (only the real one takes damage; they swap), **Chain Hook**, **Trident Feint** | **Hesitation**: attack interval +20 % | **Doubt** — in hell's realm every attack shows a false tell beside the true one |
 
-The "Māra loses" column is the v0.12.0 design, which the stand-in still follows. The full
-design of the five powers, each now the realm of its gate on Māra's wheel, is proposed in
-`Mara.gdd` §5 (v0.12.2). Three of them change there:
+Since v0.12.3, each power is the realm of its gate on Māra's wheel (`Mara.gdd` §5): a gate won
+seals the realm, and the wheel skips it. Three powers changed from the v0.12.0 design:
 - **Iron Throne:** 70 % less damage instead of invulnerable;
 - **Wrath:** belongs to the asuras' realm, at any HP, instead of below half HP;
 - **Doubt:** false tells instead of casts that fizzle.
@@ -255,17 +254,17 @@ is for a player who dodged the throw.)
 *A black-blue wrathful demon with a crown of five skulls, holding the Wheel of Life in his
 claws.* His five powers are the five above, and each gate you win **seals** one.
 
-**His full design is `Docs/Mara.gdd`** (proposed in v0.12.2, for the owner's review):
+**His full design is `Docs/Mara.gdd`** (proposed in v0.12.2; steps 1 and 2 built in v0.12.3):
 - **The Wheel of Becoming.** The realm under his fangs rules the fight. Five realms carry the
   five poisons' powers; the human realm is the only interval, where he takes ×1.5 damage.
 - **What a gate does to the wheel.** A gate won seals its realm, and the wheel skips it. Each
   stack of a poison in you holds its realm 1 s longer.
 - **The finish.** His last 5 % falls only in the human realm.
 
-**Until his kit is built,** the stand-in loses **12 % of its HP and 10 points of damage per
-sealed power** (`MaraHpPerSeal`, `MaraDamagePerSeal`), applied after his row. At foe level 8
-with two sealed, that is 3420 of 4500 HP, and damage ×1.60 of ×1.80. Five sealed leaves 40 %.
-This rule retires when the wheel lands (`Mara.gdd` §13, step 1).
+**Built (v0.12.3):** the wheel is his signature (`Signature = "wheel"`, it turns whatever kit
+stands in), and he fights on his own kit (`Scripts/Bosses/Zone6/Mara.cs`), art in placeholder.
+The v0.12.0 stand-in rule — 12 % of his HP and 10 points of damage per sealed power — is
+retired: he keeps his row's 4500 HP at foe level 8, and a seal is a realm his wheel skips.
 
 ---
 
@@ -273,7 +272,8 @@ This rule retires when the wheel lands (`Mara.gdd` §13, step 1).
 
 - **The HUD** lists the place's rules under the HP bar for the whole fight — the realm's law;
   `The Void Frontier (虚无边境) · gravity ×0.80`; `Sealed in you: Hunger ×1, Burden ×2`;
-  `Sealed in Māra: Wrath, Doubt` — and says the first as a toast when the fight opens. After a
+  `Sealed in Māra: Wrath, Doubt — his wheel skips their realms` — and says the first as a
+  toast when the fight opens. After a
   zone-6 result the toast says what changed ("gravity ×0.88 (was ×1.10)", "贪 Greed enters you —
   sealed with Hunger ×1"), and the list gains where zone 6 now stands.
 - **The map's info panel** shows zone 6's status line once the run has crossed into it or
@@ -365,7 +365,9 @@ TBD #33 continues); whether the VOID treatment's looks (§6) should move toward 
 - **Rules** (`ArenaRules.Build(world, zone6, role)`): computed by `RunState.BeginAdventure`
   for every combat node into `AdventureContext.Rules`; `ArenaRulesApplier` puts it on bodies
   (`GameManager` applies it to every `CharacterController` and `BaseFoe` that enters its tree,
-  through `SceneTree.NodeAdded`, and to the final boss after its row: `ApplyBossRules`).
+  through `SceneTree.NodeAdded`). What is sealed in Māra and the party's stacks of each poison
+  reach his wheel through the rules too (`MaraSealedPoisons`, `SealStacks`); the Tempter's
+  Offering makes a copy with one more stack for that fight (`WithFightSeal`).
 - **Body modifiers** (`CharacterController`, each source-keyed and multiplied): gravity scale,
   extra jumps, jump-height scale, move-speed scale, skill-cooldown scale (`ScaleCooldown` — the
   one helper kits call where they start a cooldown, and nowhere else), reload scale and
@@ -392,7 +394,7 @@ TBD #33 continues); whether the VOID treatment's looks (§6) should move toward 
 |------|---------------|---------|
 | The twelve bosses' kits | **the Ferryman and the Asura of Wrath on their own (v0.12.1)**; the other ten on BOSS PumpKing's kit under their own rows | the other ten |
 | The Unwritten | the stand-in + the real **Styx Tide / Rising Tide** | Borrowed Shapes, Blank Page; its arena (Z6-VF-F) |
-| Māra | the stand-in, −12 % HP and −10 damage per sealed power | `Mara.gdd` §13, in order: the Wheel of Becoming as a signature on the stand-in; then his kit; then the art |
+| Māra | **the Wheel of Becoming and his own kit (v0.12.3)**, drawn as placeholders | the art (`Mara.gdd` §13 step 3; prompts in `Docs/Art/MaraArtPrompts.md`), his arena `Z6-AV-F` as a map, his music |
 | Zone-6 arenas | run worlds' boss arenas, VOID-touched per variant; the Frontier's core on Starland's sea-level plain | each variant's own maps and tile kit (cyanotype, nagtang) |
 | Meng Po's bridge, the Weigher's pans | — | arenas of their own |
 | HUD seals | text lines | icons (TBD #67) |
@@ -431,6 +433,7 @@ Every entry is **provisional** — a first pass to be played and confirmed by th
 | 2026-11-27 | The Ferryman holds his perch on foot (no jumping); the Ram rides level along the floor he stands on | First pass; a skiff that leaves the floor is for his own arena |
 | 2026-11-27 | **The owner:** the dark leader is each variant's own final boss. The Void Frontier's is the Unwritten; Avīci's is a different one. **Closes TBD #1** | "无名者应该是虚无的最终首领。地狱也应该有一个不同的黑暗首领" |
 | 2026-11-27 | Avīci's dark leader stays **Māra**, with a full design proposed in `Mara.gdd` (v0.12.2): the Wheel of Becoming, the human realm as the only interval, and the last 5 % falling only there | Yama is a Dharma protector in Tibetan Buddhism; Māra is the tradition's own antagonist (`Mara.gdd` §2.3) |
+| 2026-11-27 | **The owner:** build Māra now, with placeholder art, and write the art prompts. v0.12.3 builds `Mara.gdd` steps 1–2 as designed; the stand-in's per-seal cut retires; the §14 questions stay open | "先做 不做美术就好了 占位先 可以把prompt写了" |
 
 ---
 
@@ -439,8 +442,8 @@ Every entry is **provisional** — a first pass to be played and confirmed by th
 In the registry (`Docs/Instructions/10-DESIGN.md` §6): **#1** (closed: each variant's final
 boss is its dark leader; Māra's open questions are in `Mara.gdd` §14), **#33** (zone 6's own
 maps), **#49** (zone-6 half closed), and new: **#62** laws
-for the other seven realms · **#63** rotation as meta-progression · **#64** the ten other zone-6
-kits and both final bosses' full kits · **#65** whether a mini-boss defeat should cost more
+for the other seven realms · **#63** rotation as meta-progression · **#64** the zone-6 kits still on the
+stand-in (Māra's is built, v0.12.3; the Unwritten's is not) · **#65** whether a mini-boss defeat should cost more
 than the day (an item, a shelter's blessing) · **#66** the seal and ladder numbers, played ·
 **#67** seal icons on the HUD and the map · **#68** whether a seal or the gravity should show
 on the fighters themselves.

@@ -62,6 +62,7 @@ public partial class BossFightCheck : Node
             await ProbeTheFight();
             await ProbeTheFerryman();
             await ProbeTheAsura();
+            await ProbeMara();
         }
         catch (Exception e)
         {
@@ -803,6 +804,208 @@ public partial class BossFightCheck : Node
         Expect(hitsOut == 1 && hitsBack == 1, $"asura: the vajra struck a player 4 m away {hitsOut} time(s) going and {hitsBack} coming back; once each way");
         Expect(player.CurrentHP < hp0, "asura: the vajra's blows did no damage");
         GD.Print($"  boss     asura          the vajra flies {AsuraWrath.VajraReachM} m and back: {hitsOut} blow going, {hitsBack} coming back, {hp0 - player.CurrentHP:0} damage");
+        await Strike(stage);
+    }
+
+    /// <summary>
+    /// Māra (Mara.gdd §5–§6) on his own kit, the wheel's realms pushed by hand as the wheel
+    /// would push them: Claw Rake's two swipes after its tell, three under Wrath, every one
+    /// landing; the Noose yanks and bites a fighter on the floor and passes under one a metre up;
+    /// the Hand slams where the player stood and throws them up; Doubt doubles a tell and a
+    /// Hand, only one of them real; each realm's arrival — the leap to the throne and back, Wrath
+    /// Fire, the Gorge's pull and bite, the Chain Hooks, the Blind Charge and its two images,
+    /// which pop without hurting him and go when the realm does.
+    /// </summary>
+    private async Task ProbeMara()
+    {
+        BossDef def = BossTable.Mara;
+        Node2D stage = BuildStage(0f, 8000f);
+        (CharacterController boss, VirtualPad pad) = StageAsleep(stage, def, new Vector2(4000f, FloorY - 32f));
+        Expect(boss is Mara && def.ScenePath.EndsWith("Mara.tscn") && def.Signature == WheelTable.Signature, "māra: the row does not field Māra's own kit and his wheel");
+        var mara = boss as Mara;
+        if (mara == null) { await Strike(stage); return; }
+        CharacterController player = StillPlayer(stage, 4000f - Units.Px(3f));
+        await Ticks(20);
+        float scale = boss.DamageDealtScale;
+
+        // Claw Rake: a tell, then two swipes; only the last shoves, so both land.
+        float hp0 = player.CurrentHP;
+        pad.Facing = -1f;
+        pad.Tap(ControlAction.Attack);
+        for (int i = 0; i < 30 && !mara.TellShowing; i++) await Ticks(1);
+        bool told = mara.TellShowing && !mara.TellDoubled;
+        await Ticks(Mathf.CeilToInt((Mara.ClawTell + Mara.ClawGap) * 60f) + 6);
+        float raked = hp0 - player.CurrentHP;
+        Expect(told && mara.LastSwipes == Mara.ClawSwipes && Mathf.IsEqualApprox(raked, Mara.ClawSwipes * Mara.ClawDamage * scale, 0.05f),
+            $"māra: Claw Rake must show a single tell, then {Mara.ClawSwipes} swipes that both land ({mara.LastSwipes} swipe(s), {raked:0.#} damage; {Mara.ClawSwipes} × {Mara.ClawDamage} × {scale:0.00})");
+        // Under Wrath, three.
+        mara.RealmLanded(WheelRealm.Asuras, arrival: false);
+        await Ticks(Mathf.CeilToInt(boss.AttackIntervalSeconds * 60f) + 40);
+        pad.Tap(ControlAction.Attack);
+        await Ticks(Mathf.CeilToInt((Mara.ClawTell + 2f * Mara.ClawGap) * 60f) + 10);
+        Expect(mara.LastSwipes == Mara.WrathClawSwipes, $"māra: under Wrath a rake must be {Mara.WrathClawSwipes} swipes, not {mara.LastSwipes}");
+        GD.Print($"  boss     māra           Claw Rake: a {Mara.ClawTell} s tell, {Mara.ClawSwipes} swipes for {raked:0.#} at level 1 (both land: only the last shoves) · {mara.LastSwipes} under Wrath");
+        await Strike(stage);
+
+        // The Noose: on the floor it catches, yanks and bites; a metre up it passes under.
+        stage = BuildStage(0f, 8000f);
+        (boss, pad) = StageAsleep(stage, def, new Vector2(4000f, FloorY - 32f));
+        mara = (Mara)boss;
+        player = StillPlayer(stage, 4000f - Units.Px(9f));
+        AddBox(stage, new Rect2(4000f + Units.Px(8f), FloorY - Units.Px(1f), Units.Px(2f), Units.Px(1f)));
+        CharacterController above = StillPlayer(stage, 4000f + Units.Px(9f));
+        above.GlobalPosition = new Vector2(4000f + Units.Px(9f), FloorY - Units.Px(1f) - 32f);
+        await Ticks(20);
+        hp0 = player.CurrentHP;
+        float aboveHp = above.CurrentHP;
+        float x0 = player.GlobalPosition.X;
+        pad.Facing = -1f;
+        pad.Tap(ControlAction.Skill1);
+        bool yanked = false;
+        for (int i = 0; i < 120 && player.CurrentHP >= hp0 - 0.01f; i++)
+        {
+            await Ticks(1);
+            yanked |= mara.Yanking;
+        }
+        float pulled = (player.GlobalPosition.X - x0) / Units.PixelsPerMeter;
+        Expect(yanked && pulled > 4f && Mathf.IsEqualApprox(hp0 - player.CurrentHP, Mara.NooseDamage * scale, 0.05f),
+            $"māra: the Noose must catch a fighter on the floor 9 m away, yank them to his claws and bite for {Mara.NooseDamage * scale:0.#} (yanked {yanked}, pulled {pulled:0.0} m, {hp0 - player.CurrentHP:0.#} damage)");
+        // The other way, at the fighter a metre up: the noose passes under.
+        await Ticks(Mathf.CeilToInt(Mara.NooseCooldown * 60f) + 10);
+        pad.Facing = 1f;
+        pad.Tap(ControlAction.Skill1);
+        MaraNoose thrown = null;
+        for (int i = 0; i < 60 && thrown == null; i++)
+        {
+            await Ticks(1);
+            foreach (Node child in stage.GetChildren()) if (child is MaraNoose noose && noose.Position.X > 4000f) thrown = noose;
+        }
+        for (int i = 0; i < 90 && thrown != null && GodotObject.IsInstanceValid(thrown); i++) await Ticks(1);
+        Expect(thrown != null && Mathf.IsEqualApprox(above.CurrentHP, aboveHp) && !mara.Yanking, $"māra: a fighter a metre up must clear the Noose ({aboveHp:0} → {above.CurrentHP:0})");
+        GD.Print($"  boss     māra           the Noose catches a fighter 9 m away on the floor, drags them {pulled:0.0} m in {Mara.NooseYankSeconds} s and bites for {hp0 - player.CurrentHP:0.#}; a metre up it passes under");
+        await Strike(stage);
+
+        // The Hand of the Wheel: where the player stood, after a 1 s shadow — a slam and a throw up.
+        stage = BuildStage(0f, 8000f);
+        (boss, pad) = StageAsleep(stage, def, new Vector2(4000f, FloorY - 32f));
+        mara = (Mara)boss;
+        player = StillPlayer(stage, 4000f - Units.Px(7f));
+        await Ticks(20);
+        mara.RealmLanded(WheelRealm.Animals, arrival: false);
+        mara.RealmLanded(WheelRealm.Hell, arrival: false);     // Hell, as the fight opens: Doubt holds
+        mara.RealmLanded(WheelRealm.Asuras, arrival: false);   // …and then not: one plain Hand
+        hp0 = player.CurrentHP;
+        pad.Tap(ControlAction.Skill2);
+        MaraStrike hand = null;
+        for (int i = 0; i < 30 && hand == null; i++)
+        {
+            await Ticks(1);
+            foreach (Node child in stage.GetChildren()) if (child is MaraStrike { Kind: MaraStrikeKind.Hand } strike) hand = strike;
+        }
+        bool offWheel = mara.HandOffWheel;
+        float handX = hand != null ? hand.GlobalPosition.X : 0f;
+        float knockUp = 0f;
+        for (int i = 0; i < 120 && player.CurrentHP >= hp0 - 0.01f; i++)
+        {
+            await Ticks(1);
+            knockUp = Mathf.Min(knockUp, player.Velocity.Y);
+        }
+        for (int i = 0; i < 10; i++) { await Ticks(1); knockUp = Mathf.Min(knockUp, player.Velocity.Y); }
+        Expect(hand != null && offWheel && Mathf.Abs(handX - (4000f - Units.Px(7f))) < 2f && Mathf.IsEqualApprox(hp0 - player.CurrentHP, Mara.HandDamage * scale, 0.05f)
+               && knockUp < -Units.Px(8f),
+            $"māra: the Hand must fall where the player stood, hold the wheel, deal {Mara.HandDamage * scale:0.#} and throw them up (dealt {hp0 - player.CurrentHP:0.#}, up {-knockUp / Units.PixelsPerMeter:0.0} m/s)");
+
+        // Doubt: a tell and a Hand each come in a pair; only one of the pair is real.
+        mara.RealmLanded(WheelRealm.Hell, arrival: false);
+        await Ticks(Mathf.CeilToInt(boss.AttackIntervalSeconds * 60f) + 30);
+        pad.Facing = -1f;
+        pad.Tap(ControlAction.Attack);
+        for (int i = 0; i < 30 && !mara.TellShowing; i++) await Ticks(1);
+        bool doubledTell = mara.TellShowing && mara.TellDoubled;
+        await Ticks(60);
+        for (int i = 0; i < 900 && mara.ESkillCooldown.Remaining > 0f; i++) await Ticks(1);   // the first Hand's cooldown
+        pad.Tap(ControlAction.Skill2);
+        var pair = new List<MaraStrike>();
+        for (int i = 0; i < 30 && pair.Count < 2; i++)
+        {
+            await Ticks(1);
+            pair.Clear();
+            foreach (Node child in stage.GetChildren()) if (child is MaraStrike { Kind: MaraStrikeKind.Hand } strike && !strike.Struck) pair.Add(strike);
+        }
+        int real = pair.FindAll(strike => strike.Real).Count;
+        MaraStrike falseHand = pair.Find(strike => !strike.Real);
+        await Ticks(Mathf.CeilToInt(Mara.HandTell * 60f) + 6);
+        Expect(doubledTell && pair.Count == 2 && real == 1 && (falseHand == null || !GodotObject.IsInstanceValid(falseHand)),
+            $"māra: under Doubt a tell must come doubled ({doubledTell}) and the Hand in a pair, one real ({pair.Count} hands, {real} real), the false one gone before the slam");
+        GD.Print($"  boss     māra           the Hand of the Wheel falls where the player stood after {Mara.HandTell} s: {Mara.HandDamage * scale:0.#} and a throw up at {-knockUp / Units.PixelsPerMeter:0.0} m/s · under Doubt a tell and a Hand come in pairs, one real");
+        await Strike(stage);
+
+        // The realms' arrivals.
+        stage = BuildStage(0f, 8000f);
+        var perch = new Vector2(4000f, FloorY - 32f);
+        (boss, pad) = StageAsleep(stage, def, perch);
+        mara = (Mara)boss;
+        player = StillPlayer(stage, 4000f - Units.Px(8f));
+        boss.GlobalPosition = perch + new Vector2(Units.Px(6f), 0f);
+        await Ticks(20);
+        Vector2 floorSpot = boss.GlobalPosition;
+        mara.RealmLanded(WheelRealm.Gods, arrival: true);
+        bool leapt = mara.Leaping;
+        await Ticks(Mathf.CeilToInt(Mara.ThroneLeapSeconds * 60f) + 8);
+        bool throned = mara.OnThrone && boss.GlobalPosition.DistanceTo(perch) < 6f;
+        mara.RealmLanded(WheelRealm.Asuras, arrival: true);
+        int waves = 0;
+        foreach (Node child in stage.GetChildren()) if (child is WrathFireWave) waves++;
+        await Ticks(Mathf.CeilToInt(Mara.ThroneLeapSeconds * 60f) + 8);
+        bool down = !mara.OnThrone && boss.GlobalPosition.DistanceTo(floorSpot) < 6f;
+        Expect(leapt && throned && down, $"māra: the gods' realm must take him onto the throne (his perch) and the next realm back down (leapt {leapt}, throned {throned}, back {down})");
+        Expect(waves == 2, $"māra: the asuras' arrival must be Wrath Fire, two waves ({waves})");
+
+        // Gorge: a player 8 m off is pulled in and bitten.
+        await Ticks(90);
+        player.GlobalPosition = new Vector2(boss.GlobalPosition.X - Units.Px(8f), FloorY - 32f);
+        await Ticks(5);
+        hp0 = player.CurrentHP;
+        x0 = player.GlobalPosition.X;
+        mara.RealmLanded(WheelRealm.HungryGhosts, arrival: true);
+        bool gorging = mara.Gorging;
+        await Ticks(Mathf.CeilToInt(Mara.GorgeSeconds * 60f) + 6);
+        float drawn = (player.GlobalPosition.X - x0) / Units.PixelsPerMeter;
+        Expect(gorging && drawn > 5f && player.CurrentHP < hp0, $"māra: the Gorge must pull a player 8 m off toward him and bite (pulled {drawn:0.0} m, HP {hp0:0} → {player.CurrentHP:0})");
+
+        // Chain Hooks: two, one real.
+        await Ticks(60);
+        mara.RealmLanded(WheelRealm.Hell, arrival: true);
+        var hooks = new List<ChainHook>();
+        foreach (Node child in stage.GetChildren()) if (child is ChainHook hook) hooks.Add(hook);
+        Expect(hooks.Count == 2 && hooks.FindAll(hook => hook.Real).Count == 1, $"māra: hell's arrival must be two Chain Hooks, one real ({hooks.Count}, {hooks.FindAll(hook => hook.Real).Count} real)");
+
+        // Blind Charge: he charges with two images; they stay, pop without hurting him, and go with the realm.
+        await Ticks(90);
+        mara.RealmLanded(WheelRealm.Animals, arrival: true);
+        bool charging = mara.Charging;
+        float chargeSpeed = 0f;
+        for (int i = 0; i < 30; i++)
+        {
+            await Ticks(1);
+            chargeSpeed = Mathf.Max(chargeSpeed, Mathf.Abs(boss.Velocity.X));
+        }
+        for (int i = 0; i < 120 && mara.Charging; i++) await Ticks(1);
+        int images = 0;
+        foreach (MaraImage image in mara.Images) if (GodotObject.IsInstanceValid(image) && !image.Popped) images++;
+        MaraImage first = mara.Images.Count > 0 ? mara.Images[0] : null;
+        float bossHp = boss.CurrentHP;
+        float onImage = first != null ? first.TakeHit(new HitInfo(500f), first.GlobalPosition) : -1f;
+        bool popped = first != null && first.Popped;
+        Expect(charging && Mathf.Abs(chargeSpeed / Units.PixelsPerMeter - Mara.ChargeSpeedMps) <= 1.5f && images == Mara.ImageCount,
+            $"māra: the animals' arrival must be a Blind Charge at {Mara.ChargeSpeedMps} m/s ({chargeSpeed / Units.PixelsPerMeter:0.0}) leaving {Mara.ImageCount} images ({images})");
+        Expect(onImage == 0f && popped && Mathf.IsEqualApprox(boss.CurrentHP, bossHp), $"māra: a blow on an image must pop it and hurt nobody (dealt {onImage}, popped {popped})");
+        await Ticks(Mathf.CeilToInt(Mara.ImageReform * 60f) + 10);
+        bool reformed = first != null && GodotObject.IsInstanceValid(first) && !first.Popped;
+        mara.RealmLanded(WheelRealm.Humans, arrival: true);
+        await Ticks(2);
+        Expect(reformed && mara.Images.Count == 0, $"māra: a popped image must reform after {Mara.ImageReform} s ({reformed}) and the images go with the animals' realm ({mara.Images.Count} left)");
+        GD.Print($"  boss     māra           arrivals: onto the throne and back · Wrath Fire ×{waves} · the Gorge pulls {drawn:0.0} m and bites · {hooks.Count} Chain Hooks, one real · a Blind Charge at {chargeSpeed / Units.PixelsPerMeter:0.0} m/s with {images} images that pop and reform");
         await Strike(stage);
     }
 

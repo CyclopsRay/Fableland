@@ -39,6 +39,13 @@ public abstract class Mission
     public virtual float SecondaryValue => 0f;
     public virtual float SecondaryMax => 1f;
     public virtual string SecondaryLabel => "";
+    /// <summary>Share of the secondary bar drawn in gold — a part of it only a rule of the fight
+    /// can open (Māra's lock, Docs/Mara.gdd §7.2). 0 for none.</summary>
+    public virtual float SecondaryNotch => 0f;
+
+    /// <summary>A line the HUD should toast now — a boss's signature saying what changed (a
+    /// turn of Māra's wheel) — or null. Draining: GameManager polls it every frame.</summary>
+    public virtual string ConsumeAnnouncement() => null;
 
     // ── Signals GameManager acts on ──────────────────────────────────────────────────
 

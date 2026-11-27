@@ -44,9 +44,13 @@ public sealed class BossMission : Mission
     private Vector2 _bossPosition;           // where the boss last stood — where it fell
     private string _bossCueId = "";          // the boss's content id, the tag of its flow cues
     private StyxTideSchedule _styx;          // the Unwritten's signature (Docs/Zone6.gdd §4.2)
+    private WheelOfBecomingField _wheel;     // Māra's signature (Docs/Mara.gdd §4)
 
     /// <summary>The Styx Tide's schedule when this boss runs it (read-only: checks).</summary>
     public StyxTideSchedule StyxTide => _styx;
+
+    /// <summary>The Wheel of Becoming when this boss turns it (read-only: checks).</summary>
+    public WheelOfBecomingField Wheel => _wheel;
 
     public override void Setup(GameManager arena, int nodeLevel, DetRandom rng)
     {
@@ -110,15 +114,14 @@ public sealed class BossMission : Mission
         body.GlobalPosition = perches[home];
         body.SetSpawnPoint(perches[home]);                    // _Ready latched the scene origin
         fighter.BeginFight(_def, _arena.FoeLevel, new BossArena(perches, home));   // AFTER AddChild (caveat)
-        // What the run took from this boss (Māra's sealed powers) comes off its row now.
-        _arena.ApplyBossRules(body);
 
         _boss = body;
         _fighter = fighter;
         _alreadyRecruited = _def.Recruits && RunState.Instance?.FindProtagonist(_def.ProtagonistId) != null;
-        // A field attack the fight runs whatever kit stands in: the Styx rising from the
-        // horizon on the Unwritten's floor, from a stream of its own.
+        // A field mechanic the fight runs whatever kit stands in: the Styx rising from the
+        // horizon on the Unwritten's floor, from a stream of its own; Māra's wheel behind his.
         if (_def.Signature == "styx_tide") _styx = new StyxTideSchedule(RaiseStyxTide, _rng.Sub("styx"));
+        if (_def.Signature == WheelTable.Signature) _wheel = StartWheel(body, body.Feet);
         DebugManager.Instance?.LogMission($"Boss staged: {_def.Id} at perch {home + 1}/{perches.Count}, HP {body.MaxHP:0}");
         return true;
     }
@@ -178,8 +181,10 @@ public sealed class BossMission : Mission
         }
 
         _styx?.Tick(dt, BossMaxHp > 0f ? BossHp / BossMaxHp : 1f);
+        _wheel?.Advance(dt);
 
-        if (!_addWaveSpawned && BossMaxHp > 0f && BossHp <= BossMaxHp * 0.5f)
+        // No adds on the wheel: in Avīci the realms are his army (Mara.gdd §7.1).
+        if (!_addWaveSpawned && _wheel == null && BossMaxHp > 0f && BossHp <= BossMaxHp * 0.5f)
         {
             _addWaveSpawned = true;
             _arena.Spawner.SpawnWave(2, Mathf.Max(1, _arena.FoeLevel - 1));
@@ -197,8 +202,32 @@ public sealed class BossMission : Mission
     /// stops fighting; the placeholder is frozen by GameManager's foe sweep.</summary>
     public override void OnResolved()
     {
-        if (_boss != null && BossAlive) _fighter?.StandDown();
+        if (_boss != null && BossAlive)
+        {
+            _fighter?.StandDown();
+            _wheel?.Halt();
+        }
     }
+
+    /// <summary>Starts the Wheel of Becoming behind the boss (Docs/Mara.gdd §4): the rules say
+    /// what is sealed in him and how many stacks of each poison the party carries — read live,
+    /// so an Offering taken mid-fight counts from the next turn. The throne, until the arena is
+    /// painted, is the perch he opened on (§8).</summary>
+    private WheelOfBecomingField StartWheel(CharacterController body, Vector2 throne)
+    {
+        var field = new WheelOfBecomingField { Name = "WheelOfBecoming" };
+        _arena.AddBackdrop(field);
+        field.Begin(body, _def, _arena.Rules.MaraSealedPoisons, poison => _arena.Rules.SealStacksOf(poison),
+            () => _arena.PlayerBody, _arena.ArenaLeft, _arena.ArenaRight, _arena.FloorY, throne);
+        field.OfferingTaken += poison => _arena.TakeFightSeal(poison);
+        DebugManager.Instance?.LogMission($"The wheel turns: {field.Realm}, sealed [{string.Join(", ", _arena.Rules.MaraSealedPoisons)}]");
+        return field;
+    }
+
+    public override string ConsumeAnnouncement() => _wheel?.ConsumeAnnouncement();
+
+    /// <summary>Māra's last sliver, in gold, while it holds (Mara.gdd §7.2).</summary>
+    public override float SecondaryNotch => _wheel != null && BossAlive && !_wheel.Liberated ? WheelTable.LockShare : 0f;
 
     /// <summary>One wave of the Styx Tide on this arena's main floor.</summary>
     private StyxTideHazard RaiseStyxTide(float direction)
@@ -227,6 +256,7 @@ public sealed class BossMission : Mission
     // Recruiting happens once (RunState.GrantProtagonist), so it is announced once: a boss
     // standing in for a realm whose own is not built, met again, or of zone 6 simply falls.
     public override string SuccessToast => !FieldsRealBoss ? base.SuccessToast
+        : _wheel is { Liberated: true } ? "The wheel stops. You step off it."
         : _alreadyRecruited || !_def.Recruits ? $"{_def.DisplayName} falls!"
         : $"{_def.DisplayName} falls — {_def.ProtagonistId} joins you!";
 
@@ -257,7 +287,8 @@ public sealed class BossMission : Mission
         {
             if (!FieldsRealBoss) return "Boss";
             float shield = BossAlive ? _boss.Shield : 0f;
-            return shield > 0.5f ? $"{_def.DisplayName} (+{Mathf.CeilToInt(shield)} shell)" : _def.DisplayName;
+            string name = _wheel != null && !_wheel.Liberated ? $"{_def.DisplayName} · {WheelTable.Of(_wheel.Realm).Title}" : _def.DisplayName;
+            return shield > 0.5f ? $"{name} (+{Mathf.CeilToInt(shield)} shell)" : name;
         }
     }
 

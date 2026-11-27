@@ -23,6 +23,7 @@ public partial class Hud : CanvasLayer
     private Label _progressLabel;
     private Label _timerLabel;
     private ProgressBar _secondaryBar;
+    private ColorRect _secondaryGold, _secondaryNotch;   // Māra's lock, made on first use
     private Label _secondaryBarLabel;
 
     private Control _rewardChoice;
@@ -261,6 +262,28 @@ public partial class Hud : CanvasLayer
         _secondaryBar.MaxValue = max;
         _secondaryBar.Value = value;
         _secondaryBarLabel.Text = $"{label} {Mathf.CeilToInt(value)} / {Mathf.CeilToInt(max)}";
+    }
+
+    /// <summary>Gold over the first <paramref name="share"/> of the secondary bar, with a notch
+    /// where it ends — Māra's lock (Docs/Mara.gdd §7.2). 0 hides it.</summary>
+    public void SetSecondaryNotch(float share)
+    {
+        bool show = share > 0f && share < 1f && _secondaryBar.Visible;
+        if (_secondaryGold == null)
+        {
+            if (!show) return;
+            _secondaryGold = new ColorRect { Name = "Lock", Color = new Color(0.96f, 0.78f, 0.28f, 0.55f), MouseFilter = Control.MouseFilterEnum.Ignore };
+            _secondaryNotch = new ColorRect { Name = "LockNotch", Color = new Color(1f, 0.86f, 0.36f), MouseFilter = Control.MouseFilterEnum.Ignore };
+            _secondaryBar.AddChild(_secondaryGold);
+            _secondaryBar.AddChild(_secondaryNotch);
+        }
+        _secondaryGold.Visible = _secondaryNotch.Visible = show;
+        if (!show) return;
+        Vector2 size = _secondaryBar.Size;
+        _secondaryGold.Position = Vector2.Zero;
+        _secondaryGold.Size = new Vector2(size.X * share, size.Y);
+        _secondaryNotch.Position = new Vector2(size.X * share - 1.5f, -3f);
+        _secondaryNotch.Size = new Vector2(3f, size.Y + 6f);
     }
 
     public void ShowRewardChoice(bool show) => _rewardChoice.Visible = show;

@@ -217,6 +217,11 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	// protagonist is byte-for-byte unaffected. Set by BossTable rows today.
 	private readonly Dictionary<string, float> _knockbackTakenScales = new();
 	private readonly Dictionary<string, float> _stunTakenScales = new();
+	// HP no hit, hazard or tick can take this body below, by source (Māra's lock); and rules
+	// that may swallow a discrete hit before it lands (Māra's Devour). Empty on every
+	// protagonist, so a fighter without them is byte-for-byte unaffected.
+	private readonly Dictionary<string, float> _hpFloors = new();
+	private readonly Dictionary<string, Func<HitInfo, Vector2, bool>> _hitFilters = new();
 	// ── Feedback (Docs/Feedback.gdd): hit-stop, merged hurt ticks, status loops, hit flash ──
 	private HitStopClock _hitStop;
 	private readonly HurtTickMeter _hurtTicks = new();
@@ -1123,6 +1128,10 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	{
 		bool playerSide = Side == CombatSide.Player;
 		if (_dead || Invincible || (playerSide && _invulnTimer > 0f)) return 0f;
+		// A rule may take the hit whole before it lands (Devour swallows a projectile at his
+		// front). A swallowed hit deals nothing, shoves nothing and raises no hit cue.
+		foreach (Func<HitInfo, Vector2, bool> swallows in _hitFilters.Values)
+			if (swallows(hit, sourcePos)) return 0f;
 		if (hit.Damage > 0f) MarkCombatActivity();
 
 		float dealt = hit.Damage * DefenseMultiplier;
@@ -1130,7 +1139,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		if (toHp > 0f) DirectDamageTaken?.Invoke(toHp);
 		if (playerSide) DebugManager.Instance?.LogPlayerDmgReceived(hit.Damage, toHp, "foe");
 		else DebugManager.Instance?.LogPlayerDmgDealt(dealt, GetType().Name);
-		CurrentHP = Mathf.Max(0f, CurrentHP - toHp);
+		CurrentHP = HpAfterLoss(toHp);
 		NotifyHpChanged();
 		float shown = playerSide ? toHp : dealt;
 		PopNumber(shown, heal: false);
@@ -1174,6 +1183,50 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		return scale;
 	}
 
+	/// <summary>The HP no hit, hazard tick or damage over time can take this body below: the
+	/// highest floor any source has set, 0 with none (Māra's lock, Docs/Mara.gdd §7.2). Damage
+	/// past it is lost, and an execute does nothing while one holds.</summary>
+	public float HpFloor
+	{
+		get
+		{
+			float floor = 0f;
+			foreach (float value in _hpFloors.Values) floor = Mathf.Max(floor, value);
+			return floor;
+		}
+	}
+
+	/// <summary>Set (hp &gt; 0) or clear a named HP floor. Setting one above the body's HP heals
+	/// nothing: it only stops further loss.</summary>
+	public void SetHpFloor(string source, float hp)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (hp > 0f) _hpFloors[source] = hp;
+		else _hpFloors.Remove(source);
+	}
+
+	public void ClearHpFloor(string source) => _hpFloors.Remove(source);
+
+	/// <summary>Set or clear (null) a named rule that sees every discrete hit before it lands
+	/// (<see cref="TakeHit(HitInfo, Vector2)"/>, not hazards or ticks) and returns true to
+	/// swallow it whole. A rule must not set or clear rules itself.</summary>
+	public void SetHitFilter(string source, Func<HitInfo, Vector2, bool> swallows)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (swallows != null) _hitFilters[source] = swallows;
+		else _hitFilters.Remove(source);
+	}
+
+	public void ClearHitFilter(string source) => _hitFilters.Remove(source);
+
+	/// <summary>Where HP stands after losing <paramref name="loss"/>: never below 0 nor below a
+	/// floor — and a floor above the body's HP never raises it.</summary>
+	private float HpAfterLoss(float loss)
+	{
+		float floor = Mathf.Min(HpFloor, CurrentHP);
+		return Mathf.Max(floor, CurrentHP - loss);
+	}
+
 	/// <summary>Set or clear (scale 1) a named share of incoming knockback this body
 	/// takes. Sources multiply. A boss's poise is one source; an item can be another.</summary>
 	public void SetKnockbackTakenScale(string source, float scale) => SetScale(_knockbackTakenScales, source, scale);
@@ -1204,7 +1257,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 			float dealt = damage * DefenseMultiplier;
 			dealt = AbsorbDamage(dealt);
 			DebugManager.Instance?.LogHazardDmg(dealt, Side == CombatSide.Player ? "player" : GetType().Name);
-			CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
+			CurrentHP = HpAfterLoss(dealt);
 			NotifyHpChanged();
 			PopNumber(dealt, heal: false);
 			GainUltCharge(dealt * UltChargeReceivedRate);
@@ -1264,10 +1317,11 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	public ulong TargetId => GetInstanceId();
 
 	/// <summary>An authored execute (Cleopastar's Blackhole under 10% HP). Only a Foe-side
-	/// body can be executed: nothing on the Foe side executes the player in this slice.</summary>
+	/// body can be executed: nothing on the Foe side executes the player in this slice. Not
+	/// while an HP floor holds: the floor is a rule of the fight, not a share of HP.</summary>
 	public void Execute()
 	{
-		if (_dead || Invincible || Side == CombatSide.Player) return;
+		if (_dead || Invincible || Side == CombatSide.Player || HpFloor > 0f) return;
 		Die();
 	}
 
@@ -1323,7 +1377,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		_hurtTicks.Add(this, source, dealt);
 		dealt = AbsorbDamage(dealt);
 		DebugManager.Instance?.LogDotDmg(dealt, IsBurning ? "Burn" : _fire.Active ? "OnFire" : "Frozen");
-		CurrentHP = Mathf.Max(0f, CurrentHP - dealt);
+		CurrentHP = HpAfterLoss(dealt);
 		NotifyHpChanged();
 		GainUltCharge(dealt * UltChargeReceivedRate);
 		if (CurrentHP <= 0f) Die();
@@ -1389,6 +1443,8 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		_fireDurationExtensions.Clear();
 		_frozenDurationExtensions.Clear();
 		_continuousExternalVelocity.Clear();
+		_hpFloors.Clear();
+		_hitFilters.Clear();
 		TempHP = 0f;
 		_hitStop.Clear();
 		_hurtTicks.Clear();

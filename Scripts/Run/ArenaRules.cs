@@ -46,6 +46,9 @@ public sealed class ArenaRules
     public bool SurvivableDefeat => Zone6Role == Zone6Role.MiniBoss;
 
     // ── Avīci's seals on you (every protagonist) ────────────────────────────────────
+    /// <summary>Stacks of each poison in the player's party (poison id → 1..cap): what the
+    /// scales below are made of, and what holds each of Māra's realms longer (Mara.gdd §4.2).</summary>
+    public Dictionary<string, int> SealStacks { get; private set; } = new(StringComparer.Ordinal);
     public float SealReloadScale = 1f;
     public float SealDamageTakenScale = 1f;
     public float SealCooldownScale = 1f;
@@ -54,11 +57,16 @@ public sealed class ArenaRules
     /// <summary>"Sealed: Hunger ×1 (reload time +30%), Burden ×2 (move speed −15%)".</summary>
     public string SealLine = "";
 
-    // ── Māra's sealed abilities (the final boss's stand-in) ─────────────────────────
-    public readonly List<string> SealedBossAbilities = new();
-    public float FinalBossHpScale = 1f;
-    public float FinalBossDamageBonus;
+    // ── Māra's sealed powers (Avīci's final fight) ──────────────────────────────────
+    /// <summary>The poisons whose power is sealed in Māra, in gate order: their realms of his
+    /// wheel never come round (Mara.gdd §4).</summary>
+    public List<string> MaraSealedPoisons { get; private set; } = new();
+    /// <summary>The same, by the names of the powers ("Devour", "Wrath").</summary>
+    public List<string> SealedBossAbilities { get; private set; } = new();
     public string FinalBossLine = "";
+
+    public int SealStacksOf(string poisonId) =>
+        poisonId != null && SealStacks.TryGetValue(poisonId, out int stacks) ? stacks : 0;
 
     public bool HasLaw => !string.IsNullOrEmpty(LawId);
     public bool InZone6 => Zone6Role != Zone6Role.None;
@@ -113,34 +121,71 @@ public sealed class ArenaRules
             if (role == Zone6Role.Final && zone6.IsAvici)
             {
                 foreach (Zone6PoisonDef poison in Zone6Table.Poisons)
-                    if (zone6.MaraSealed.Contains(poison.Id)) rules.SealedBossAbilities.Add(poison.MaraAbility);
+                {
+                    if (!zone6.MaraSealed.Contains(poison.Id)) continue;
+                    rules.MaraSealedPoisons.Add(poison.Id);
+                    rules.SealedBossAbilities.Add(poison.MaraAbility);
+                }
                 int sealedCount = rules.SealedBossAbilities.Count;
-                rules.FinalBossHpScale = 1f - Zone6Table.MaraHpPerSeal * sealedCount;
-                rules.FinalBossDamageBonus = -Zone6Table.MaraDamagePerSeal * sealedCount;
-                rules.FinalBossLine = sealedCount == 0
-                    ? "Māra holds all five powers"
-                    : $"Sealed in Māra: {string.Join(", ", rules.SealedBossAbilities)}";
+                rules.FinalBossLine = sealedCount == 0 ? "Māra holds all five realms of his wheel"
+                    : sealedCount == Zone6Table.Poisons.Length ? "All five sealed in Māra: his wheel stands on the human realm"
+                    : $"Sealed in Māra: {string.Join(", ", rules.SealedBossAbilities)} — his wheel skips their realms";
             }
         }
 
         // Seals are on you for the rest of the run, wherever you fight.
-        if (zone6 != null && zone6.PlayerSeals.Count > 0)
-        {
-            var parts = new List<string>();
+        if (zone6 != null)
             foreach (Zone6PoisonDef poison in Zone6Table.Poisons)
             {
                 int k = zone6.SealStacks(poison.Id);
-                if (k <= 0) continue;
-                rules.SealReloadScale += poison.ReloadTimePerStack * k;
-                rules.SealDamageTakenScale += poison.DamageTakenPerStack * k;
-                rules.SealCooldownScale += poison.CooldownPerStack * k;
-                rules.SealMoveSpeedScale -= poison.MoveSpeedLossPerStack * k;
-                rules.SealAttackIntervalScale += poison.AttackIntervalPerStack * k;
-                parts.Add($"{poison.SealName} ×{k}");
+                if (k > 0) rules.SealStacks[poison.Id] = k;
             }
-            rules.SealMoveSpeedScale = Math.Max(0.1f, rules.SealMoveSpeedScale);
-            rules.SealLine = "Sealed in you: " + string.Join(", ", parts);
-        }
+        rules.RecomputeSeals();
         return rules;
+    }
+
+    /// <summary>
+    /// These rules with one more stack of a poison in the party, for the rest of this fight
+    /// only — the Tempter's Offering (Mara.gdd §7.5). The run is not touched: the final fight
+    /// ends it either way. A poison at its cap stays there. A new record: the handshake's is
+    /// never changed.
+    /// </summary>
+    public ArenaRules WithFightSeal(string poisonId)
+    {
+        ArenaRules copy = Clone();
+        if (Zone6Table.Poison(poisonId) != null)
+            copy.SealStacks[poisonId] = Math.Min(Zone6Table.SealStackCap, copy.SealStacksOf(poisonId) + 1);
+        copy.RecomputeSeals();
+        return copy;
+    }
+
+    public ArenaRules Clone()
+    {
+        var copy = (ArenaRules)MemberwiseClone();
+        copy.SealStacks = new Dictionary<string, int>(SealStacks, StringComparer.Ordinal);
+        copy.MaraSealedPoisons = new List<string>(MaraSealedPoisons);
+        copy.SealedBossAbilities = new List<string>(SealedBossAbilities);
+        return copy;
+    }
+
+    /// <summary>The seals' scales and line, from the stacks.</summary>
+    private void RecomputeSeals()
+    {
+        SealReloadScale = SealDamageTakenScale = SealCooldownScale = SealMoveSpeedScale = SealAttackIntervalScale = 1f;
+        SealLine = "";
+        var parts = new List<string>();
+        foreach (Zone6PoisonDef poison in Zone6Table.Poisons)
+        {
+            int k = SealStacksOf(poison.Id);
+            if (k <= 0) continue;
+            SealReloadScale += poison.ReloadTimePerStack * k;
+            SealDamageTakenScale += poison.DamageTakenPerStack * k;
+            SealCooldownScale += poison.CooldownPerStack * k;
+            SealMoveSpeedScale -= poison.MoveSpeedLossPerStack * k;
+            SealAttackIntervalScale += poison.AttackIntervalPerStack * k;
+            parts.Add($"{poison.SealName} ×{k}");
+        }
+        SealMoveSpeedScale = Math.Max(0.1f, SealMoveSpeedScale);
+        if (parts.Count > 0) SealLine = "Sealed in you: " + string.Join(", ", parts);
     }
 }

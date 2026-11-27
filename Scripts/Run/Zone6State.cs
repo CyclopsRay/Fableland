@@ -91,8 +91,9 @@ public sealed class Zone6State
             Zone6PoisonDef poison = Zone6Table.PoisonOfBoss(MiniBossAt(nodeId));
             if (poison == null) return "";
             bool sealedNow = MaraSealed.Add(poison.Id);
+            string realm = WheelTable.OfPoison(poison.Id)?.Title ?? "its realm";
             return sealedNow
-                ? $"{poison.Glyph} {poison.Name} is sealed in Māra: he loses {poison.MaraAbility}."
+                ? $"{poison.Glyph} {poison.Name} is sealed in Māra: his wheel skips {realm} — no more {poison.MaraAbility}."
                 : $"{poison.Glyph} {poison.Name} was already sealed in Māra.";
         }
         return "";
