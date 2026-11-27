@@ -191,9 +191,16 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | 76 | **The Weird Mushroom's outcome (f)**, one more held slot for its eater: rolls as (e) until a second held slot exists | ITEMS §7.13, NODES §3 |
 | 77 | **A VOID phantom's contact** should be a BOSS fight at your node; a touch of −25 % HP to every fighter stands in. Which boss, and what winning gives | ITEMS §7.2, #9 |
 | 78 | **Foes and the ground give no items** — no foe drops a wonder item, holds one, or leaves one lying in a map (ITEMS §1.2's foe-drop and "foes may hold" rows; FOES §7's loot hooks) | ITEMS §1.2, FOES §7 |
+| 79 | **BOSS PumpKing's brain does not use his ultimate.** His kit can cast the Black Prison (the boss check proves it); his brain needs a rule — open it when the player is within 8 m and his ring is full, recast when the player is near its centre | PumpKing.gdd (BOSS), FOES §8 |
+| 80 | **The realm view belongs behind the battlefield.** Inside the Black Prison the background should become PumpKing's realm; today the placeholder is drawn over the fight, translucent. The arena needs a "behind the battlefield" slot a kit can ask for by an event, like Māra's `GameManager.AddBackdrop` (TODO(eng) with the art) | PumpKing.gdd §Q, Feedback.gdd §6.6 |
+| 81 | **The Black Prison's art and feel** — every TODO(art) in `PumpKing.gdd` (border, warning, cardboard houses, vines, pumpkins, mouth, blink and blast, the view from inside, the aim preview), its animation clips, and VFX/SFX rows for the `ult.*` cues | PumpKing.gdd, Feedback.gdd §6.6, VFX.gdd, Audio.gdd |
+| 82 | **The prison's 3 m radius may feel small** for an ultimate — one number: give the prison its own radius instead of `ExplosionRadius` | PumpKing.gdd §Q |
+| 83 | **The ult ring is not kept** — it lives on the body: a Tab switch and every new fight start it at 0, so a cast needs 1500 damage dealt (or 750 taken) inside one fight. Per protagonist and persisted like cooldowns? Retune the rates? | NODES §3.3, every kit's GDD |
+| 84 | **Items are not silenced** (decided with the Black Prison: they are not skills) — the owner may want a silenced fighter's item shut too | PumpKing.gdd §Q, ITEMS §3 |
+| 85 | **Pre-existing, noted by the ult work:** the crab's Jump aims with `Gravity`, not `Gravity × GravityScale`, so under a gravity law it misses the player's height; every headless boss check prints 16 "Command or Control autoremapping" engine errors (present at v0.12.7) | FOES §3, 40-QA |
 
-Numbering: #75–#78 came with the wonder items (v0.12.8); #69–#74 with recruitment and the
-shelter as a room (v0.12.9). #62–#68 came with zone 6 and the realm laws (v0.12.0). #28–#33 were minted by v0.10.11 / v0.11.0 and #34–#35 by the swimming work, which
+Numbering: #79–#85 came with PumpKing's ultimate (v0.12.11); #75–#78 with the wonder items
+(v0.12.8); #69–#74 with recruitment and the shelter as a room (v0.12.9). #62–#68 came with zone 6 and the realm laws (v0.12.0). #28–#33 were minted by v0.10.11 / v0.11.0 and #34–#35 by the swimming work, which
 called them #28 and #29 in its own worktree before the two lines met (v0.11.1). #36–#47 are
 the open questions v0.11.2's hit feedback left, registered here in v0.11.3. #48–#55 came with
 the VFX director (v0.11.6); #49 and #50 were written before zone 6 was dealt maps and Cloud

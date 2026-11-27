@@ -6,18 +6,19 @@ zone-6 kits), **v0.12.2** (Māra's design; the dark leader settled), **v0.12.3**
 his wheel and his kit, art in placeholder), **v0.12.4** (the audit's run-stopping bugs and
 kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events, small rules),
 **v0.12.8** (the wonder items) and, on 2026-11-28, **v0.12.9** (recruitment and the walkable
-shelter, merged from a parallel session) and **v0.12.10** (the plantation and the enchanting
-altar in the hub's room). **Replace this file at every hand-off:** it describes
+shelter, merged from a parallel session), **v0.12.10** (the plantation and the enchanting
+altar in the hub's room) and **v0.12.11** (PumpKing's ultimate, the Black Prison, merged from the
+other parallel session). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.10**, nineteen commits and one merge
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.11**, nineteen commits and two merges
   on top of v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
   owner asks for each fast-forward; until then it trails the branch.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.10, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.11, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -59,9 +60,10 @@ altar in the hub's room). **Replace this file at every hand-off:** it describes
 | 0.12.7 | `c2424c8` | Collection's grace stops the ambient spawner; a benched fighter's item cools down at the bench rate | NODES §3.3, §4.1 |
 | 0.12.8 | `3052f28` | **The wonder items live — all fourteen, each with a source.** One `ItemLedger` (perish, enchantments, plots, VOID phantoms, mushroom days) written by `RunState.Items.cs`; DD's creature, the mushroom, the Feather's rewind button, the Claw's loot-crack-throw, Possession passives from the backpack; five new events | `ITEMS.gdd` (status block, each *Built* note, §9 v0.12.8), KNOWLEDGE v0.12.8 |
 | 0.12.9 | `51722a3` | **Recruitment, and the shelter as a walkable room** (from the `recruit-shelter` session, `13f097d`, merged): a run starts with its home protagonist alone and each realm's 4-1 recruits that realm's own; the shelter is a side-view room whose stations (road, team board, lantern, campfire, whetstone, anvil) replace the buttons; three shelter bugs fixed in passing | `NODES.gdd` §3.1, §4.5, §5.0, KNOWLEDGE v0.12.9 |
-| 0.12.10 | — | **The plantation and the enchanting altar** stand in the hub's room: sow and harvest, enchant Possession with the Blessing of Shieldon, each through its own panel | `ITEMS.gdd` §4.3, §7.1, `NODES.gdd` §5.0, KNOWLEDGE v0.12.10 |
+| 0.12.10 | `092ec07` | **The plantation and the enchanting altar** stand in the hub's room: sow and harvest, enchant Possession with the Blessing of Shieldon, each through its own panel | `ITEMS.gdd` §4.3, §7.1, `NODES.gdd` §5.0, KNOWLEDGE v0.12.10 |
+| 0.12.11 | — | **PumpKing's ultimate, the Black Prison** (from the `pumpking-ult` session, `370d1cd`, merged): a 3 m prison ≤ 8 m away, 1 s warning, 4 s of half speed, half jumps, silence and a 3 m sight cap on the other side, pumpkins every 0.5 s, a free recast that blinks him in for a 100-damage blast; crowd control (slow, low jump, silence, sight cap) as a reaction every target takes | `PumpKing.gdd` (Q, how it is built, decisions), `FOES.gdd` §crowd control, `Feedback.gdd` §6.6, KNOWLEDGE v0.12.11 |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.10, all passing:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.11, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
@@ -69,7 +71,7 @@ altar in the hub's room). **Replace this file at every hand-off:** it describes
 | VFX | `Scenes/Feedback/VfxCheck.tscn` | 1298 |
 | Audio | `Scenes/Feedback/AudioCheck.tscn` | 1108 |
 | Map content | `Scenes/MapCreation/MapContentCheck.tscn` | 1171 |
-| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 192 |
+| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 259 at v0.12.11 (the Black Prison; ~23 s) |
 | Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
 | Run | `Scenes/Run/RunWalkCheck.tscn` | 2019 at v0.12.9 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
 | Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 82 at v0.12.8 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives |
@@ -86,8 +88,9 @@ altar in the hub's room). **Replace this file at every hand-off:** it describes
 - **Realm bosses (#10):** recruiting works since v0.12.9 — a run starts alone and a realm's 4-1
   recruits that realm's own — but every realm's 4-1 is still fought as BOSS PumpKing. BOSS
   variants of Cleopastar, Pixolotl, Sifu Pangda and Pomegraknight are the next step.
-- **Ultimates (#5):** the ring fills and Q does nothing for all five. Every character GDD
-  defers its ultimate, so write the designs first (TBD #21).
+- **Ultimates (#5):** PumpKing's is built (v0.12.11, the Black Prison); the other four still do
+  nothing on Q. Every other character GDD defers its ultimate, so write the designs first
+  (TBD #21). The ring itself is not kept across a switch or a fight (TBD #83).
 - **Items (#19): done in v0.12.8**, their shelter screens in v0.12.10 (the plantation and the
   enchanting altar), except THE VOID's combat skill (needs the foes' sight limit — the
   PumpKing ult session's).
@@ -194,16 +197,15 @@ altar in the hub's room). **Replace this file at every hand-off:** it describes
   arena. Laws for the other seven realms (#62). Play both variants: the debug page (key 4 →
   Zone 6) forces a variant, stages any zone-6 boss, and sets gravity and seals.
 - **Design gaps** (audit Part 2):
-  - the ultimate does nothing for all five fighters (PumpKing's is being built — below);
+  - the ultimate does nothing for four of the five fighters (PumpKing's is built, v0.12.11);
   - every realm's boss is PumpKing (beating him recruits the realm's own since v0.12.9);
   - ~~8 of 14 items cannot be obtained~~ (v0.12.8: every item has a source);
   - ~~"?" nodes have 3 placeholder events~~ (20 since v0.12.8).
 - **Two parallel sessions started 2026-11-27 from v0.12.7** (each wrote
   `Docs/_handoff/<name>.md`; this branch integrates them, on the owner's "合并"):
   **`recruit-shelter`** — merged as v0.12.9 (its reserved spots filled in v0.12.10);
-  **`pumpking-ult`** — PumpKing's ultimate, the Black Prison (branch
-  `claude/pumpking-black-prison-f31091`), to merge next. Then: THE VOID's skill onto the ult's
-  sight API.
+  **`pumpking-ult`** — merged as v0.12.11. Next: THE VOID's skill onto the sight cap
+  (`SetSightLimit(source, 0)` on every foe for 10 s).
 - **v0.12.9's calls for the owner to confirm** (written into the GDDs; each changes code if
   answered otherwise):
   - a run starts with its home protagonist alone (Pomegraknight — every run's home is
@@ -216,6 +218,17 @@ altar in the hub's room). **Replace this file at every hand-off:** it describes
   - one fighter: no Switch slot, Tab does nothing;
   - interact is E, also W / ↑ (TBD #74); one room, 48 × 16 m, for every world until each has
     its own (TBD #71); a closed station stays, dimmed, and says why.
+- **v0.12.11's calls for the owner to confirm** (in `PumpKing.gdd`'s decisions log):
+  - cast range 8 m; radius 3 m — his head's blast (may feel small, TBD #82);
+  - silence shuts skills, not the basic attack (the seagull's poop is its basic attack); items
+    are not silenced (TBD #84);
+  - "one cell around you" = 3 × 3 cells = a 3 m sight cap; the border is not a wall;
+  - eight pumpkins a prison, 10–25 damage, no shove; the recast is free, once, after the
+    warning, and its 100-damage blast does not shove (it would throw the prisoners out);
+  - one prison at a time; it outlives a Tab switch and his death;
+  - BOSS PumpKing does not cast it yet (TBD #79); the realm view is drawn over the fight until
+    the arena has a slot behind it (TBD #80). Try it: debug page (key 4) → PumpKing → *Fill the
+    ult ring (then Q)*.
 
 ## 5. How to work here (each of these cost hours)
 

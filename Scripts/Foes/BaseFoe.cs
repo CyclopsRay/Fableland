@@ -126,7 +126,10 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
     {
         get { float m = 1f; if (_fire.Active) m *= 1.2f; if (_frozenDebuff.Active) m *= 0.8f; return m; }
     }
-    protected float CurrentMoveSpeed => MoveSpeed * MoveMultiplier;
+    /// <summary>The speed this foe walks or flies at now: its level's, its statuses', and the
+    /// share a skill leaves it (<see cref="MoveSpeedScale"/>). A skill's own fixed speed (the
+    /// seagull's dash) is not walking and does not read it.</summary>
+    protected float CurrentMoveSpeed => MoveSpeed * MoveMultiplier * MoveSpeedScale;
     /// <summary>A base damage amount scaled by foe ATK and any active OnFire bonus.</summary>
     protected float EffectiveDamage(float baseAmount) => baseAmount * AtkMult * DealtDamageMultiplier;
 
@@ -179,9 +182,13 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
     protected bool Stunned => _stunTimer > 0f;
     public bool Trapped => _trappedTimer > 0f;
     protected bool IsAggro => State == FoeState.Aggro;
+    /// <summary>It has the player in its sights (FOES §6). Read-only, for checks and tooling.</summary>
+    public bool Aggroed => State == FoeState.Aggro;
     protected bool CanAct => !Stunned && !_dead;
-    protected bool Skill1Ready => FoeStats.HasSkill1(CurrentLevel) && _skill1Cd <= 0f;
-    protected bool Skill2Ready => FoeStats.HasSkill2(CurrentLevel) && _skill2Cd <= 0f;
+    // A silenced foe starts no skill: every skill is started through one of these gates. Its
+    // body blow, the seagull's poop (its basic attack, FOES §4) and a passive still go.
+    protected bool Skill1Ready => FoeStats.HasSkill1(CurrentLevel) && _skill1Cd <= 0f && !Silenced;
+    protected bool Skill2Ready => FoeStats.HasSkill2(CurrentLevel) && _skill2Cd <= 0f && !Silenced;
     protected void StartSkill1Cooldown(float cd) => _skill1Cd = cd;
     protected void StartSkill2Cooldown(float cd) => _skill2Cd = cd;
 
@@ -224,12 +231,71 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
         get { float m = 1f; foreach (float v in _gravityScales.Values) m *= v; return m; }
     }
 
-    public void SetGravityScale(string source, float scale)
+    public void SetGravityScale(string source, float scale) => SetScale(_gravityScales, source, scale);
+
+    private static void SetScale(Dictionary<string, float> sources, string source, float scale)
     {
         if (string.IsNullOrWhiteSpace(source)) return;
-        if (Mathf.IsEqualApprox(scale, 1f)) _gravityScales.Remove(source);
-        else _gravityScales[source] = Mathf.Max(0f, scale);
+        if (Mathf.IsEqualApprox(scale, 1f)) sources.Remove(source);
+        else sources[source] = Mathf.Max(0f, scale);
     }
+
+    private static float ScaleOf(Dictionary<string, float> sources)
+    {
+        float m = 1f;
+        foreach (float v in sources.Values) m *= v;
+        return m;
+    }
+
+    // ── Crowd control a skill lays on a foe (ICombatTarget; PumpKing's Black Prison) ──────
+    // Held by sources like every modifier, so one skill ending never clears another's.
+    private readonly Dictionary<string, float> _moveSpeedScales = new();
+    private readonly Dictionary<string, float> _jumpHeightScales = new();
+    private readonly HashSet<string> _silenceSources = new();
+    private readonly Dictionary<string, float> _sightLimits = new();
+
+    /// <summary>Share of its walking or flying speed this foe keeps (all sources multiplied).</summary>
+    public float MoveSpeedScale => ScaleOf(_moveSpeedScales);
+    /// <summary>Share of a jump's height it keeps; a jump's launch scales by the root (h = v²/2g).</summary>
+    public float JumpHeightScale => ScaleOf(_jumpHeightScales);
+    protected float JumpLaunchScale => Mathf.Sqrt(Mathf.Max(0f, JumpHeightScale));
+    /// <summary>True while any source silences it: <see cref="Skill1Ready"/> and
+    /// <see cref="Skill2Ready"/> say no.</summary>
+    public bool Silenced => _silenceSources.Count > 0;
+    /// <summary>How far it sees, px from its centre — the nearest cap any source holds; +∞ with none.</summary>
+    public float SightLimitPx
+    {
+        get { float limit = float.PositiveInfinity; foreach (float v in _sightLimits.Values) limit = Mathf.Min(limit, v); return limit; }
+    }
+
+    public void SetMoveSpeedScale(string source, float scale) => SetScale(_moveSpeedScales, source, scale);
+    public void SetJumpHeightScale(string source, float scale) => SetScale(_jumpHeightScales, source, scale);
+
+    public void SetSilenced(string source, bool on)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+        if (on) _silenceSources.Add(source);
+        else _silenceSources.Remove(source);
+    }
+
+    /// <summary>Cap its sight (0 = blind). It looks again on its next tick, so a foe that can no
+    /// longer see the player stops chasing at once (<see cref="UpdateSight"/>).</summary>
+    public void SetSightLimit(string source, float metres)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return;
+        _sightLimits[source] = Units.Px(Mathf.Max(0f, metres));
+        _sightTimer = 0f;
+    }
+
+    public void ClearSightLimit(string source)
+    {
+        if (!string.IsNullOrWhiteSpace(source)) _sightLimits.Remove(source);
+    }
+
+    /// <summary>False while a sight cap keeps the player out of view (always true with none).</summary>
+    private bool InSightRange(Node2D player) =>
+        _sightLimits.Count == 0 ||
+        (player != null && IsInstanceValid(player) && GlobalPosition.DistanceTo(player.GlobalPosition) <= SightLimitPx);
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────
     public override void _Ready()
@@ -379,12 +445,15 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
         if (_sightTimer > 0f) return;
         _sightTimer = SightInterval;
 
-        bool seen = player != null && CanSeePlayer(player);
+        bool seen = player != null && InSightRange(player) && CanSeePlayer(player);
         if (seen) { EnterAggro(); _missCount = 0; }             // hit → aggro, reset misses
         else if (State == FoeState.Aggro)                        // misses counted only while AGGRO
         {
             _missCount++;
-            if (_missCount >= 3) { State = FoeState.Patrol; _missCount = 0; }
+            // A foe whose sight a skill has capped does not chase a memory for three more looks
+            // (FOES §6's rule for a player who slipped out of a sight shape): it has lost the
+            // player now (the Black Prison, PumpKing.gdd).
+            if (_missCount >= 3 || _sightLimits.Count > 0) { State = FoeState.Patrol; _missCount = 0; }
         }
     }
 
@@ -548,8 +617,10 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
 
         PopNumber(dealt);
 
-        // Getting hit alerts a sight-capable foe: force aggro + reset the miss counter.
-        if (FoeStats.HasAggro(CurrentLevel)) { EnterAggro(); _missCount = 0; }
+        // Getting hit alerts a sight-capable foe: force aggro + reset the miss counter — unless a
+        // sight cap keeps the player out of its view: a blinded foe feels the blow, not where it
+        // came from.
+        if (FoeStats.HasAggro(CurrentLevel) && InSightRange(CharacterController.LocalPlayer)) { EnterAggro(); _missCount = 0; }
 
         // Single-player prototype: any damage a foe takes came from the player, so credit
         // "damage dealt" ult charge here for every source without threading a dealer ref.

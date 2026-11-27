@@ -50,6 +50,31 @@ public interface ICombatTarget
 
     void SetContinuousExternalVelocity(string source, Vector2 velocity);
     void ClearContinuousExternalVelocity(string source);
+
+    // ── Crowd control (PumpKing's Black Prison — Docs/PumpKing.gdd) ─────────────────────
+    // What a skill may lay on a body of either side. Each is held by a named source (golden
+    // rule 7), so a skill that ends clears only its own: a scale of 1, `false` or a cleared
+    // limit releases that source and leaves every other. A target that cannot move, jump,
+    // use a skill or look (a mirror image) takes them as nothing.
+
+    /// <summary>Share of its move speed this body keeps while <paramref name="source"/> holds it
+    /// (sources multiply; 1 clears). Walking, running, swimming and flying, not a skill's own
+    /// fixed speed (a dash).</summary>
+    void SetMoveSpeedScale(string source, float scale);
+
+    /// <summary>Share of its jump's HEIGHT this body keeps (sources multiply; 1 clears); the
+    /// launch speed scales by the root, so 0.5 is a jump half as high.</summary>
+    void SetJumpHeightScale(string source, float scale);
+
+    /// <summary>Silenced while any source holds it: no skill starts. The basic attack still goes
+    /// (a fighter's BA, a foe's body blow and the seagull's poop), and a skill already under way
+    /// runs its course.</summary>
+    void SetSilenced(string source, bool on);
+
+    /// <summary>Caps how far this body sees, in metres from its centre (0 = blind); the nearest
+    /// cap any source holds wins. A foe or a boss brain cannot find the player past it.</summary>
+    void SetSightLimit(string source, float metres);
+    void ClearSightLimit(string source);
 }
 
 /// <summary>

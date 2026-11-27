@@ -190,6 +190,68 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A release and the body's reaction share a physics frame — a probe counted a jump "during" the prison (v0.12.11, caught in the check)
+- **Symptom:** "a silenced crab beside him jumped". It jumped on the tick the prison let go: the
+  prison (earlier in the tree) released it, and the crab, later in the same physics frame,
+  jumped. The probe read the crab after that frame and the prison's state of the frame before.
+- **Rule:** a probe that watches a held body stops on the tick the holder lets go: check the
+  holder's state *after* each wait, before reading the body.
+- **Why:** the holder and the held body each run their own `_PhysicsProcess` in tree order;
+  one frame can contain both "freed" and "acted".
+
+### A crab doubles a blow from above — a pumpkin's 25 read 48 (v0.12.11, caught in the check)
+- **Symptom:** pumpkin hits of 38–48 against a 10–25 rule.
+- **Rule:** a probe that measures damage on a crab must allow its Soft Shell (FOES §3, ×2 from a
+  source in the 60° cone above), or strike it from the side. The prison probe puts the blast
+  centre at a crab's height for the same reason.
+- **Why:** the hit is right. The source position is part of a hit, and crabs read it.
+
+### A virtual pad nobody steps never presses anything (v0.12.11, designed around)
+- **Symptom (avoided):** `StillPlayer`'s pad in the boss check is never stepped. It is a pad
+  "never pressed" by design, and a tap on it would never land.
+- **Rule:** a probe that presses a pad no brain owns registers it with the check, which steps
+  it before the stage, as `FlowCheck` and `FeedbackCheck` do. `BossFightCheck` now has
+  `_pads`.
+
+### A polygon with a repeated point is not drawn (v0.12.11, caught before it ran)
+- **Symptom (avoided):** the mouth's two lips met at both corners, written as four points on two
+  spots. Godot's triangulation refuses a polygon with a repeated vertex and draws nothing,
+  with an error. Headless runs would not have shown it.
+- **Rule:** when two polylines are joined into one polygon, give each shared point once.
+
+### A sight cap must reach a boss's senses, or the boss is blind in name only (v0.12.11, designed around)
+- **Rule:** a boss brain sees through `BossSenses.Sample` alone, so the cap is enforced there.
+  `CharacterController.SightLimitPx` past the target means "no target".
+- **Why:** a kit never reads the player. Only the brain does.
+
+### A press made while stunned is lost — a mutant survived because the probe's PumpKing was stunned (v0.12.11, found by the mutation run)
+- **Symptom:** "the recast twice" survived. The probe pressed Q once more after the blink and
+  saw no second blink. With the mutant, the press should have opened a second mouth.
+- **Cause:** the blink lands him beside the penned crab. Its body blow stuns him for 0.25 s,
+  and a stunned body does not read buttons (`HandleAbilities` runs only when not `Frozen`). A
+  `JustPressed` lasts one frame, so the press was simply gone and the assertion was vacuous.
+- **Rule:** when a probe presses a button on a body that something can hit, take its stuns away
+  (`SetStunTakenScale("probe.…", 0)`, a poise source). Press more than once, and count the cue
+  the press raises (`ult.recast`), not only the effect.
+- **Why:** "nothing happened" passes for two reasons: the rule held, or the press never arrived.
+  Only the cue of the press tells them apart.
+
+### Reading a freed node: C# members still answer, native ones throw (v0.12.11, found by the mutation run)
+- **Symptom:** under one mutant the check threw `ObjectDisposedException` and stopped 16 checks
+  early. The waits ran long, the prison faded and freed itself, then `prison.VeilShown` read its
+  freed veil's `Visible`.
+- **Rule:** a getter a check (or a brain) may call after the node is gone guards each native
+  read with `IsInstanceValid`. `Over`, `EndedAt` and other plain C# members answer from the
+  wrapper even after the node is freed.
+- **Why:** the C# wrapper outlives the native object. Only calls into the engine fail.
+
+### Tooling: a copy of `HEAD` for a baseline needs the git-ignored `.import` files (v0.12.11)
+- **Symptom:** `git archive HEAD | tar -x` plus a copied `.godot`, then the boss check: "No
+  loader found for resource: …png", and every PumpKing scene failed to load.
+- **Rule:** copy every `*.import` from the checkout too; then `dotnet build` and run.
+  - That gives the baseline count without a second worktree.
+  - The baseline here is **192** at v0.12.7.
+
 ### Godot drops ":" from a node's name — `FindChild` by the name you gave then finds nothing (v0.12.10, the shelter panels' check)
 - **Symptom:** the plantation's buttons were named `Plant0:rotten_mushroom`, the altar's
   `Enchant:item-3`; the check's `FindChild` found none of them and pressed nothing (seven

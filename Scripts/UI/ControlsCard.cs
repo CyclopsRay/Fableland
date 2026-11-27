@@ -21,7 +21,7 @@ public static class ControlsCard
         ("attack", "Basic attack (aim with the mouse)"),
         ("skill1", "Skill 1"),
         ("skill2", "Skill 2"),
-        ("ult", "Ultimate — not built yet"),
+        ("ult", "Ultimate, once its ring is full (PumpKing: the Black Prison, again to blink into it · the others: not built yet)"),
         ("use_item", "Use the held item"),
         ("switch_protagonist", "Switch fighter"),
         ("pause", "Pause"),

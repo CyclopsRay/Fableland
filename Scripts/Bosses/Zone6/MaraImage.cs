@@ -98,4 +98,10 @@ public partial class MaraImage : StaticBody2D, ICombatTarget
     public void Execute() => Pop();
     public void SetContinuousExternalVelocity(string source, Vector2 velocity) { }
     public void ClearContinuousExternalVelocity(string source) { }
+    // An image does not walk, jump, cast or look: crowd control finds nothing to hold.
+    public void SetMoveSpeedScale(string source, float scale) { }
+    public void SetJumpHeightScale(string source, float scale) { }
+    public void SetSilenced(string source, bool on) { }
+    public void SetSightLimit(string source, float metres) { }
+    public void ClearSightLimit(string source) { }
 }

@@ -9,6 +9,32 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.11** — **PumpKing's ultimate, the Black Prison (黑狱)** — the game's first ultimate (the
+  owner's design, built in the `pumpking-ult` session, branch
+  `claude/pumpking-black-prison-f31091` at `370d1cd`, merged here on the owner's "合并").
+  Decisions it made are in `PumpKing.gdd`'s decisions log and HANDOFF §4.
+  - **The prison** (Q, the full ring): a 3 m circle (his head's blast) where he aims, at most
+    8 m away, after 1 s of warning that touches nobody.
+    - **For 4 s**, every body of the other side inside it moves at half speed, jumps half as
+      high, starts no skill (the basic attack still goes) and sees only one map cell (3 m).
+    - **Pumpkins** of random size, one every 0.5 s, are flung out of it for 10–25 damage.
+    - **The recast** (free, once): his big mouth opens at the centre, he blinks into it, and his
+      head goes off at its biggest (3 m, 100 damage, no shove).
+    - Placeholder art, every TODO(art) listed in `PumpKing.gdd`. From F5: debug page (key 4) →
+      PumpKing → *Fill the ult ring (then Q)*.
+  - **Crowd control is a reaction on `ICombatTarget`.** `SetMoveSpeedScale`,
+    `SetJumpHeightScale`, `SetSilenced` and `SetSightLimit` / `ClearSightLimit` are on
+    `CharacterController` and `BaseFoe`, each held by a named source; a Māra image takes them as
+    nothing.
+    - **Silence** shuts a fighter's Skill 1, Skill 2 and ult, and keeps a foe's skills from
+      starting.
+    - **The sight cap:** a capped foe drops the player at once, and a hit doesn't turn it. A
+      boss brain (`BossSenses`) finds no target past the cap.
+  - **Soul Form obeys `MoveSpeedScale`** — a prison and a zone-6 slowing seal both reach it now.
+  - The controls card's ult line names the Black Prison.
+  - **Checks:** the boss check 192 → 259; 33 mutants, each caught by name. Every suite is clean
+    on the merge.
+  - **New TBDs:** #79–#85 (`10-DESIGN.md` §6).
 - **0.12.10** — **The plantation and the enchanting altar stand in the hub's room** (the last
   item screens; `ITEMS.gdd` §4.3, §7.1, `NODES.gdd` §5.0).
   - **The plantation** (two plots): its prompt says how the plots stand; its panel

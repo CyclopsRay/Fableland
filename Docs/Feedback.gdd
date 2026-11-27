@@ -253,6 +253,7 @@ The attack names in use today:
 | `pomegraknight` / `s1.tornado` | tick 1–5 | ranged, named Light | *Pomegraknight.TornadoHit* |
 | `pomegraknight` / `s2.seed` | — | ranged | *PomeSeed.OnBodyEntered* |
 | `pumpking` / `ba.head` · `ba.explode` | — | ranged | *PumpKingHead.TryStrike · DealExplosion* |
+| `pumpking` / `ult.pumpkin` · `ult.blast` | — | ranged (no shove; never holds him) | *PrisonPumpkin.TryStrike · PumpKing.LandInPrisonMouth* — the Black Prison, §6.6 |
 | *foe id* / `contact` | — | melee | *BaseFoe.TryContactDamage* |
 | `seagull` / `s2.dash` · `s1.poop` | — | melee · ranged | *SeagullFoe.UpdateSkills · PoopProjectile.OnBodyEntered* |
 | `hazard` / `tsunami` | — | ranged | *TsunamiHazard.OnBodyEntered* |
@@ -347,6 +348,26 @@ Hits name their attack the same way: `ba.swing`, `s1.bite`, `s2.slam` (ranged: t
 hand never holds the emanation), `realm.halo`, `realm.gorge_bite`, `realm.chain_hook`,
 `realm.blind_charge` (variant 2 from an image), `ba.image_swing`, `s1.image_catch`, and Wrath
 Fire's `s1.wrath_fire`.
+
+### 6.6 PumpKing's ultimate, the Black Prison — owner `pumpking` (v0.12.11, `Docs/PumpKing.gdd`)
+
+The prison's own cues are raised at a position, sourced from the prison (or its pumpkin), in
+the caster's class (`fighter`, or `boss` for a BOSS PumpKing's). No director has rows for them
+yet: they fall back to the class and `any` until the prison's art and sound exist (PumpKing.gdd,
+TODO(art)).
+
+| Action | Kind | Variant | Size · Magnitude · Direction · Position | Raised by |
+|---|---|---|---|---|
+| `ult.cast` | one-shot, on him | — | size = the radius · magnitude = the warning's seconds · direction = to the centre | *PumpKing.HandleSkillUlt* |
+| `ult.warn` | **loop** | — | at the centre · size = the radius · magnitude = 1 s | *BlackPrison.Begin → Form (or _ExitTree)* |
+| `ult.prison` | **loop** | — | at the centre · size = the radius · magnitude = 4 s | *BlackPrison.Form → End (or _ExitTree)* |
+| `ult.catch` | one-shot | — | at a body as it is caught · size = its hit radius | *BlackPrison.Hold* |
+| `ult.pumpkin` | one-shot | which (1–8) | where it grows · size = its radius px · magnitude = its damage · direction = its throw · source = the pumpkin | *BlackPrison.GrowPumpkin* |
+| `ult.pumpkin.splat` | one-shot | — | where it burst on the ground, or ended its flight · size · direction = its travel | *PrisonPumpkin.Burst* (a pumpkin that hits a body is told by its `HitCue`) |
+| `ult.recast` | one-shot, on him | — | magnitude = the mouth's seconds (0.4) · direction = to the centre | *PumpKing.HandleSkillUlt* |
+| `ult.mouth` | one-shot | — | at the centre · size = half the radius · magnitude = 0.4 s | *BlackPrison.Recast* |
+| `ult.blink` | one-shot, on him | — | where he lands · magnitude = how far px · direction | *PumpKing.LandInPrisonMouth* |
+| `ult.blast` | one-shot | — | at the centre · size = the radius · magnitude = its damage | *PumpKing.LandInPrisonMouth* |
 
 ---
 

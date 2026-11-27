@@ -228,11 +228,16 @@ public sealed class BossSenses
         if (self.GetTree().GetFirstNodeInGroup(CombatTargets.PlayerGroup) is not CharacterController player) return;
         if (player.IsDefeated || !GodotObject.IsInstanceValid(player)) return;
 
+        // A sight cap a skill laid on him (the Black Prison): past it he does not know where
+        // the player is, and every rule that needs a target waits.
+        float distance = Position.DistanceTo(player.GlobalPosition);
+        if (distance > self.SightLimitPx) return;
+
         HasTarget = true;
         TargetPosition = player.GlobalPosition;
         TargetVelocity = player.Velocity;
         TargetRadius = player.HitRadius;
-        Distance = Position.DistanceTo(TargetPosition);
+        Distance = distance;
     }
 }
 

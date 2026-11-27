@@ -496,6 +496,47 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	public void SetMoveSpeedScale(string source, float scale) => SetScale(_moveSpeedScales, source, scale);
 	public void SetCooldownScale(string source, float scale) => SetScale(_cooldownScales, source, scale);
 
+	// ── Crowd control a skill lays on this body (ICombatTarget; the Black Prison) ─────────
+	// Held by sources like every modifier here. Move and jump are the two scales above.
+	private readonly HashSet<string> _silenceSources = new();
+	private readonly Dictionary<string, float> _sightLimits = new();
+
+	/// <summary>True while any source silences this body: Skill 1, Skill 2 and the ultimate
+	/// are not read; the basic attack is, and a skill already under way runs its course.</summary>
+	public bool Silenced => _silenceSources.Count > 0;
+	public bool IsSilencedBy(string source) => _silenceSources.Contains(source);
+
+	public void SetSilenced(string source, bool on)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (on) _silenceSources.Add(source);
+		else _silenceSources.Remove(source);
+	}
+
+	/// <summary>How far this body sees, in px from its centre: the nearest cap any source holds,
+	/// +∞ with none. A boss brain does not find the player past it (<c>BossSenses</c>); for the
+	/// player's own body, whatever laid the cap darkens the view past it.</summary>
+	public float SightLimitPx
+	{
+		get
+		{
+			float limit = float.PositiveInfinity;
+			foreach (float value in _sightLimits.Values) limit = Mathf.Min(limit, value);
+			return limit;
+		}
+	}
+
+	public void SetSightLimit(string source, float metres)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		_sightLimits[source] = Units.Px(Mathf.Max(0f, metres));
+	}
+
+	public void ClearSightLimit(string source)
+	{
+		if (!string.IsNullOrWhiteSpace(source)) _sightLimits.Remove(source);
+	}
+
 	/// <summary>Set or clear (0) a named number of extra jumps. Charges already in hand change
 	/// with it, so a body given a law in mid-air gets its jump now, not after landing.</summary>
 	public void SetExtraJumps(string source, int jumps)
@@ -960,6 +1001,9 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	private void HandleAbilities()
 	{
 		if (Controls.JustPressed(ControlAction.Attack)) HandleBA();
+		// A silence takes the skills and leaves the basic attack (Docs/PumpKing.gdd, the Black
+		// Prison). A press made while silenced is gone, not saved for later.
+		if (Silenced) return;
 		if (Controls.JustPressed(ControlAction.Skill1)) HandleSkill1();
 		if (Controls.JustPressed(ControlAction.Skill2)) HandleSkill2();
 		if (Controls.JustPressed(ControlAction.Ult)) HandleSkillUlt();

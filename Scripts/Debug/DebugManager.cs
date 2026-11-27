@@ -249,6 +249,12 @@ public partial class DebugManager : CanvasLayer
         clearBtn.Pressed += ClearProtagonistOverride;
         vbox.AddChild(clearBtn);
 
+        // The ring takes 1500 points of damage to fill: this fills it, so an ultimate (PumpKing's
+        // Black Prison) can be tried at once.
+        var fillUlt = new Button { Text = "Fill the ult ring (then Q)" };
+        fillUlt.Pressed += FillUltCharge;
+        vbox.AddChild(fillUlt);
+
         BuildRosterSection(vbox);
 
         // Boss fights (FOES.gdd §8): stage any boss without the overworld. One button per
@@ -597,6 +603,21 @@ public partial class DebugManager : CanvasLayer
         Zone6State state = EditableZone6();
         string whose = RunState.Instance?.Graph != null ? "this run" : "debug fights";
         _zone6Status.Text = $"{whose}: {state.StatusLine()}";
+    }
+
+    private void FillUltCharge()
+    {
+        CharacterController player = CharacterController.LocalPlayer;
+        if (player == null || !IsInstanceValid(player))
+        {
+            _protagonistStatus.Text = "No fighter in play — start a fight first.";
+            return;
+        }
+        player.GainUltCharge(player.MaxUltCharge);
+        _protagonistStatus.Text = $"{player.GetType().Name}'s ult ring is full: press Q.";
+        // Hand the keyboard back to the fight (a focused button would swallow the next key).
+        foreach (Node node in _protagonistPanel.FindChildren("*", nameof(Button), true, false))
+            if (node is Button button) button.ReleaseFocus();
     }
 
     private void ClearStagedBoss()
