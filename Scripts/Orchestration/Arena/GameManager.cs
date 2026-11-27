@@ -160,6 +160,13 @@ public partial class GameManager : Node2D
     private int _nodeLevel;
     private MissionType _missionType;
     private bool _goalResolved;
+    // The run is ending (the last fighter fell): the fight holds still for a beat before RUN
+    // OVER, and nothing in the arena may resolve or end the run a second time meanwhile.
+    private bool _dying;
+
+    /// <summary>Seconds the fall holds before the run-over screen (audit v0.11.1 #20: death
+    /// cut straight to it).</summary>
+    public const float DeathBeatSeconds = 1.2f;
 
     private float _graceTimer;           // universal pre-combat grace: no foes, timer frozen, countdown shown
     private bool _ended;   // debug-only local end-of-match latch (banner + restart)
@@ -173,6 +180,7 @@ public partial class GameManager : Node2D
     {
         // Keep running while the tree is paused so the debug restart flow works after win/lose.
         ProcessMode = ProcessModeEnum.Always;
+        SettingsStore.EnsureLoaded();   // F5 straight into an arena still gets the player's settings
         _graceTimer = Mathf.Max(0f, PreCombatCountdownSeconds);
 
         Entities = GetNode<Node2D>(EntitiesPath);
@@ -928,10 +936,10 @@ public partial class GameManager : Node2D
 
         // Don't tick the mission during the grace period — its timer is frozen while the
         // player gets their bearings (grace = -1f once the 3s countdown finishes).
-        if (_mission.Status == MissionStatus.Running && _graceTimer < 0f) _mission.Tick(dt);
+        if (_mission.Status == MissionStatus.Running && _graceTimer < 0f && !_dying) _mission.Tick(dt);
         if (_graceTimer < 0f) PushMissionHud();
 
-        if (_mission.Status != MissionStatus.Running && !_goalResolved) OnMissionResolved();
+        if (_mission.Status != MissionStatus.Running && !_goalResolved && !_dying) OnMissionResolved();
     }
 
     private void PushMissionHud()
@@ -1156,8 +1164,13 @@ public partial class GameManager : Node2D
             }
             if (RunState.Instance.CurrentAdventure?.Kind == NodeKind.Boss
                 && RunState.Instance.TryRecoverFromBossFailure()) return;
-            // Permadeath — no lives, no respawn in a run (NODES §2.2).
+            // Permadeath — no lives, no respawn in a run (NODES §2.2). A beat first: the fall is
+            // seen, the mission's clock stops, then the run-over screen.
+            _dying = true;
             RaiseFlow("run.over", "death");
+            _hud.ShowBanner("You fell.");
+            await ToSignal(GetTree().CreateTimer(DeathBeatSeconds), SceneTreeTimer.SignalName.Timeout);
+            if (!IsInstanceValid(this) || RunState.Instance.RunFinished) return;
             RunState.Instance.EndRun(RunEndKind.Death);
             return;
         }

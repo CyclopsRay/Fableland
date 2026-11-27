@@ -85,6 +85,9 @@ public partial class DebugManager : CanvasLayer
             OffsetBottom = BtnH,
         };
         _toggleBtn.Pressed += OnToggle;
+        // Debug tools are for whoever builds the game: an exported release hides the toggle
+        // (audit v0.11.1 #4). The editor's F5 is a debug build, so it stays there.
+        _toggleBtn.Visible = OS.IsDebugBuild();
         AddChild(_toggleBtn);
 
         // ---- skip button (visible only when debug is on) ----

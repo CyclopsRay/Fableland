@@ -9,12 +9,12 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.5**, fourteen commits on top of
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.6**, fifteen commits on top of
   v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
   owner asks for each fast-forward; until then it trails the branch.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.5, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.6, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -51,7 +51,8 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 | 0.12.2 | `1350e9d` | **The dark leader is each variant's final boss** (TBD #1 closed by the owner). **Māra's full design, proposed for review:** the Wheel of Becoming, the human realm as the only interval, the last 5 % falling only there, his kit, arena, look and build plan. Docs only | `Docs/Mara.gdd` |
 | 0.12.3 | `7afe440` | **Māra built** (`Mara.gdd` steps 1–2, the owner's "先做…占位先"): the **Wheel of Becoming** as his signature (rests, skips, stacks, the realms' modifiers, the lock, the Last Turn, Liberation, the Offering) and **his own kit** (Claw Rake, Noose, Hand of the Wheel, every realm's arrival strike, Doubt's false tells, Delusion's images). Placeholders drawn in code; **art prompts written, not generated** | `Docs/Mara.gdd` §13.4, `Docs/Art/MaraArtPrompts.md` |
 | 0.12.4 | `2774457` | **The audit's bugs that could end or stall a run, and kits back to their GDDs** (Part 2 #11–#17): resolution invincibility held by sources (Pixolotl's Shift), the Eidolon Shelter's dead end, Yukai's Rope letting go, Cleopastar's star jump, damage credited to Pangda's blows and to thrown stars and heads, the Fire Tornado replacing Slash 1 and spinning in place, the seagull's puddle and dash; the Asura's flurry lands every arm. New **`FlowCheck`**, each fix broken once | `Docs/Research/AUDIT-v0.11.1.md` Part 2 (its status line), KNOWLEDGE v0.12.4 |
-| 0.12.5 | — | **The player is told what happens**: a Controls card in the pause menu and a key line under the countdown; rewards named in the toast (and the day's notes kept for the summary); wonder cores on the map; each fighter's own face in the portrait and the Switch slot, the magazine as pips; the run-over screen names the dark leader | `Docs/Research/AUDIT-v0.11.1.md` Part 2 status |
+| 0.12.5 | `a419a6a` | **The player is told what happens**: a Controls card in the pause menu and a key line under the countdown; rewards named in the toast (and the day's notes kept for the summary); wonder cores on the map; each fighter's own face in the portrait and the Switch slot, the magazine as pips; the run-over screen names the dark leader | `Docs/Research/AUDIT-v0.11.1.md` Part 2 status |
+| 0.12.6 | — | **The shell, and the road between fights**: a real Settings screen (comfort + volumes, saved beside the slots), Quit on the title, a beat before RUN OVER, the map's mist on by default, debug tools only in a debug build; fifteen "?" events (stray storybook pages) with costs, prices — wonder cores' first use — and stats | `NODES.gdd` §6.1, `Feedback.gdd` §7 |
 
 **Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.4, all passing:
 
@@ -64,7 +65,7 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 | Boss | `Scenes/Bosses/BossFightCheck.tscn` | 192 |
 | Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
 | Run | `Scenes/Run/RunWalkCheck.tscn` | 1993 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
-| Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 25 — the audit's Part 2 fixes, each on real bodies |
+| Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 37 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events |
 
 **Look and listen without a fight:**
 - `Scenes/Dev/VfxGallery.tscn`
@@ -86,7 +87,10 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
    keep arriving during Collection's grace, and Pixolotl's magazine reloading only from empty
    (its GDD is silent).
 
-3. **Shell polish** (audit Part 2 #1–4, #6, #20). Not started.
+3. **Shell polish** (audit Part 2 #1–4, #6, #20). **Mostly done in v0.12.5–v0.12.6**: the
+   Controls card, rewards named, cores shown, faces and magazine pips, debug tools gated, a
+   Settings screen, Quit, the mist, a beat before RUN OVER. Still open from the list below: a
+   shared paper-and-ink `Theme` (art), and a sound or flash for a refused attack.
    - A controls card built from the `InputMap`.
    - Rewards named by the arena and shown by the HUD.
    - Wonder cores shown, display only.

@@ -352,8 +352,10 @@ Fire's `s1.wrath_fire`.
 
 ## 7. Comfort settings
 
-`FeedbackSettings` (static, 0–1). **Nothing writes or saves them yet** — the options screen
-is the next team's; every session runs on the defaults.
+`FeedbackSettings` (static, 0–1). Since v0.12.6 the **Settings screen** (pause menu and title,
+`SettingsDialog`) has a slider for each, applied at once, and `SettingsStore` keeps them in
+`settings.json` beside the save slots (following `SaveGameService`'s redirection, so a check
+never touches the player's own).
 
 | Setting | Default | Scales |
 |---|---|---|

@@ -555,6 +555,18 @@ When the player enters a `?` node:
 The following categories are reserved. Specific events, rewards, and probabilities
 are **TBD** and will be fleshed out in a future content pass.
 
+**Built so far (v0.12.6, provisional):** fifteen single-node events (`EventDefs.cs`): the
+three v0.5.0 placeholders, and twelve "stray pages of other storybooks" drifting through the
+fused worlds. They include the hare and the tortoise, Goldilocks' bowls, stone soup, the fox's
+grapes, the emperor's tailor, the match girl, the Pied Piper, an old master, a wandering
+merchant, a crossroads smith, the golden goose and a hedge of thorns.
+- **Verbs:** cores, heal, an item, nothing, and since v0.12.6 a cost (`HurtParty`, never below
+  5 % HP), a price (`SpendCores`, the wonder cores' first use) and a lasting `GrantAtk` /
+  `GrantDef`.
+- **The rule:** every page keeps a choice that costs nothing.
+- **The pick:** one per node, from the run's seed, uniformly; the list is append-only.
+- **Owner's call:** the themes and every number are the build's proposal.
+
 | Category | Examples |
 |----------|----------|
 | **Movement** | Teleporter (randomly sends the player to another node on the map); tunnel (secret sub-map with challenges and grand prizes) |

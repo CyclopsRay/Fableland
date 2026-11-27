@@ -115,7 +115,7 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 |---|-----|------|
 | 1 | ~~Dark leader (final boss) name + full design.~~ **Resolved 2026-11-27 (the owner):** the dark leader is not one being. It is the final boss of the run's zone-6 variant: **the Unwritten** for the Void Frontier, a different one for Avīci. Avīci's is **Māra**, whose full design is proposed in `Mara.gdd` (v0.12.2); its open questions are in that document's §14 | MapGDD §10, FOES §8, Zone6.gdd §4.2 |
 | 2 | Boss foes. *v0.10.11: the system is built — a boss is its protagonist's kit on the Foe side with its own table row, a rule-based brain and an arena made for it; BOSS PumpKing is the first (FOES §8).* Still open: **what makes a boss differ from its protagonist** (larger magazine, quicker cooldowns, a held item, … — every `BossTable` value is a first-pass placeholder); phases; the other realms' bosses; the LV6 final boss; whether a boss can be executed (Cleopastar's Blackhole under 10% HP currently can); whether BOSS PumpKing should let a closing head arrive instead of setting it off beside the player (a touch costs a standing player 48, a detonation 30 — FOES §8.3). *v0.11.0: PumpKing stands in as **every** realm's boss until each has its own — "the other realms' bosses" is now seven rows to add to `BossTable`* | FOES §8, NODES §4.5 |
-| 3 | Question-mark node event content + probabilities | NODES §6.1 |
+| 3 | Question-mark node event content + probabilities — *fifteen events built, v0.12.6 (stray storybook pages; costs, prices, stats); probabilities still uniform* | NODES §6.1 |
 | 4 | Shelter **Wish** action | NODES §5.5 |
 | 5 | Plantation GDD (slots, watering, growth) | ITEMS §4.3, NODES §5.2 |
 | 6 | Meta-progression / persistence between runs | NODES §2.4 |
@@ -123,7 +123,7 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | 8 | Pixolotl Feather day-rewind undo scope | ITEMS §7.8 |
 | 9 | Slaughter wave composition per world | NODES §4.3 |
 | 10 | Zone-6 time-scaling curve (anti-stagnation) | MapGDD §8a |
-| 11 | VOID trader goods list & prices | NODES §5.3, ITEMS §1.2 |
+| 11 | VOID trader goods list & prices — *a first use for wonder cores: priced "?" events (the merchant, the smith), v0.12.6; no trader yet* | NODES §5.3, ITEMS §1.2 |
 | 12 | Wonder-item row in FOES loot table; foes holding items | ITEMS §1.2/§8 |
 | 13 | VOID PHANTOM contact boss fight | ITEMS §7.2 |
 | 14 | Mission reward delivery mechanism | NODES §1.2 |

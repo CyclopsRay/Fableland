@@ -9,6 +9,29 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.6** — **The shell, and the road between fights.** Audit v0.11.1 #4, #18 and #20.
+  - **Settings (#20):** a real Settings screen in the pause menu and on the title. It has a
+    slider for each comfort setting (shake, camera punch, flash, hit-stop, particles) and each
+    of the four volumes; changes apply at once.
+    - Saved in `settings.json` beside the save slots by `SettingsStore`, following
+      `SaveGameService`'s redirection, so a check never touches the player's own file.
+  - **The title** gets Settings and **Quit**.
+  - **Death** holds a beat before RUN OVER: "You fell.", 1.2 s, the mission clock stopped.
+  - **The map's mist** is on by default (MapGDD §8a).
+  - **Debug tools (#4)** show only in a debug build. The editor's F5 keeps them; an exported
+    release hides them:
+    - the DBG button;
+    - the map's seed box, dice, mist, render, view and fields toggles;
+    - the title's Map Creation.
+  - **Events (#18):** fifteen instead of three. The twelve new ones are stray pages of other
+    storybooks: the hare and the tortoise, Goldilocks' bowls, stone soup, the fox's grapes, the
+    emperor's tailor, the match girl, the Pied Piper, an old master, a wandering merchant, a
+    crossroads smith, the golden goose and a hedge of thorns.
+    - New verbs: a cost (`HurtParty`, never below 5 % HP), a price (`SpendCores`) and lasting
+      `GrantAtk` / `GrantDef`.
+    - **Wonder cores finally buy something** (TBD #11): items, healing and stats.
+    - Every page keeps a free choice (`EventDefs.Validate`).
+  - **The flow check** grows to 37 (settings round trip, the screen's sliders, the events).
 - **0.12.5** — **The player is told what happens.** Audit v0.11.1 Part 2 #1, #2, #3 and #6.
   - **Controls (#1):**
     - The pause menu has a **Controls** card, read from the InputMap, so a rebinding shows up

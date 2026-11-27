@@ -3,9 +3,9 @@ using System;
 /// <summary>
 /// The player's feedback preferences — how much shake, flash, hit-stop, particle density and
 /// volume they want (<c>Docs/Feedback.gdd</c> §7). Plain numbers, 0–1, readable from any
-/// layer. Nothing writes or saves them yet: the options screen and their persistence are not
-/// built (the defaults below are what every session runs with), and the particle and volume
-/// values wait for the VFX and audio directors that will read them. Nothing here is
+/// layer. The Settings screen (<c>SettingsDialog</c>, the pause menu and the title) sets them and
+/// <c>SettingsStore</c> keeps them in <c>settings.json</c> beside the save slots (v0.12.6); the
+/// defaults below are what a fresh install has. Nothing here is
 /// balance: every value only scales how strongly the game *shows* something, except
 /// <see cref="HitStop"/>, which scales a freeze — and a freeze is applied to both ends of a
 /// hit alike, so it cannot favour either side.

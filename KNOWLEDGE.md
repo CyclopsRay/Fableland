@@ -190,6 +190,12 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### Clamping to a floor with Max lifts a value already under it (v0.12.6, the events' HurtParty; caught before it landed)
+- **Symptom (in review):** `HpRatio = Max(0.05, HpRatio − cost)` "never below 5 %" would
+  have raised a fighter at 2 % to 5 %. An event that costs HP would have healed.
+- **Rule:** a floor that only stops loss is `Min(current, Max(floor, current − loss))`. The HP
+  floor (`CharacterController.HpAfterLoss`, v0.12.3) is built the same way.
+
 ### A summary that clears its notes before it runs throws away what the day said (v0.12.5, audit #2)
 - **Symptom:** winning the home capital put "The capital yields TwistedReality." in
   `DayEndNotes`. `EndDay` cleared that list before its pipeline ran, so the day-end summary

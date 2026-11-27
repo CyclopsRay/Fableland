@@ -101,18 +101,8 @@ public partial class PauseMenu : CanvasLayer
         dialog.PopupCentered();
     }
 
-    private void ShowSettings()
-    {
-        var dialog = new AcceptDialog
-        {
-            Title = "Settings",
-            DialogText = "Settings are reserved for the upcoming meta-save. This pause menu is ready to host them.",
-            ProcessMode = ProcessModeEnum.Always,
-        };
-        AddChild(dialog);
-        dialog.Confirmed += dialog.QueueFree;
-        dialog.PopupCentered();
-    }
+    /// <summary>The Settings screen: comfort and volume, saved when it closes (audit v0.11.1 #20).</summary>
+    private void ShowSettings() => SettingsDialog.Open(this);
 
     private void SaveAndQuit()
     {

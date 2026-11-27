@@ -44,7 +44,7 @@ public partial class MapController : Node2D
     // the only writer of visited/current DURING exploration, always writing through to RunState.
     private readonly HashSet<MapNode> _visited = new();
     private readonly HashSet<string> _revealed = new();  // regions entered: world abbrs and "XX"
-    private bool _mist;
+    private bool _mist = true;   // MapGDD §8a: always on in the real game (audit v0.11.1 Part 4 #15)
 
     private Vector2 _tokenPos;   // smoothed visual position of the player token
     private float _time;         // for flicker + token lerp
@@ -110,7 +110,9 @@ public partial class MapController : Node2D
         GetNode<Button>("UI/DiceButton").Pressed += OnDice;
         GetNode<Button>("UI/FinishDayButton").Pressed += OnFinishDay;
         _mistButton.Pressed += OnToggleMist;
+        _mistButton.Text = _mist ? "Mist: on" : "Mist: off";
         _renderButton.Pressed += OnToggleRender;
+        SettingsStore.EnsureLoaded();
         _seedEdit.TextSubmitted += OnSeedSubmitted;
         GetNode<Label>("UI/VersionLabel").Text = "v" + GameVersion.Current;
 
@@ -122,6 +124,13 @@ public partial class MapController : Node2D
         _fieldsButton.Pressed += OnToggleCityFields;
         _renderButton.Text = RenderButtonText();
         UpdateViewModeButton();
+
+        // The seed box, dice, mist, render, view and fields toggles are tools for whoever builds
+        // the game: an exported release hides them; the editor's debug build keeps them
+        // (audit v0.11.1 #4 — "Dice" started a new run over the current one with no question).
+        if (!OS.IsDebugBuild())
+            foreach (string tool in new[] { "UI/SeedEdit", "UI/DiceButton", "UI/MistButton", "UI/RenderButton", "UI/ViewModeButton", "UI/FieldsButton" })
+                if (GetNodeOrNull<Control>(tool) is { } control) control.Visible = false;
 
         // Debug day editor — hidden unless debug is on.
         _dayEditor = GetNode<Control>("UI/DayEditor");

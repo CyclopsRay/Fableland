@@ -71,17 +71,30 @@ public partial class EventController : CanvasLayer
         foreach (Node c in _choicesBox.GetChildren()) c.QueueFree();
 
         if (page?.Choices == null) return;
+        int cores = RunState.Instance?.WonderCores ?? 0;
         foreach (var choice in page.Choices)
         {
-            var btn = new Button { Text = choice?.Label ?? "...", CustomMinimumSize = new Vector2(0, 40) };
+            // A choice with a price can only be taken with the cores to pay it; the page always
+            // keeps one that costs nothing (EventDefs.Validate).
+            bool affordable = CanAfford(choice, cores);
+            var btn = new Button
+            {
+                Text = (choice?.Label ?? "...") + (affordable ? "" : $"  — you have {cores}"),
+                CustomMinimumSize = new Vector2(0, 40),
+                Disabled = !affordable,
+            };
             btn.Pressed += () => OnChoice(choice);
             _choicesBox.AddChild(btn);
         }
     }
 
+    /// <summary>Whether a party holding <paramref name="cores"/> wonder cores can take this choice.</summary>
+    public static bool CanAfford(EventChoice choice, int cores) => choice != null && choice.CoresCost <= cores;
+
     private void OnChoice(EventChoice choice)
     {
         if (choice == null || _resolved) return;
+        if (!CanAfford(choice, RunState.Instance?.WonderCores ?? int.MaxValue)) return;
 
         // Hide+disable immediately so a stray double-click can't double-apply effects while the
         // old buttons' QueueFree (deferred to end-of-frame) is still pending.
@@ -119,6 +132,18 @@ public partial class EventController : CanvasLayer
                 break;
             case EventEffectKind.GrantItem:
                 RunState.Instance?.AddItem(fx.StringArg);
+                break;
+            case EventEffectKind.SpendCores:
+                RunState.Instance?.SpendWonderCores(fx.IntArg);
+                break;
+            case EventEffectKind.HurtParty:
+                RunState.Instance?.HurtParty(fx.FloatArg);
+                break;
+            case EventEffectKind.GrantAtk:
+                RunState.Instance?.AddAtk(fx.IntArg);
+                break;
+            case EventEffectKind.GrantDef:
+                RunState.Instance?.AddDef(fx.IntArg);
                 break;
             case EventEffectKind.Nothing:
             default:

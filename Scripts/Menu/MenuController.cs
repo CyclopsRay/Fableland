@@ -15,9 +15,21 @@ public partial class MenuController : Control
 
     public override void _Ready()
     {
-        GetNode<Button>("Center/VBox/MapCreationButton").Pressed += OnMapCreation;
+        Fableland.Run.SettingsStore.EnsureLoaded();
+        var mapCreation = GetNode<Button>("Center/VBox/MapCreationButton");
+        mapCreation.Pressed += OnMapCreation;
+        // The map editor is a tool for whoever builds the game: an exported release hides it
+        // (audit v0.11.1 #4). Running from the editor is a debug build, so it stays there.
+        mapCreation.Visible = OS.IsDebugBuild();
         GetNode<Button>("Center/VBox/StartButton").Pressed += ShowSaveSlots;
         _mainChoices = GetNode<Control>("Center/VBox");
+        // Settings and Quit on the title (audit v0.11.1 #20: the title had no Quit).
+        var settings = new Button { Name = "SettingsButton", Text = "Settings" };
+        settings.Pressed += () => Fableland.UI.SettingsDialog.Open(this);
+        _mainChoices.AddChild(settings);
+        var quit = new Button { Name = "QuitButton", Text = "Quit" };
+        quit.Pressed += () => GetTree().Quit();
+        _mainChoices.AddChild(quit);
         _slotPanel = GetNode<Control>("Center/SlotPanel");
         _slotStatus = GetNode<Label>("Center/SlotPanel/Status");
         _slotPanel.Visible = false;

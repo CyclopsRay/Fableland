@@ -54,7 +54,9 @@ public partial class FlowCheck : Node
         {
             CheckShelterExits();
             CheckRewardsNamed();
+            CheckEvents();
             await CheckHudFaces();
+            await CheckSettings();
             Engine.PhysicsTicksPerSecond = ticksPerSecond * SpeedUp;
             Engine.TimeScale = SpeedUp;
             await Ticks(1);
@@ -206,6 +208,76 @@ public partial class FlowCheck : Node
         hud.QueueFree();
         await Ticks(1);
         GD.Print($"  flow     hud            all {Debug.ProtagonistRoster.Entries.Length} fighters show their own face in the portrait and the Switch slot");
+    }
+
+    // ---------------------------------------------------------------- #18 events
+
+    private void CheckEvents()
+    {
+        foreach (string problem in EventDefs.Validate()) Expect(false, problem);
+        Expect(EventDefs.All.Length >= 15, $"events: {EventDefs.All.Length} events for a run's 20–30 \"?\" nodes (#18)");
+        Expect(EventDefs.All[0].Id == "traveller" && EventDefs.All[1].Id == "old_shrine" && EventDefs.All[2].Id == "abandoned_cart",
+            "events: the list is append-only — its order is part of each node's pick");
+        // A price gates its choice; the free one is always there.
+        EventDef merchant = Array.Find(EventDefs.All, def => def.Id == "wandering_merchant");
+        int priced = 0, free = 0;
+        foreach (EventChoice choice in merchant.Pages[0].Choices)
+        {
+            if (!EventController.CanAfford(choice, 0)) priced++;
+            else free++;
+        }
+        Expect(priced == 3 && free == 1 && EventController.CanAfford(merchant.Pages[0].Choices[0], 12) && !EventController.CanAfford(merchant.Pages[0].Choices[0], 11),
+            "events: a priced choice must be taken only with its cores (the merchant's heart costs 12)");
+        GD.Print($"  flow     events         {EventDefs.All.Length} events, every page with a free choice, every item real; prices gate their choices (wonder cores' first use)");
+    }
+
+    // ---------------------------------------------------------------- #20 settings
+
+    /// <summary>The Settings screen: a slider per setting that changes it at once, and the
+    /// values saved and read back — in a scratch folder, never the player's own.</summary>
+    private async Task CheckSettings()
+    {
+        string savesBefore = SaveGameService.DirectoryOverride;
+        string scratch = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fableland-flow-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(scratch);
+        SaveGameService.DirectoryOverride = scratch;
+        try
+        {
+            Expect(SettingsStore.FilePath.StartsWith(scratch), $"settings: the file must follow the saves' redirection ({SettingsStore.FilePath})");
+            FeedbackSettings.ResetToDefaults();
+            FeedbackSettings.ScreenShake = 0.2f;
+            FeedbackSettings.MusicVolume = 0.35f;
+            Expect(SettingsStore.Save(), "settings: could not save");
+            FeedbackSettings.ResetToDefaults();
+            Expect(SettingsStore.Load() && Mathf.IsEqualApprox(FeedbackSettings.ScreenShake, 0.2f) && Mathf.IsEqualApprox(FeedbackSettings.MusicVolume, 0.35f),
+                $"settings: a saved shake ×0.2 and music ×0.35 came back as ×{FeedbackSettings.ScreenShake} and ×{FeedbackSettings.MusicVolume}");
+
+            var dialog = UI.SettingsDialog.Open(this);
+            await Ticks(2);
+            var sliders = new List<HSlider>();
+            var stack = new Stack<Node>();
+            stack.Push(dialog);
+            while (stack.Count > 0)
+                foreach (Node child in stack.Pop().GetChildren())
+                {
+                    if (child is HSlider slider) sliders.Add(slider);
+                    stack.Push(child);
+                }
+            Expect(sliders.Count == 9, $"settings: the screen must have a slider for each of its nine settings ({sliders.Count})");
+            if (sliders.Count > 0) sliders[0].Value = 0.6;
+            Expect(Mathf.IsEqualApprox(FeedbackSettings.ScreenShake, 0.6f), $"settings: moving the shake slider must change the shake at once (×{FeedbackSettings.ScreenShake})");
+            dialog.EmitSignal(AcceptDialog.SignalName.Confirmed);
+            await Ticks(2);
+            FeedbackSettings.ResetToDefaults();
+            Expect(SettingsStore.Load() && Mathf.IsEqualApprox(FeedbackSettings.ScreenShake, 0.6f), "settings: closing the screen must save what it set");
+            GD.Print("  flow     settings       nine sliders change the game at once; closing saves them; the file follows the saves' folder");
+        }
+        finally
+        {
+            FeedbackSettings.ResetToDefaults();
+            SaveGameService.DirectoryOverride = savesBefore;
+            try { System.IO.Directory.Delete(scratch, true); } catch { /* a leftover temp folder is harmless */ }
+        }
     }
 
     // ---------------------------------------------------------------- #13 resolved invincibility

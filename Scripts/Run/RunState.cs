@@ -635,6 +635,24 @@ public partial class RunState : Node
 
     public void AddWonderCores(int amount) { WonderCores += amount; DebugManager.Instance?.LogCores(amount, WonderCores); }
 
+    /// <summary>Spend wonder cores (a "?" event's price): false, and nothing spent, without enough.</summary>
+    public bool SpendWonderCores(int amount)
+    {
+        if (amount <= 0) return true;
+        if (WonderCores < amount) return false;
+        WonderCores -= amount;
+        DebugManager.Instance?.LogCores(-amount, WonderCores);
+        return true;
+    }
+
+    /// <summary>Every fighter loses a share of its max HP (a "?" event's cost) — never below 5 %:
+    /// an event never kills.</summary>
+    public void HurtParty(float ratio)
+    {
+        // Down to 5 % at the lowest — and a fighter already below that is not raised to it.
+        foreach (var p in Owned) p.HpRatio = Mathf.Min(p.HpRatio, Mathf.Max(0.05f, p.HpRatio - ratio));
+    }
+
     public void AddItem(string defId)
     {
         if (!ItemCatalog.Contains(defId))
