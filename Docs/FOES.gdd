@@ -130,10 +130,10 @@ The aerial harasser. No gravity, momentum-based movement, zoning tools.
 | Stat | Value |
 |------|-------|
 | Base HP | 35 |
-| Base ATK | 18 |
+| Base ATK | 20 — the code's since v0.5.0 (the first design was 18) |
 | Base SPD | (accel-based, see Passive) |
 | Gravity | **none** (ignores gravity) |
-| Contact damage | none (does not deal passive contact damage) |
+| Contact damage | yes, at its ATK, every 0.9 s — on since v0.6.5 (the first design had none) — but **not while it dashes**, so the dash's own hit lands (v0.12.4; TBD #39) |
 | Hit radius | 20 px |
 | External damping | 600 px/s² |
 
@@ -168,10 +168,14 @@ X position. Vertical position is maintained (the seagull doesn't dive during bas
 
 - **Shape:** 120° cone, 12 m length.
 
-### Skill 1 — Poop (level 4+, 5 s cooldown)
+### Skill 1 — Poop (from level 1 since v0.5.3, 5 s cooldown)
+
+*v0.5.3 made it the seagull's basic attack, available at every level: gated at level 4 with
+no contact damage, a low-level seagull was harmless.*
 
 When **aggro'd**: drops a poop projectile that falls with gravity. On reaching a surface,
-it **lingers for 3 s**, dealing **30 base damage** on contact. The lingering poop is a
+it **lingers for 3 s**, dealing **30 base damage** on contact — **once to each body** (v0.12.4:
+before, the puddle hit four times a second, up to 360). The lingering poop is a
 hazard — it zones the player and can stack with multiple seagulls.
 
 Damage: 30 base (× ATK multiplier from foe level). Does the poop deal damage mid-air on
@@ -180,8 +184,9 @@ direct hit? **Yes** — direct hit during the drop also deals 30 base damage.
 ### Skill 2 — Dash (level 6+, 10 s cooldown)
 
 When **aggro'd**: the seagull **stops moving for 1 s** and **turns red** (telegraph),
-then **dashes 15 m** (480 px) **at 30 m/s** (0.5 s) horizontally toward the player's
-current X position. **Pierces through** the player (does not stop on contact). Deals
+then **dashes 15 m** (480 px) **at 30 m/s** (0.5 s) toward the player's position at the
+start of the telegraph — **aimed in both axes** in the code since v0.5.0 (the first design said
+horizontal; at its patrol height of 3–5 m a level dash would pass over a grounded player). **Pierces through** the player (does not stop on contact). Deals
 **50 base damage** on contact during the dash.
 
 Damage: 50 base (× ATK multiplier from foe level).

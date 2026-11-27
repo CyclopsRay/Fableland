@@ -251,8 +251,8 @@ public sealed class SoftVolumeSet
 {
     private readonly List<SoftVolume> _inside = new();
 
-    /// <summary>True while the body is in at least one medium: it is resisted, and its jump
-    /// charges are kept full.</summary>
+    /// <summary>True while the body is in at least one medium: it is resisted. A fighter's
+    /// jump charges are kept full only while it also <see cref="Swims"/> (v0.12.4).</summary>
     public bool InMedium { get; private set; }
     /// <summary>True while at least one of those media is one a fighter swims in — every
     /// map volume is; a character's kit volume may not be.</summary>

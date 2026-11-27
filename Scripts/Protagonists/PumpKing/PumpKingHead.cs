@@ -78,8 +78,8 @@ public partial class PumpKingHead : CharacterBody2D
         CombatSide side = CombatSide.Player)
     {
         _gravityScale = owner is CharacterController launcher ? launcher.GravityScale : 1f;
-        _owner = owner;   // kept for reference/debug only — the mask below never includes the
-                           // launcher's own layer, so no physical collision exception is needed.
+        _owner = owner;   // credited with the damage the head deals (Credit); the mask below never
+                           // includes the launcher's own layer, so no collision exception is needed.
         // The head looks for bodies on the other side: the Foes layer when the player's
         // PumpKing threw it (the scene's authored mask), the Player layer when the BOSS did.
         _side = side;
@@ -210,8 +210,8 @@ public partial class PumpKingHead : CharacterBody2D
     private bool TryStrike(KinematicCollision2D col)
     {
         if (!CombatTargets.TryGetHostile(col.GetCollider(), _side, out ICombatTarget target)) return false;
-        target.TakeHit(new HitInfo(ContactDamage * _dmgMult, Vector2.Zero)
-            .FromRanged(_cueOwner, "ba.head", _owner), GlobalPosition);
+        Credit(target.TakeHit(new HitInfo(ContactDamage * _dmgMult, Vector2.Zero)
+            .FromRanged(_cueOwner, "ba.head", _owner), GlobalPosition));
         Explode();
         return true;
     }
@@ -263,8 +263,16 @@ public partial class PumpKingHead : CharacterBody2D
             if (distance - foe.HitRadius > _explosionRadius) continue;
 
             Vector2 knock = (distance > 0.01f ? to / distance : Vector2.Right) * _explosionKnockback;
-            foe.TakeHit(new HitInfo(_explosionDamage, knock).FromRanged(_cueOwner, "ba.explode", _owner),
-                GlobalPosition);
+            Credit(foe.TakeHit(new HitInfo(_explosionDamage, knock).FromRanged(_cueOwner, "ba.explode", _owner),
+                GlobalPosition));
         }
+    }
+
+    /// <summary>What the head dealt is its thrower's, while the thrower is still there (a Tab
+    /// switch frees the body and the head rolls on): omni-vamp and the like hear it (audit
+    /// v0.11.1 #14).</summary>
+    private void Credit(float dealt)
+    {
+        if (dealt > 0f && _owner is CharacterController thrower && IsInstanceValid(thrower)) thrower.ReportDamageDealt(dealt);
     }
 }

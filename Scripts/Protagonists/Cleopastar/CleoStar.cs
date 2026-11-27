@@ -150,6 +150,16 @@ public partial class CleoStar : Area2D
         AddChild(_starVolume);
     }
 
+    /// <summary>Who threw it: the damage its explosions and ticks deal is credited to her, so
+    /// what listens to damage dealt (Pome's Bravery's omni-vamp) hears it (audit v0.11.1 #14).
+    /// Null after a Tab switch frees her; the star flies on and credits nobody.</summary>
+    public CharacterController Thrower { get; set; }
+
+    private void Credit(float dealt)
+    {
+        if (dealt > 0f && Thrower != null && IsInstanceValid(Thrower)) Thrower.ReportDamageDealt(dealt);
+    }
+
     /// <summary>Called after AddChild so _Ready has created the terrain and star-volume probes.</summary>
     public void Init(Vector2 direction, float speed, float minDistance,
         float maxDistance, float damageMultiplier, AmmoController launchAmmo)
@@ -340,7 +350,7 @@ public partial class CleoStar : Area2D
             float damageMult = _motion == Motion.Gliding ? _volley?.ConsumeMultiplier(foe) ?? 1f : 1f;
             Vector2 push = knockback > 0f
                 ? (distance > 0.001f ? to / distance : _lastDirection) * knockback : Vector2.Zero;
-            foe.TakeHit(new HitInfo(damage * _damageMultiplier * damageMult, push), GlobalPosition);
+            Credit(foe.TakeHit(new HitInfo(damage * _damageMultiplier * damageMult, push), GlobalPosition));
         }
 
         QueueFree();
@@ -375,7 +385,7 @@ public partial class CleoStar : Area2D
         {
             if (foe.GlobalPosition.DistanceTo(GlobalPosition) > PullRadius) continue;
 
-            foe.TakeHit(new HitInfo(BlackholeTickDamage * _damageMultiplier, Vector2.Zero, 0.2f), GlobalPosition);
+            Credit(foe.TakeHit(new HitInfo(BlackholeTickDamage * _damageMultiplier, Vector2.Zero, 0.2f), GlobalPosition));
             if (CombatTargets.IsAlive(foe) && foe.CurrentHp < foe.MaxHP * 0.10f)
                 foe.Execute();
         }

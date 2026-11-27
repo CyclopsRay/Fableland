@@ -83,20 +83,40 @@ public partial class ShelterController : CanvasLayer
         bool blessed = rs?.IsShelterBlessed(_nodeId) ?? true;
         int stamina = rs?.Stamina ?? RunState.MaxStamina;
 
+        // An Eidolon Shelter's only exit is its Blessing, which carries you across. Once the
+        // crossing is spent — or can no longer happen (the far shore devoured) — Back opens:
+        // the map always has Finish the Day, so this screen can never be a dead end (#16).
+        string blocked = null;
+        bool canCross = _isEidolonShelter && blessed && rs != null && rs.CanCrossEidolonShelter(_nodeId, out blocked);
         _title.Text = _isEidolonShelter ? "Eidolon Shelter" : _isVoidShelter ? $"Last Shelter {_nodeId}" : $"Transportation Hub {_nodeId}";
         _status.Text = _isEidolonShelter
-            ? (blessed ? "Spend this shelter's Blessing on Rest or Sharpen, then cross to the far shore." : "The bridge has been crossed; only Team Build remains.")
+            ? (canCross ? "Spend this shelter's Blessing on Rest or Sharpen, then cross to the far shore."
+                : blessed ? $"{blocked ?? "The bridge cannot be crossed."} Team Build, or back to the map."
+                : "The bridge has been crossed: Team Build, or back to the map.")
             : _isVoidShelter
                 ? "The singularity has closed behind you. Rest, sharpen, or rebuild before the VOID."
                 : (blessed ? "Blessed — one day-ending action available." : "Mundane — the Blessing is spent.");
 
-        _rest.Disabled = !blessed;
-        _sharpenWeapon.Disabled = !blessed;
-        _sharpenArmor.Disabled = !blessed;
-        _finishDay.Disabled = _isEidolonShelter;
-        _back.Disabled = _isEidolonShelter || stamina <= 0;
+        (bool back, bool finish, bool blessings) = Exits(_isEidolonShelter, blessed, canCross, stamina);
+        _rest.Disabled = !blessings;
+        _sharpenWeapon.Disabled = !blessings;
+        _sharpenArmor.Disabled = !blessings;
+        _finishDay.Disabled = !finish;
+        _back.Disabled = !back;
         _back.Text = _isVoidShelter ? "Continue into the VOID" : "Back to Map";
     }
+
+    /// <summary>
+    /// Which ways out a shelter screen offers (NODES §1.2). A hub: the Blessing's actions while
+    /// blessed, Finish the Day, and Back while stamina lasts. An Eidolon Shelter: its Blessing
+    /// is its exit — it carries you across — so Back and Finish are closed while it can; once
+    /// it is spent, or the crossing can no longer happen, Back opens, because the map always
+    /// has Finish the Day (audit v0.11.1 #16). Pure: the check runs every case.
+    /// </summary>
+    public static (bool Back, bool Finish, bool Blessings) Exits(bool eidolon, bool blessed, bool canCross, int stamina) =>
+        eidolon
+            ? (Back: !canCross, Finish: false, Blessings: blessed && canCross)
+            : (Back: stamina > 0, Finish: true, Blessings: blessed);
 
     private void Blessing(string effectLine, System.Action apply)
     {

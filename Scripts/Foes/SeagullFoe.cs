@@ -35,6 +35,13 @@ public partial class SeagullFoe : BaseFoe
 
     private enum DashPhase { None, Telegraph, Dashing }
     private DashPhase _dash = DashPhase.None;
+
+    /// <summary>No contact hit while dashing: it would land a tick before the dash's own 50 and
+    /// its grace would refuse the dash (TBD #39, fixed v0.12.4).</summary>
+    protected override bool ContactAllowed => _dash != DashPhase.Dashing;
+
+    /// <summary>Read-only, for checks.</summary>
+    public bool Dashing => _dash == DashPhase.Dashing;
     private float _dashTimer;
     private Vector2 _dashDir = Vector2.Right;   // direction toward player, locked at telegraph start
     private bool _dashHit;

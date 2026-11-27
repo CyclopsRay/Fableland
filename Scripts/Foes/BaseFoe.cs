@@ -307,7 +307,7 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
             {
                 if (State == FoeState.Aggro && player != null) UpdateAggro(dt, player);
                 else UpdatePatrol(dt);
-                if (HasContactDamage && player != null) TryContactDamage(player);
+                if (HasContactDamage && ContactAllowed && player != null) TryContactDamage(player);
             }
             else IntentVel.X = 0f;                    // gain-no/root: no self-directed horizontal move
             // 4. skill gates (ongoing telegraph/dash must progress even while stunned)
@@ -402,6 +402,10 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
 
     // ── Movement (subclass sets intent; base integrates) ────────────────────────────
     protected virtual void UpdatePatrol(float dt) { }
+    /// <summary>False while a body blow of the foe's own is under way: its contact hit would
+    /// land first and the player's post-hit grace would eat the blow (TBD #39).</summary>
+    protected virtual bool ContactAllowed => true;
+
     protected virtual void UpdateAggro(float dt, CharacterController player) { }
     protected virtual void UpdateSkills(float dt, CharacterController player) { }
 

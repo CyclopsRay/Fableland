@@ -43,7 +43,10 @@ Bitmask: Player=1, Foes=2, Ground=4, Platform=8, Projectile=16, Hazard=32.
      off (Cleopastar's star): gravity/input/jumps continue and velocity is gradually pulled
      toward StagnationIndex·maxSpeed (scene fallback 0.5; map clouds 0.3, palms 0.1) plus
      the GravityIndex drift — the v0.6.18 contract, `SoftVolumeSet.Resist`.
-   Membership keeps a fighter's jump charges full either way. The same volume is also
+   Membership in a volume it swims in keeps a fighter's jump charges full; a kit volume
+   (`Swimmable` off — Cleopastar's star) does not, so she can run out inside her star and its
+   exhausted-jump support fires as Cleopastar.gdd says (v0.12.4; before, the star refilled her
+   jumps every tick and was never spent). The same volume is also
    **water** (`GravityScale` = share of gravity left, `SinkSpeed` = absolute drop, `Drag` =
    resistance multiplier) and a **current** (`IsMedium` off + `Flow`: carries only — a
    current, bubbles, a waterfall; an identical carry counts once). A body can be in several
@@ -186,6 +189,53 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 ---
 
 ## Caveats / gotchas (grow this on every bug fix)
+
+### A kit's own skill cleared the arena's end-of-mission gate — invincibility is held by sources (v0.12.4, audit #13)
+- **Symptom:** after a mission resolved, Pixolotl's Shift set `Invincible = false` on its way
+  out. The resolution's invincibility was gone, and a foe or hazard still on the field could
+  kill her and end the run. Reproduced by the flow check.
+- **Rule:** `Invincible` is held by named sources. Its setter is the body's own
+  (`KitInvincibleSource`); the arena holds `ResolvedInvincibleSource` through
+  `SetInvincible`; a respawn clears every source.
+- **Why:** one boolean with two owners means the last writer wins (golden rule 7).
+
+### A pull toward a point on a wall never arrives (v0.12.4, Yukai's Rope, audit #12)
+- **Symptom:** the rope's drag ended only within 0.35 m of its anchor. The anchor is on a wall
+  face and the body is 0.75 m half-wide, so the pull never ended. With the old rule, the flow
+  check found it still pulling after 4 s.
+- **Rule:** a pull toward a surface ends when the body stops closing in (0.2 s with no
+  progress), or after a time limit (1.5 s), as well as on arrival.
+
+### A support that is asked only when the charges run out never runs if something refills them (v0.12.4, Cleopastar's star, audit #17)
+- **Symptom:** inside her own star Cleopastar's jumps were refilled every tick, because every
+  medium refreshed jumps. She could never be out of jumps there, so the star's exhausted-jump
+  support was never asked: it never exploded or launched her.
+- **Rule:** only a volume the body swims in refills jumps. A kit volume (`Swimmable` off) does
+  not.
+- **To test it** (the flow check): her star is a volume only in its fall phase, after a 1 s
+  hover. Her magazine starts empty, one Glow every 1.5 s.
+
+### A hit landed by a kit's own shape, or by something it threw, must be reported (v0.12.4, audit #14)
+- **Symptom:** The Forgotten Kashaya's reflect never triggered for Sifu Pangda (his blows use
+  their own rectangle, not `MeleeCone`). Pome's Bravery's omni-vamp ignored Cleopastar's stars
+  and PumpKing's head (they never credited their thrower).
+- **Rule:**
+  - a melee blow with its own shape calls `ReportMeleeDamageDealt`;
+  - a thrown thing credits its thrower with `ReportDamageDealt`, while the thrower is still
+    valid.
+
+### "Damage on contact" from a hazard that ticks is a stream of hits (v0.12.4, the seagull's puddle, audit #11)
+- **Symptom:** FOES §4's puddle "deals 30 base damage on contact". As a `Hazard`, it hit four
+  times a second for 3 s, up to 360 damage: a still player lost 200 HP (all of it) in the flow
+  check's mutant run.
+- **Rule:** "on contact" means once for each body. Keep a set of bodies already struck.
+
+### zsh does not split an unquoted variable (v0.12.4, tooling)
+- **Symptom:** a mutation run did `FILES="a b c"; for f in $FILES; do cp …`. zsh made it one
+  word, so the backups failed, the `&&` chain stopped before the mutants were applied, and the
+  run passed on the real code.
+- **Rule:** in zsh use an array: `files=(a b c); for f in $files`, with `${f:t}` for the base
+  name. Count the backups before you mutate.
 
 ### A blow of several hits against the player: only the last may shove (v0.12.3, Māra's Claw Rake)
 - **Symptom:** a two-swipe rake dealt 9.6 damage, not 19.2. The second swipe landed 0.15 s

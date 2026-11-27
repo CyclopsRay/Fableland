@@ -48,6 +48,9 @@ public sealed class ItemRuntime : IDisposable
 
     public bool IsUsable => Definition != null && _behavior != null;
 
+    /// <summary>True while Yukai's Rope is pulling its holder (checks read it).</summary>
+    public bool RopeDragging => _behavior is YukaisRopeBehavior { Dragging: true };
+
     public void Tick(float dt)
     {
         if (State == null || Definition == null) return;
@@ -138,8 +141,16 @@ internal sealed class FanChensHeartBehavior : ICombatItemBehavior
 
 internal sealed class YukaisRopeBehavior : ICombatItemBehavior
 {
+    /// <summary>The longest a drag lasts, and how long it may stop closing in before it lets go.</summary>
+    public const float MaxDragSeconds = 1.5f;
+    public const float StallSeconds = 0.2f;
+
     private Vector2 _anchor;
     private bool _dragging;
+    private float _dragTime, _stalled, _lastDistance;
+
+    /// <summary>True while the rope is pulling (checks read it).</summary>
+    public bool Dragging => _dragging;
 
     public void OnEquip(ItemRuntime runtime) { }
 
@@ -151,14 +162,26 @@ internal sealed class YukaisRopeBehavior : ICombatItemBehavior
 
         if (!_dragging) return;
         Vector2 delta = _anchor - runtime.Holder.GlobalPosition;
-        if (delta.LengthSquared() <= Units.Px(0.35f) * Units.Px(0.35f))
+        float distance = delta.Length();
+        // The anchor is a point on a surface and the body has a width, so its centre may never
+        // reach it: let go when the body stops closing in (it has hit the wall), or at the time
+        // limit — not only on arrival (audit v0.11.1 #12).
+        _dragTime += dt;
+        _stalled = _lastDistance - distance < Units.Px(0.05f) ? _stalled + dt : 0f;
+        _lastDistance = distance;
+        if (distance <= Units.Px(0.35f) || _stalled >= StallSeconds || _dragTime >= MaxDragSeconds)
         {
-            _dragging = false;
-            runtime.Holder.ClearContinuousExternalVelocity(runtime.SourceKey + ":rope");
+            Release(runtime);
             return;
         }
-        float speed = Mathf.Min(Units.Px(42f), delta.Length() * 9f);
-        runtime.Holder.SetContinuousExternalVelocity(runtime.SourceKey + ":rope", delta.Normalized() * speed);
+        float speed = Mathf.Min(Units.Px(42f), distance * 9f);
+        runtime.Holder.SetContinuousExternalVelocity(runtime.SourceKey + ":rope", delta / Mathf.Max(0.001f, distance) * speed);
+    }
+
+    private void Release(ItemRuntime runtime)
+    {
+        _dragging = false;
+        runtime.Holder.ClearContinuousExternalVelocity(runtime.SourceKey + ":rope");
     }
 
     public bool TryUse(ItemRuntime runtime, out string reason)
@@ -178,6 +201,9 @@ internal sealed class YukaisRopeBehavior : ICombatItemBehavior
         }
         _anchor = hit["position"].AsVector2();
         _dragging = true;
+        _dragTime = 0f;
+        _stalled = 0f;
+        _lastDistance = (_anchor - from).Length();
         reason = null;
         return true;
     }

@@ -89,7 +89,10 @@ public partial class AsuraWrath : Zone6BossFighter
             if (_flurry[i] > 0f) continue;
             _flurry.RemoveAt(i);
             _flurryStage++;
-            MeleeCone(Units.Px(FlurryRangeM), FlurryHalfAngle, FlurryDamage, Units.Px(FlurryShoveMps), false, 0f,
+            // Only the last arm shoves: a shove gives the player 0.8 s of grace, which would
+            // swallow every arm after it (KNOWLEDGE v0.12.3).
+            float shove = _flurry.Count == 0 ? Units.Px(FlurryShoveMps) : 0f;
+            MeleeCone(Units.Px(FlurryRangeM), FlurryHalfAngle, FlurryDamage, shove, false, 0f,
                 cueAction: "ba.flurry", cueVariant: _flurryStage);
         }
     }

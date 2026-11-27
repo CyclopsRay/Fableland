@@ -14,6 +14,9 @@ public partial class PoopHazard : Hazard
     public float Damage = 30f;
     public float Life = 3f;
     private float _life;
+    // FOES §4: "30 base damage on contact" — once for each body, not every hazard tick (four
+    // a second for 3 s would be 360). Audit v0.11.1 #11, fixed v0.12.4.
+    private readonly System.Collections.Generic.HashSet<ulong> _struck = new();
 
     public override void _Ready()
     {
@@ -31,7 +34,7 @@ public partial class PoopHazard : Hazard
     protected override void ApplyTick(Node2D body)
     {
         // Player-only: bypasses i-frames via ApplyHazard, like any hazard tick.
-        if (body is not CharacterController player) return;
+        if (body is not CharacterController player || !_struck.Add(player.GetInstanceId())) return;
         player.ApplyHazard(Damage, Vector2.Zero);
         RaiseTickCue(player, Damage);
     }

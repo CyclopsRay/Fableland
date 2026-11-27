@@ -68,6 +68,7 @@ public partial class Cleopastar : CharacterController
         GetParent().AddChild(star);
         star.GlobalPosition = origin;
         star.Init(direction, StarSpeed, StarMinDistance, StarMaxDistance, DamageDealtMultiplier, Ammo);
+        star.Thrower = this;
         RegisterStar(star);
         _flightStar = star;
 

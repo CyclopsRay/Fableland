@@ -121,9 +121,31 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	public bool ControlsLocked { get; set; }
 	/// <summary>Root status: blocks self-directed movement/jumps and new knockback, but not skills.</summary>
 	public bool Trapped => _trappedTimer > 0f;
-	/// <summary>Combat-side damage gate used for terminal mission resolution. Unlike
-	/// the short post-hit i-frame timer, this also suppresses hazards and DoT.</summary>
-	public bool Invincible { get; set; }
+	/// <summary>Combat-side damage gate. Unlike the short post-hit i-frame timer, it also
+	/// suppresses hazards, statuses and DoT. Held by named sources (golden rule 7): this
+	/// property sets and clears the body's own (<see cref="KitInvincibleSource"/> — a skill
+	/// such as Pixolotl's Shift, a boss standing down); the arena's end of a mission holds
+	/// <see cref="ResolvedInvincibleSource"/>, which no kit can clear (audit v0.11.1 #13). A
+	/// respawn clears every source.</summary>
+	public bool Invincible
+	{
+		get => _invincibleSources.Count > 0;
+		set => SetInvincible(KitInvincibleSource, value);
+	}
+
+	/// <summary>The body's own invincibility: what <see cref="Invincible"/>'s setter holds.</summary>
+	public const string KitInvincibleSource = "kit";
+	/// <summary>The terminal gate a resolved mission puts on the player's body.</summary>
+	public const string ResolvedInvincibleSource = "mission.resolved";
+
+	public void SetInvincible(string source, bool on)
+	{
+		if (string.IsNullOrWhiteSpace(source)) return;
+		if (on) _invincibleSources.Add(source);
+		else _invincibleSources.Remove(source);
+	}
+
+	public bool IsInvincibleFrom(string source) => _invincibleSources.Contains(source);
 
 	/// <summary>Per-character cooldown state for the HUD's skill icons. Base has
 	/// nothing to report; characters with a Shift/E override these.</summary>
@@ -221,6 +243,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	// that may swallow a discrete hit before it lands (Māra's Devour). Empty on every
 	// protagonist, so a fighter without them is byte-for-byte unaffected.
 	private readonly Dictionary<string, float> _hpFloors = new();
+	private readonly HashSet<string> _invincibleSources = new();
 	private readonly Dictionary<string, Func<HitInfo, Vector2, bool>> _hitFilters = new();
 	// ── Feedback (Docs/Feedback.gdd): hit-stop, merged hurt ticks, status loops, hit flash ──
 	private HitStopClock _hitStop;
@@ -758,7 +781,9 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		// jump support while the body is inside: a jump there is a stroke, as often as the
 		// universal JumpCooldown allows, on top of the swimming (cloud/tree jump chains).
 		// Refresh before reading jump input so a charge can be used on this same physics tick.
-		if (_softVolumes.InMedium && !_dead) RefreshJumps();
+		// Only a volume the body swims in refills: a kit volume (Cleopastar's star) must let her
+		// run out, or the jump it exists to give is never asked for (audit v0.11.1 #17).
+		if (_softVolumes.Swims && !_dead) RefreshJumps();
 
 		float inputDir = 0f;
 		if (controllable)
@@ -1077,6 +1102,16 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		public readonly float AttackerStop() => _weight == HitWeight.Auto
 			? 0f
 			: FeedbackTable.AttackerStop(_weight, _score, _killed, FeedbackSettings.HitStop);
+	}
+
+	/// <summary>Report a melee blow a kit lands with its own hit shape (not <see cref="MeleeCone"/>,
+	/// which reports its own): held melee reactions (The Forgotten Kashaya) hear it, and so does
+	/// everything that listens to damage dealt (audit v0.11.1 #14).</summary>
+	protected void ReportMeleeDamageDealt(ICombatTarget target, float dealt)
+	{
+		if (dealt <= 0f) return;
+		MeleeDamageDealt?.Invoke(target, dealt);
+		ReportDamageDealt(dealt);
 	}
 
 	/// <summary>Report a non-melee hit dealt by this protagonist. Projectile and persistent-skill
@@ -1488,7 +1523,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	public void Respawn()
 	{
 		_dead = false;
-		Invincible = false;
+		_invincibleSources.Clear();
 		CurrentHP = MaxHP;
 		GlobalPosition = _spawnPoint;
 		Velocity = _intentVel = _externalVel = Vector2.Zero;

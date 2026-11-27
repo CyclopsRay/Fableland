@@ -989,7 +989,7 @@ public partial class GameManager : Node2D
         // the reward/Finish Day flow is visible. The controller-level gate covers
         // direct hits, hazards, and already-running damage-over-time effects.
         if (_player != null && IsInstanceValid(_player))
-            _player.Invincible = true;
+            _player.SetInvincible(CharacterController.ResolvedInvincibleSource, true);
 
         // All living foes become invincible — the mission is over, the player shouldn't
         // be able to farm kills or take stray damage after the objective resolves.

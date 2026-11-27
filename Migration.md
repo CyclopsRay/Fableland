@@ -9,6 +9,32 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.4** — **Bugs that could end or stall a run, and kits back to their GDDs.** These are
+  audit v0.11.1 Part 2 #11–#17, each reproduced and pinned by a new check,
+  **`Scenes/Run/FlowCheck.tscn`** (25 checks, broken once each to prove it).
+  - **#13:** a resolved mission's invincibility can no longer be undone by Pixolotl's Shift.
+    `Invincible` is now held by named sources.
+  - **#16:** an Eidolon Shelter whose crossing is spent or blocked opens Back to the map. It
+    was a screen with every exit disabled.
+  - **#12:** Yukai's Rope lets go at the wall it pulled you to. It could pull for ever.
+  - **#17:** inside her own star, Cleopastar can run out of jumps, and her star jump fires as
+    the GDD says. A kit volume no longer refills jumps.
+  - **#14:**
+    - Sifu Pangda's blows are melee to a held item, so The Forgotten Kashaya works for him.
+    - Cleopastar's stars and PumpKing's head credit their thrower, so Pome's Bravery's
+      omni-vamp hears them.
+  - **#15, the Fire Tornado:**
+    - The press after Blush is the tornado **instead of** Slash 1.
+    - She spins in place for 2.5 s.
+    - It no longer sets targets burning.
+    - The v0.2.0 box (8 × 2.5 m) and push (2 m/s) are kept; the GDD now records them.
+  - **#11, the seagull:**
+    - Its puddle hits each body once, 30 damage. It was four hits a second.
+    - It makes no contact hit while dashing, so the dash's 50 lands (TBD #39).
+    - FOES §4 now records the deliberate v0.5.x changes: poop from level 1, contact damage,
+      ATK 20, the dash aimed at the player.
+  - **The Asura's flurry:** only its last arm shoves, so all three land. The boss check
+    measures it.
 - **0.12.3** — **Māra fights on his own kit, and his wheel turns.** `Docs/Mara.gdd` steps 1
   and 2, built as designed (the owner: build it, art as placeholders, write the prompts).
   - **The Wheel of Becoming** is his signature (`BossDef.Signature = "wheel"`), run by the boss

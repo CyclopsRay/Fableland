@@ -752,9 +752,14 @@ public partial class BossFightCheck : Node
             Expect(!asura.Enraged && enrages.Count == 0, "asura: enraged above half HP");
             await Ticks(45);                      // past the stun of a blow that size
             pad.Facing = -1f;
+            float beforeFlurry = player.CurrentHP;
             pad.Tap(ControlAction.Attack);
             await Ticks(40);
             Expect(asura.LastFlurryHits == AsuraWrath.FlurryHits, $"asura: a flurry at 51% HP was {asura.LastFlurryHits} arms; it is {AsuraWrath.FlurryHits}");
+            float flurried = beforeFlurry - player.CurrentHP;
+            float flurryWants = AsuraWrath.FlurryHits * AsuraWrath.FlurryDamage * boss.DamageDealtScale;
+            Expect(Mathf.IsEqualApprox(flurried, flurryWants, 0.05f),
+                $"asura: a flurry dealt {flurried:0.#}; every arm must land ({AsuraWrath.FlurryHits} × {AsuraWrath.FlurryDamage} × {boss.DamageDealtScale:0.00} = {flurryWants:0.#}) — only the last arm shoves (KNOWLEDGE v0.12.3)");
 
             // 49%: enraged, once; four arms.
             boss.TakeHit(new HitInfo(boss.MaxHP * 0.02f), boss.GlobalPosition + new Vector2(50f, 0f));

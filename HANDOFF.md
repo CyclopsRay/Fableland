@@ -2,18 +2,19 @@
 
 Written 2026-11-27, at the end of a long multi-agent session (v0.11.1 → v0.11.8); updated
 the same day for **v0.12.0** (zone 6 as a stage, realm laws), **v0.12.1** (the first two
-zone-6 kits), **v0.12.2** (Māra's design; the dark leader settled) and **v0.12.3** (Māra built:
-his wheel and his kit, art in placeholder). **Replace this file at every hand-off:** it
-describes *now*; `Migration.md` §0 describes history.
+zone-6 kits), **v0.12.2** (Māra's design; the dark leader settled), **v0.12.3** (Māra built:
+his wheel and his kit, art in placeholder) and **v0.12.4** (the audit's run-stopping bugs and
+kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:** it describes
+*now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.3**, twelve commits on top of
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.4**, thirteen commits on top of
   v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
-- `main` was fast-forwarded to v0.12.2 (`1350e9d`) on 2026-11-27, **locally, not pushed**; it
-  is one commit behind the branch until the owner says to fast-forward again.
+- `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
+  owner asks for each fast-forward; until then it trails the branch.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.3, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.4, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -48,19 +49,21 @@ describes *now*; `Migration.md` §0 describes history.
 | 0.12.0 | `1490004` | **Zone 6 is a stage that rotates; realms have laws.** Two variants — the Void Frontier (gravity ladder, the Unwritten's Styx Tide) and Avīci (the five poisons' seals, Māra). Gates are mini-bosses whose defeat the run survives. Wulin's Qinggong. One rules record (`ArenaRules`) applied to every body. Twelve boss rows on the stand-in kit. Art direction confirmed (cyanotype / nagtang) | `Docs/Zone6.gdd`, `MapGDD.md` §2.3, §7 |
 | 0.12.1 | `219bfed` | **The Ferryman and the Asura of Wrath on their own kits** (`Zone6BossFighter`; sprites; Undertow, obol toll, Skiff Ram; flurry, Wrath Fire, vajra, Rising Wrath) | `Zone6.gdd` §4.1, §5.1, `FOES.gdd` §8.7 |
 | 0.12.2 | `1350e9d` | **The dark leader is each variant's final boss** (TBD #1 closed by the owner). **Māra's full design, proposed for review:** the Wheel of Becoming, the human realm as the only interval, the last 5 % falling only there, his kit, arena, look and build plan. Docs only | `Docs/Mara.gdd` |
-| 0.12.3 | — | **Māra built** (`Mara.gdd` steps 1–2, the owner's "先做…占位先"): the **Wheel of Becoming** as his signature (rests, skips, stacks, the realms' modifiers, the lock, the Last Turn, Liberation, the Offering) and **his own kit** (Claw Rake, Noose, Hand of the Wheel, every realm's arrival strike, Doubt's false tells, Delusion's images). Placeholders drawn in code; **art prompts written, not generated** | `Docs/Mara.gdd` §13.4, `Docs/Art/MaraArtPrompts.md` |
+| 0.12.3 | `7afe440` | **Māra built** (`Mara.gdd` steps 1–2, the owner's "先做…占位先"): the **Wheel of Becoming** as his signature (rests, skips, stacks, the realms' modifiers, the lock, the Last Turn, Liberation, the Offering) and **his own kit** (Claw Rake, Noose, Hand of the Wheel, every realm's arrival strike, Doubt's false tells, Delusion's images). Placeholders drawn in code; **art prompts written, not generated** | `Docs/Mara.gdd` §13.4, `Docs/Art/MaraArtPrompts.md` |
+| 0.12.4 | — | **The audit's bugs that could end or stall a run, and kits back to their GDDs** (Part 2 #11–#17): resolution invincibility held by sources (Pixolotl's Shift), the Eidolon Shelter's dead end, Yukai's Rope letting go, Cleopastar's star jump, damage credited to Pangda's blows and to thrown stars and heads, the Fire Tornado replacing Slash 1 and spinning in place, the seagull's puddle and dash; the Asura's flurry lands every arm. New **`FlowCheck`**, each fix broken once | `Docs/Research/AUDIT-v0.11.1.md` Part 2 (its status line), KNOWLEDGE v0.12.4 |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts, all passing; the bold ones were rerun at v0.12.3, the rest are from v0.12.1:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.4, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
-| Feedback | `Scenes/Feedback/FeedbackCheck.tscn` | **249** |
+| Feedback | `Scenes/Feedback/FeedbackCheck.tscn` | 251 |
 | VFX | `Scenes/Feedback/VfxCheck.tscn` | 1298 |
 | Audio | `Scenes/Feedback/AudioCheck.tscn` | 1108 |
 | Map content | `Scenes/MapCreation/MapContentCheck.tscn` | 1171 |
-| Boss | `Scenes/Bosses/BossFightCheck.tscn` | **191** |
-| Zone 6 | `Scenes/Run/Zone6Check.tscn` | **115** |
-| Run | `Scenes/Run/RunWalkCheck.tscn` | **1993** without `--saves`; 2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>` |
+| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 192 |
+| Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
+| Run | `Scenes/Run/RunWalkCheck.tscn` | 1993 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
+| Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 25 — the audit's Part 2 fixes, each on real bodies |
 
 **Look and listen without a fight:**
 - `Scenes/Dev/VfxGallery.tscn`
@@ -77,16 +80,10 @@ describes *now*; `Migration.md` §0 describes history.
    - Then add rows in `VfxTable` / `SfxTable`. Art direction: the signature-effect sections of `VFX.gdd` and `Audio.gdd`.
    - Remove the five direct `ShakeCamera()` calls (4 in Sifu Pangda, 1 in Pixolotl).
    - Audio memory will pass its 8 MB budget once the kits are wired; the owner must choose a policy (§4).
-2. **Gameplay bugs from the audit** (Part 2). Entries #12, #13, #16 and #17 were found by reading, not by running: reproduce each with a check first.
-
-   | # | Bug | Caveats to read first |
-   |---|---|---|
-   | 13 | Pixolotl's Shift after a mission resolves drops the end-of-mission invincibility | "Mission resolution must gate player damage at the shared controller"; "External arena actions must ask the active character's skill-state policy"; "A control lock does not freeze physics by itself" |
-   | 17 | Cleopastar's star jump never fires | "A special one-way support must not silently refresh ordinary jump charges"; "An enterable character-specific field needs a membership filter" |
-   | 12 | Yukai's Rope against a solid wall | — |
-   | 16 | The Eidolon Shelter can be re-entered and has no exit | — |
-   | 14 | Kashaya's passive and Pome's Bravery heal miss triggers | — |
-   | 15 | Fire Tornado's numbers differ from the GDD | — |
+2. **Gameplay bugs from the audit** (Part 2) — **#11–#17 fixed in v0.12.4**, each reproduced
+   and pinned by `Scenes/Run/FlowCheck.tscn`. Still open from that list: the ambient foes that
+   keep arriving during Collection's grace, and Pixolotl's magazine reloading only from empty
+   (its GDD is silent).
 
 3. **Shell polish** (audit Part 2 #1–4, #6, #20). Not started.
    - A controls card built from the `InputMap`.

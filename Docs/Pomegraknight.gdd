@@ -93,22 +93,22 @@ When Blush is active, Pomegraknight's next BA input within **3 seconds** of cast
 | Tick interval | 0.5 s |
 | Duration | 2.5 s (5 ticks) |
 | Total damage | 75 |
-| Hitbox | 3 m (length) × 2 m (height) rectangle |
+| Hitbox | 8 m (length) × 2.5 m (height) rectangle — the v0.2.0 tuning (the first design was 3 × 2 m) |
 | Hitbox position | Centered on Pomegraknight (extends both left and right) |
 | Damage reduction | 40% during the full 2.5 s |
-| External force | 5 m/s radial push outward per tick |
+| External force | 2 m/s radial push outward per tick — the v0.2.0 tuning: "a slight knockback instead of a launch" (first design: 5 m/s) |
 | Penetration | Hits all enemies in area, no per-target limit |
 
 **Mechanics:**
-* Pomegraknight is the center of the hitbox — the 3×2 m rectangle wraps around her, covering both sides equally.
+* Pomegraknight is the center of the hitbox — the 8 × 2.5 m rectangle wraps around her, covering both sides equally.
 * She spins in place for the full 2.5 s, locked in the animation.
-* Every 0.5 s, all valid targets inside the rectangle take 15 damage and are pushed outward at 5 m/s.
+* Every 0.5 s, all valid targets inside the rectangle take 15 damage and are pushed outward at 2 m/s. They are not set burning.
 * She gains 40% damage reduction for the entire 2.5 s duration — protecting her from foes that survive the push and get close.
 * The tornado persists for the full 2.5 s even if no targets are present.
 * Once used, the Fire Tornado is consumed — subsequent Blush casts grant a fresh one.
 * If the 3 s window expires without using BA, the Fire Tornado is lost (the normal combo resumes on next BA press).
 
-**Design intent:** This addresses Pomegraknight's weakness against horizontal swarms of minion foes. The 3×2 m centered rectangle gives her a wave-clear tool that hits both sides, the 40% DR keeps her safe during the long animation lock, and the per-tick push outward prevents enemies from simply walking through the tornado to hit her.
+**Design intent:** This addresses Pomegraknight's weakness against horizontal swarms of minion foes. The wide, short centered rectangle gives her a wave-clear tool that hits both sides, the 40% DR keeps her safe during the long animation lock, and the per-tick push outward prevents enemies from simply walking through the tornado to hit her.
 
 ---
 
@@ -125,7 +125,7 @@ Pomegraknight ignites herself, bursting into flames. This applies the Burning st
 
 Blush is Pomegraknight's core loop enabler — it turns her from a moderate-damage skirmisher into a high-threat rushdown character for its duration. The 10 s cooldown creates a rhythm of burst windows.
 
-**Fire Tornado follow-up:** For 3 seconds after casting Blush, Pomegraknight's next BA input triggers a **Fire Tornado** — she spins in place, creating a 3×2 m rectangle centered on herself dealing 15 DMG per 0.5 s for 2.5 s (75 total), with 40% damage reduction and a 5 m/s radial push per tick. Hits both sides. Replaces Slash1 and consumes 1 ammo. If not used within 3 s, the tornado is lost. Only one tornado per Blush cast.
+**Fire Tornado follow-up:** For 3 seconds after casting Blush, Pomegraknight's next BA input triggers a **Fire Tornado** — she spins in place, creating an 8 × 2.5 m rectangle centered on herself dealing 15 DMG per 0.5 s for 2.5 s (75 total), with 40% damage reduction and a 2 m/s radial push per tick. Hits both sides. Replaces Slash1 and consumes 1 ammo. If not used within 3 s, the tornado is lost. Only one tornado per Blush cast.
 
 **VFX:** A looping fire particle system activates for the full 5 s duration. The character sprite does not change (no animator branch for burning), but the flames provide a clear visual read.
 
@@ -167,7 +167,7 @@ When Blush is active, seeds are replaced with burning seeds that apply a 2 s Bur
 | Skill | Name | CD | Key Mechanic |
 |-------|------|----|--------------|
 | Passive | Pomegranate Shell | — | Burn immune; 1.5× melee DMG & burning seeds while Burning |
-| BA | Pome Slash / Fire Tornado | 0.75 s (replenish windup) | 3-stage melee combo, 4 m / 80° cone; Fire Tornado (centered 3×2 m, 15×5 ticks, 40% DR, radial push) on first BA within 3 s of Blush |
+| BA | Pome Slash / Fire Tornado | 0.75 s (replenish windup) | 3-stage melee combo, 4 m / 80° cone; Fire Tornado (centered 8 × 2.5 m, 15×5 ticks, 40% DR, 2 m/s radial push) on first BA within 3 s of Blush |
 | Shift | Blush | 10 s | Self-ignite for 5 s; enables full passive; grants one Fire Tornado charge |
 | E | Pome Seed Eruption | 9 s | 3 waves (6+8+10 seeds), per-wave hit tracking |
 
@@ -216,7 +216,7 @@ unless their GDD says so.
 
 ## Design Notes
 
-* The Fire Tornado was added to address Pomegraknight's weakness against horizontal swarms of minion foes. Her cone-based melee struggled to clear spread-out enemies; the centered 3×2 m rectangle covers both sides, the 40% DR protects her during the long animation lock, and the per-tick push keeps foes from closing in.
+* The Fire Tornado was added to address Pomegraknight's weakness against horizontal swarms of minion foes. Her cone-based melee struggled to clear spread-out enemies; the centered rectangle covers both sides, the 40% DR protects her during the long animation lock, and the per-tick push keeps foes from closing in.
 * Pomegraknight is a snowball character. Blush is her power window — she must commit to a 5 s aggression phase and make it count. Outside Blush, she's a modest-damage skirmisher with above-average HP.
 * The E skill's 3-wave structure creates lingering zone denial. Opponents must path around falling seeds or eat chip damage. During Blush, the burning seeds add a persistent threat — even 6 damage per hit adds up when the Burning DoT is ticking.
 * The BA combo's 3rd stage hits hardest (30 base / 45 burning). Opponents should watch for the third swing wind-up and disengage before it lands.

@@ -781,16 +781,7 @@ public partial class RunState : Node
     /// endpoint without ending the day. Team Build remains a free shelter action.</summary>
     public bool TryCrossEidolonShelter(string shelterId, out string reason)
     {
-        reason = null;
-        MapNode shelter = FindNode(shelterId);
-        if (Graph == null || shelter == null || !Graph.TryGetRealityBridgeEndpoints(shelter, out MapNode a, out MapNode b))
-        {
-            reason = "This shelter no longer connects two realities.";
-            return false;
-        }
-        if (!IsShelterBlessed(shelterId)) { reason = "This shelter's Blessing is already spent."; return false; }
-        MapNode target = PreviousNodeId == a.Id ? b : a;
-        if (target.Devoured) { reason = "The far shore has been devoured."; return false; }
+        if (!CanCrossEidolonShelter(shelterId, out MapNode shelter, out MapNode target, out reason)) return false;
         ConsumeBlessing(shelterId);
         PreviousNodeId = shelter.Id;
         CurrentNodeId = target.Id;
@@ -799,6 +790,29 @@ public partial class RunState : Node
         if (!InVoid && target.WorldIndex == -1) EnterVoid();
         if (target.IsCombat && !CompletedNodeIds.Contains(target.Id)) BeginAdventure(target.Id);
         else ReturnToMap();
+        return true;
+    }
+
+    /// <summary>Whether an Eidolon Shelter's Blessing can still carry the player across — the
+    /// bridge stands, the Blessing is unspent, the far shore is not devoured — and where to.
+    /// The shelter screen asks it so that a crossing that cannot happen never leaves the player
+    /// on a screen with every exit disabled (audit v0.11.1 #16).</summary>
+    public bool CanCrossEidolonShelter(string shelterId, out string reason) =>
+        CanCrossEidolonShelter(shelterId, out _, out _, out reason);
+
+    private bool CanCrossEidolonShelter(string shelterId, out MapNode shelter, out MapNode target, out string reason)
+    {
+        reason = null;
+        target = null;
+        shelter = FindNode(shelterId);
+        if (Graph == null || shelter == null || !Graph.TryGetRealityBridgeEndpoints(shelter, out MapNode a, out MapNode b))
+        {
+            reason = "This shelter no longer connects two realities.";
+            return false;
+        }
+        if (!IsShelterBlessed(shelterId)) { reason = "This shelter's Blessing is already spent."; return false; }
+        target = PreviousNodeId == a.Id ? b : a;
+        if (target.Devoured) { reason = "The far shore has been devoured."; return false; }
         return true;
     }
 

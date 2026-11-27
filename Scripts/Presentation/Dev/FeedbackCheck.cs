@@ -1002,7 +1002,8 @@ public partial class FeedbackCheck : Node
         Expect(_hits.Count == 3 && Count(_cues, "pomegraknight", "ba.swing") == 3, $"pome: a three-slash combo is three swings and three hits ({Count(_cues, "pomegraknight", "ba.swing")} / {_hits.Count})");
         await Ticks(70);                                                              // the reload
 
-        // Blush, then the next slash: burning, and the Fire Tornado as a loop with its box.
+        // Blush, then the next press: the Fire Tornado instead of Slash 1 (Pomegraknight.gdd,
+        // v0.12.4), as a loop with its box; then, still burning, a slash tagged so.
         ClearLog();
         _pad.Tap(ControlAction.Skill1);
         Expect(await Until(() => Count(_cues, "pomegraknight", "s1.cast") > 0, 30), "pome: Blush raises s1.cast");
@@ -1010,8 +1011,8 @@ public partial class FeedbackCheck : Node
         Expect(Count(_starts, "pomegraknight", "status.burning") == 1, "pome: Blush sets her burning — the status loop starts");
         _pad.Tap(ControlAction.Attack);
         bool spinning = await Until(() => Count(_starts, "pomegraknight", "s1.tornado") > 0, 30);
-        Expect(spinning && Find(_cues, "pomegraknight", "ba.swing", out Cue burningSwing) && burningSwing.Tag == "burning", "pome: a slash while burning is tagged 'burning'");
-        Expect(spinning, "pome: the slash after Blush starts the s1.tornado loop");
+        Expect(spinning, "pome: the press after Blush starts the s1.tornado loop");
+        Expect(Count(_cues, "pomegraknight", "ba.swing") == 0, "pome: the press after Blush is the Fire Tornado instead of Slash 1 — no swing");
         if (spinning)
         {
             Cue tornado = _starts[_starts.FindIndex(c => c.Action == "s1.tornado")];
@@ -1038,6 +1039,11 @@ public partial class FeedbackCheck : Node
             }
             Expect(fieldHits == ticks, $"pome: every tick lands on a target inside the box ({fieldHits} hits for {ticks} ticks)");
             Expect(!heldByField, "hit-stop: the tornado's ticks must never hold her — a field is ranged");
+            // Blush burns 5 s, the tornado 2.5 s: the next press is a slash, still burning.
+            await Ticks(6);
+            _pad.Tap(ControlAction.Attack);
+            bool swung = await Until(() => Count(_cues, "pomegraknight", "ba.swing") > 0, 30);
+            Expect(swung && Find(_cues, "pomegraknight", "ba.swing", out Cue burningSwing) && burningSwing.Tag == "burning", "pome: a slash while burning is tagged 'burning'");
         }
         await Ticks(30);
 

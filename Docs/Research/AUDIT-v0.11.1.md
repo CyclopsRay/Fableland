@@ -414,6 +414,12 @@ mission the moment belongs to.
 
 ## Part 2 — The twenty gaps a player would hit
 
+> **Status at v0.12.4.** Fixed, each pinned by `Scenes/Run/FlowCheck.tscn`: **#11** (the puddle
+> and the dash; the other seagull lines were deliberate and FOES §4 now says so), **#12**, **#13**,
+> **#14**, **#15** (replace and lock; the box and push were the v0.2.0 tuning, now in the GDD),
+> **#16**, **#17**. Overtaken by later work: **#8** (VFX v0.11.6, audio v0.11.7 — the four kits'
+> own cues remain, Part 1) and **#9** (zone 6's own bosses, v0.12.0–v0.12.3). The rest stand.
+
 Ordered by how much of a new player's session each one touches, starting from the title
 screen. Effort: S ≤ 30 min, M ≤ 2 h, L more. Four entries (12, 13, 16, 17) come from reading
 the code only and should be confirmed in play before anyone fixes them.

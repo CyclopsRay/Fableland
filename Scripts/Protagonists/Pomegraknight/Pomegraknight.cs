@@ -50,6 +50,8 @@ public partial class Pomegraknight : CharacterController
     [Export] public float TornadoDuration = 2.5f;
     [Export] public float TornadoTick = 0.5f;
     [Export] public float TornadoDamage = 15f;
+    // The box and the push are the v0.2.0 tuning ("a wide-and-short box with a slight
+    // knockback instead of a launch"); Pomegraknight.gdd records them since v0.12.4.
     [Export] public float TornadoHalfW = 128f;     // 8m wide — much bigger than her sideways
     [Export] public float TornadoHalfH = 40f;      // 2.5m tall — slightly bigger than her (2m)
     [Export] public float TornadoPush = 64f;       // ~2 m/s — a slight knockoff, not a launch
@@ -157,6 +159,18 @@ public partial class Pomegraknight : CharacterController
     {
         if (!TryConsumeAmmo()) return;
 
+        // Within Blush's window the press is the Fire Tornado INSTEAD of Slash 1: it costs the
+        // ammo and counts as the combo's first stage (Pomegraknight.gdd; audit v0.11.1 #15).
+        if (_tornadoCharge > 0f)
+        {
+            _tornadoCharge = 0f;
+            _comboStage = 1;
+            StartAmmoAttackInterval();
+            RequestAmmoReload();
+            ActivateTornado();
+            return;
+        }
+
         float mult = IsBurning ? BurnComboMult : 1f;   // passive
         float dmg = ComboDamage[_comboStage % ComboDamage.Length] * mult;
         int stage = (_comboStage % 3) + 1;             // captured before _comboStage++ below
@@ -178,8 +192,6 @@ public partial class Pomegraknight : CharacterController
         _comboStage++;
         StartAmmoAttackInterval();
         RequestAmmoReload();
-
-        if (_tornadoCharge > 0f) { ActivateTornado(); _tornadoCharge = 0f; }
     }
 
     // ── Blush + Fire Tornado ───────────────────────────────────────────────
@@ -203,13 +215,22 @@ public partial class Pomegraknight : CharacterController
         _tornadoTickTimer = 0f;            // tick on the next frame
         _tornadoTicks = 0;
         SetDefenseSource("FireTornado", TornadoDefense);
+        // She spins in place, locked in the animation, for the whole 2.5 s (the GDD). The lock
+        // is hers alone: no other system sets ControlsLocked on her.
+        ControlsLocked = true;
+        PlayAnim("ignite", restart: true);   // NOTE(animation): a spin clip when one exists
     }
 
     private void EndTornado()
     {
+        _tornadoActive = 0f;
+        ControlsLocked = false;
         ClearDefenseSource("FireTornado");
         CueBus.Stop(this, "s1.tornado");
     }
+
+    /// <summary>True while the Fire Tornado spins (checks read it).</summary>
+    public bool TornadoSpinning => _tornadoActive > 0f;
 
     public override void _ExitTree()
     {
@@ -221,6 +242,7 @@ public partial class Pomegraknight : CharacterController
     private void UpdateTornado(float dt)
     {
         if (_tornadoActive <= 0f) return;
+        if (Dead) { EndTornado(); return; }   // a respawn must not wake up locked
         _tornadoActive -= dt;
         _tornadoTickTimer -= dt;
         if (_tornadoTickTimer <= 0f)
@@ -247,7 +269,7 @@ public partial class Pomegraknight : CharacterController
             float dealt = e.TakeHit(new HitInfo(TornadoDamage * DamageDealtMultiplier, push)
                 .FromRanged(this, "s1.tornado", _tornadoTicks, HitWeight.Light), origin);
             ReportDamageDealt(dealt);
-            e.SetBurning(2f);
+            // No burn on its targets: the GDD's tornado deals its 75 and nothing more (#15).
         }
     }
 

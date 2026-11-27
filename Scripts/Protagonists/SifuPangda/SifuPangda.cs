@@ -392,7 +392,7 @@ public partial class SifuPangda : CharacterController
             Vector2 delta = foe.GlobalPosition - center;
             if (Mathf.Abs(delta.X) > halfW + foe.HitRadius || Mathf.Abs(delta.Y) > halfH + foe.HitRadius) continue;
             float dealt = foe.TakeHit(new HitInfo(damage * DamageDealtMultiplier, knockback, stun), GlobalPosition);
-            ReportDamageDealt(dealt);
+            ReportMeleeDamageDealt(foe, dealt);   // his palm, kick, dive and dash are melee blows
         }
     }
 
