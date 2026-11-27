@@ -158,11 +158,26 @@ public static class BossTable
         Signature = signature,
     };
 
+    /// <summary>The same row on a kit of its own: its scene and its magazine. Its damage share
+    /// and bulk stay the row's, so a kit's numbers (Zone6.gdd) scale like every boss's: × the
+    /// row's share × the node's foe level.</summary>
+    private static BossDef WithKit(BossDef row, string scenePath, CharacterAmmoDef ammo) => new()
+    {
+        Id = row.Id, DisplayName = row.DisplayName, ProtagonistId = row.ProtagonistId, WorldAbbr = row.WorldAbbr,
+        ScenePath = scenePath, BaseHp = row.BaseHp, DamageScale = row.DamageScale,
+        KnockbackTaken = row.KnockbackTaken, StunTaken = row.StunTaken, CooldownScale = row.CooldownScale,
+        Ammo = ammo, DecisionSeconds = row.DecisionSeconds, Role = row.Role, Zone6Variant = row.Zone6Variant,
+        Concept = row.Concept, Signature = row.Signature,
+    };
+
     private const string VF = "void_frontier";
     private const string AV = "avici";
 
-    public static readonly BossDef Ferryman = Zone6Boss("z6_ferryman", "The Ferryman (渡魂人)", BossRole.Zone6Mini, VF,
-        "A hooded giant in a skiff: amber lantern, oar, obols. Oar Sweep, Obol Toss (the toll drains ult charge), Undertow, Skiff Ram.");
+    // The first two with kits of their own (v0.12.1): their own scene, their own magazine.
+    public static readonly BossDef Ferryman = WithKit(Zone6Boss("z6_ferryman", "The Ferryman (渡魂人)", BossRole.Zone6Mini, VF,
+        "A hooded giant in a skiff: amber lantern, oar, obols. Oar Sweep, Obol Toss (the toll drains ult charge), Undertow, Skiff Ram."),
+        "res://Scenes/Bosses/Ferryman.tscn",
+        new CharacterAmmoDef { CharacterId = "z6_ferryman", Capacity = 1, ReloadSize = 1, ReloadDelaySec = 1.4f, RepeatReloadWhileMissing = false, BaseAttackIntervalSec = 0f, RespawnMode = AmmoRespawnMode.Full });
     public static readonly BossDef Weigher = Zone6Boss("z6_weigher", "The Weigher of Hearts (称心官)", BossRole.Zone6Mini, VF,
         "A jackal-headed judge, gold collar, a balance. Feather Fan, Judgement (tilting pan platforms; the low pan sinks into a hazard), Devourer's Jaws.");
     public static readonly BossDef MengPo = Zone6Boss("z6_meng_po", "Meng Po of the Naihe Bridge (孟婆)", BossRole.Zone6Mini, VF,
@@ -177,8 +192,10 @@ public static class BossTable
 
     public static readonly BossDef Preta = Zone6Boss("z6_preta", "Preta, the Hungry Ghost (饿鬼)", BossRole.Zone6Mini, AV,
         "贪 Greed. A grey-green ghost, a huge belly, a needle throat. Gorge (inhales; swallowed projectiles heal it), Spew, Hungry Grasp.");
-    public static readonly BossDef Asura = Zone6Boss("z6_asura", "Asura of Wrath (修罗)", BossRole.Zone6Mini, AV,
-        "嗔 Anger. Three faces, six arms, tiger skin, a flame aureole. Six-Arm Flurry, Wrath Fire, Vajra Throw, Rising Wrath.");
+    public static readonly BossDef Asura = WithKit(Zone6Boss("z6_asura", "Asura of Wrath (修罗)", BossRole.Zone6Mini, AV,
+        "嗔 Anger. Three faces, six arms, tiger skin, a flame aureole. Six-Arm Flurry, Wrath Fire, Vajra Throw, Rising Wrath."),
+        "res://Scenes/Bosses/AsuraWrath.tscn",
+        new CharacterAmmoDef { CharacterId = "z6_asura", Capacity = 1, ReloadSize = 1, ReloadDelaySec = 0.2f, RepeatReloadWhileMissing = false, BaseAttackIntervalSec = 1.1f, RespawnMode = AmmoRespawnMode.Full });
     public static readonly BossDef Boar = Zone6Boss("z6_boar", "The Boar of Delusion (痴猪)", BossRole.Zone6Mini, AV,
         "痴 Delusion. A black boar with closed eyes. Blind Charge (stuns itself on a wall), Mirror Herd, Mire (left and right swap).");
     public static readonly BossDef FallenDeva = Zone6Boss("z6_fallen_deva", "The Fallen Deva (衰天)", BossRole.Zone6Mini, AV,

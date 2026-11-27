@@ -1,14 +1,15 @@
 # HANDOFF — read this instead of the last session
 
 Written 2026-11-27, at the end of a long multi-agent session (v0.11.1 → v0.11.8); updated
-the same day for **v0.12.0** (zone 6 as a stage, realm laws). **Replace this file at every
+the same day for **v0.12.0** (zone 6 as a stage, realm laws) and **v0.12.1** (the first two
+zone-6 kits). **Replace this file at every
 hand-off:** it describes *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.0**, nine commits on top of
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.1**, ten commits on top of
   v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
-  (`main` below is at v0.11.8, one behind.)
+  (`main` below is at v0.11.8, two behind.)
 - `main` was fast-forwarded to this commit (v0.11.8) on 2026-11-27, **locally, not pushed**.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
   **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.11.8, first run
@@ -43,9 +44,10 @@ hand-off:** it describes *now*; `Migration.md` §0 describes history.
 | 0.11.6 | `1fdd7f7` | **VfxDirector**: every cue drawn in its owner's art medium (ten media), pooled and budgeted | `Docs/VFX.gdd` |
 | 0.11.7 | `d4c48ec` | **AudioDirector**: all sound and music synthesised from data, 14 music profiles, intensity stems, a combo ladder in the realm's scale. Also the GDD-vs-code audit | `Docs/Audio.gdd`, `Docs/Research/AUDIT-v0.11.1.md` |
 | 0.11.8 | `9f97e87` | This hand-off | — |
-| 0.12.0 | — | **Zone 6 is a stage that rotates; realms have laws.** Two variants — the Void Frontier (gravity ladder, the Unwritten's Styx Tide) and Avīci (the five poisons' seals, Māra). Gates are mini-bosses whose defeat the run survives. Wulin's Qinggong. One rules record (`ArenaRules`) applied to every body. Twelve boss rows on the stand-in kit. Art direction confirmed (cyanotype / nagtang) | `Docs/Zone6.gdd`, `MapGDD.md` §2.3, §7 |
+| 0.12.0 | `1490004` | **Zone 6 is a stage that rotates; realms have laws.** Two variants — the Void Frontier (gravity ladder, the Unwritten's Styx Tide) and Avīci (the five poisons' seals, Māra). Gates are mini-bosses whose defeat the run survives. Wulin's Qinggong. One rules record (`ArenaRules`) applied to every body. Twelve boss rows on the stand-in kit. Art direction confirmed (cyanotype / nagtang) | `Docs/Zone6.gdd`, `MapGDD.md` §2.3, §7 |
+| 0.12.1 | — | **The Ferryman and the Asura of Wrath on their own kits** (`Zone6BossFighter`; sprites; Undertow, obol toll, Skiff Ram; flurry, Wrath Fire, vajra, Rising Wrath) | `Zone6.gdd` §4.1, §5.1, `FOES.gdd` §8.7 |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.0, all passing:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.1, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
@@ -53,9 +55,9 @@ hand-off:** it describes *now*; `Migration.md` §0 describes history.
 | VFX | `Scenes/Feedback/VfxCheck.tscn` | 1298 |
 | Audio | `Scenes/Feedback/AudioCheck.tscn` | 1108 |
 | Map content | `Scenes/MapCreation/MapContentCheck.tscn` | 1171 |
-| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 157 |
+| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 177 |
 | Zone 6 (new) | `Scenes/Run/Zone6Check.tscn` | 86 |
-| Run | `Scenes/Run/RunWalkCheck.tscn` (`-- --saves=<copy of the owner's slots>`) | 1960 |
+| Run | `Scenes/Run/RunWalkCheck.tscn` (`-- --saves=<copy of the owner's slots>`) | 2005 |
 
 **Look and listen without a fight:**
 - `Scenes/Dev/VfxGallery.tscn`
@@ -102,10 +104,12 @@ hand-off:** it describes *now*; `Migration.md` §0 describes history.
 4. **`arena.enter` should report the realm on screen** (TBD #50). *Zone 6's half is done
    (v0.12.0): it reports its variant at the drained lightness.* Left: the tag becomes
    `MapRealm.Of(map)`, so Cloud Court reports `CC` and gets its enamel effects and music.
-6. **Zone 6's kits** (TBD #64). Every zone-6 boss fields BOSS PumpKing's kit under its own row.
-   Next: the Ferryman and the Asura of Wrath (designed in `Zone6.gdd` §4.1, §5.1 with numbers;
-   sprites in `Assets/Sprites/Bosses/`), then the other eight, the Unwritten's Borrowed Shapes
-   and Blank Page, Māra's five powers. Read first: `FOES.gdd` §8, `Zone6.gdd` §8–§9.
+6. **Zone 6's kits** (TBD #64). The Ferryman and the Asura of Wrath have their own (v0.12.1:
+   `Scripts/Bosses/Zone6/`, a `Zone6BossFighter` each); the other ten field BOSS PumpKing's
+   kit under their own rows. Next: the other eight guardians and poisons (designs in
+   `Zone6.gdd` §4.1, §5.1; concept art `Z6-VF-2…5`, `Z6-AV-1, 3…5`, no keyed sprites yet), the
+   Unwritten's Borrowed Shapes and Blank Page, Māra's five powers. Read first: `FOES.gdd`
+   §8.7, `Zone6.gdd` §8–§9, and the v0.12.1 caveats in `KNOWLEDGE.md`.
 5. **Nobody has watched or listened to anything.** Play in the real renderer, then tune the data:
    - `FeedbackTable` / `FeelTable`: light hits barely shake; the flash colour.
    - VFX: mark sizes (4–23 px) and ambience; status loops are timid.

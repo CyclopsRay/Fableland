@@ -145,15 +145,19 @@ colour** of its own (§7). Until its kit is built each fields the stand-in (§9)
 | XX-5-4 | **Xolotl, the Soul-Dog of Mictlan (冥犬修洛特)** | jade | a skeletal dog-god on backward feet, a jade collar, lightning | **Pounce**, **Carry** (drags you 1.5 s), **Lightning Howl** |
 | XX-5-5 | **Stingy Jack, the Lantern Wanderer (守灯杰克)** | ember orange | a lanky wanderer, an ember in a carved turnip | **Ember Toss** (sets OnFire), **Lantern Step**, **Lights Out** (3 s of dark) |
 
-**The Ferryman in numbers** (first-pass; built in v0.12.1, `FOES.gdd` §8):
+**The Ferryman in numbers** (first-pass; **his own kit since v0.12.1** — `Scripts/Bosses/Zone6/Ferryman.cs`):
 
 | Skill | What it does |
 |-------|--------------|
 | Oar Sweep (BA) | a cone 5 m deep, ±50°: 30 damage and an 18 m/s horizontal shove; every 1.4 s |
-| Obol Toss (S1, 6 s) | a fan of 3 coins thrown under gravity (and G): 10 damage and **−150 ult charge** each — the toll |
+| Obol Toss (S1, 6 s) | a fan of 3 coins lobbed at 45°, the middle one thrown to land on the player under the gravity he — and so his coins — feels (G included), one short, one long: 10 damage and **−150 ult charge** each — the toll, net of the charge the blow itself pays the victim |
 | Undertow (S2, 12 s) | every fighter within 14 m is dragged toward him at 4 m/s for 2.5 s; then he sweeps |
 | Skiff Ram (below 50 % HP, every 15 s) | a 0.8 s lantern telegraph, then he rides across at 16 m/s: 40 damage and a knock-up |
-| Brain | Undertow when you are beyond 8 m and it is ready; Sweep within 5 m; Obol at 5–14 m; Ram in phase 2 when ready; otherwise hold near the river's edge |
+| Brain | Undertow when you are beyond 8 m (and within its 14 m) and it is ready; Sweep within 5 m; Obol at 5–14 m; Ram in phase 2 when ready; otherwise hold near the river's edge — the perch he opened on, on foot |
+
+Measured (BossFightCheck §5): the Undertow drags a still player **8.0 m in 2 s** and ends in a
+sweep that lands; an obol takes **150** ult charge from a player 8 m away; the Ram holds still
+through its telegraph, rides at **16.0 m/s** and throws the player up at **21.5 m/s**.
 
 ### 4.2 The Unwritten (无名者) — the final boss
 
@@ -222,7 +226,7 @@ of Smoulder is −13.0), cooldowns through the kits' one cooldown helper, move s
 running and swimming. Measured on all five kits of the roster (Zone6Check §4c): every one takes
 ×1.15 damage and walks ×0.85 as fast under one stack of each.
 
-**The Asura of Wrath in numbers** (first-pass; built in v0.12.1):
+**The Asura of Wrath in numbers** (first-pass; **its own kit since v0.12.1** — `Scripts/Bosses/Zone6/AsuraWrath.cs`):
 
 | Skill | What it does |
 |-------|--------------|
@@ -231,6 +235,12 @@ running and swimming. Measured on all five kits of the roster (Zone6Check §4c):
 | Vajra Throw (S2, 7 s) | flies 12 m and returns: 20 damage each way, a small shove |
 | Rising Wrath (passive) | attack interval and cooldowns × (1 − 0.4 × the share of HP missing); **enraged** below 50 % HP (cue `passive.wrath.enrage`) |
 | Brain | Flurry within 3.5 m; Vajra at 5–12 m; Wrath Fire when you are grounded within 12 m; otherwise close in |
+
+Measured (BossFightCheck §5): Rising Wrath ×0.80 at 51 % HP and ×0.70 at 25 %, on cooldowns
+and the attack interval alike; enraged once, below half — the flurry goes from 3 arms to 4; the
+vajra strikes a player 4 m away once going and once coming back. (Past about 4.8 m the two
+blows land within the player's 0.8 s of post-hit grace, and only the first counts — the return
+is for a player who dodged the throw.)
 
 ### 5.2 Māra Pāpīyas (天魔波旬) — the final boss
 
@@ -363,7 +373,7 @@ TBD #33 continues); whether the VOID treatment's looks (§6) should move toward 
 
 | What | Now (v0.12.0) | To come |
 |------|---------------|---------|
-| All twelve bosses' kits | BOSS PumpKing's kit under each one's own row (name, HP, foe level) | own kits; v0.12.1: the Ferryman and the Asura of Wrath |
+| The twelve bosses' kits | **the Ferryman and the Asura of Wrath on their own (v0.12.1)**; the other ten on BOSS PumpKing's kit under their own rows | the other ten |
 | The Unwritten | the stand-in + the real **Styx Tide / Rising Tide** | Borrowed Shapes, Blank Page; its arena (Z6-VF-F) |
 | Māra | the stand-in, −12 % HP and −10 damage per sealed power | his five powers, each removed by its seal |
 | Zone-6 arenas | run worlds' boss arenas, VOID-touched per variant; the Frontier's core on Starland's sea-level plain | each variant's own maps and tile kit (cyanotype, nagtang) |
@@ -398,6 +408,10 @@ Every entry is **provisional** — a first pass to be played and confirmed by th
 | 2026-11-27 | Zone 6 never applies a borrowed world's law | It has rules of its own |
 | 2026-11-27 | Per-variant VOID looks (grey-teal mist; fire on black); `arena.enter` tagged with the variant at the drained lightness | Closes TBD #49's zone-6 half |
 | 2026-11-27 | Art: the Void Frontier in **cyanotype** with one spot colour per guardian; Avīci in **Tibetan nagtang**. Explored and kept on file: black-figure pottery, magic-lantern slide; hell scroll, black lacquer and gold | Confirmed by the concept images (§7) |
+| 2026-11-27 | v0.12.1: a zone-6 kit is a Foe-side fighter that is nobody's protagonist (`Zone6BossFighter`), its row's damage share and bulk kept (× the node's level), one static sprite mirrored by its scene so the body's facing flips it | The same rules as every boss; no animation yet |
+| 2026-11-27 | The obols are aimed by range (45°, v = √(d·g·G)), not thrown at a fixed speed | Under this game's gravity (64 m/s²) a fixed 13 m/s throw lands 2 m away; aimed, the fan brackets the player at any range and any G |
+| 2026-11-27 | The obol's toll is net of the ult charge its own blow pays the victim | Otherwise a 150 toll reads 138 |
+| 2026-11-27 | The Ferryman holds his perch on foot (no jumping); the Ram rides level along the floor he stands on | First pass; a skiff that leaves the floor is for his own arena |
 
 ---
 

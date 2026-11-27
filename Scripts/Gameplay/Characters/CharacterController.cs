@@ -1333,6 +1333,15 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	/// credits the rate for damage dealt via <see cref="LocalPlayer"/>; this
 	/// character credits the rate for damage it receives itself (see TakeHit/
 	/// ApplyHazard/ApplyDotDamage above).</summary>
+	/// <summary>Take ult charge away (clamped at 0) — a toll, like the Ferryman's obols
+	/// (Docs/Zone6.gdd §4.1) — and tell the HUD.</summary>
+	public void DrainUltCharge(float amount)
+	{
+		if (amount <= 0f || UltCharge <= 0f) return;
+		UltCharge = Mathf.Max(0f, UltCharge - amount);
+		UltChargeChanged?.Invoke(UltCharge, MaxUltCharge);
+	}
+
 	public void GainUltCharge(float amount)
 	{
 		if (_dead || amount <= 0f) return;

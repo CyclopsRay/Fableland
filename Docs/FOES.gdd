@@ -487,6 +487,13 @@ protagonist**: they recruit nobody and pay no item (`BossDef.Recruits` is false)
 - **Debug.** The debug page (key 4) lists realm bosses one button each, and zone 6's twelve in
   one picker with a Fight button; a zone-6 fight is staged at its node's level, on the map its
   node would be dealt, with the rules a run would carry.
+- **Own kits (v0.12.1): the Ferryman and the Asura of Wrath.** A zone-6 kit is a Foe-side
+  fighter that is nobody's protagonist (`Scripts/Bosses/Zone6/Zone6BossFighter.cs`): its row's
+  scene (`Scenes/Bosses/Ferryman.tscn`, `AsuraWrath.tscn`) and magazine, a brain of its own
+  rules on a virtual pad, one static sprite (drawn facing left; the scene's negative x scale
+  mirrors it so the body's facing flips it), the body's own hit flash. Cue owners `ferryman`,
+  `asura_wrath`. Skills and measured numbers: `Zone6.gdd` §4.1, §5.1. The other ten still
+  field the stand-in.
 
 ---
 

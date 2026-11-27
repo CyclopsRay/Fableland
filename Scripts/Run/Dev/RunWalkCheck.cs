@@ -1012,7 +1012,7 @@ public partial class RunWalkCheck : Node
         run.CurrentNodeId = run.PreviousNodeId = "XX-R";
 
         // Each gate's plan: how many times it is lost before it is won (-1: never won).
-        int[] losses = frontier ? new[] { 1, 0, 0, 0, 0 } : new[] { 1, 0, 0, 1, 2 };
+        int[] losses = frontier ? new[] { 1, 0, 0, 0, 0 } : new[] { 1, 1, 0, 1, 2 };
         bool[] wins = frontier ? new[] { true, true, true, true, true } : new[] { true, true, true, true, false };
         var opened = new List<string>();
         bool switched = false, reloaded = false;
@@ -1073,9 +1073,9 @@ public partial class RunWalkCheck : Node
         }
         else
         {
-            Expect(run.Zone6.SealStacks("greed") == 1 && run.Zone6.SealStacks("pride") == 1 && run.Zone6.SealStacks("doubt") == 2
-                   && run.Zone6.MaraSealed.Count == 4 && !run.Zone6.MaraSealed.Contains("doubt"),
-                $"{tag}: after the gates zone 6 is '{run.Zone6.StatusLine()}'; it must be Hunger ×1, Burden ×1, Hesitation ×2, four powers sealed in Māra and Doubt not");
+            Expect(run.Zone6.SealStacks("greed") == 1 && run.Zone6.SealStacks("anger") == 1 && run.Zone6.SealStacks("pride") == 1
+                   && run.Zone6.SealStacks("doubt") == 2 && run.Zone6.MaraSealed.Count == 4 && !run.Zone6.MaraSealed.Contains("doubt"),
+                $"{tag}: after the gates zone 6 is '{run.Zone6.StatusLine()}'; it must be Hunger ×1, Smoulder ×1, Burden ×1, Hesitation ×2, four powers sealed in Māra and Doubt not");
         }
 
         // The core.
@@ -1157,6 +1157,10 @@ public partial class RunWalkCheck : Node
         Expect(run.CurrentAdventure?.Mission == MissionType.Boss && arena.BossId == expected && mission is { FieldsRealBoss: true, IsFinalBoss: false } && boss != null,
             $"{where}: the gate must field {expected} (arena names '{arena.BossId}', mission {run.CurrentAdventure?.Mission}, staged: {boss != null})");
         Expect(arena.FoeLevel == 7, $"{where}: an LV5 node fights at foe level {arena.FoeLevel}; the design fixes it at 7");
+        // The two guardians with kits of their own (v0.12.1) field them; the rest the stand-in.
+        string kit = expected == BossTable.Ferryman.Id ? nameof(Fableland.Bosses.Ferryman)
+            : expected == BossTable.Asura.Id ? nameof(Fableland.Bosses.AsuraWrath) : nameof(Fableland.Bosses.BossPumpKing);
+        Expect(boss == null || boss.GetType().Name == kit, $"{where}: {expected} fields {boss?.GetType().Name}; its kit is {kit}");
         Expect(mission != null && Mathf.IsEqualApprox(mission.TimeRemaining, MissionTable.BossTimeLimit(5), 5f),
             $"{where}: the mini-boss timer reads {mission?.TimeRemaining:0} s; the design gives {MissionTable.BossTimeLimit(5):0} s");
         Expect(arena.Rules.Zone6Role == Zone6Role.MiniBoss && arena.Rules.SurvivableDefeat && !arena.Rules.HasLaw,

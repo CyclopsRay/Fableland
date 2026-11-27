@@ -187,6 +187,26 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A button tapped on a pad is read on the body's process frame — wait for its effect, not for ticks (v0.12.1, boss check)
+- **Symptom:** "Skill2 did not start the Undertow" on one run in three: the check tapped the
+  Ferryman's pad and looked two physics ticks later. Skills are read in `_Process`; at the
+  checks' 8× physics rate two ticks can pass with no process frame between them.
+- **Rule:** after a tap, wait until the effect is visible (bounded), then measure from there.
+
+### A blow pays its victim ult charge — a toll must be net of it (v0.12.1, Ferryman)
+- **Symptom:** an obol's "−150 ult charge" read −138: the coin's 6 damage paid the victim 12
+  charge (`UltChargeReceivedRate` 2) after the drain had been worked out.
+- **Rule:** read the charge before the hit and leave the victim at (before − toll).
+
+### A blow big enough to set a boss's HP in a check also stuns it (v0.12.1, boss check)
+- **Symptom:** the Asura's flurry was "0 arms" — the check had just knocked off 49 % of its HP
+  and tapped Attack two ticks later, inside the stun that blow earned.
+- **Rule:** wait out the stun (≈ 45 ticks) before pressing a boss's buttons after a big hit.
+
+### Art drawn facing left: mirror it in the scene, not in code (v0.12.1, zone-6 kits)
+- **Rule:** the base body sets `Sprite.FlipH = false` when it faces right; a sprite drawn facing
+  left gets a negative x scale in its scene, and the base class's flip then works unchanged.
+
 ### A fight the run survives must stop the fallen body writing its HP back (v0.12.0, zone 6)
 - **Symptom (caught in design):** a zone-6 mini-boss defeat floors the battle team at 25 % HP in
   `RunState.ReportGoal`, but the arena writes the active body's HP back again on Finish the Day

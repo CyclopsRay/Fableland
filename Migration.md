@@ -9,6 +9,15 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.1** — **The Ferryman and the Asura of Wrath fight with their own kits.** The first
+  two zone-6 bosses off the stand-in (`Docs/Zone6.gdd` §4.1, §5.1), each a Foe-side fighter
+  that is nobody's protagonist, on the keyed concept sprite, driven by its own rules. **The
+  Ferryman** (the Void Frontier's first gate): Oar Sweep, a fan of obols that take 150 ult
+  charge each, the Undertow that drags you 4 m/s toward his oar, and below half HP the Skiff
+  Ram at 16 m/s. **The Asura of Wrath** (Avīci's 嗔 gate): a six-arm flurry, two floor waves of
+  Wrath Fire you jump, a vajra that strikes going and coming back, and Rising Wrath — faster as
+  it is hurt, enraged below half. The boss check measures each skill; the run check meets both
+  on their gates and loses and wins there.
 - **0.12.0** — **Zone 6 is a stage of its own, and realms have laws.** Design: `Docs/Zone6.gdd`
   (every number provisional, logged). **Realm laws:** a data row per world, applied to every
   fighter on both sides as source-keyed modifiers; the first is Wulin's **Qinggong (轻功)** — one

@@ -60,6 +60,8 @@ public partial class BossFightCheck : Node
             await ProbeSwimmingTakesSides();
             await ProbeHisRules();
             await ProbeTheFight();
+            await ProbeTheFerryman();
+            await ProbeTheAsura();
         }
         catch (Exception e)
         {
@@ -616,6 +618,192 @@ public partial class BossFightCheck : Node
         foreach (BossRule rule in boss.GetNode<BossBrain>("BossBrain").Rules.Rules)
             if (rule.Name == name) return rule;
         return null;
+    }
+
+    // ---------------------------------------------------------------- 5. zone 6's own kits (v0.12.1)
+
+    /// <summary>A zone-6 boss on its own kit, its brain asleep: the check presses its buttons.</summary>
+    private (CharacterController Boss, VirtualPad Pad) StageAsleep(Node2D stage, BossDef def, Vector2 at)
+    {
+        CharacterController boss = StageBoss(stage, def, at);
+        boss.GetNode<BossBrain>("BossBrain").Sleep();
+        return (boss, (VirtualPad)boss.Controls);
+    }
+
+    /// <summary>A player that stands where it is put (its own pad, never pressed).</summary>
+    private static CharacterController StillPlayer(Node2D stage, float x)
+    {
+        CharacterController player = Spawn<CharacterController>(stage, PlayerScene, new Vector2(x, FloorY - 32f));
+        player.UseControls(new VirtualPad());
+        return player;
+    }
+
+    /// <summary>
+    /// The Ferryman (Zone6.gdd §4.1) on his own kit: the Undertow drags a still player toward
+    /// him at its speed and he sweeps at its end; an obol takes its toll of ult charge; the
+    /// Skiff Ram waits out its telegraph, rides at its speed and throws up what it hits.
+    /// </summary>
+    private async Task ProbeTheFerryman()
+    {
+        BossDef def = BossTable.Ferryman;
+        Node2D stage = BuildStage(0f, 6000f);
+        (CharacterController boss, VirtualPad pad) = StageAsleep(stage, def, new Vector2(3000f, FloorY - 32f));
+        Expect(boss is Ferryman && def.ScenePath.EndsWith("Ferryman.tscn"), "ferryman: the row does not field the Ferryman's own kit");
+        var ferryman = boss as Ferryman;
+        if (ferryman == null) { await Strike(stage); return; }
+        CharacterController player = StillPlayer(stage, 3000f - Units.Px(11f));
+        await Ticks(20);
+
+        // Undertow: 2 s of pull measured on a player who does not move.
+        float hp0 = player.CurrentHP;
+        pad.Facing = -1f;
+        pad.Tap(ControlAction.Skill2);
+        // A button is read on the body's process frame, which need not fall in the next tick.
+        for (int i = 0; i < 30 && !ferryman.Undertowing; i++) await Ticks(1);
+        Expect(ferryman.Undertowing, "ferryman: Skill2 did not start the Undertow");
+        float x0 = player.GlobalPosition.X;
+        await Ticks(120);
+        float pulled = (player.GlobalPosition.X - x0) / Units.PixelsPerMeter;
+        float expected = Ferryman.UndertowPullMps * 2f;
+        Expect(Mathf.Abs(pulled - expected) <= expected * 0.15f, $"ferryman: the Undertow dragged a still player {pulled:0.0} m in 2 s; at {Ferryman.UndertowPullMps} m/s it is {expected:0.0} m");
+        for (int i = 0; i < 60 && ferryman.Undertowing; i++) await Ticks(1);
+        await Ticks(3);
+        Expect(!ferryman.Undertowing && player.CurrentHP < hp0, $"ferryman: the Undertow's end must deliver the player to his oar (HP {hp0:0} → {player.CurrentHP:0})");
+        GD.Print($"  boss     ferryman       the Undertow drags a still player {pulled:0.0} m in 2 s (design {expected:0.0}) and ends in a sweep that lands");
+        await Strike(stage);
+
+        // The toll: an obol that lands takes 150 of the player's ult charge.
+        stage = BuildStage(0f, 6000f);
+        (boss, pad) = StageAsleep(stage, def, new Vector2(3000f, FloorY - 32f));
+        ferryman = (Ferryman)boss;
+        player = StillPlayer(stage, 3000f - Units.Px(8f));
+        await Ticks(20);
+        player.GainUltCharge(600f);
+        float charge = player.UltCharge;
+        // His senses feed the throw's reach; the brain is asleep, so take one reading by hand.
+        pad.Facing = -1f;
+        pad.Aim = player.GlobalPosition;
+        boss.GetNode<BossBrain>("BossBrain").Sense?.Invoke(0.1f);
+        pad.Tap(ControlAction.Skill1);
+        for (int i = 0; i < 120 && Mathf.IsEqualApprox(player.UltCharge, charge); i++) await Ticks(1);
+        float toll = charge - player.UltCharge;
+        Expect(toll >= Ferryman.ObolUltToll - 0.5f && Mathf.Abs(toll % Ferryman.ObolUltToll) < 0.5f,
+            $"ferryman: an obol took {toll:0} ult charge from a player 8 m away; the toll is {Ferryman.ObolUltToll:0} a coin");
+        GD.Print($"  boss     ferryman       the obols (a fan at 45°, aimed by range under the place's gravity) take {toll:0} ult charge from a player 8 m away");
+        await Strike(stage);
+
+        // The Skiff Ram: below half HP; still through the telegraph, then a ride at its speed.
+        stage = BuildStage(0f, 8000f);
+        (boss, pad) = StageAsleep(stage, def, new Vector2(2000f, FloorY - 32f));
+        ferryman = (Ferryman)boss;
+        player = StillPlayer(stage, 2000f + Units.Px(9f));
+        await Ticks(20);
+        boss.TakeHit(new HitInfo(boss.MaxHP * 0.6f), boss.GlobalPosition + new Vector2(-50f, 0f));
+        Expect(ferryman.InPhaseTwo, "ferryman: at 40% HP he is not in phase two");
+        boss.GetNode<BossBrain>("BossBrain").Sense?.Invoke(0.1f);
+        float startX = boss.GlobalPosition.X;
+        hp0 = player.CurrentHP;
+        ferryman.BeginRam();
+        await Ticks(Mathf.FloorToInt(Ferryman.RamTelegraph * 60f) - 4);
+        float duringTelegraph = boss.GlobalPosition.X - startX;
+        float speed = 0f, knockUp = 0f;
+        for (int i = 0; i < 90 && ferryman.Ramming; i++)
+        {
+            await Ticks(1);
+            speed = Mathf.Max(speed, boss.Velocity.X);
+            knockUp = Mathf.Min(knockUp, player.Velocity.Y);
+        }
+        Expect(Mathf.Abs(duringTelegraph) < Units.Px(0.5f), $"ferryman: he moved {duringTelegraph / Units.PixelsPerMeter:0.0} m during the ram's telegraph");
+        Expect(Mathf.Abs(speed / Units.PixelsPerMeter - Ferryman.RamSpeedMps) <= 1.5f, $"ferryman: the skiff rode at {speed / Units.PixelsPerMeter:0.0} m/s; the design is {Ferryman.RamSpeedMps} m/s");
+        Expect(player.CurrentHP < hp0 && knockUp < -Units.Px(8f), $"ferryman: the ram must hit the player in its path and throw it up (HP {hp0:0} → {player.CurrentHP:0}, up {-knockUp / Units.PixelsPerMeter:0.0} m/s)");
+        GD.Print($"  boss     ferryman       the Skiff Ram holds still through its {Ferryman.RamTelegraph} s telegraph, rides at {speed / Units.PixelsPerMeter:0.0} m/s, throws the player up at {-knockUp / Units.PixelsPerMeter:0.0} m/s");
+        await Strike(stage);
+    }
+
+    /// <summary>
+    /// The Asura of Wrath (Zone6.gdd §5.1) on its own kit: Rising Wrath scales its cooldowns
+    /// and attack interval with the HP it has lost; below half it is enraged — the cue, and a
+    /// fourth arm in the flurry; the vajra strikes on its way out and again on its way back.
+    /// </summary>
+    private async Task ProbeTheAsura()
+    {
+        BossDef def = BossTable.Asura;
+        Node2D stage = BuildStage(0f, 6000f);
+        (CharacterController boss, VirtualPad pad) = StageAsleep(stage, def, new Vector2(3000f, FloorY - 32f));
+        Expect(boss is AsuraWrath && def.ScenePath.EndsWith("AsuraWrath.tscn"), "asura: the row does not field the Asura's own kit");
+        var asura = boss as AsuraWrath;
+        if (asura == null) { await Strike(stage); return; }
+        CharacterController player = StillPlayer(stage, 3000f - Units.Px(2.5f));
+        var enrages = new List<Cue>();
+        void Heard(Cue cue) { if (cue.Owner == "asura_wrath" && cue.Action == "passive.wrath.enrage") enrages.Add(cue); }
+        CueBus.Raised += Heard;
+        try
+        {
+            await Ticks(10);
+            float interval = asura.AttackIntervalSeconds;
+            Expect(Mathf.IsEqualApprox(boss.CooldownScale, 1f) && !asura.Enraged, "asura: at full HP its wrath must scale nothing");
+
+            // 51%: wrath ×0.804, not yet enraged. A flurry is three arms.
+            boss.TakeHit(new HitInfo(boss.MaxHP * 0.49f), boss.GlobalPosition + new Vector2(50f, 0f));
+            await Ticks(2);
+            Expect(Mathf.IsEqualApprox(boss.CooldownScale, 1f - 0.4f * 0.49f, 1e-3f) && Mathf.IsEqualApprox(asura.AttackIntervalSeconds, interval * (1f - 0.4f * 0.49f), 1e-3f),
+                $"asura: at 51% HP Rising Wrath must scale cooldowns and the attack interval ×{1f - 0.4f * 0.49f:0.000} (×{boss.CooldownScale:0.000}, {asura.AttackIntervalSeconds:0.00} s of {interval:0.00} s)");
+            Expect(!asura.Enraged && enrages.Count == 0, "asura: enraged above half HP");
+            await Ticks(45);                      // past the stun of a blow that size
+            pad.Facing = -1f;
+            pad.Tap(ControlAction.Attack);
+            await Ticks(40);
+            Expect(asura.LastFlurryHits == AsuraWrath.FlurryHits, $"asura: a flurry at 51% HP was {asura.LastFlurryHits} arms; it is {AsuraWrath.FlurryHits}");
+
+            // 49%: enraged, once; four arms.
+            boss.TakeHit(new HitInfo(boss.MaxHP * 0.02f), boss.GlobalPosition + new Vector2(50f, 0f));
+            await Ticks(2);
+            Expect(asura.Enraged && enrages.Count == 1, $"asura: below half HP it must be enraged and say so once ({enrages.Count} cue(s))");
+            await Ticks(Mathf.CeilToInt(asura.AttackIntervalSeconds * 60f) + 20);
+            pad.Tap(ControlAction.Attack);
+            await Ticks(40);
+            Expect(asura.LastFlurryHits == AsuraWrath.EnragedFlurryHits, $"asura: an enraged flurry was {asura.LastFlurryHits} arms; it is {AsuraWrath.EnragedFlurryHits}");
+            boss.TakeHit(new HitInfo(boss.MaxHP * 0.24f), boss.GlobalPosition + new Vector2(50f, 0f));
+            await Ticks(2);
+            Expect(Mathf.IsEqualApprox(boss.CooldownScale, 0.7f, 2e-3f) && enrages.Count == 1, $"asura: at 25% HP wrath must be ×0.70 (×{boss.CooldownScale:0.000}) and the enrage not said again");
+            GD.Print($"  boss     asura          Rising Wrath ×1.00 → ×{1f - 0.4f * 0.49f:0.00} at 51% → ×0.70 at 25% on cooldowns and the attack interval · enraged once below 50%: the flurry goes from {AsuraWrath.FlurryHits} arms to {asura.LastFlurryHits}");
+        }
+        finally
+        {
+            CueBus.Raised -= Heard;
+        }
+        await Strike(stage);
+
+        // The vajra: out 12 m and back; a player 4 m away is struck going and coming (the two
+        // blows land more than the player's 0.8 s of post-hit grace apart).
+        stage = BuildStage(0f, 6000f);
+        (boss, pad) = StageAsleep(stage, def, new Vector2(3000f, FloorY - 32f));
+        asura = (AsuraWrath)boss;
+        player = StillPlayer(stage, 3000f - Units.Px(4f));
+        await Ticks(20);
+        float hp0 = player.CurrentHP;
+        pad.Facing = -1f;
+        pad.Tap(ControlAction.Skill2);
+        Vajra vajra = null;
+        for (int i = 0; i < 10 && vajra == null; i++)
+        {
+            await Ticks(1);
+            foreach (Node child in stage.GetChildren()) if (child is Vajra thrown) vajra = thrown;
+        }
+        int hitsOut = 0, hitsBack = 0;
+        bool turned = false;
+        for (int i = 0; i < 180 && vajra != null && GodotObject.IsInstanceValid(vajra); i++)
+        {
+            hitsOut = vajra.HitsOut;
+            hitsBack = vajra.HitsBack;
+            turned |= vajra.Returning;
+            await Ticks(1);
+        }
+        Expect(vajra != null && turned, "asura: the vajra was not thrown, or never turned back");
+        Expect(hitsOut == 1 && hitsBack == 1, $"asura: the vajra struck a player 4 m away {hitsOut} time(s) going and {hitsBack} coming back; once each way");
+        Expect(player.CurrentHP < hp0, "asura: the vajra's blows did no damage");
+        GD.Print($"  boss     asura          the vajra flies {AsuraWrath.VajraReachM} m and back: {hitsOut} blow going, {hitsBack} coming back, {hp0 - player.CurrentHP:0} damage");
+        await Strike(stage);
     }
 
     private static CharacterController StageBoss(Node2D stage, BossDef def, Vector2 perch)
