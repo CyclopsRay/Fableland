@@ -152,7 +152,7 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | 37 | Cleopastar's effect and sound style follows **Starland** (flat poster) — **provisional, the owner has not confirmed it**; her GDD says the Palace of LOOING | Feedback.gdd §8, §11 |
 | 38 | Sifu Pangda's effect and sound style follows the **Banboo Maze** (freehand ink) — **provisional, the owner has not confirmed it**; his GDD says Gui Lin, which has no world yet (#19) | Feedback.gdd §8, §11 |
 | 39 | Should a seagull's dash suppress its contact damage? Its 20-damage contact usually lands a tick before its 50-damage dash, and the player's i-frames then refuse the dash — so the dash seldom deals its own damage (noted in v0.11.2, not changed) | FOES §4 |
-| 40 | An options screen and persistence for `FeedbackSettings` — the comfort settings exist (static, 0–1) and nothing writes or saves them | Feedback.gdd §7 |
+| 40 | An options screen and persistence for `FeedbackSettings` — the comfort settings and (v0.11.7) the four volumes exist (static, 0–1) and work; nothing shows, writes or saves them | Feedback.gdd §7, Audio.gdd §14 |
 | 41 | Naming a soft volume's medium — a cloud cannot be told from foliage today (the two are tuned alike; `SoftVolume.MediumKind` is there to be named), so their cues cannot differ | Feedback.gdd §9 |
 | 42 | `arena.enter` takes the first world a map lists, which is ambiguous for a map serving several worlds — whose style does such an arena wear? | Feedback.gdd §9 |
 | 43 | The dark-flash threshold (backdrop lightness ≥ 0.80 — a guess until seen) and a per-world canvas review of which realms flash dark | Feedback.gdd §5.3, §11 |
@@ -160,7 +160,7 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | 45 | Should hit-stop also freeze attack timing? Today every clock keeps running during a stop and abilities are still read, so no DPS or cooldown moves; Smash freezes attack timing with the body | Feedback.gdd §4, §11 |
 | 46 | The hit-stop budget numbers — 0.18 s, refilling at 0.15 s per second; not from the research and never tuned in a fight | Feedback.gdd §4, §11 |
 | 47 | A photosensitivity test on real footage (Harding-style) — the limits are reasoned, not measured | Feedback.gdd §5.4 |
-| 48 | **Cleopastar's and Sifu Pangda's effect media are still provisional** (poster / ink — #37, #38); since v0.11.6 they are also two fields in `VfxTable.Looks`, to change with Feedback.gdd §8 | VFX.gdd §4 |
+| 48 | **Cleopastar's and Sifu Pangda's effect media are still provisional** (poster / ink — #37, #38); since v0.11.6 they are also two fields in `VfxTable.Looks`, and since v0.11.7 two entries in the audio home-world table (`Scripts/Presentation/Audio/Medium.cs`) — they decide how each looks and sounds, to change with Feedback.gdd §8 | VFX.gdd §4, Audio.gdd §6 |
 | 49 | **The VOID style has no art bible, and no arena raises a VOID tag.** A zone-6 fight is fought on a map of one of the run's worlds, drawn VOID-touched (#33): its `arena.enter` still names that world, and reports the backdrop's lightness from before the drain — the picture is drawn at about half of it. So effects are in the borrowed world's medium, and their palette and the hit flash's dark-or-light choice are made for a canvas lighter than the one on screen. Should a VOID-touched arena announce the VOID's medium, and its drained lightness? | VFX.gdd §2, §9, MapGDD §7, Feedback.gdd §5.3 |
 | 50 | **Cloud Court's effects are not enamel.** The enamel style is filed under `CC`, a code no arena raises: since v0.11.3 the Cloud Court map is a Palace of LOOING map (#26), so its arena announces `PL` and its dust, water, hazards and ambience are drawn in gongbi — Loong's Nest's medium — over cloisonné art. Should `arena.enter` name the map's realm (`MapRealm.Of`) and not its world? (see also #42) | VFX.gdd §4, RealmStyleBible §7C |
 | 51 | The kits' own placeholder telegraphs (`_baTelegraph`'s cone outline and the debug ranges) are still drawn under the new slash — keep them as a debug view, or remove them now that the cone is shown? | VFX.gdd §11, `Docs/Art/Vfx/captures/` 06–08 |
@@ -168,12 +168,21 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 | 53 | Shake on a Light hit is ≈ 1.5–2 px for 70 ms (`Decay` 3 /s) — invisible in a capture; is the kick enough on its own? | Feedback.gdd §3 |
 | 54 | A cue for *how* a status ended (Blush's steam, a thaw's shatter) | VFX.gdd §9 |
 | 55 | The map editor's Playtest raises no `arena.enter`, so its effects use the default medium | VFX.gdd §9 |
+| 56 | **Listen to it.** Every level, every recipe and all the music are unheard — proven only by measurement and spectrograms; the audition page is `Scenes/Dev/AudioAudition.tscn` | Audio.gdd §13 |
+| 57 | Starland allows pure tones only and the Palace is low-passed at 2.2 kHz: are their sounds distinct enough (a jump, a landing and a hit may all read as "a beep" or "a thud in water"), or do the rules need loosening for readability? | Audio.gdd §13 |
+| 58 | Audio memory when the other four kits are wired (about +0.4 MB each against the 8 MB budget): hold the party of three instead of every character, or raise the budget | Audio.gdd §11, §14 |
+| 59 | A real HP share for the music and the mix — the bus only says "low"; a cue or an `IFeedbackBody` member | Audio.gdd §8, §14 |
+| 60 | Recorded or commissioned music: stems as Ogg with BPM metadata, and whether music states then move to `AudioStreamInteractive` | Audio.gdd §14 |
+| 61 | The audio work's own calls, for the owner: the menu, map, shelters, events and UI sound in the beach's watercolour (the starting world); `flow`/`mission.time` is raised from the HUD clock; `UiCues` wires every `BaseButton` in the tree | Audio.gdd §2, §14 |
 
 Numbering: #28–#33 were minted by v0.10.11 / v0.11.0 and #34–#35 by the swimming work, which
 called them #28 and #29 in its own worktree before the two lines met (v0.11.1). #36–#47 are
 the open questions v0.11.2's hit feedback left, registered here in v0.11.3. #48–#55 came with
 the VFX director (v0.11.6); #49 and #50 were written before zone 6 was dealt maps and Cloud
-Court joined the Palace (v0.11.3) and are reworded here for the tree they landed in.
+Court joined the Palace (v0.11.3) and are reworded here for the tree they landed in. #56–#61
+came with the audio director (v0.11.7); its hand-off also asked for an options-screen row and
+a provisional-media row, which are #40 and #48 (amended there, not repeated), and for a "Cloud
+Court has no world" row, untrue since v0.11.3 and left out (#50 covers what remains).
 
 Note #19/#20/#24: **realm ↔ world-pool consistency** — every playable character must have
 a home world in `MapGDD.md` §2 (home world = start zone). The Kingdom of Horror and The

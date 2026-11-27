@@ -42,6 +42,10 @@ public partial class EventController : CanvasLayer
         _finishDay.Pressed += OnFinishDay;
 
         RenderPage();
+
+        // flow/event.enter: a "?" node's screen is up.
+        Fableland.UI.UiCues.Attach(this);
+        CueBus.EmitAt(CueOwners.Flow, "event.enter", Vector2.Zero, variant: RunState.Instance?.Day ?? 0);
     }
 
     /// <summary>

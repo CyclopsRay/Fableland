@@ -26,9 +26,11 @@ make a codebase impossible to extend later.
 │ PRESENTATION   Hud, DamageNumberManager, ShakeCamera2D,        │
 │                the DIRECTORS — FeelDirector (shake, flash,     │
 │                zoom), VfxDirector (every cue's effect, in the  │
-│                art medium of whoever caused it), then audio —  │
-│                each listening to the cue bus with a table of   │
-│                its own,                                        │
+│                art medium of whoever caused it), AudioDirector │
+│                (every cue's sound and the music, synthesised;  │
+│                its Synth/ is pure C#, no Godot types) — each   │
+│                listening to the cue bus with a table of its    │
+│                own; UiCues lets every button raise on the bus, │
 │                map atlas render (MapControllerAtlas/RenderModel)│
 │                — observes via events/signals; never ticked by  │
 │                  gameplay logic, never queried by it            │

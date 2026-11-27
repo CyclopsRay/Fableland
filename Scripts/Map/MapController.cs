@@ -146,7 +146,25 @@ public partial class MapController : Node2D
         UpdateInfo();
         ShowDayEndToastIfAny();
         QueueRedraw();
+
+        // flow/map.enter: the overworld is up. Variant = the day, tag = the world the token
+        // stands in ("VOID" once inside it), position = the token on the map.
+        UiCues.Attach(this);
+        CueBus.EmitAt(CueOwners.Flow, "map.enter", _current?.Pos ?? Vector2.Zero, variant: rs?.Day ?? 0,
+            tag: rs != null && rs.InVoid ? "VOID" : _current?.Zone ?? "");
     }
+
+    /// <summary>A node kind as a cue tag: lower-case, constant strings.</summary>
+    private static string KindTag(NodeKind kind) => kind switch
+    {
+        NodeKind.Combat => "combat",
+        NodeKind.Boss => "boss",
+        NodeKind.TransportHub => "hub",
+        NodeKind.Shelter => "shelter",
+        NodeKind.Event => "event",
+        NodeKind.River => "river",
+        _ => "",
+    };
 
     /// <summary>
     /// Show RunState.LastDayEndSummary as a transient toast, once (cleared immediately so a
@@ -497,6 +515,7 @@ public partial class MapController : Node2D
             _current = target;
             rs.CurrentNodeId = target.Id;
             _lastMoveDir = target.Pos - debugFrom.Pos;
+            CueBus.EmitAt(CueOwners.Flow, "map.travel", target.Pos, size: _lastMoveDir.Length(), direction: _lastMoveDir.Normalized(), tag: KindTag(target.Kind));
             if (!rs.InVoid && target.WorldIndex == -1) rs.EnterVoid();
             bool trig = (!_visited.Contains(target) && target.Kind != NodeKind.River)
                      || (target.IsCombat && !IsCompleted(target))
@@ -532,6 +551,11 @@ public partial class MapController : Node2D
         _current = target;
         rs.CurrentNodeId = target.Id;
         _lastMoveDir = target.Pos - fromNode.Pos;   // heading-up mode spins this step to the top
+
+        // flow/map.travel: the token moves. Variant = the stamina it cost, size = the distance on
+        // the map, direction = the way it went, tag = what kind of node it arrives at.
+        CueBus.EmitAt(CueOwners.Flow, "map.travel", target.Pos, variant: cost, size: _lastMoveDir.Length(),
+            direction: _lastMoveDir.Normalized(), tag: KindTag(target.Kind));
 
         // Crossing the zone-6 singularity devours the whole outer ring at once (one-way in).
         if (!rs.InVoid && target.WorldIndex == -1) rs.EnterVoid();

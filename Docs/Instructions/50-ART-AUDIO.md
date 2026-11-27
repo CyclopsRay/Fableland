@@ -132,13 +132,28 @@ The design, the tier table and every number: `Docs/Feedback.gdd` (v0.11.2). In s
 - Any new juice effect gets a verify-by-eye pass, not just call-site review — and a line in
   `FeedbackCheck` for the mechanism behind it.
 
-## 7. Audio (not started — the plan)
+## 7. Audio
 
-- Start when v0.5.0 makes runs real; sound is 30% of feel and currently 0%.
-- Structure first: an audio director autoload listening to the cue bus (v0.11.2 —
-  `Docs/Feedback.gdd` §2, §6: the cue vocabulary there is the audio work order; a sound is
-  a row keyed (owner, action) in the director's own `CueTable`, falling back owner → class
-  → `any`); buses `Master/Music/SFX/UI`, with volumes in `FeedbackSettings`.
-- Minimum viable set: hit/hurt/death, jump/land, per-skill casts, pickup, UI clicks,
-  day-end sting, devour rumble, one music loop per world palette + zone 6.
-- Same placeholder rule: free/cheap SFX now, replace later behind stable event names.
+The design, the ten media, every row's rules and the music: **`Docs/Audio.gdd`**. In short:
+
+- **There are no audio assets.** Every sound and every piece of music is synthesised from
+  data at load (`Scripts/Presentation/Audio/Synth/`, pure C#) and cached per realm and per
+  character. `AudioDirector` (a presentation autoload) listens to the cue bus and gives
+  every cue of `Feedback.gdd` §6 a sound; gameplay never names one.
+- **A realm is a synthesis medium, not a scale** — the audio twin of the style bible's "one
+  medium per world". Each of the ten media implements the same six primitives (whoosh,
+  thump, tick, tone, texture, sweep) its own way, so a new cue is one recipe and ten sounds,
+  and a character carries its home medium into every arena (Audio.gdd §5–6).
+- **The placeholder rule, inverted:** the synthesis *is* the placeholder. A file named after
+  an event — `res://Assets/Audio/<event id>.wav` or `.ogg` — replaces its recipe with no
+  code change (Audio.gdd §10). That is how recorded or commissioned sound arrives.
+- **Music** is a profile per realm and per screen (key, tempo, metre, motif, three or four
+  stems of unequal length), bounced with a new seed every fight; intensity fades the stems;
+  a boss adds its motif in its own medium; hits climb the realm's scale and a kill resolves
+  (Audio.gdd §7–8).
+- **Nobody has heard it.** It was measured (`AudioCheck`, `40-QA.md` §(2)) and looked at
+  (`Tools/audio/inspect.py`; sheets in `Docs/Audio/sheets/`). The listening pass is owed:
+  `res://Scenes/Dev/AudioAudition.tscn` plays any event, any variant, any realm's music at
+  any intensity, and every mix state. Levels and recipes are data — retune them there.
+- Adding a sound: `20-ENGINEERING.md` §4, "Give a cue its sound". Any new sound gets a look
+  at its sheet, not just a green check.

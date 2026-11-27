@@ -22,6 +22,7 @@ RunState="*res://Scripts/Run/RunState.cs"
 DebugManager="*res://Scripts/Debug/DebugManager.cs"
 FeelDirector="*res://Scripts/Presentation/Feel/FeelDirector.cs"
 VfxDirector="*res://Scripts/Presentation/Vfx/VfxDirector.cs"
+AudioDirector="*res://Scripts/Presentation/Audio/AudioDirector.cs"
 
 [display]
 

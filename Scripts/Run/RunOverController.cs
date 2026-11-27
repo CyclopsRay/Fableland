@@ -34,6 +34,18 @@ public partial class RunOverController : Control
             $"Wonder items: {rs?.ItemsCollected ?? 0}";
 
         GetNode<Button>("Center/Box/MenuButton").Pressed += OnMenu;
+
+        // flow/runover.enter: the run-over screen is up. Tag = how the run ended.
+        Fableland.UI.UiCues.MarkBack(GetNode<Button>("Center/Box/MenuButton"));
+        Fableland.UI.UiCues.Attach(this);
+        string how = kind switch
+        {
+            RunEndKind.Victory => "victory",
+            RunEndKind.VoidDevoured => "void_devoured",
+            RunEndKind.BossTimer => "boss_timer",
+            _ => "death",
+        };
+        CueBus.EmitAt(CueOwners.Flow, "runover.enter", Vector2.Zero, tag: how);
     }
 
     private void OnMenu() => GetTree().ChangeSceneToFile("res://Scenes/Menu.tscn");

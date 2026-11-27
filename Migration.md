@@ -9,6 +9,60 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.11.7** — **The game has sound: an audio director, a synthesis toolkit, music for every
+  world.** Design, the ten media, every rule and the budgets: `Docs/Audio.gdd`; research
+  behind it: `Docs/Research/R1-audio-research.md`. **Nobody has heard it yet** — there are no
+  audio assets and none could be acquired, so every sound and every piece of music is
+  synthesised from data at load, and all of it was proved by measurement (a headless check)
+  and by looking at spectrograms; the listening pass (`50-ART-AUDIO.md` §7) is owed.
+  **What a player should notice:** everything makes a sound, and the sound belongs to a
+  world. A jump, a landing, a hit, a death, a hazard are each one event and ten sounds —
+  soft mallets and washes of air on the beach, pure tones in a huge hall in Starland, plucks
+  that bend into pitch with a single echo in the Banboo Maze, struck iron in a cave in the
+  Hollow Castle, hard-gated twang printed twice like a worn record in the Deserted, chimes
+  under water in the Palace, scratched and hatched noise in the Kingdom of Horror, chip
+  pulses on a 60 Hz tick in the Forgotten, a metallic tick around every note in Cloud Court,
+  and sound with its top, its bits and its pitch taken away in the VOID. A character carries
+  its home sound into every arena. Each world has its own music — key, tempo, metre, motif —
+  whose layers come in as a fight heats up; a boss adds its own motif in its own world's
+  sound; hits climb the realm's scale as a combo builds and a kill resolves it; stingers
+  land on the beat. The menu, the map, shelters and events have music; the map's loses its
+  top end as the VOID closes in. Pausing, going under water and low HP each change the mix.
+  **The contract:** `AudioDirector` is a presentation autoload on the cue bus (T10 §4b) —
+  no gameplay file names a sound. A sound is a row in `SfxTable` keyed (owner, action),
+  resolved owner → class → `any`, written in the six primitives of a `Medium`. A file named
+  after an event (`res://Assets/Audio/<event id>.wav`) replaces its recipe with no code
+  change. New cues for the screens between fights (`Audio.gdd` §2): `flow`/`menu.enter`,
+  `map.enter`, `map.travel`, `shelter.enter`, `event.enter`, `runover.enter`, `day.end`,
+  `void.devour`, `mission.time`, `run.over` tagged `void_devoured`; `ui`/`hover`, `press`,
+  `back`, `pause.open`, `pause.close` (`Scripts/UI/UiCues.cs` wires every button).
+  **Budgets, measured:** 0 bytes on disk; 7.6 MB of PCM with a realm, its music, all five
+  protagonists and the beach's foes loaded (budget 8); at most 40 voices; 0 bytes allocated
+  per cue; 3.6 µs a cue, 1.2 µs a frame; synthesis on one worker thread (a realm's sounds in
+  under 0.2 s, its music in about 0.1 s).
+  **Verification:** `Scenes/Feedback/AudioCheck.tscn` — 1098 checks, about 20 s
+  (`40-QA.md` §(2)), mutation-tested with twenty-six breakages (24 caught at once, the two
+  survivors given assertions); `Scenes/Dev/AudioDump.tscn` + `Tools/audio/inspect.py` draw the sound;
+  `Scenes/Dev/AudioAudition.tscn` is the page to listen with. `FABLELAND_AUDIO=trace` wakes
+  the director in a headless run: the run check stays green with sound being made.
+  **Not done:** the other four kits' own sounds (their abilities raise no cues yet);
+  positional audio; an options screen; saving the volume settings; music as recorded stems.
+  **Also archived here:** `Docs/Research/AUDIT-v0.11.1.md`, an audit of the GDDs against the
+  code at v0.11.5 — a 161-row work order of gameplay moments for the effects and sound wiring
+  of the other four kits, the foes, hazards, items and missions; the twenty gaps a player would
+  hit; the TBD registry reviewed; seventeen number mismatches.
+  *(Merged onto 0.11.6 from the audio branch's five commits after its own copy of the 0.11.2
+  base, by cherry-pick, so 0.11.2–0.11.6 kept their text. From the hand-off: seven caveats in
+  `KNOWLEDGE.md`; `AudioDirector` in `T10` §1 / §4b, `T40` §1 and the `T00` diagram; the new
+  cue rows in `Feedback.gdd` §6.4; TBDs #56–#61, with its options-screen and provisional-media
+  rows folded into #40 and #48 and its "Cloud Court has no world" row dropped as untrue since
+  0.11.3; `Docs/Audio/sheets/` has a `.gdignore`. On the merged tree: `dotnet build` 0 / 0;
+  AudioCheck 1098, VfxCheck 1298, FeedbackCheck 249, map content 1170, boss 109, run 1328; the
+  run check with `FABLELAND_AUDIO=trace`: 996 cues, 0 without a sound, 527 voices, 129 stolen,
+  0 refused, at most 17 at once, 100 played late and 38 dropped late while banks rendered;
+  `AudioAudition.tscn` and `VfxGallery.tscn` start headless without script errors. Still
+  open, untouched here: an arena's `arena.enter` names the map's world, not its realm, and a
+  zone-6 arena reports its untreated lightness — TBD #49 and #50.)*
 - **0.11.6** — **Effects: a VFX director that draws every cue in the art medium of whoever
   caused it.** Design, the ten media, every row and the budget: `Docs/VFX.gdd`. It was
   **looked at** — every archetype in every medium, and a staged fight on a mid-tone, a pale

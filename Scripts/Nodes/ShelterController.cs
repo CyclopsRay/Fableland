@@ -69,6 +69,12 @@ public partial class ShelterController : CanvasLayer
 
         BuildTeamBuildPanel();
         Refresh();
+
+        // flow/shelter.enter: the shelter's screen is up. Tag = which kind of shelter.
+        Fableland.UI.UiCues.MarkBack(_back);
+        Fableland.UI.UiCues.Attach(this);
+        CueBus.EmitAt(CueOwners.Flow, "shelter.enter", Vector2.Zero, variant: rs?.Day ?? 0,
+            tag: _isEidolonShelter ? "eidolon" : _isVoidShelter ? "void" : "hub");
     }
 
     private void Refresh()

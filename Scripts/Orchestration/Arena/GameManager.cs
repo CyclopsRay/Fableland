@@ -145,6 +145,7 @@ public partial class GameManager : Node2D
     // Flow cues (Docs/Feedback.gdd §6): what the arena tells the cue bus about itself.
     private string _mapWorld = "";       // the world the authored map was built for; "" if unknown
     private int _countdownShown = -1;    // the last whole second the countdown raised a tick for
+    private int _timeCueShown = -1;      // the last whole second of the mission clock a cue was raised for
 
     public override void _Ready()
     {
@@ -793,6 +794,18 @@ public partial class GameManager : Node2D
     {
         _hud.SetProgress(_mission.ProgressText);
         _hud.SetTimer(_mission.HasTimer, _mission.TimeRemaining);
+        // flow/mission.time: the mission's clock is running out — raised once at 30, 20 and 10
+        // seconds, then every second from 5. Variant = whole seconds left on the HUD clock.
+        if (_mission.HasTimer && _mission.Status == MissionStatus.Running)
+        {
+            int left = Mathf.CeilToInt(_mission.TimeRemaining);
+            if (left != _timeCueShown)
+            {
+                _timeCueShown = left;
+                if (left == 30 || left == 20 || left == 10 || (left >= 1 && left <= 5))
+                    RaiseFlow("mission.time", MissionTag(_missionType), left);
+            }
+        }
         _hud.SetSecondaryBar(_mission.HasSecondaryBar, _mission.SecondaryValue, _mission.SecondaryMax, _mission.SecondaryLabel);
         _hud.ShowRewardChoice(_mission.NeedsRewardChoice);
     }

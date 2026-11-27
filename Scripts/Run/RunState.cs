@@ -390,6 +390,8 @@ public partial class RunState : Node
             var parts = new List<string> { $"Day {dayLabel} begins." };
             parts.AddRange(DayEndNotes);
             LastDayEndSummary = string.Join(" ", parts);
+            // flow/day.end: a day is over and the next begins. Variant = the new day.
+            CueBus.EmitAt(CueOwners.Flow, "day.end", Vector2.Zero, variant: Day, tag: InVoid ? "VOID" : null);
             CaptureLastDayCheckpoint();
             if (!SaveActiveRun(out string saveError))
                 GD.PushError($"[RunState] Day-end save failed: {saveError}");
@@ -447,8 +449,11 @@ public partial class RunState : Node
     {
         if (Graph == null) return;
         InVoid = true;
+        int eaten = 0;
         foreach (var n in Graph.Nodes)
-            if (n.WorldIndex != -1) n.Devoured = true; // everything outside zone 6
+            if (n.WorldIndex != -1) { if (!n.Devoured) eaten++; n.Devoured = true; } // everything outside zone 6
+        // flow/void.devour, tag `singularity`: the whole outer ring goes at once. Magnitude = nodes eaten.
+        CueBus.EmitAt(CueOwners.Flow, "void.devour", Vector2.Zero, variant: Day, magnitude: eaten, tag: "singularity");
         Graph.BreakRealityBridgesAtDevouredEndpoints();
         RebuildNodeIndex();
     }

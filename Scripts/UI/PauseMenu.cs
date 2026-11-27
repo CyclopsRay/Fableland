@@ -18,6 +18,7 @@ public partial class PauseMenu : CanvasLayer
         var menu = new PauseMenu { _saveAndQuit = saveAndQuit };
         owner.AddChild(menu);
         owner.GetTree().Paused = true;
+        CueBus.EmitAt(CueOwners.Ui, "pause.open", Vector2.Zero);     // ui/pause.open: the game is paused
     }
 
     public override void _Ready()
@@ -65,6 +66,7 @@ public partial class PauseMenu : CanvasLayer
             Visible = false,
         };
         box.AddChild(_status);
+        UiCues.Attach(this);
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -112,6 +114,7 @@ public partial class PauseMenu : CanvasLayer
     private void Close(bool unpause)
     {
         if (unpause && GetTree() != null) GetTree().Paused = false;
+        CueBus.EmitAt(CueOwners.Ui, "pause.close", Vector2.Zero);    // ui/pause.close: the pause menu is gone
         QueueFree();
     }
 }

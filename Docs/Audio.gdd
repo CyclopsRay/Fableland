@@ -1,0 +1,528 @@
+# Fableland — Audio GDD
+
+How the game sounds: the **audio director** that turns cues into sound, the **synthesis
+toolkit** that makes every sound and every piece of music from data at load (there are no
+audio assets), the **ten media** that give each world and each character its own sound, the
+**adaptive music**, and how **actions play the music**.
+
+Implementation: `Scripts/Presentation/Audio/` — `AudioDirector.cs` (the autoload),
+`AudioEngine.cs` (buses, voices, cache, file overrides, music engine), `SfxTable.cs` /
+`SfxDef.cs` (the sound rows), `Medium.cs` · `MediaA.cs` · `MediaB.cs` (the ten media),
+`MusicProfile.cs` · `MusicProfiles.cs` (the music), `MusicClock.cs` (clock, blackboard),
+`VoiceManager.cs`, `Synth/` (the toolkit — pure C#), `Dev/` (check, dump, audition).
+Research behind it: `Docs/Research/R1-audio-research.md`, cited below as **R1** with its
+source keys (R1 §6). The cue bus it listens to: `Docs/Feedback.gdd`.
+
+> **Nobody has heard this yet.** Every sound was reasoned from the style bible and the
+> research, rendered, **measured** (`AudioCheck`, §12) and **looked at** as waveforms and
+> spectrograms (§13). That proves the mechanisms and rules out the measurable faults —
+> silence, clipping, clicks, harshness, boom, sameness. It does not prove any of it is
+> pleasant. The first job of whoever can listen is the audition page (§13); expect to
+> retune levels and recipes, which are all data.
+
+---
+
+## 1. Principles
+
+1. **Gameplay raises, the director listens.** `AudioDirector` is a presentation autoload on
+   the cue bus (T10 §4b). It never calls gameplay and is never called by it; nothing it does
+   can change a fight; its randomness is its own.
+2. **Everything is synthesised from data.** Sounds are rendered in C# into 16-bit mono
+   `AudioStreamWAV` at load, off the main thread [R1 §1.3; format and loop fields verified:
+   G7, G14]. Nothing is on disk. **A file wins over a recipe** (§10) — the upgrade path.
+3. **A realm is a synthesis medium, not a scale** (§5) [R1 §4.7 — the digest's proposal,
+   built on the style bible]. A character keeps its home medium in every arena and is
+   pitched to the key of the realm it fights in.
+4. **No fatigue.** Hundreds of fights, the same slash thousands of times: seed-mutated
+   variants dealt without repeats, pitch and level jitter, cooldowns, voice caps, volleys
+   coalesced into one sound (§3), music whose stems have unequal lengths and is re-bounced
+   with a new seed every fight (§7). [Variation practice: R1 §2.3, mostly **from memory**
+   there; `mutate` verified in jsfxr, X1; voice limits verified, X2.]
+5. **We own the clock** (§7.3). The engine keeps no usable time for runtime music
+   [verified: G8, G15; and measured here — §12].
+6. **Actions play the music** (§8): hits climb the realm's scale, a kill resolves on the
+   tonic, stingers land on the beat [the idea: Ape Out, W2, and Hi-Fi Rush, W3 — both read
+   by the digest as secondary sources].
+7. **One stinger at a time**, and priority decides what yields. Dynamic range is the point,
+   as in `Feedback.gdd` §1.4.
+8. **Cheap, and measured** (§11): 7.6 MB of PCM with everything loaded, at most 40 voices,
+   0 bytes allocated per cue.
+9. **Proven without ears** (§12–13) — and honest about what that cannot prove.
+
+---
+
+## 2. Cues
+
+The director hears the whole vocabulary of `Feedback.gdd` §6 and gives **every row a
+sound** (§6 here). It added the cues the screens between fights need, raised exactly as the
+vocabulary's are — where the moment happens, constant strings, real values:
+
+| Owner / Action | Variant | Tag | Size · Magnitude · Direction · Position | Raised by |
+|---|---|---|---|---|
+| `flow` / `menu.enter` | — | — | — | *MenuController._Ready* |
+| `flow` / `map.enter` | the day | the world the token stands in · `VOID` inside it | at the token (map units) | *MapController._Ready* |
+| `flow` / `map.travel` | stamina spent (0 in debug) | `combat` · `boss` · `hub` · `shelter` · `event` · `river` | size = distance · direction = the way · at the destination | *MapController.TryMove* |
+| `flow` / `shelter.enter` | the day | `hub` · `void` · `eidolon` | — | *ShelterController._Ready* |
+| `flow` / `event.enter` | the day | — | — | *EventController._Ready* |
+| `flow` / `runover.enter` | — | `death` · `void_devoured` · `boss_timer` · `victory` | — | *RunOverController._Ready* |
+| `flow` / `day.end` | the new day | `VOID` inside it | — | *RunState.EndDay* |
+| `flow` / `void.devour` | the day that ended | — · `singularity` (the whole outer ring) | magnitude = nodes eaten | *VoidDevourStep.Run · RunState.EnterVoid* |
+| `flow` / `run.over` | — | `void_devoured` (the fourth ending; the arena raises the other three) | at the eaten node | *VoidDevourStep.Run* |
+| `flow` / `mission.time` | whole seconds left (30, 20, 10, then 5…1) | the mission type | — | *GameManager.PushMissionHud* |
+| `ui` / `pause.open` · `pause.close` | — | — | — | *PauseMenu.Open · Close* |
+| `ui` / `hover` · `press` · `back` | — | — | size = the button's width · at its centre (screen) | *UiCues* — every `BaseButton`; a screen calls `UiCues.Attach(this)`, and `UiCues.MarkBack(button)` for its way out |
+
+These rows are also in `Feedback.gdd` §6.4, the shared vocabulary (merged in v0.11.7).
+
+**Event ids.** A sound event is `owner.action` — `pomegraknight.ba.swing`, `any.jump`,
+`flow.mission.success`; a hit's attack is `owner.hit.action` (`pomegraknight.hit.ba`,
+`any.hit` for an unnamed one). A staged row adds the stage, a tagged one the tag:
+`pomegraknight.ba.swing.3`, `any.jump.air`, `hazard.tick.spike`. That id is the dump's file
+name and the name of the file that overrides it (§10).
+
+---
+
+## 3. The sound data model
+
+### 3.1 A row (`SfxDef`)
+
+| Field | Meaning |
+|---|---|
+| `Owner`, `Action` | The key, resolved **owner → class → `any`** like every director's table. An alias (`boss_crab` → `crab`, a fourth lower) uses another owner's rows at a different size. |
+| `Recipe`, `Body` | The recipe, written in a medium's six primitives (§5), and the seconds it fills before the medium's tail. |
+| `From` | Whose medium renders it: `Owner` (a body's own sounds — its home world), `Realm` (hazards, the world, statuses, the flow of a mission), or `Fixed` (the UI and the screens: the storybook's watercolour; the VOID's own voice). |
+| `Stages`, `Tags` | Cases rendered separately: cue variant 1…n (a combo stage, a wave), and tags (`air`, `water`, `burn\|on_fire`). Any other tag plays the plain case. |
+| `Variants` | 1–4 **seed-mutated** siblings per case, dealt from a shuffled bag that never repeats the last one. |
+| `PitchJitter`, `VolumeJitter` | ± semitones and ± dB per play. |
+| `Pitch` | `Free` · `Key` (moved to the realm's tonic, on a scale degree, plus degrees per cue variant) · `Ladder` (the combo — §8). |
+| `Bus`, `PeakDb`, `VolumeDb` | SFX · UI · Ambience · Music; the peak a render is normalised to; the row's level. |
+| `Priority`, `MaxVoices`, `Cooldown`, `Steal` | §3.3. |
+| `BurstCount`, `BurstDef` | Volley coalescing: the n-th post inside 60 ms plays the burst row once, the rest are dropped. |
+| `Layer`, `LayerTag` | A row added on top when the cue carries a tag: Pomegraknight's slash, **burning**, is her slash plus `burn.fizz` — not a second copy of every stage. |
+| `Mods` | State modifiers: on the body's `FeedbackState` (`LowHp`, `Submerged`…) or on the blackboard (`Boss`, `Urgent`…) → ± pitch, ± level. |
+| `MagnitudeRef`, `OthersDb` | Level follows the cue's magnitude (a landing's speed); a cue that is not about the player's body is quieter. |
+| `Loop`, `FadeIn`, `FadeOut` · `Quantize` · `DuckDb` | A loop row; a stinger's grid; a duck of the music while it sounds. |
+
+### 3.2 A hit is layered
+
+One `HitCue` is up to four voices: **what struck** (the attack's row, in the attacker's
+medium, louder and lower by weight) · **its weight** (`hit.heavy`, for Heavy and Massive) ·
+**what was struck** (`hit.taken`, the victim's row in the victim's medium; a graze has none)
+· **the note** (§8). An unnamed hit on a foe is in the medium of whoever the player wears —
+so the four unwired kits already sound like their homes.
+
+### 3.3 The voice manager
+
+The engine's polyphonic stream neither limits nor steals — a full one returns −1 [R1 §5.5,
+G5; measured: 6 posts into a polyphony of 4 give 4 handles and two −1]. So, in order:
+
+1. a **volley** is counted first, and becomes one sound;
+2. a row cannot retrigger inside its **cooldown**;
+3. a row has its own **cap** and steals its own oldest voice;
+4. a **bus** has a cap (24 SFX · 4 UI · 4 ambience · 8 stingers); the lowest priority on it
+   yields, then the quietest, then the oldest — unless the newcomer is lower still; a voice
+   of priority 90+ never yields to a lower one;
+5. **loops are requests that outlive voices**: five burning bodies and a cap of two means
+   two are heard, and when one stops the next takes its place; a loop whose source leaves
+   the tree ends.
+
+One player per bus (the per-voice bus argument is reported ignored [R1 §5.5]). A sound whose
+bank is still rendering is held up to 0.3 s and played when ready.
+
+---
+
+## 4. The synthesis toolkit (`Synth/`, pure C#)
+
+No Godot type appears under `Synth/`: it runs on a worker thread and in a headless check.
+
+| Piece | What it is |
+|---|---|
+| `Gen.Osc` | sine, triangle, band-limited saw and pulse (PolyBLEP: harmonics stop at Nyquist instead of folding back), with glide and vibrato |
+| `Gen.Fm` | two-operator FM with a decaying index — bells, glass, a blade's ring; the index is capped where sidebands would alias |
+| `Gen.Modal` | a struck object as decaying partials (two-pole resonators) — bars, blocks, bowls, anvils |
+| `Gen.Pluck` | Karplus–Strong with pick position, loss, pitch bend and vibrato, tuned for its own filter's delay [the algorithm: W4, verified] |
+| `Gen.Noise` · `Gen.Lfsr` · `Gen.Crackle` | white / pink / brown through a swept state-variable filter; a 15-bit shift register (chip noise); sparse clicks |
+| `Gen.Additive` | a stack of harmonics, each drifting a few cents — organ, sheng, pad |
+| `Sfxr` | the sfxr parameter model with `Mutate` [parameter names: jsfxr, X1, verified], plus a volume register and a tick grid for the pixel medium |
+| `Env` | struck, hard gate, smooth swell, pressed-and-lifted; steppable in level and time |
+| `Fx` | low/high-pass, resonance, echo, a small Schroeder reverb, chorus, tremolo, soft clip, bit crush, rate reduce |
+| `Finish` | DC block, edge fades, tail trim (−42 dB), **fold** (a periodic loop: the tail is added back onto the start — exact seam) and **cross-fade loop** (a stationary texture), normalise, TPDF dither, 16-bit pack |
+| `Analysis` · `WavFile` | peak, RMS, DC, edges, seam, band shares, centroid (FFT); WAV files for the dump |
+
+A render is **deterministic** for (row, medium, case, variant, seed), on any thread.
+
+---
+
+## 5. The ten media
+
+Every sound is built from six primitives a medium implements its own way — **whoosh**
+(something through the air), **thump** (a body), **tick**, **tone** (its melodic voice),
+**texture** (fire, ice, air, water, rumble, buzz, daze) and **sweep** (a glide, or a stepped
+run where glides are forbidden) — and then goes through the medium's **room**. So a jump is
+one event and ten sounds.
+
+| Realm · medium | The rule, as sound | Allowed | How a note begins and ends | Space | Forbidden | Key · stored at |
+|---|---|---|---|---|---|---|
+| **VK** storybook watercolour | soft edges, bleeding washes | mallets (marimba, pan), sine, triangle, soft FM, pink noise | attack ≥ 8 ms; a second voice a few cents off bleeds under it | small bright room | hard squares, clipping, dry gates | D gong pentatonic · 16 kHz |
+| **SL** flat poster | flat planes, a hard terminator | pure sines and triangles **only** | hard gates (3 ms); level in **terraces**; no vibrato | a hall, a 220 ms echo | noise of any kind, vibrato, clutter | A Phrygian dominant, sparse (0 1 4 7) · 16 kHz |
+| **BM** freehand ink | one stroke, pressed and lifted; bare paper | plucked string, breath, wood knocks | a pluck **bends into pitch**; vibrato **dies away**; strokes swell fast and taper long | dry, one 280 ms echo | pads, chords, warmth, regular rhythm | E yu pentatonic · 22 kHz |
+| **HC** lit realism | weight, relief, one saturated colour | physical models: drum skins, iron, stone; saw under 400 Hz | struck, long decays | stone cave; everything low-passed at 3.5 kHz — **except fire** | chip waves, bright leads | D Aeolian + tritone · 16 kHz |
+| **TD** linocut | a key block and flat inks out of register | twang pluck, wood blocks, fixed-band noise, a whistle | **hard-gated**; level in terraces; every mark **printed twice**, 10–24 ms apart; crackle | dry; band-passed 300–3500 Hz | reverb, filter sweeps, crescendos | A minor pentatonic · 11 kHz |
+| **PL** gongbi | an even line, graded colour, under water | bronze chimes, pure tones, smooth noise, even bubbles | raised-cosine edges ≥ 10 ms; ornaments in **exact** time; never a bend | low-passed 2.2 kHz, chorus, soft room | pitch scoops, rubato, rough attacks | G Lydian · 11 kHz |
+| **KH** scratchboard | light scratched out of black | high-passed noise, theremin, music box, harpsichord pluck, a hollow gourd | thin; **tremolo as hatching** (38–55 Hz); an untidy line (cents off, late doubles) | dry short plate; high-passed 400 Hz (a thump is spared) | warm bass, lush reverb, tidiness | D Hungarian minor · 22 kHz |
+| **TF** pixel art | a hard grid, a fixed palette | pulse, triangle, shift-register noise, sfxr | pitch in **semitone steps**; **16 volume levels**; changes on a 60 Hz tick; dither = two notes or levels taking turns | none; one eighth-note ping | reverb, glides, soft edges | A harmonic minor · 22 kHz |
+| **CC** cloisonné enamel | every colour inside gold wire | pure tones in fourths, fifths, octaves; struck metal; pitched air | **every note opens with a metallic tick**, and a shape closes with one | bright and short; high-passed 120 Hz | mud, low drones, a note without its edge | C gong pentatonic, high · 22 kHz |
+| **VOID** black | subtraction | sub drone with octave partials, detuned clusters, brown noise | swells that are **cut off**; pitches that **sag**; only ever downward | near-endless, low-passed 800 Hz, **7 bits** | pulse, melody, brightness | D, no scale (0 1 6 7) · 11 kHz |
+
+Per-medium summary sheets — waveforms and spectrograms of a dozen core events, a medium's
+own rows, and its music at three intensities — are in `Docs/Audio/sheets/` (§13).
+
+**Storage rates follow a measured engine fact.** The engine's resampler leaves an image at
+(stored rate − f): for a tone stored at 16 kHz, 32 dB down at 3 kHz and only **10 dB down
+at 6 kHz**; at 22.05 kHz, 44 dB down at 3 kHz, 21 dB at 6 kHz (measured by capturing the
+mixed bus). So a medium is stored at a lower rate only when its sound sits in the lower
+third of that band: watercolour and lit realism (under 1 % of their energy is above 5 kHz)
+and the poster's pure tones at 16 kHz; gongbi, linocut and the VOID, each low-passed by
+rule, at 11 kHz; the four bright media at 22.05 kHz.
+
+---
+
+## 6. Signature sounds
+
+Home worlds: Pomegraknight → VK, PumpKing → KH, Pixolotl → TF (given); **Cleopastar → SL
+and Sifu Pangda → BM are provisional** (`Feedback.gdd` §8) — one line each in
+`Medium.HomeOf`. Crab, seagull and the stand-in boss crab are the beach's: VK.
+
+| Who | Medium | Built today | Motif (semitones from the tonic) |
+|---|---|---|---|
+| **Pomegraknight** | watercolour | **the full kit** — slash: a wash of air and a blade's FM ring, the three stages climbing degrees 1-3-5, the third landing on a mallet; burning adds a fizz of fire (a layer). Blush: a fire whoosh over a warm swell. Fire Tornado: a rising spiral of hatched air over a low roll (loop) and ticks that step up the realm's scale. Seeds: a wave is **one** sound — 6, 8 or 10 woodblock pops in a pentatonic rattle; hits are single pops, 4 inside 60 ms become one burst; an expiry is the quietest thing she makes | 5 – 1′ – 3′ |
+| **PumpKing** | scratchboard | the head's blast: a hollow gourd, a scratched burst, a wet splat of falling chirps, and a **tritone stab** (the red); a dud only pops; the head's hits are hollow thumps | 1 – ♯4 – 1 low |
+| **Cleopastar** | poster | class rows in her medium (pure tones, terraces, echo); kit not wired | 1 – ♭2 – 4 – 3 |
+| **Pixolotl** | pixel art | class rows in her medium (pulses, arpeggios, a ping); kit not wired | 1 – 5 – 1′ – 5 – ♭3 |
+| **Sifu Pangda** | ink | class rows in his medium (plucks that bend, wood knocks, breath); kit not wired | 5 – 6 – 1′ |
+| **Crab** · **boss crab** | watercolour | castanet claw clicks, a shell clack when struck, scuttle ticks on aggro, a crack and a bubble on death; the boss crab is the same rows a fourth lower | 1 – 1 – 5 |
+| **Seagull** | watercolour | a falling squawk; a **rising whistle** for its dash telegraph (priority 90: never stolen); a peck, a dash, a splat | 1′ – 5 |
+
+Every body also has the class rows — spawn, jump (ground / air / swim), land (by speed),
+death, respawn, heal, `hurt.tick` (by kind), `ult.ready` (its motif, for a wired kit),
+switch out / in, a foe's aggro and evolve, and the five status loops, which belong to the
+realm. The world's rows — soft volumes (water, foliage, other), hazard ticks (fire, freeze,
+lava, spike, poop, damage), the tsunami, the realm's ambience — are always the realm's
+medium: a Dungeon spike is struck iron, a Forgotten City spike is three chip notes.
+
+---
+
+## 7. Music
+
+### 7.1 The model
+
+A `MusicProfile` is a key, a tempo, a metre, a medium, a motif and **three or four stems**
+made by short pattern generators (a bed of held notes or a looped texture, an ostinato from
+cells, drums from step masks, a lead that plays the motif in phrases — as written, shifted,
+reversed, cut short, or one held note — with rests). It is **bounced with a seed** into
+looping PCM (about 100 ms on the worker), re-seeded for every fight, and played as one
+`AudioStreamSynchronized` [verified: G2, G16].
+
+- **Unequal bar lengths.** Stems loop independently, each at its own length (measured:
+  §12), so the whole only repeats after their least common multiple — 2.5 to 31 minutes.
+- **One tonal centre.** Harmony never leaves the tonic, so any alignment is consonant.
+- **A beat is a whole number of samples** — the same number the clock counts with.
+- **Seams are exact.** Notes and reverb that ring past a loop's end are folded back onto
+  its start.
+
+### 7.2 States and intensity
+
+| State | Raised by | Music |
+|---|---|---|
+| Menu · Overworld · Shelter · Event | `menu.enter` · `map.enter` · `shelter.enter` · `event.enter` | the screen's own profile at a resting intensity (0.5 · 0.35 · 0.3 · 0.45) |
+| Combat | `arena.enter` (tag = world; none = home, or the VOID from node level 5) | the realm's profile; intensity 0.15 through the countdown, then the blackboard's |
+| Boss | `boss.intro` | intensity floor 0.6; **the boss's motif as a two-bar layer in the boss character's home medium**, entering on the next bar |
+| Victory · Defeat | `mission.success`, `boss.defeated` · `mission.fail`, `player.down` | stems out in 0.5–1.5 s (a defeat sinks under a closing filter), then the stinger |
+| Silent | `runover.enter` | none |
+
+**Intensity** (0–1) fades stems between their thresholds — moved at most 0.4 dB a frame and
+muted below −40 dB, because the engine applies a stem's volume with no ramp [verified: G16]:
+
+| Stem | In at | Full at | |
+|---|---|---|---|
+| bed | always | | |
+| lead | 0 | 0.1 | sparse; +2 dB above 0.8 |
+| pulse | 0.2 | 0.45 | |
+| drums | 0.5 | 0.75 | +2 dB above 0.8; the bed −2 dB |
+
+### 7.3 The clock
+
+`MusicClock` counts beats in real seconds from the moment the stems are **heard** (start +
+time to the next mix + output latency [R1 §5.8]), announces beats and bars, and quantises
+stingers. A stinger lands on a bar, a beat, or the coarsest subdivision that is near enough
+— it never waits more than 0.25 s (grid), 0.6 s (beat) or 0.7 s (bar). In the check a
+stinger sounds within one frame of the grid line it was aimed at.
+
+### 7.4 The profiles
+
+| Profile | Key | Tempo, metre | Bed · pulse · drums · lead (bars) | Motif idea | Repeats after |
+|---|---|---|---|---|---|
+| **VK** The Beach | D gong pentatonic | 104, 4/4 swung | pad on D and A + surf (3) · marimba ostinato (5) · shaker, low conga (7) · steel pan (4) | a gentle rise and fall: 1 3 5 3 6 | 16 min |
+| **SL** Starland | A Phrygian dominant, sparse | 56, four slow beats | sub drone and its fifth, in terraces (3) · one doum every two bars, a sistrum answer (4) · half-time maqsum (2) · a glass bell (5) | 1 – 5 – 3 – ♭2, descending tension | 4 min |
+| **BM** The Banboo Maze | E yu pentatonic | 72, 4/4 loose | a breath at the tonic (2) · muyu knocks, a quarter left out (3) · accelerating bangu rolls (4) · guzheng gestures, half of them rests; a dizi answers (5) | 1 – 4 – ♭3 – 5 | 3 min |
+| **HC** The Hollow Castle | D Aeolian + tritone | 80, 6/8 | saw drone under 400 Hz + lava (4) · anvil and chain (7) · low drums (10) · an iron bell (9) | 1 – ♭3 – 2 – ♭5: through the tritone | 31 min |
+| **TD** The Deserted | A minor pentatonic | 92, a gallop | wind in terraces, crackle (4) · twang guitar, root and fifth (6) · clip-clop, tambourine (7) · a whistle (5) | 1 – ♭3 – 4 – ♭7 – 5 | 18 min |
+| **PL** The Palace of LOOING | G Lydian | 63, 4/4 strict | deep pad + even bubbles (2) · bronze-chime ostinato (3) · frame drum, small bells (4) · a xiao with its exact grace note (5) | 1 – 3 – ♯4 – 5: the Lydian fourth | 4 min |
+| **KH** The Kingdom of Horror | D Hungarian minor | 132, 3/4 waltz | thin theremin, wind (5) · oom-pah-pah on plucked strings (12) · bones, a hollow thump (9) · a music box ending on the theremin (8) | 1 – ♯4 – 5 – ♭3 | 8 min |
+| **TF** The Forgotten | A harmonic minor | 126, 6/8 against 3/4 | triangle bass in three + swamp noise (8) · pulse arpeggios in two groups of three (10) · a shift-register kit (9) · a pulse lead dithered with its fifth (5) | 1 – 5 – 1′ – 5 – ♭3 | 9 min |
+| **CC** Cloud Court | C gong pentatonic, high | 96, 4/4 | sheng cluster of stacked fourths (3) · yunluo in fifths and octaves (5) · finger cymbals, a small drum (6) · a high flute, glissandi (4) | 1 – 5 – 1′ – 5: open fifths | 2.5 min |
+| **VOID** zone 6 | D, no scale | none | sub drone with octave partials + rumble (3) · a detuned cluster that sags (5) · **fragments of eaten realms' motifs, an octave down** (7) | none of its own | 7 min |
+| menu | D gong pentatonic | 84, 4/4 | pad + surf (4) · gentle marimba (6) · steel pan: the theme (5) | the beach's | 3 min |
+| map | G gong pentatonic | 76, walking | pad on G and D (3) · walking marimba (4) · steel pan, sparse (5) | 5 – 3 – 1 – 3 | 3 min |
+| shelter | C gong pentatonic | 60, still | a warm pad (2) · a low mallet, two notes a bar (3) · a lullaby, half rests (4) | the beach's, slowly | 0.8 min |
+| event | E, suspended (0 2 5 7 10) | 92, 4/4 | a suspended pad (3) · plucked ticks (4) · a question on the pan (5) | 1 – 4 – 2 – 5 | 2.6 min |
+
+Keys stay in one family (D, A, E, G, C), so a motif moves by fourths and fifths and a
+crossfade between screens shares tones. The realms' mixes were measured and trimmed to
+within a few dB of one another (SL and TF −3 dB, BM and TD +2).
+
+**Stingers** are rows on the Music bus in the realm's medium, built from the realm's motif:
+`mission.start` (its first three notes, on the grid), `mission.success` (the motif an octave
+up, then home), `mission.fail` (the motif backwards, ending off the tonic), `boss.intro`
+(a thump and a rise through the tritone, on the bar), `boss.defeated`, `player.down`,
+`run.over` (a dirge · a fanfare for victory · the ground going, for the VOID), `day.end`
+(an evening chime, on the beat). `countdown.tick` 3 · 2 · 1 climbs the realm's scale and
+`countdown.go` is the next degree; `mission.time` ticks at 30, 20, 10 and from 5.
+`void.devour` is the VOID's own voice — it swells, is cut, and what it ate falls — and
+ducks the music 9 dB.
+
+---
+
+## 8. Actions and the music; the blackboard
+
+**The combo ladder.** Each hit the player's side lands is also a note of the realm's scale
+in the player character's medium: hit *n* is degree *n*, dropped an octave whenever it
+would pass a ninth, so it always climbs and never leaves the instrument's range. A volley
+is one step (60 ms). **A kill resolves**: the tonic and its octave, and the ladder starts
+again. The combo drops after 1.6 s without a hit, or when the player is hit. It costs
+nothing: one rendered note, re-pitched.
+
+**In key.** A tonal row is rendered at its medium's home tonic and moved to the realm's by
+the nearest way (her watercolour D, in Starland, plays 5 semitones down, on A). A row can
+name a scale degree, and add degrees per cue variant — the countdown, the tornado's ticks.
+
+**The blackboard** (`AudioBlackboard`) is what the director keeps from the bus, and what
+rows and the music read:
+
+| Value | From |
+|---|---|
+| realm, node level, mission | `arena.enter`, `mission.start` |
+| who the player wears | any cue of a Player-side fighter |
+| foes alive | `spawn` / `death` of class `foe` |
+| heat | damage of every `HitCue` (taken counts half again), halving every 2.5 s |
+| player HP | **coarse**: 1 · 0.3 when low · 0 down — from `spawn`/`death` cues and the body's `FeedbackState`, read eight times a second through `IFeedbackBody` |
+| combo | hits, kills |
+| boss present, which | `boss.intro`, `boss.defeated` |
+| mission time left | `mission.time` |
+| submerged | `soft.enter` / `soft.exit` tagged `water`, of the player's body |
+| VOID share | the day in `map.enter` (day 1 → 0, day 45 → 1; 1 inside it) |
+
+**Intensity** = 0.2 + 0.24·foes⁄4 + 0.24·heat⁄60 + 0.16·(1 − HP) + 0.16·urgency (the last
+30 s), floor 0.6 with a boss; 0.4 s up, 4 s down [the shape: R1 §4.4, a proposal].
+
+---
+
+## 9. Buses and mix states
+
+```
+Master   [hard limiter, ceiling −0.3 dB]
+ ├─ Music     [low-pass slot]   −8 dB    two stem players (cross-fade), the boss layer, stingers
+ ├─ SFX       [low-pass slot]   −3 dB    paused with the tree
+ ├─ Ambience  [low-pass slot]   −14 dB   the realm's air; paused with the tree
+ └─ UI        never filtered    −6 dB    plays through a pause
+```
+
+Built in code, idempotently; `AudioEffectHardLimiter` (the old limiter is deprecated
+[G12]). Each bus is its designed level **plus the player's setting** (`FeedbackSettings`
+Master / Music / SFX / UI; 0 mutes) — nothing saves the settings yet. Levels are designed,
+not heard.
+
+A **mix state** is a snapshot of level and low-pass; they stack (lowest cutoff, summed
+level) and glide in a quarter of a second:
+
+| State | When | Music | SFX, Ambience |
+|---|---|---|---|
+| Paused | `ui`/`pause.open` … `pause.close` | 800 Hz, −6 dB | held by the tree |
+| Underwater | the player's body in water | 1.8 kHz | 1.2 kHz, −2 dB |
+| Low HP | the player's body at or under 30 % | 3 kHz, and a **heartbeat** loop in the realm's low voice | — |
+| VOID | on the map, as days pass | 20 kHz on day 1 → 1.2 kHz on day 45 | — |
+| Defeat | 1.6 s after `player.down` | 600 Hz | — |
+
+---
+
+## 10. A file wins over a recipe
+
+Put `res://Assets/Audio/<event id>.wav` (or `.ogg`) in the project and it **replaces the
+synthesis of that event** — no code change; the row's caps, cooldown, level and pitch rules
+still apply.
+
+- `<id>@<MEDIUM>.wav` wins over `<id>.wav` for that medium: `any.jump@SL.wav`.
+- `<id>_2.wav` … `_4.wav` add variants.
+- A case is its own id: `pomegraknight.ba.swing.3.wav`, `any.jump.air.wav`. A file for the
+  plain jump does not replace the air jump.
+- A file that replaces a loop row is made to loop.
+- Music stems are not overridable yet (§14).
+
+---
+
+## 11. Budgets (measured by `AudioCheck`)
+
+| Budget | Limit | Measured |
+|---|---|---|
+| Disk | 0 | 0 |
+| **PCM in memory**, everything loaded: common + five protagonists + the beach's three foes + the largest realm bank + the largest music | **8 MB** | **7.61 MB** |
+| · common (UI, screens, the VOID's voice) | 0.5 MB | 391 KB |
+| · a protagonist (its rows + its class's, in its medium) | 1.0 MB | Pomegraknight 736 KB · Cleopastar 736 · Pixolotl 564 · PumpKing 487 · Sifu Pangda 575 |
+| · the beach's foes | 0.6 MB | 448 KB |
+| · a realm's bank | 1.9 MB | largest: SL 1843 KB |
+| · a realm's music | 2.1 MB | largest: BM 2009 KB |
+| Voices | 24 SFX + 4 UI + 4 ambience + 8 stingers; 2 stem players + 1 layer | 16 at once at most across the run check's eighty fights (at 8×, with the director awake); 100 of 454 voices there were stolen by their own row's cap |
+| Garbage | 0 bytes per cue | 0 bytes for 1 800 cues and 1 705 voices |
+| CPU, main thread | 0.1 ms a frame; 0.1 ms a cue | **1.2 µs** a frame with music, two loops and voices live; **3.6 µs** a cue on average (a hit is up to four voices) |
+| Synthesis (worker thread) | a realm bank under 250 ms; a bounce under 250 ms | a realm bank ≤ 175 ms; a bounce 56–158 ms; all eight characters 280 ms at boot |
+
+The first sounds of an arena wait for its bank: `arena.enter` is the first the director
+hears of a realm, so its own sound and the countdown's first tick play up to 0.2 s late
+(99 of 876 cues in the run check were held this way; none was dropped).
+
+The realm bank is evicted when the realm changes; characters and the common bank stay.
+**Read the protagonist line with care:** four of the five kits are not wired, so their
+banks are class rows only. A wired kit costs about what Pomegraknight's does on top
+(≈ 0.4 MB); with all five wired the total would pass 8 MB, and the cache should then hold
+the party (three) rather than all five (§14).
+
+---
+
+## 12. Verification
+
+```bash
+Godot --headless --path . res://Scenes/Feedback/AudioCheck.tscn      # exit 0 = clean; about 20 s
+```
+
+`AudioCheck: OK (1098 checks)` — `40-QA.md` §(2). It proves: the director is dormant in a
+headless run until asked · the tables, the voice manager's rules, the clock and the ladder
+(pure logic) · **every cue of the vocabulary resolves for every owner class, and every row
+renders in every medium it can be heard in** — 570 row × medium sets, 1 200 clips — not
+silent (the recipe itself must reach −45 dBFS *before* normalising), not clipped, no DC, no
+click at either end, a continuous seam for every loop · renders are deterministic across
+threads; variants, stages and seeds differ · every profile's stems are whole bars, unequal,
+seamless, and mix without clipping · the memory budget · and, on the real engine (the
+headless driver still mixes): buses and settings, cooldowns, volleys, loops, layered hits,
+the ladder in key, stingers on the grid, stems moved in steps of at most 0.4 dB, a boss's
+layer on the bar, mix states, screens, eviction, a file overriding a recipe, the real menu,
+pause menu and run-over screen raising their cues · 0 bytes allocated.
+
+Engine facts it rests on, verified by running (the rest are the digest's, R1 §5):
+
+- A headless run reports display `headless`, audio driver `Dummy` — **and still mixes in
+  real time**, so voices, loops and music can be tested for real.
+- Stems of a synchronized stream loop independently; the player's position is the largest
+  of its stems' positions and is useless as a clock. `PitchScale` works on it.
+- A paused tree holds a `Pausable` polyphonic player's voices.
+- **A voice told to stop is free only after the engine's next mix**, and a one-shot ends in
+  the engine's time, not ours: the voice manager stops every voice it retires, and the
+  engine's polyphony is twice the manager's cap.
+- The resampler's images (§5).
+
+`FABLELAND_AUDIO=trace` wakes the director in any headless run and prints what it heard:
+the run check (891, green with it awake) raised `map.enter` 40 times, `day.end` 24,
+`shelter.enter` and `event.enter` 8 each, `runover.enter`, every mission and boss cue —
+876 cues, none without a sound, 454 voices, none refused.
+
+The check was **mutation-tested**: twenty-six deliberate breakages, twenty-four caught by
+name at once, and the two survivors each given the assertion that now catches it
+(`40-QA.md` §(2) lists them).
+
+**Not exercised by any check:** `map.travel` (the run check moves by handing nodes to
+`RunState`), `void.devour`, `mission.time`, `run.over` tagged `void_devoured`.
+
+---
+
+## 13. Looking and listening
+
+```bash
+Godot --headless --path . res://Scenes/Dev/AudioDump.tscn -- --out=/abs/folder     # every sound as a WAV, 30 s of every music at three intensities
+/opt/homebrew/bin/python3 Tools/audio/inspect.py /abs/folder --out /abs/sheets --docs Docs/Audio/sheets
+```
+
+The dump writes 1 200 sound files and 42 music mixes in under ten seconds; the tool draws a
+sheet per medium, one event across all ten media, and a report (band shares, attack times,
+distances between media, variants compared).
+
+**What the sheets showed, and what was changed** (two rounds):
+
+- The ten media are far apart on paper: the closest pair (BM / CC) is 12 dB apart in band
+  spectrum and envelope; under 6 would be hard to tell apart.
+- **Harsh:** fire textures in KH, HC and BM had a third of their energy above 8 kHz →
+  retuned to band-passed noise and lower crackle; now no medium averages over 2 % above
+  8 kHz (the brightest single sounds are Cloud Court's wire ticks, 8–14 %).
+- **Boomy:** the VOID had 75 % of its energy under 120 Hz, HC 48 % → the VOID's drone now
+  leans on its octave partials (a small speaker has nothing at 37 Hz), HC's drum is higher
+  and shorter. The VOID is still 51 % and HC 45 % — by rule, and worth hearing.
+- **Empty:** a short burst of a sparse texture could contain nothing and be normalised
+  into its own noise floor → a scatter always places an early event, and the check now
+  measures a recipe before normalising.
+- **Same:** 143 of 610 variant pairs were one waveform (tonal rows draw no randomness) →
+  variants now differ in decay, strike, a few cents of drift, and — in the chip medium —
+  duty and length; 8 of 369 remain near-identical (struck notes in the dark media, a few
+  short knocks).
+- **Long:** every Starland jump rang for over a second in its hall → drier and shorter.
+- Music: SL's sub drone carried 70 % of its mix → more octave, less fundamental.
+
+**Still in doubt** — for whoever listens first:
+
+- **Starland** is pure tones only: its jump, land and hit differ in pitch and pattern, and
+  may all read as "a beep". Its fire loop is a trill of two tones.
+- **The Palace** is low-passed at 2.2 kHz by rule: everything may read as "a thud in water".
+- Levels between buses, and between rows, are designed, not heard. Whether the combo's
+  notes sit under the hits or over them is a guess (−10 dB).
+- Whether the realms' music is music. The generators are rules, not a composer.
+- The resampler's images at 16 and 11 kHz are small by arithmetic; unheard.
+
+**The audition page** — `res://Scenes/Dev/AudioAudition.tscn`: every event, case and
+variant, in its own medium or forced into any of the ten; any realm's or screen's music
+with the intensity dragged by hand; mix states; stingers; a boss's layer; the combo and its
+resolution; a seed volley; the volume settings. It drives the real director through the
+real cue bus.
+
+---
+
+## 14. Deferred
+
+| Deferred | Why |
+|---|---|
+| The other four kits' own sounds | Their abilities raise no cues yet (`Feedback.gdd` §9); until then they have their class's rows in their home medium |
+| Positional audio (pan, distance) | The polyphonic voice has no pan; a 2.5D arena on one screen needs it least |
+| Holding the party rather than every character | Not needed until more kits are wired (§11) |
+| Overriding a music stem with a file; commissioned music as Ogg stems with `AudioStreamInteractive` | It only keeps time for streams that report a BPM [R1 §5.7, G15] |
+| Real HP share on the blackboard | The bus says "low" or not; a number needs one line in the contract (`IFeedbackBody` or a cue), which the VFX work is building against |
+| The live lead layer, ult = the character's motif over ducked stems, time-rate → pitch (Pixolotl), a black-hole mix state (Cleopastar) | With the kits |
+| Side-chain ducking; a reverb send; a loudness (LUFS) target | Levels first need ears |
+| An options screen; saving the volume settings | `Feedback.gdd` §7 |
+| Web export | Sample playback there has no bus effects [R1 §5.16] |
+
+---
+
+## 15. Decisions log
+
+| Date | Decision | Why |
+|---|---|---|
+| 2026-11-26 | Every sound is rendered through one of ten media's six primitives | "The style of its world" becomes a property of the render, not of each row: a new cue is ten sounds for one recipe, and an unwired kit already sounds like its home |
+| 2026-11-26 | A row is rendered by the owner's medium, the realm's, or a fixed one; the UI and the screens are the storybook's watercolour | A body's own sounds travel with it; hazards and the world are the realm's; the UI belongs to no world |
+| 2026-11-26 | Space is baked into each sound; the buses carry only a limiter and low-pass slots | A character keeps its home room in every arena, and three bus effects cost less than five reverbs |
+| 2026-11-26 | Storage rate per medium (11 / 16 / 22 kHz) | Memory was 13.5 MB against 8; the resampler's measured images say which media can afford a lower rate |
+| 2026-11-26 | Variants where a sound repeats (2–3), one where it happens once a fight | Memory; pitch and level jitter and the shuffle do the rest |
+| 2026-11-26 | Burning is a layer, not a case | Half the memory of her kit's burning copies |
+| 2026-11-26 | Banks: common and every known character at boot, the realm on `arena.enter`; anything else on first use, held up to 0.3 s | All eight characters fit (3.9 MB after boot, with the common bank); only the realm changes |
+| 2026-11-26 | The clock is system time anchored at each music start | The engine keeps no usable time for runtime stems; drift over a fight is milliseconds |
+| 2026-11-26 | A boss's layer is a separate player started on the bar, not a fifth stem | A synchronized stream cannot be changed while it plays; one mix block of offset is inaudible for an ostinato |
+| 2026-11-26 | The combo's note is its own voice in the player's medium, not a re-pitch of the hit | The thump of a hit must not change pitch; the note can |
+| 2026-11-26 | One stinger at a time on the Music bus, by priority | A boss's fall is not followed by "mission success" over it |
+| 2026-11-26 | The blackboard's HP is coarse | Only what the bus and `IFeedbackBody` say; the contract was not widened under the VFX work |
+| 2026-11-26 | The director is dormant in a headless run | The other checks run fights at 8× and must not be given sound to make; `FABLELAND_AUDIO` wakes it |
+| 2026-11-26 | **Provisional**, inherited: Cleopastar's medium is Starland's, Sifu Pangda's the Banboo Maze's | `Feedback.gdd` §11 — the owner has not confirmed either |

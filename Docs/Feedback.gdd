@@ -304,7 +304,17 @@ radius, magnitude = blast damage, 0 and tag `dud` for a head that only pops) —
 | `flow` / `mission.start` · `mission.success` · `mission.fail` | node level | `collection` · `protect` · `destroy` · `slaughter` · `boss` | — | *GameManager._Process · OnMissionResolved* |
 | `flow` / `boss.intro` · `boss.defeated` | node level | the boss's content id | at the boss (where it stood) · source = the boss, if still there | *BossMission.StageBoss · Tick* |
 | `flow` / `player.down` | — | — | at the player | *GameManager.OnPlayerDied* |
-| `flow` / `run.over` | — | `death` · `boss_timer` · `victory` | — | *GameManager.OnPlayerDied · OnMissionResolved* |
+| `flow` / `run.over` | — | `death` · `boss_timer` · `victory` · `void_devoured` (v0.11.7) | — · at the eaten node for `void_devoured` | *GameManager.OnPlayerDied · OnMissionResolved · VoidDevourStep.Run* |
+| `flow` / `mission.time` (v0.11.7) | whole seconds left (30, 20, 10, 5…1) | the mission type | — | *GameManager.PushMissionHud* |
+| `flow` / `menu.enter` · `event.enter` (v0.11.7) | — · the day | — | — | *MenuController._Ready · EventController._Ready* |
+| `flow` / `map.enter` (v0.11.7) | the day | the token's world · `VOID` | at the token (map units) | *MapController._Ready* |
+| `flow` / `map.travel` (v0.11.7) | stamina spent | the destination's kind | size = distance · direction · at the destination | *MapController.TryMove* |
+| `flow` / `shelter.enter` (v0.11.7) | the day | `hub` · `void` · `eidolon` | — | *ShelterController._Ready* |
+| `flow` / `runover.enter` (v0.11.7) | — | `death` · `void_devoured` · `boss_timer` · `victory` | — | *RunOverController._Ready* |
+| `flow` / `day.end` (v0.11.7) | the new day | `VOID` inside it | — | *RunState.EndDay* |
+| `flow` / `void.devour` (v0.11.7) | the day that ended | — · `singularity` | magnitude = nodes eaten | *VoidDevourStep.Run · RunState.EnterVoid* |
+| `ui` / `pause.open` · `pause.close` (v0.11.7) | — | — | — | *PauseMenu.Open · Close* |
+| `ui` / `hover` · `press` · `back` (v0.11.7) | — | — | size = the button's width · at its centre (screen px) | *UiCues ← every BaseButton* (a screen calls `UiCues.Attach(this)`) |
 
 ---
 

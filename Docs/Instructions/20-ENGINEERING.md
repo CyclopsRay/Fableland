@@ -208,6 +208,41 @@ the moment raises no cue yet (then: the recipe above, one `CueBus.Emit` with rea
 An authored sprite replaces any of it without code: `Assets/Vfx/<style>/<effect id>.png`
 (VFX.gdd §8).
 
+**Give a cue its sound (v0.11.7)** — `Docs/Audio.gdd`; copy Pomegraknight's rows in
+`Scripts/Presentation/Audio/SfxTable.cs`. No gameplay file is touched: the cue is already
+raised.
+
+1. **Does it need a row at all?** A cue with no row of its own falls back owner → class →
+   `any`, rendered in the owner's home medium — a new fighter's jump, landing, death and
+   hits already sound like its world. A character new to the game needs one line in
+   `Medium.HomeOf` (and, to be a bigger or smaller copy of another, one in `SfxTable.Alias`).
+2. **Write the row**: `Row(owner, "action", bodySeconds, (c, stage, tag) => { … })` — or
+   `Attack(owner, "ba", …)` for what a hit sounds like. The recipe is a few calls on
+   `c.Medium`: `Whoosh`, `Thump`, `Tick`, `Tone`, `Texture`, `Sweep` (and `Puff(...)` for a
+   shaped burst of a texture). Use the medium's primitives, not a generator directly, unless
+   the sound is one character's signature — that is what makes it right in all ten media.
+   Pitches come from the key: `c.Deg(n)` for a degree of the home scale, `T(c, 7)` for an
+   open interval that sits in any realm.
+3. **Say how it behaves**, in one line: `.Staged(3)` (cue variant = a stage rendered
+   separately) · `.Tagged("air", "burn|on_fire")` (tags rendered separately) ·
+   `.Vary(variants, ±semitones, ±dB)` — 2–3 where it repeats, 1 where it happens once a
+   fight · `.Voices(max, cooldown, priority)` · `.Level(dB, peak)` · `.Keyed(degree,
+   perVariant)` (a tonal row follows the realm's key) · `.OfRealm()` (the realm's medium:
+   hazards, the world) · `.Looping()` (for a cue raised with `Start` / `Stop`) ·
+   `.Layered("burning", fizz)` · `.Bursting(4, burstRow)` (a volley) · `.When(state, ±st,
+   ±dB)` · `.Quantized(Quantize.Grid)` + `.On(AudioBusId.Music)` (a stinger).
+4. **Mind the budget**: a variant is PCM in memory (`Audio.gdd` §11). Seconds × variants ×
+   cases × 2 × the medium's rate.
+5. **Look at it and prove it**: add the cue to `AudioCheck.Words()` if it is new to the
+   vocabulary and run the check; dump it and read its sheet (`40-QA.md` §(2)) — is it
+   silent, harsh, boomy, the same as its neighbour? Then listen:
+   `res://Scenes/Dev/AudioAudition.tscn`.
+6. **A recording instead?** Drop `res://Assets/Audio/<event id>.wav` — the row's rules stay.
+
+**A screen's cues** — a new screen calls `Fableland.UI.UiCues.Attach(this)` at the end of
+`_Ready` (every button then raises `ui`/`hover` and `ui`/`press`; `UiCues.MarkBack(button)`
+makes one raise `ui`/`back`) and raises its own `flow`/`<screen>.enter`.
+
 **New mission type (v0.5.0+)** — a `Mission` strategy object the arena GameManager
 hosts: `Setup(nodeLevel)`, `Tick`, `IsComplete/IsFailed`, `GrantReward`. Mission choice
 is rolled **at map-generation time** from `DetRandom` and stored on the node.

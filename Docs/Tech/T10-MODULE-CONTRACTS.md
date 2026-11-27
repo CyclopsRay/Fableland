@@ -8,9 +8,9 @@ How modules talk, so that adding module N+1 never means rewiring modules 1..N.
 
 | Mechanism | Use for | Rules |
 |-----------|---------|-------|
-| **C# events** (`event Action<...>`) | Gameplay → Presentation notifications (`HpChanged`, `Died`); anything with multiple listeners | Raiser never cares who listens. **Subscribe in `_Ready`/`_EnterTree`, unsubscribe in `_ExitTree` — always.** A scene node subscribed to an autoload's event and then freed by `ReloadCurrentScene` is a leak *and* a crash (the delegate keeps the dead node alive; invoking it touches a disposed object). This will be our most common bug class once RunState exists — make the pair-check a review habit. |
+| **C# events** (`event Action<...>`) | Gameplay → Presentation notifications (`HpChanged`, `Died`); anything with multiple listeners | Raiser never cares who listens. **Subscribe in `_Ready`/`_EnterTree`, unsubscribe in `_ExitTree` — always.** A scene node subscribed to an autoload's event and then freed by `ReloadCurrentScene` is a leak *and* a crash (the delegate keeps the dead node alive; invoking it touches a disposed object). This will be our most common bug class once RunState exists — make the pair-check a review habit. `MusicClock.BeatHit` / `BarHit` (v0.11.7) are C# events on an autoload's object: a scene node that subscribes unsubscribes in `_ExitTree` (`AudioAudition` does). |
 | **Godot signals** | Scene-boundary wiring authored in `.tscn` (buttons, Area2D enter/exit) | Fine at the edge; don't build cross-module buses out of them (no compile-time checking). |
-| **Autoload singletons** (`static Instance` set in `_EnterTree`) | True globals only. Current: `DamageNumberManager`, `ShakeCamera2D`, `CharacterController.LocalPlayer` (both claimed by the Player-side body only — a Foe-side fighter never touches them, §4a), `FeelDirector` (v0.11.2 — it must outlive every arena, as the cue bus it listens to does; §4b), `VfxDirector` (v0.11.6 — it must outlive every arena, as the bus it listens to does; its pooled nodes are its own children, so no scene owns or frees them; §4b); planned: `RunState`, the audio director, `BalanceOverrides` | Cap the list. Each new one needs a written justification here. A singleton that parents nodes into the live scene must do it via `GetTree().CurrentScene` (survives reloads — existing pattern). |
+| **Autoload singletons** (`static Instance` set in `_EnterTree`) | True globals only. Current: `DamageNumberManager`, `ShakeCamera2D`, `CharacterController.LocalPlayer` (both claimed by the Player-side body only — a Foe-side fighter never touches them, §4a), `FeelDirector` (v0.11.2 — it must outlive every arena, as the cue bus it listens to does; §4b), `VfxDirector` (v0.11.6 — it must outlive every arena, as the bus it listens to does; its pooled nodes are its own children, so no scene owns or frees them; §4b), `AudioDirector` (v0.11.7 — it must outlive every scene: the music plays across scene changes and the cue bus it listens to is static; it is dormant in a headless run unless `FABLELAND_AUDIO` asks; §4b); planned: `RunState`, `BalanceOverrides` | Cap the list. Each new one needs a written justification here. A singleton that parents nodes into the live scene must do it via `GetTree().CurrentScene` (survives reloads — existing pattern). |
 | **Direct references** (`[Export]` NodePath / ctor args / `Init(...)`) | Parent→child within one scene; spawner→spawnee config | `Init(...)` is called **after** `AddChild` (KNOWLEDGE caveat); spawnee guards against acting on un-Init'd state for one frame. |
 | **Return values / plain calls** | Within a module | Prefer these. Events are for crossing layers, not for everything. |
 
@@ -165,6 +165,12 @@ PRESENTATION  a director subscribes to CueBus.Raised / HitLanded / LoopStarted /
   ever written back. A cue that carries a cone packs it in `Extents` (`CueShapes.Cone`);
   `arena.enter`'s `Source` is the arena, and a listener ends what belongs to the arena when
   that node leaves the tree.
+- **The audio director** (v0.11.7, `Docs/Audio.gdd`) is the third. A sound is a row in
+  `SfxTable` (`CueTable<SfxDef>`), resolved exactly as `FeelTable` is; it adds nothing to the
+  five-type contract. The UI raises cues too: `UiCues.Attach(screen)` wires every button to
+  `ui`/`hover` · `press` · `back`, and a screen raises its own `flow`/`<screen>.enter`.
+  `IFeedbackBody.FeedbackState` is polled eight times a second for the body the player wears
+  (low HP is not a cue) — still read-only.
 - **Adding a cue**: one `CueBus.Emit` at the line where the moment happens, a row in
   `Docs/Feedback.gdd` §6, and a line in `FeedbackCheck`.
 

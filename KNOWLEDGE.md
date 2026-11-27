@@ -187,6 +187,81 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A voice the engine was told to stop is free only after its next mix — and a one-shot ends in the engine's time, not yours (v0.11.7, audio check)
+- **Symptom:** the first allocation probe raised 13 500 cues on a made-up clock and started
+  **0** voices; the engine had refused 22 765. `AudioStreamPlaybackPolyphonic.PlayStream`
+  returns −1 when its polyphony is full, `StopStream` only *marks* a voice, and the slot is
+  released by the mix thread — every 10–46 ms of real time. The voice manager retired voices
+  on its own clock and never told the engine, so the engine still held them all.
+- **Rule:** the voice manager calls `StopStream` for every voice it retires, natural end
+  included; the engine's polyphony is **twice** the manager's cap, so a frame that steals
+  many voices has somewhere to put the newcomers; and a check that starts real voices lets
+  real time pass between bursts (`Breathe()` in `AudioCheck`).
+- **Why:** two clocks. Ours decides what should be sounding; the engine's decides when a
+  slot is free. A refused voice is a dropped sound, silently.
+
+### The engine's resampler leaves an image at (stored rate − f): pick a storage rate by where the sound's energy sits (v0.11.7, audio, measured)
+- **Symptom (measured, never heard):** a pure tone in a runtime `AudioStreamWAV` stored at
+  16 kHz, captured from the mixed bus at 44.1 kHz: a 3 kHz tone has an image at 13 kHz
+  32 dB down — and a **6 kHz tone an image at 10 kHz only 10 dB down**. At 22.05 kHz: 44 dB
+  and 21 dB. At 11.025 kHz a 2 kHz tone images at 9 kHz, 33 dB down.
+- **Rule:** store a medium at a lower rate only if its sound sits in the lower third of that
+  band (`Audio.gdd` §5): watercolour, lit realism and the poster at 16 kHz; gongbi, linocut
+  and the VOID — each low-passed by rule — at 11 kHz; the bright media at 22.05 kHz.
+  `Tools/audio/inspect.py` reports each medium's share of energy above 5 kHz; re-read it
+  before lowering a rate.
+- **Why:** memory was 13.5 MB against a budget of 8, and the cheapest saving — a lower rate
+  — adds exactly the fizz above 8 kHz the sheets are read to avoid.
+
+### Normalising a sound that is nearly silent turns its noise floor into the sound (v0.11.7, audio check)
+- **Symptom:** "HC `any.jump.swim`: 26 % of its energy above 8 kHz". The recipe was a short
+  burst of a *sparse* texture (three drips a second, 0.14 s long): most variants contained
+  no drip at all, and peak-normalising the result amplified dither into white noise that
+  passed "not silent".
+- **Rule:** `AudioCheck` measures a recipe **before** it is normalised (`SfxClip.RawPeakDb`
+  must reach −45 dBFS); `Medium.Scatter` always places an event in the first fifth of the
+  span it is given. A generator that may rest must not be allowed to rest everywhere — the
+  music's lead plays its last phrase if it has played none (the shelter's lead, seed 1,
+  bounced a silent stem).
+- **Why:** "not silent" after normalisation is true of anything, including nothing.
+
+### "Seed-mutated variants" are only different if the recipe draws from the seed (v0.11.7, audio sheets)
+- **Symptom:** the inspection report found 143 of 610 variant pairs with the same waveform:
+  tonal rows (a marimba note, a bell) used no randomness, so every variant rendered the same
+  bytes; the dither made them *look* different to a byte comparison.
+- **Rule:** a medium's primitives draw `Mut(c, share)` (decay, strike, layer level) and
+  `Cents(c)` (a few cents: inaudible as pitch, enough to drift apart) from the variant's
+  seed; the chip medium varies duty and length instead, because a chip's pitch is exact.
+  Compare variants by correlation (`inspect.py`), not by bytes.
+
+### A made-up clock must also zero every lead taken from the real audio server (v0.11.7, audio check)
+- **Symptom:** "the boss's layer did not enter on the bar (it entered −79 ms from it)". The
+  director was stepped on a made-up clock, but `MusicEngine` still subtracted
+  `AudioServer.GetTimeToNextMix()` + output latency — real numbers — to decide when to start.
+- **Rule:** `AudioDirector.TimeSource` sets `MusicEngine.NoLead`; anything paced against the
+  sound card reads its lead through one property.
+
+### State a check removes by hand must go through its owner (v0.11.7, audio check)
+- **Symptom:** "the realm's bank was not warmed on arena.enter", and every engine probe after
+  it failed. The memory stage had nulled rendered sets directly to measure eviction; the
+  cache's "already requested" set still listed them, so they were never rendered again.
+- **Rule:** evict through `AudioCache.EvictRealm` / `Clear`. One owner per piece of state
+  (T00 rule 2) applies to checks too.
+
+### Tooling: a script named `inspect.py`, a `SceneTree` script's first frame, `timeout` on macOS (v0.11.7, tooling, reference)
+- `Tools/audio/inspect.py` shadows the standard library's `inspect`, which numpy imports:
+  "partially initialized module 'numpy'". The tool removes its own folder from `sys.path`
+  before importing numpy. Do not "simplify" that away.
+- In a `-s` SceneTree script, `_initialize` runs before the root is in the tree
+  ("Playback can only happen when a node is inside the scene tree") — `await process_frame`
+  first. macOS has no `timeout`; cap a spike with `--quit-after <frames>`.
+- Verified by running, for the next audio work: a headless run reports display `headless`
+  and audio driver `Dummy`, **and still mixes in real time** (voices advance, loops loop,
+  `IsStreamPlaying` works); 6 posts into a polyphony of 4 return 4 handles and two −1;
+  stems of an `AudioStreamSynchronized` loop independently and the player's position is the
+  largest of theirs; `PitchScale` works on it; a paused tree holds a `Pausable` polyphonic
+  player's voices; an unknown bus name reads back as `Master`.
+
 ### A stepped effect drew nothing on its first frame — 83 to 100 ms of a slash went missing (v0.11.6, VFX)
 - **Symptom:** in the first gallery captures the scratchboard, linocut and VOID columns
   were empty for slashes and trails, and ink and pixel art showed a sliver. Each of those

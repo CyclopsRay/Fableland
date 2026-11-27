@@ -28,6 +28,11 @@ public partial class MenuController : Control
             _slotButtons[i].Pressed += () => SelectSlot(slot);
         }
         GetNode<Button>("Center/SlotPanel/BackButton").Pressed += HideSaveSlots;
+
+        // flow/menu.enter: the title screen is up. ui/hover · press · back come from every button.
+        Fableland.UI.UiCues.MarkBack(GetNode<Button>("Center/SlotPanel/BackButton"));
+        Fableland.UI.UiCues.Attach(this);
+        CueBus.EmitAt(CueOwners.Flow, "menu.enter", Vector2.Zero);
     }
 
     private void OnMapCreation()

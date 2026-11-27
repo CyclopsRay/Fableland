@@ -23,6 +23,9 @@ Optimize by measurement against budgets, never by folklore.
 | Particles alive (ambience included) | 512; ordinary fights measured 49–97 |
 | Non-critical effects started per frame | 6; none off screen |
 | VFX garbage | 0 bytes per cue, per frame, per draw (`VfxCheck`) |
+| Audio PCM in memory (v0.11.7, `Docs/Audio.gdd` §11) | **8 MB** with a realm, its music, five protagonists and the realm's foes loaded (measured 7.6); 0 bytes on disk |
+| Audio voices | **40** at most (24 SFX, 4 UI, 4 ambience, 8 stingers) plus three music players |
+| Audio garbage and time | 0 bytes per cue; under 0.1 ms a frame (measured 1.2 µs); synthesis only on one worker thread, never in `_Process` (`AudioCheck` asserts each) |
 
 ## 2. C# / GC discipline (the #1 lag source in Godot C#)
 

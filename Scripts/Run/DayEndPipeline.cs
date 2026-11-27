@@ -114,6 +114,10 @@ public sealed class VoidDevourStep : IDayStep
 
         // Describe what happened for the day-end summary toast (T30 §5 residual) — this step only
         // appends a note; RunState.EndDay owns rendering it.
+        // flow/void.devour: the VOID ate ground tonight. Variant = the day that ended,
+        // magnitude = how many nodes it took.
+        if (devouredCount > 0)
+            CueBus.EmitAt(CueOwners.Flow, "void.devour", Vector2.Zero, variant: endedDay, magnitude: devouredCount);
         if (devouredCount > 0)
             rs.DayEndNotes.Add($"The VOID devoured {devouredCities} city field{(devouredCities == 1 ? "" : "s")} and {devouredFunctions} function node{(devouredFunctions == 1 ? "" : "s")}.");
         if (brokenBridges > 0)
@@ -122,7 +126,11 @@ public sealed class VoidDevourStep : IDayStep
         // Standing on ground the VOID just ate = death (the third death source, NODES §2.2).
         var cur = rs.FindNode(rs.CurrentNodeId);
         if (cur != null && cur.Devoured)
+        {
+            // flow/run.over, tag `void_devoured`: the fourth way a run ends (the arena raises the other three).
+            CueBus.EmitAt(CueOwners.Flow, "run.over", cur.Pos, tag: "void_devoured");
             rs.EndRun(RunEndKind.VoidDevoured);
+        }
     }
 }
 
