@@ -487,6 +487,8 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	/// <summary>The magazine's reload time and basic-attack interval as they stand, every
 	/// rule counted (read-only: checks and tooling; 0 without a magazine).</summary>
 	public float ReloadSeconds => Ammo?.EffectiveReloadDelay ?? 0f;
+	/// <summary>The basic-attack magazine now, for the HUD's pips: shots in it, and its size.</summary>
+	public (int Current, int Capacity) Magazine => Ammo != null ? (Ammo.Current, Ammo.Capacity) : (0, 0);
 	public float AttackIntervalSeconds => Ammo?.EffectiveAttackIntervalSeconds ?? 0f;
 
 	public void SetGravityScale(string source, float scale) => SetScale(_gravityScales, source, scale);

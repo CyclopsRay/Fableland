@@ -394,7 +394,8 @@ public partial class MapController : Node2D
         // Inside the VOID, time is unknowable — the black hole ate the clock.
         string day = _inVoid ? "???" : _day.ToString();
         string zone6 = Zone6Line();
-        _infoLabel.Text = $"Day {day}   Stamina {_stamina}/{MaxStamina}\n" +
+        int cores = RunState.Instance?.WonderCores ?? 0;
+        _infoLabel.Text = $"Day {day}   Stamina {_stamina}/{MaxStamina}   Wonder cores {cores}\n" +
                           $"Traversed {_visited.Count}\n" +
                           $"fights {fights}  hubs {hubs}  shelter {shelters}  ? {marks}" +
                           (zone6.Length > 0 ? "\n" + zone6 : "");

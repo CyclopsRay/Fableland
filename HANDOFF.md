@@ -9,12 +9,12 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.4**, thirteen commits on top of
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.5**, fourteen commits on top of
   v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
   owner asks for each fast-forward; until then it trails the branch.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.4, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.5, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -50,7 +50,8 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 | 0.12.1 | `219bfed` | **The Ferryman and the Asura of Wrath on their own kits** (`Zone6BossFighter`; sprites; Undertow, obol toll, Skiff Ram; flurry, Wrath Fire, vajra, Rising Wrath) | `Zone6.gdd` §4.1, §5.1, `FOES.gdd` §8.7 |
 | 0.12.2 | `1350e9d` | **The dark leader is each variant's final boss** (TBD #1 closed by the owner). **Māra's full design, proposed for review:** the Wheel of Becoming, the human realm as the only interval, the last 5 % falling only there, his kit, arena, look and build plan. Docs only | `Docs/Mara.gdd` |
 | 0.12.3 | `7afe440` | **Māra built** (`Mara.gdd` steps 1–2, the owner's "先做…占位先"): the **Wheel of Becoming** as his signature (rests, skips, stacks, the realms' modifiers, the lock, the Last Turn, Liberation, the Offering) and **his own kit** (Claw Rake, Noose, Hand of the Wheel, every realm's arrival strike, Doubt's false tells, Delusion's images). Placeholders drawn in code; **art prompts written, not generated** | `Docs/Mara.gdd` §13.4, `Docs/Art/MaraArtPrompts.md` |
-| 0.12.4 | — | **The audit's bugs that could end or stall a run, and kits back to their GDDs** (Part 2 #11–#17): resolution invincibility held by sources (Pixolotl's Shift), the Eidolon Shelter's dead end, Yukai's Rope letting go, Cleopastar's star jump, damage credited to Pangda's blows and to thrown stars and heads, the Fire Tornado replacing Slash 1 and spinning in place, the seagull's puddle and dash; the Asura's flurry lands every arm. New **`FlowCheck`**, each fix broken once | `Docs/Research/AUDIT-v0.11.1.md` Part 2 (its status line), KNOWLEDGE v0.12.4 |
+| 0.12.4 | `2774457` | **The audit's bugs that could end or stall a run, and kits back to their GDDs** (Part 2 #11–#17): resolution invincibility held by sources (Pixolotl's Shift), the Eidolon Shelter's dead end, Yukai's Rope letting go, Cleopastar's star jump, damage credited to Pangda's blows and to thrown stars and heads, the Fire Tornado replacing Slash 1 and spinning in place, the seagull's puddle and dash; the Asura's flurry lands every arm. New **`FlowCheck`**, each fix broken once | `Docs/Research/AUDIT-v0.11.1.md` Part 2 (its status line), KNOWLEDGE v0.12.4 |
+| 0.12.5 | — | **The player is told what happens**: a Controls card in the pause menu and a key line under the countdown; rewards named in the toast (and the day's notes kept for the summary); wonder cores on the map; each fighter's own face in the portrait and the Switch slot, the magazine as pips; the run-over screen names the dark leader | `Docs/Research/AUDIT-v0.11.1.md` Part 2 status |
 
 **Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.4, all passing:
 

@@ -417,7 +417,9 @@ mission the moment belongs to.
 > **Status at v0.12.4.** Fixed, each pinned by `Scenes/Run/FlowCheck.tscn`: **#11** (the puddle
 > and the dash; the other seagull lines were deliberate and FOES §4 now says so), **#12**, **#13**,
 > **#14**, **#15** (replace and lock; the box and push were the v0.2.0 tuning, now in the GDD),
-> **#16**, **#17**. Overtaken by later work: **#8** (VFX v0.11.6, audio v0.11.7 — the four kits'
+> **#16**, **#17**. Then in v0.12.5: **#1** (the pause menu's Controls card and the countdown's
+> line), **#2**, **#3** (shown on the map; a use is TBD #11), **#6** (faces, magazine pips; a
+> refused attack is still silent). Overtaken by later work: **#8** (VFX v0.11.6, audio v0.11.7 — the four kits'
 > own cues remain, Part 1) and **#9** (zone 6's own bosses, v0.12.0–v0.12.3). The rest stand.
 
 Ordered by how much of a new player's session each one touches, starting from the title

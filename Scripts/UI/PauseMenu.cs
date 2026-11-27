@@ -57,6 +57,7 @@ public partial class PauseMenu : CanvasLayer
         title.AddThemeFontSizeOverride("font_size", 28);
         box.AddChild(title);
         box.AddChild(MakeButton("Continue", Close));
+        box.AddChild(MakeButton("Controls", ShowControls));
         box.AddChild(MakeButton("Settings", ShowSettings));
         box.AddChild(MakeButton("Save & Quit", SaveAndQuit));
         _status = new Label
@@ -83,6 +84,21 @@ public partial class PauseMenu : CanvasLayer
         var button = new Button { Text = text, CustomMinimumSize = new Vector2(0f, 50f) };
         button.Pressed += pressed;
         return button;
+    }
+
+    /// <summary>What every key does, from the InputMap (audit v0.11.1 #1).</summary>
+    private void ShowControls()
+    {
+        var dialog = new AcceptDialog
+        {
+            Title = "Controls",
+            DialogText = ControlsCard.Text(),
+            ProcessMode = ProcessModeEnum.Always,
+        };
+        AddChild(dialog);
+        dialog.Confirmed += dialog.QueueFree;
+        dialog.Canceled += dialog.QueueFree;
+        dialog.PopupCentered();
     }
 
     private void ShowSettings()

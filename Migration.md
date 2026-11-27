@@ -9,6 +9,27 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.5** — **The player is told what happens.** Audit v0.11.1 Part 2 #1, #2, #3 and #6.
+  - **Controls (#1):**
+    - The pause menu has a **Controls** card, read from the InputMap, so a rebinding shows up
+      with no other change.
+    - The arena's countdown names the essentials: attack, skills, item, switch, pause.
+  - **Rewards (#2):**
+    - A goal's toast names what it paid, for example "+10 wonder cores · FanChen's Heart ·
+      +10 ATK", plus the capital's TwistedReality and a recruit who actually joined.
+    - The day's notes now survive into the day-end summary. They were cleared before the
+      summary read them, so "The capital yields TwistedReality" was never shown.
+  - **Wonder cores (#3):** the map's info panel shows the count. A use for them is still a
+    design question (TBD #11).
+  - **The HUD (#6):**
+    - The portrait is the fighter in play's own mugshot, flushing red as HP falls and grey when
+      down.
+    - The Switch slot shows all five fighters' faces. Cleopastar's slot used to vanish.
+    - The magazine shows as pips under the portrait.
+  - **The run-over screen** names the run's dark leader: "…stopped Māra's wheel" or "…faced
+    the Unwritten".
+  - **Checks:** the flow check now has 28, including the reward wording and every fighter's
+    face.
 - **0.12.4** — **Bugs that could end or stall a run, and kits back to their GDDs.** These are
   audit v0.11.1 Part 2 #11–#17, each reproduced and pinned by a new check,
   **`Scenes/Run/FlowCheck.tscn`** (25 checks, broken once each to prove it).

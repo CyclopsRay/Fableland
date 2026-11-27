@@ -555,6 +555,7 @@ public partial class GameManager : Node2D
         _player.HpChanged += OnPlayerHpChanged;
         _player.Died += OnPlayerDied;
         _hud.SetPlayer(_player);
+        _hud.SetPortrait(_hasRun && _battlePartyIds.Length > 0 ? _battlePartyIds[_battlePartyIndex] : _player.Name.ToString());
         _hud.SetHp(_player.CurrentHP, _player.MaxHP, _player.Shield, _player.TempHP);
 
         if (_hasRun && _battlePartyIds.Length > 0)
@@ -865,7 +866,7 @@ public partial class GameManager : Node2D
             }
             _graceTimer = Mathf.Max(0f, _graceTimer - dt);
             _hud.SetProgress(_graceTimer > 0.01f
-                ? $"Get ready... {Mathf.CeilToInt(_graceTimer)}"
+                ? $"Get ready... {Mathf.CeilToInt(_graceTimer)}\n{Fableland.UI.ControlsCard.OneLine()}"
                 : "Go!");
         }
         else if (_graceTimer == 0f)
@@ -1034,6 +1035,9 @@ public partial class GameManager : Node2D
 
             string note = RunState.Instance.LastZone6Note;
             string toast = success ? _mission.SuccessToast : _rules.SurvivableDefeat ? "Defeated — you wake back on the map." : "Mission failed.";
+            // Name what the goal paid (audit v0.11.1 #2).
+            string reward = success ? RunState.Instance.LastRewardLine : "";
+            if (reward.Length > 0) note = note.Length > 0 ? reward + " " + note : reward;
             _hud.ShowToast(string.IsNullOrEmpty(note) ? toast : toast + " " + note, string.IsNullOrEmpty(note) ? 2.5f : 6f);
             if (_rules.InZone6) _hud.SetRulesLines(RulesAfterResult());
             _hud.SetFinishDayEnabled(true);

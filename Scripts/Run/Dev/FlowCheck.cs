@@ -53,6 +53,8 @@ public partial class FlowCheck : Node
         try
         {
             CheckShelterExits();
+            CheckRewardsNamed();
+            await CheckHudFaces();
             Engine.PhysicsTicksPerSecond = ticksPerSecond * SpeedUp;
             Engine.TimeScale = SpeedUp;
             await Ticks(1);
@@ -168,6 +170,42 @@ public partial class FlowCheck : Node
         var hub = ShelterController.Exits(eidolon: false, blessed: true, canCross: false, stamina: 0);
         Expect(hub.Finish && !hub.Back && hub.Blessings, "shelter: a hub with no stamina keeps Finish the Day and its Blessing");
         GD.Print("  flow     shelter        an Eidolon Shelter opens Back once its crossing is spent or blocked, at any stamina; hubs unchanged");
+    }
+
+    // ---------------------------------------------------------------- #2, #6 what the player is told
+
+    private void CheckRewardsNamed()
+    {
+        var bundle = new RewardBundle { WonderCores = 10, AtkBonus = 10 };
+        bundle.ItemDefIds.Add("fanchens_heart");
+        string said = bundle.Describe();
+        Expect(said == $"+10 wonder cores · {Items.ItemCatalog.DisplayName("fanchens_heart")} · +10 ATK",
+            $"rewards: a goal's reward must be named in the toast — '{said}' (#2)");
+        Expect(new RewardBundle().Describe() == "" && new RewardBundle { WonderCores = 1 }.Describe() == "+1 wonder core",
+            "rewards: an empty bundle says nothing, and one core is a core");
+        GD.Print($"  flow     rewards        a goal's toast names what it paid: \"{said}\"");
+    }
+
+    /// <summary>The HUD shows each fighter's own face, in the portrait and in the Switch slot —
+    /// Cleopastar's slot used to vanish whenever she was next (#6).</summary>
+    private async Task CheckHudFaces()
+    {
+        var hud = ResourceLoader.Load<PackedScene>("res://Scenes/Hud.tscn").Instantiate<global::Hud>();
+        AddChild(hud);
+        await Ticks(1);
+        var missing = new List<string>();
+        foreach ((string id, string _) in Debug.ProtagonistRoster.Entries)
+        {
+            hud.SetNextProtagonist(id);
+            hud.SetPortrait(id);
+            hud.SetHp(50f, 100f);
+            string path = $"res://Assets/Sprites/Protagonists/{id}/UI/Mugshot.png";
+            if (!hud.SwitchSlotShown || hud.SwitchFace?.ResourcePath != path || hud.PortraitFace?.ResourcePath != path) missing.Add(id);
+        }
+        Expect(missing.Count == 0, $"hud: every fighter's own face must show in the portrait and the Switch slot — not for {string.Join(", ", missing)} (#6)");
+        hud.QueueFree();
+        await Ticks(1);
+        GD.Print($"  flow     hud            all {Debug.ProtagonistRoster.Entries.Length} fighters show their own face in the portrait and the Switch slot");
     }
 
     // ---------------------------------------------------------------- #13 resolved invincibility

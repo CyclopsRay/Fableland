@@ -190,6 +190,12 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A summary that clears its notes before it runs throws away what the day said (v0.12.5, audit #2)
+- **Symptom:** winning the home capital put "The capital yields TwistedReality." in
+  `DayEndNotes`. `EndDay` cleared that list before its pipeline ran, so the day-end summary
+  never showed it, nor "X joins your roster".
+- **Rule:** notes are cleared after the summary has read them, not before.
+
 ### A kit's own skill cleared the arena's end-of-mission gate — invincibility is held by sources (v0.12.4, audit #13)
 - **Symptom:** after a mission resolved, Pixolotl's Shift set `Invincible = false` on its way
   out. The resolution's invincibility was gone, and a foe or hazard still on the field could

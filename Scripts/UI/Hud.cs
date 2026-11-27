@@ -63,15 +63,18 @@ public partial class Hud : CanvasLayer
     // Indexed by HP-fraction bucket: full, >70%, 50-70%, 20-50%, <20%, dead.
     private Texture2D[] _mugshotStates;
 
-    // Lazy-loaded next-protagonist mugshot textures (placeholder art until real mugshots land).
-    // Keyed by protagonist Id; only the two implemented characters have entries.
-    private static readonly System.Collections.Generic.Dictionary<string, string> _nextMugshotPaths = new()
+    // The portrait of the fighter in play (its own mugshot, tinted as its HP falls), and the
+    // magazine shown as pips under it (audit v0.11.1 #6: one face for all five; no magazine).
+    private Texture2D _portrait;
+    private Label _magazineLabel;
+
+    /// <summary>A protagonist's own mugshot, or null when it has none.</summary>
+    private static Texture2D MugshotOf(string id)
     {
-        {"Pomegraknight", "res://Assets/Sprites/UI/mugshot_next_pomegraknight.svg"},
-        {"PumpKing", "res://Assets/Sprites/UI/mugshot_next_pumpking.svg"},
-        {"Pixolotl", "res://Assets/Sprites/Protagonists/Pixolotl/UI/Mugshot.png"},
-        {"Sifu Pangda", "res://Assets/Sprites/Protagonists/Sifu Pangda/UI/Mugshot.png"},
-    };
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        string path = $"res://Assets/Sprites/Protagonists/{id}/UI/Mugshot.png";
+        return ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+    }
 
     public override void _Ready()
     {
@@ -127,6 +130,17 @@ public partial class Hud : CanvasLayer
             GD.Load<Texture2D>("res://Assets/Sprites/UI/mugshot_dead.svg"),
         };
 
+        _magazineLabel = new Label
+        {
+            Name = "MagazineLabel",
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Position = new Vector2(_mugshot.OffsetLeft - 8f, _mugshot.OffsetBottom + 2f),
+            Size = new Vector2(_mugshot.OffsetRight - _mugshot.OffsetLeft + 16f, 20f),
+        };
+        _magazineLabel.AddThemeFontSizeOverride("font_size", 14);
+        GetNode<Control>("StatusCluster").AddChild(_magazineLabel);
+
         // Sane defaults until GameManager pushes real mission state.
         _secondaryBar.Visible = false;
         _rewardChoice.Visible = false;
@@ -140,6 +154,8 @@ public partial class Hud : CanvasLayer
 
         UpdateCooldownSlot(_shiftCd, _shiftCdLabel, _player.ShiftCooldown);
         UpdateCooldownSlot(_eCd, _eCdLabel, _player.ESkillCooldown);
+        (int shots, int size) = _player.Magazine;
+        _magazineLabel.Text = size > 0 ? new string('●', Mathf.Clamp(shots, 0, size)) + new string('○', Mathf.Max(0, size - shots)) : "";
     }
 
     private static void UpdateCooldownSlot(TextureProgressBar overlay, Label label, (float Remaining, float Max) cd)
@@ -171,9 +187,10 @@ public partial class Hud : CanvasLayer
     public void SetNextProtagonist(string id)
     {
         _switchNextId = id;
-        if (id != null && _nextMugshotPaths.TryGetValue(id, out string path))
+        Texture2D face = MugshotOf(id);
+        if (face != null)
         {
-            _switchIcon.Texture = GD.Load<Texture2D>(path);
+            _switchIcon.Texture = face;
             _switchSlot.Visible = true;
         }
         else
@@ -212,6 +229,20 @@ public partial class Hud : CanvasLayer
         _ultRing.Value = cur;
     }
 
+    /// <summary>Read-only, for checks: whether the Switch slot shows, and the faces drawn.</summary>
+    public bool SwitchSlotShown => _switchSlot.Visible;
+    public Texture2D SwitchFace => _switchIcon.Texture;
+    public Texture2D PortraitFace => _mugshot.Texture;
+    public string MagazineText => _magazineLabel?.Text ?? "";
+
+    /// <summary>Whose face the portrait shows: the fighter in play. With no mugshot of its own
+    /// the generic mood faces stand in.</summary>
+    public void SetPortrait(string protagonistId)
+    {
+        _portrait = MugshotOf(protagonistId);
+        _mugshot.SelfModulate = Colors.White;
+    }
+
     public void SetHp(float cur, float max, float shield = 0f, float tempHP = 0f)
     {
         _hpBar.SetValues(cur, max, shield, tempHP);
@@ -223,7 +254,20 @@ public partial class Hud : CanvasLayer
         // temporary buffers that don't affect the character portrait.
         float frac = max > 0f ? cur / max : 0f;
         int state = frac >= 1f ? 0 : frac > 0.7f ? 1 : frac > 0.5f ? 2 : frac > 0.2f ? 3 : frac > 0f ? 4 : 5;
-        _mugshot.Texture = _mugshotStates[state];
+        if (_portrait == null)
+        {
+            _mugshot.Texture = _mugshotStates[state];
+            return;
+        }
+        // The fighter's own face, flushing red as its HP falls and grey when it is down.
+        _mugshot.Texture = _portrait;
+        _mugshot.SelfModulate = state switch
+        {
+            5 => new Color(0.35f, 0.35f, 0.38f),
+            4 => new Color(1f, 0.45f, 0.45f),
+            3 => new Color(1f, 0.72f, 0.72f),
+            _ => Colors.White,
+        };
     }
 
     public void SetLives(int lives) => _livesLabel.Text = $"Lives: {lives}";

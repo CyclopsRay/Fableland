@@ -79,6 +79,9 @@ public partial class RunState : Node
     /// <summary>What the last zone-6 fight changed, in a player's words ("gravity ×0.80 (was
     /// ×1.00)") — the arena's toast and the map's next note. "" when nothing did.</summary>
     public string LastZone6Note = "";
+    /// <summary>What the last goal paid, in a player's words ("+10 wonder cores · FanChen's
+    /// Heart"), for the arena's toast; "" when it paid nothing.</summary>
+    public string LastRewardLine { get; private set; } = "";
 
     // ---- run lifecycle ----
     public bool RunFinished;                                  // guards double scene-swaps
@@ -373,6 +376,7 @@ public partial class RunState : Node
     {
         var node = FindNode(CurrentAdventure?.NodeId);
         LastZone6Note = "";
+        LastRewardLine = "";
         bool zone6Mini = node != null && CurrentAdventure?.Rules?.Zone6Role == Zone6Role.MiniBoss;
         if (zone6Mini)
         {
@@ -397,9 +401,20 @@ public partial class RunState : Node
                 {
                     AddItem(TwistedRealityItemId);
                     DayEndNotes.Add("The capital yields TwistedReality.");
+                    LastRewardLine = ItemCatalog.DisplayName(TwistedRealityItemId);
                 }
             }
+            int ownedBefore = Owned.Count;
             ApplyRewards(rewards);
+            // What the arena says the player got (audit v0.11.1 #2): the bundle, the capital's
+            // TwistedReality, and a recruit only when one actually joined.
+            var said = new List<string>();
+            string bundle = rewards?.Describe() ?? "";
+            if (bundle.Length > 0) said.Add(bundle);
+            if (LastRewardLine.Length > 0) said.Add(LastRewardLine);
+            if (Owned.Count > ownedBefore && rewards != null)
+                foreach (string id in rewards.ProtagonistGrants) said.Add($"{id} joins you");
+            LastRewardLine = string.Join(" · ", said);
         }
         else if (node != null && node.IsCombat)
         {
@@ -481,13 +496,15 @@ public partial class RunState : Node
     public void EndDay()
     {
         if (RunFinished) return;
-        DayEndNotes.Clear();
+        // Notes the day left (the capital yielding TwistedReality, a recruit) are kept for this
+        // summary — clearing them first threw them away (audit v0.11.1 #2).
         _pipeline.Run(this);
         if (!RunFinished)
         {
             string dayLabel = InVoid ? "???" : Day.ToString(); // hidden day still ticks; only the display is "???"
             var parts = new List<string> { $"Day {dayLabel} begins." };
             parts.AddRange(DayEndNotes);
+            DayEndNotes.Clear();
             LastDayEndSummary = string.Join(" ", parts);
             // flow/day.end: a day is over and the next begins. Variant = the new day.
             CueBus.EmitAt(CueOwners.Flow, "day.end", Vector2.Zero, variant: Day, tag: InVoid ? "VOID" : null);

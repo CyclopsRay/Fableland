@@ -19,7 +19,7 @@ public partial class RunOverController : Control
             RunEndKind.Death => "You died in combat.",
             RunEndKind.VoidDevoured => "The VOID devoured the ground beneath you.",
             RunEndKind.BossTimer => "The boss timer expired — the darkness took you.",
-            RunEndKind.Victory => "You reached the center and defeated the dark leader.",
+            RunEndKind.Victory => VictoryLine(rs),
             _ => "",
         };
 
@@ -35,6 +35,7 @@ public partial class RunOverController : Control
 
         GetNode<Button>("Center/Box/MenuButton").Pressed += OnMenu;
 
+
         // flow/runover.enter: the run-over screen is up. Tag = how the run ended.
         Fableland.UI.UiCues.MarkBack(GetNode<Button>("Center/Box/MenuButton"));
         Fableland.UI.UiCues.Attach(this);
@@ -49,4 +50,13 @@ public partial class RunOverController : Control
     }
 
     private void OnMenu() => GetTree().ChangeSceneToFile("res://Scenes/Menu.tscn");
+
+    /// <summary>The win, said for the run's own dark leader (Docs/Zone6.gdd §4.2, Mara.gdd §11).</summary>
+    private static string VictoryLine(RunState rs)
+    {
+        string variant = rs?.Zone6?.VariantId ?? "";
+        if (variant == Fableland.Data.Zone6Table.AviciId) return "You reached the centre and stopped Māra's wheel. You step off it.";
+        if (variant == Fableland.Data.Zone6Table.VoidFrontierId) return "You reached the centre and faced the Unwritten — a story never begun, ended.";
+        return "You reached the centre and defeated the dark leader.";
+    }
 }
