@@ -829,6 +829,13 @@ public partial class FlowCheck : Node
         await Ticks(10);
         var state = new ProtagonistState("Pomegraknight") { HeldItemDefId = RunState.VoidItemId, HeldItemInstanceId = "void-check" };
         var theVoid = new ItemRuntime(pome, state);
+        // Silenced, no item (the owner, v0.12.13): the press is refused and nothing is spent.
+        pome.SetSilenced("check.silence", true);
+        bool hushed = theVoid.TryUse(out string hushedWhy);
+        Expect(!hushed && VoidBlindness.Active.Count == 0 && state.HeldItemDayCooldownRemaining == 0
+               && float.IsPositiveInfinity(boss.SightLimitPx) && (hushedWhy ?? "").StartsWith("Silenced"),
+            $"void: a silenced holder must not use THE VOID, nor spend its days ('{hushedWhy}'; {VoidBlindness.Active.Count} darkness, {state.HeldItemDayCooldownRemaining} day(s))");
+        pome.SetSilenced("check.silence", false);
         bool used = theVoid.TryUse(out string reason);
         Expect(used && boss.SightLimitPx == 0f && crab.SightLimitPx == 0f,
             $"void: THE VOID must blind every foe at once — the boss sees {M(boss.SightLimitPx)} m, the crab {M(crab.SightLimitPx)} m ({reason})");

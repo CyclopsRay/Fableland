@@ -1487,10 +1487,11 @@ public partial class BossFightCheck : Node
     /// The Black Prison cast by the player's PumpKing on a crab penned at its centre. Q on an
     /// empty ring opens nothing; on a full one it spends the ring and opens where he aims. For a
     /// second it only warns — nobody touched, nothing grown, a recast refused. Then the crab
-    /// inside walks at half speed and is held (jump, silence, sight) while a crab 12 m off is
-    /// untouched. The recast, free and once, blinks him to the nearest spot at the mouth his body
-    /// fits (the centre is at a crab's height, in the floor for him) and his head's biggest blast
-    /// lands on the crab inside and not the far one. It holds four seconds, then lets go.
+    /// at its centre walks at half speed and is held (jump, silence, sight), as is one 8 m off,
+    /// while a crab past its 19.1 m rim is untouched. The recast, free and once, blinks him to the
+    /// nearest spot at the mouth his body fits (the centre is at a crab's height, in the floor for
+    /// him) and his head's biggest blast lands on the crab at the centre — its heart — and not on
+    /// the one 8 m off or the far one. It holds four seconds, then lets go.
     /// </summary>
     private async Task ProbeTheBlackPrison()
     {
@@ -1524,6 +1525,11 @@ public partial class BossFightCheck : Node
                && Mathf.IsEqualApprox(BlackPrison.MoveScale, 0.5f) && Mathf.IsEqualApprox(BlackPrison.JumpScale, 0.5f)
                && Mathf.IsEqualApprox(BlackPrison.PumpkinEvery, 0.5f) && Mathf.IsEqualApprox(BlackPrison.SightMetres, 3f),
             "black prison: the owner's numbers moved (1 s warning, 4 s held, half speed, half jump, a pumpkin every 0.5 s, sight one cell = 3 m)");
+        // The owner's rule for its size (v0.12.13): a fighter at the standard 10 m/s, slowed, walks
+        // out from the centre — hit circle clear of the rim — in exactly the hold.
+        float walkOut = (BlackPrison.RadiusM + BlackPrison.ReferenceHitRadiusM) / (BlackPrison.ReferenceRunMps * BlackPrison.MoveScale);
+        Expect(Mathf.IsEqualApprox(walkOut, BlackPrison.HoldSeconds) && Mathf.IsEqualApprox(BlackPrison.ReferenceRunMps, 10f),
+            $"black prison: a 10 m/s fighter slowed by it must walk out from its centre in its {BlackPrison.HoldSeconds} s; it takes {walkOut:0.00} s ({BlackPrison.RadiusM:0.0} m wide)");
 
         (PumpKing king, VirtualPad pad) = PlayerPumpKing(stage, 2000f);
         // The blink lands him beside the penned crab, whose body blow stuns him for 0.25 s — and
@@ -1535,7 +1541,12 @@ public partial class BossFightCheck : Node
         Vector2 centre = new(2000f + Units.Px(7f), FloorY - 22f);
         Pen(stage, centre.X - 70f, centre.X + 70f);
         CrabFoe walker = Crab(stage, centre.X, 1, 3);
-        float farX = centre.X + Units.Px(12f);
+        // 8 m off: inside the prison, outside its heart (his head's 3 m blast).
+        float midX = centre.X + Units.Px(8f);
+        Pen(stage, midX - 70f, midX + 70f);
+        CrabFoe mid = Crab(stage, midX, 1, 7);
+        // 6 m past its rim.
+        float farX = centre.X + Units.Px(BlackPrison.RadiusM + 6f);
         Pen(stage, farX - 70f, farX + 70f);
         CrabFoe far = Crab(stage, farX, 1, 5);
         await Ticks(20);
@@ -1552,7 +1563,8 @@ public partial class BossFightCheck : Node
         if (prison == null) return;
         Expect(king.UltCharge < 1f, $"black prison: opening it must spend the whole ring ({king.UltCharge:0} of {king.MaxUltCharge:0} left)");
         Expect(prison.Centre.DistanceTo(centre) < 0.5f, $"black prison: it opened at {prison.Centre}, not where he aimed ({centre}), 7 m off and inside his {PumpKing.PrisonCastRangeM} m");
-        Expect(Mathf.IsEqualApprox(prison.Radius, king.ExplosionRadius), $"black prison: its radius is {M(prison.Radius)} m; it is his head's blast, {M(king.ExplosionRadius)} m");
+        Expect(Mathf.IsEqualApprox(prison.Radius, Units.Px(BlackPrison.RadiusM)) && Mathf.IsEqualApprox(prison.Heart, king.ExplosionRadius),
+            $"black prison: it opened {M(prison.Radius)} m wide with a {M(prison.Heart)} m heart; the owner's rule makes it {BlackPrison.RadiusM:0.0} m, its heart his head's blast ({M(king.ExplosionRadius)} m)");
 
         // The warning: nobody touched, nothing grown, a recast refused.
         bool early = false;
@@ -1567,8 +1579,8 @@ public partial class BossFightCheck : Node
         Expect(prison.Standing && Mathf.Abs(prison.FormedAt - BlackPrison.WarnSeconds) <= 1.5f * Tick,
             $"black prison: it began to hold after {prison.FormedAt:0.000} s; the warning is {BlackPrison.WarnSeconds} s");
 
-        Expect(Held(walker), $"black prison: the crab inside must be held ({Rules(walker)}; expected {Held4})");
-        Expect(Free(far), $"black prison: a crab 12 m off must be untouched ({Rules(far)})");
+        Expect(Held(walker) && Held(mid), $"black prison: the crabs inside — at its centre and 8 m off — must be held ({Rules(walker)} · {Rules(mid)}; expected {Held4})");
+        Expect(Free(far), $"black prison: a crab past its rim must be untouched ({Rules(far)})");
         float slowed = await TopSpeedX(walker, 30);
         Expect(Mathf.Abs(slowed - walk * BlackPrison.MoveScale) <= walk * 0.06f,
             $"black prison: the crab inside walks {M(slowed)} m/s; half its {M(walk)} m/s is {M(walk * BlackPrison.MoveScale)}");
@@ -1589,7 +1601,8 @@ public partial class BossFightCheck : Node
         float blastWants = king.ExplosionDamage * PumpKing.UltBlastDamageScale * king.DamageDealtScale;
         Expect(blasts.Exists(h => ReferenceEquals(h.Victim, walker) && Mathf.IsEqualApprox(h.Damage, blastWants, 0.01f) && h.Knockback == Vector2.Zero),
             $"black prison: his head's biggest blast must land on the crab inside for {blastWants:0}, shoving nobody ({blasts.Count} blast hit(s))");
-        Expect(!blasts.Exists(h => ReferenceEquals(h.Victim, far)), "black prison: the blast reached the crab 12 m off");
+        Expect(!blasts.Exists(h => ReferenceEquals(h.Victim, far) || ReferenceEquals(h.Victim, mid)),
+            "black prison: the recast's blast reached a crab 8 m off or past the rim — it is his head's (the prison's heart), not the prison's");
         int blastCount = blasts.Count;
         await Ticks(20);
         for (int i = 0; i < 8; i++)
@@ -1607,8 +1620,8 @@ public partial class BossFightCheck : Node
         Expect(Free(walker), $"black prison: when it ends the crab must be let go ({Rules(walker)})");
         float after = await TopSpeedX(walker, 30);
         Expect(Mathf.Abs(after - walk) <= walk * 0.06f, $"black prison: let go, the crab walks {M(after)} m/s; it walked {M(walk)}");
-        GD.Print($"  boss     black prison   {prison.FormedAt:0.00} s of warning, then held {prison.EndedAt - prison.FormedAt:0.00} s · a crab inside walks {M(walk)} → {M(slowed)} → {M(after)} m/s · " +
-                 $"the recast lands him {M(landed.DistanceTo(centre))} m above a centre in the floor · his biggest blast {blastWants:0}, no shove");
+        GD.Print($"  boss     black prison   {M(prison.Radius)} m wide · {prison.FormedAt:0.00} s of warning, then held {prison.EndedAt - prison.FormedAt:0.00} s · a crab inside walks {M(walk)} → {M(slowed)} → {M(after)} m/s · " +
+                 $"the recast lands him {M(landed.DistanceTo(centre))} m above a centre in the floor · his biggest blast {blastWants:0} over its {M(prison.Heart)} m heart, no shove");
     }
 
     /// <summary>
@@ -1782,6 +1795,47 @@ public partial class BossFightCheck : Node
         try { await PrisonSlowsASoul(stage); }
         finally { _pads.Clear(); }
         await Strike(stage);
+
+        stage = BuildStage(0f, 6000f);
+        try { await PrisonWalkOut(stage); }
+        finally { _pads.Clear(); }
+        await Strike(stage);
+    }
+
+    /// <summary>
+    /// The owner's rule for its size, walked (v0.12.13): a fighter at the standard 10 m/s caught
+    /// 10 m from the centre runs straight out and is free — hit circle clear of the rim — after
+    /// (19.1 + 0.9 − 10) m at half speed: 2 s. From the centre the same walk is the whole 4 s.
+    /// </summary>
+    private async Task PrisonWalkOut(Node2D stage)
+    {
+        (CharacterController boss, VirtualPad bossPad) = StageAsleep(stage, BossTable.PumpKing, new Vector2(3000f, FloorY - 32f));
+        Vector2 centre = new(3000f - Units.Px(PumpKing.PrisonCastRangeM), FloorY - 32f);
+        CharacterController player = PadPlayer(stage, centre.X + Units.Px(10f), out VirtualPad pad);
+        await Ticks(20);
+        Expect(Mathf.IsEqualApprox(player.MoveSpeed, Units.Px(BlackPrison.ReferenceRunMps))
+               && Mathf.IsEqualApprox(player.HitRadius, Units.Px(BlackPrison.ReferenceHitRadiusM)),
+            $"black prison walk-out: the probe's fighter runs {M(player.MoveSpeed)} m/s with a {M(player.HitRadius)} m hit circle; the rule's fighter runs {BlackPrison.ReferenceRunMps} m/s with {BlackPrison.ReferenceHitRadiusM} m");
+
+        BlackPrison prison = await CastPrison((PumpKing)boss, bossPad, centre);
+        Expect(prison != null, "black prison walk-out: a BOSS PumpKing's Q on a full ring opened no prison");
+        if (prison == null) return;
+        await WaitForStage(prison, BlackPrison.Phase.Standing, 90);
+        Expect(prison.Holds(player), $"black prison walk-out: a fighter 10 m from the centre of a {M(prison.Radius)} m prison must be held");
+        float from = player.GlobalPosition.DistanceTo(prison.Centre);
+        pad.Hold(ControlAction.MoveRight);
+        int ticks = 0;
+        for (; ticks < 60 * 5 && prison.Holds(player) && !prison.Over; ticks++) await Ticks(1);
+        pad.Hold(ControlAction.MoveRight, false);
+        float seconds = ticks * Tick;
+        float slowed = player.MoveSpeed * BlackPrison.MoveScale;
+        float expected = (prison.Radius + player.HitRadius - from) / slowed;
+        Expect(!prison.Over && Mathf.Abs(seconds - expected) <= 4f * Tick,
+            $"black prison walk-out: caught {M(from)} m from the centre, a slowed fighter walked out in {seconds:0.00} s; at {M(slowed)} m/s it is {expected:0.00} s");
+        float fromCentre = (prison.Radius + player.HitRadius) / slowed;
+        Expect(Mathf.Abs(fromCentre - BlackPrison.HoldSeconds) <= 0.01f,
+            $"black prison walk-out: from the centre the walk is {fromCentre:0.00} s; the owner's rule is the whole hold, {BlackPrison.HoldSeconds} s");
+        GD.Print($"  boss     black prison   {M(prison.Radius)} m wide: a {M(player.MoveSpeed)} m/s fighter caught {M(from)} m off its centre walks out in {seconds:0.00} s; from the centre, {fromCentre:0.00} s — its whole hold");
     }
 
     /// <summary>A soul flies too: a BOSS PumpKing already in Soul Form when the player's prison
@@ -1814,12 +1868,15 @@ public partial class BossFightCheck : Node
     private async Task PrisonOnThePlayer(Node2D stage, List<Cue> swings)
     {
         (CharacterController boss, VirtualPad bossPad) = StageAsleep(stage, BossTable.PumpKing, new Vector2(3000f, FloorY - 32f));
-        CharacterController player = PadPlayer(stage, 3000f - Units.Px(5f), out VirtualPad pad);
+        // He opens it as far to his left as he may (8 m); the player stands 13 m right of its
+        // centre, past him: inside a 19.1 m prison, near enough its rim to run out while it stands.
+        Vector2 centre = new(3000f - Units.Px(PumpKing.PrisonCastRangeM), FloorY - 32f);
+        CharacterController player = PadPlayer(stage, centre.X + Units.Px(13f), out VirtualPad pad);
         await Ticks(20);
         float rise = await JumpRise(player, pad);
         Expect(Mathf.Abs(rise - Units.Px(8f)) < Units.Px(0.6f), $"prison takes sides: before it, the player's jump rises {M(rise)} m; the standard jump is 8 m");
 
-        BlackPrison prison = await CastPrison((PumpKing)boss, bossPad, player.GlobalPosition);
+        BlackPrison prison = await CastPrison((PumpKing)boss, bossPad, centre);
         Expect(prison != null, "prison takes sides: a BOSS PumpKing's Q on a full ring opened no prison");
         if (prison == null) return;
         await WaitForStage(prison, BlackPrison.Phase.Standing, 90);

@@ -119,6 +119,7 @@ public partial class RunWalkCheck : Node
             await WalkToTheCloudCourt();
             await WalkTheVoid();
             await WalkThePhantoms();
+            await WalkTheUltRings();
         }
         catch (Exception e)
         {
@@ -734,6 +735,62 @@ public partial class RunWalkCheck : Node
                && run.LastPhantomNote.Length > 0,
             $"phantoms: {next.Id}: a phantom one road away must reach you and touch the party for a quarter of its HP ({run.Ledger.Phantoms.Count} left, HP {lead.HpRatio:0.00})");
         GD.Print($"  run      phantoms       a challenge draws THE VOID's phantom a road nearer, a resumed battle does not, and its touch costs {ItemLedger.PhantomTouchHpShare:P0} HP");
+    }
+
+    /// <summary>
+    /// Each protagonist's own ult ring, kept from fight to fight (the owner, v0.12.13), through
+    /// real scene changes: a new run starts empty; a Tab switch brings in the other fighter's own
+    /// ring and leaves the first one's with them; winning, the day's end, its save and a load keep
+    /// both; the next fight opens with the lead's ring as they left it.
+    /// </summary>
+    private async Task WalkTheUltRings()
+    {
+        RunState run = RunState.Instance;
+        run.NewRun("WALKULT");
+        run.DebugRecruitAll();
+        Expect(run.TrySetActiveBuild(new[] { "Pomegraknight", "PumpKing" }, out string teamError), $"ult rings: the party could not be set: {teamError}");
+        var fights = run.Graph.Nodes.FindAll(node => node.Kind == NodeKind.Combat && !node.Devoured && node.WorldIndex == 0);
+        Expect(fights.Count >= 2, $"ult rings: the home world has {fights.Count} combat node(s); the walk needs two");
+        if (fights.Count < 2) return;
+        string firstId = fights[0].Id, nextId = fights[1].Id;
+        ProtagonistState Lead() => run.FindProtagonist("Pomegraknight");
+        ProtagonistState Second() => run.FindProtagonist("PumpKing");
+
+        GameManager arena = await Enter($"ult rings: {firstId}", fights[0]);
+        if (arena == null) return;
+        CharacterController lead = Player(GetTree());
+        Expect(lead is Pomegraknight && lead.UltCharge == 0f, $"ult rings: a new run's lead must be Pomegraknight with an empty ring ({lead?.Name}: {lead?.UltCharge:0})");
+        lead?.GainUltCharge(600f);
+
+        Input.ActionPress("switch_protagonist");
+        await Ticks(3);
+        Input.ActionRelease("switch_protagonist");
+        await Ticks(10);
+        CharacterController second = Player(GetTree());
+        Expect(second is PumpKing && second != lead && second.UltCharge == 0f && Mathf.IsEqualApprox(Lead().UltCharge, 600f),
+            $"ult rings: switched in, PumpKing must bring his own empty ring and leave Pomegraknight's 600 with her (he has {second?.UltCharge:0}, she keeps {Lead().UltCharge:0})");
+        second?.GainUltCharge(250f);
+
+        arena.CurrentMission.DebugForceComplete();
+        for (int i = 0; i < 300 && !arena.GoalResolved; i++) await Ticks(1);
+        Expect(arena.GoalResolved && Mathf.IsEqualApprox(Lead().UltCharge, 600f) && Mathf.IsEqualApprox(Second().UltCharge, 250f),
+            $"ult rings: winning must keep both rings (Pomegraknight {Lead().UltCharge:0} of 600, PumpKing {Second().UltCharge:0} of 250)");
+        run.EndDay();
+        Expect(await SceneIs<MapController>(600) != null, "ult rings: the day did not end back on the map");
+        Expect(Mathf.IsEqualApprox(Lead().UltCharge, 600f) && Mathf.IsEqualApprox(Second().UltCharge, 250f),
+            $"ult rings: the day's end must not clear them (Pomegraknight {Lead().UltCharge:0}, PumpKing {Second().UltCharge:0})");
+
+        Expect(run.TryLoadRunFromSlot(run.ActiveSaveSlot, out string error), $"ult rings: the run did not load from its day-end save: {error}");
+        Expect(Mathf.IsEqualApprox(Lead().UltCharge, 600f) && Mathf.IsEqualApprox(Second().UltCharge, 250f),
+            $"ult rings: a save and a load must keep them (Pomegraknight {Lead().UltCharge:0}, PumpKing {Second().UltCharge:0})");
+        run.ResumeLoadedRun();
+        await SceneIs<MapController>(600);
+
+        GameManager next = await Enter($"ult rings: {nextId}", run.FindNode(nextId));
+        CharacterController back = Player(GetTree());
+        Expect(next != null && back is Pomegraknight && Mathf.IsEqualApprox(back.UltCharge, 600f),
+            $"ult rings: the next fight must open with the lead's own ring ({back?.Name}: {back?.UltCharge:0} of 600)");
+        GD.Print("  run      ult rings      each fighter keeps their own ring: through a switch, a won fight, the day's end, a save and a load, into the next fight");
     }
 
     private async Task WalkEveryWorld()

@@ -177,7 +177,7 @@ have nobody, so every run holds at least one capital that recruits (2.3 on avera
 protagonists whose homes a run did not draw are the wanderers' to bring (§5.4).
 
 **Joining.**
-- A recruit takes the **first empty team slot**; with the team full (the cap, 3) it waits on
+- A recruit takes the **first empty team slot** (confirmed by the owner, v0.12.13); with the team full (the cap, 3) it waits on
   the **bench**, and Team Build at any shelter fields it. The fighter who opens the next
   battle does not change.
 - A recruit joins at **full HP** with **the Blessings the roster shares** — ATK, DEF and
@@ -234,6 +234,7 @@ Arena scene's authoring placeholder before combat starts.
 | **Cooldown penalty** | Protagonists in the background have their skill cooldowns tick at rate **1/(2n−2)** where n = party size (n ≥ 2). 2-party: 0.5× (6s CD → 12s real), 3-party: 0.25× (6s → 24s), 4-party: 0.167× (6s → 36s). The active protagonist always ticks at 1×. This prevents cycling through protagonists to spam skills, and scales naturally with party size — larger parties mean slower individual recovery. |
 | **Landing effect** | When a protagonist is switched **in**, they trigger their unique **Protagonist Landing Effect** (defined per-character; see character GDDs). |
 | **Item CDs** | Held items on background protagonists tick at the same 1/(2n−2) rate (day-based CDs are unaffected — only combat second-based CDs are penalized). |
+| **Ult ring** | Each protagonist has **their own ult ring** (the owner, v0.12.13). The incoming protagonist brings theirs; the outgoing one keeps what they had, unchanged on the bench (a ring fills only from the body in play — damage dealt and taken). **A fight's end does not clear it:** the run record carries it to the next fight, through days, saves and loads. A new run and a new recruit start empty. A body worn from the debug page starts empty and keeps its ring to itself. |
 | **Death** | If the active protagonist dies, the run is over (permadeath; §2.2) — the bench does not serve as extra lives. |
 | **Short party** | With 2 protagonists, Tab switches back and forth. With 1 protagonist — how every run starts (§3.1) — Tab does nothing and the HUD has **no Switch slot**: it appears, with the next fighter's face, once a second one joins (v0.12.9; the slot was always hidden with nobody to switch to). |
 | **Mid-air switch** | Position and velocity are **preserved** — the incoming protagonist appears exactly where the outgoing one was, continuing any existing trajectory. No reset, no ground-snap. |

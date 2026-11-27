@@ -190,6 +190,31 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A body writes run state back only into the record it was loaded from (v0.12.13, the ult rings; designed in)
+- **Rule:** per-protagonist state a body carries through a fight — HP, the magazine, and since
+  v0.12.13 the ult ring — is loaded from that protagonist's `ProtagonistState` when the body
+  enters, and written back on **every** way out: a Tab switch, the goal resolving, Finish the
+  Day, Save & Quit, a fall (`GameManager.WriteBackHp` → `WriteBackToState`). The body remembers
+  which record it was loaded from (`_boundUltState`, like `_boundAmmoState`) and writes only
+  into that one; `ResetDebugCombatState` unbinds it.
+- **Why:** the debug page's swap hydrates the new body from the run's active fighter's record
+  (it shares HP on purpose). Unbound, a debug-worn PumpKing whose ring the debug page filled
+  would hand that full ring to Pomegraknight at the fight's end. The run check's
+  `WalkTheUltRings` walks the real paths; three mutants (no load, no write-back, not saved)
+  each fail it.
+
+### Draw placeholder detail in metres, not as shares of a gameplay radius (v0.12.13, the Black Prison; caught before it ran)
+- **Symptom it would have had:** the prison's radius went from 3 m to 19.1 m. Its thorns
+  (r × 0.2), houses (r × 0.34), vines and the recast's mouth (r × 0.75 — a 14 m grin) were
+  all shares of the radius and would have grown six-fold; the thorns' base was an angle, so it
+  widened too.
+- **Rule:** size a drawing's details in metres (`Units.Px(...)`); let only *counts* follow the
+  radius (thorns every 0.5 m of rim, dashes every metre, segments by circumference). Anything
+  that belongs to a smaller gameplay shape (the mouth, the vines over the pumpkins' heart) is
+  drawn from that shape (`BlackPrison.Heart`), not from the outer one.
+- **Why:** gameplay radii are retuned by design; a placeholder keyed to them changes its look
+  without anyone touching it.
+
 ### An item effect that must outlast a Tab switch lives in the arena, not in its `ItemRuntime` (v0.12.12, THE VOID; designed in)
 - **Rule:** an `ItemRuntime` is disposed whenever the body in play changes (a Tab switch, a
   debug swap, the scene's end), and `OnUnequip` runs then. An effect meant to last its own time

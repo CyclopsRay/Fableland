@@ -8,17 +8,19 @@ kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events
 **v0.12.8** (the wonder items) and, on 2026-11-28, **v0.12.9** (recruitment and the walkable
 shelter, merged from a parallel session), **v0.12.10** (the plantation and the enchanting
 altar in the hub's room), **v0.12.11** (PumpKing's ultimate, the Black Prison, merged from the
-other parallel session) and **v0.12.12** (THE VOID's darkness — every item now has its behaviour). **Replace this file at every hand-off:** it describes
+other parallel session), **v0.12.12** (THE VOID's darkness — every item now has its behaviour)
+and **v0.12.13** (the owner's answers: the Black Prison's size rule, silenced items, each
+fighter's own ult ring kept between fights). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.12**, twenty commits and two merges
-  on top of v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
-- `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
-  owner asks for each fast-forward; until then it trails the branch.
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.13**, twenty-one commits and two
+  merges on top of v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
+- `main` was fast-forwarded to **v0.12.13** on 2026-11-28 (the owner: "版本可以帮更新"),
+  **locally, not pushed** (it was at v0.12.3 before). The owner asks for each fast-forward.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.12, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.13, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -62,9 +64,10 @@ other parallel session) and **v0.12.12** (THE VOID's darkness — every item now
 | 0.12.9 | `51722a3` | **Recruitment, and the shelter as a walkable room** (from the `recruit-shelter` session, `13f097d`, merged): a run starts with its home protagonist alone and each realm's 4-1 recruits that realm's own; the shelter is a side-view room whose stations (road, team board, lantern, campfire, whetstone, anvil) replace the buttons; three shelter bugs fixed in passing | `NODES.gdd` §3.1, §4.5, §5.0, KNOWLEDGE v0.12.9 |
 | 0.12.10 | `092ec07` | **The plantation and the enchanting altar** stand in the hub's room: sow and harvest, enchant Possession with the Blessing of Shieldon, each through its own panel | `ITEMS.gdd` §4.3, §7.1, `NODES.gdd` §5.0, KNOWLEDGE v0.12.10 |
 | 0.12.11 | `be10b44` | **PumpKing's ultimate, the Black Prison** (from the `pumpking-ult` session, `370d1cd`, merged): a 3 m prison ≤ 8 m away, 1 s warning, 4 s of half speed, half jumps, silence and a 3 m sight cap on the other side, pumpkins every 0.5 s, a free recast that blinks him in for a 100-damage blast; crowd control (slow, low jump, silence, sight cap) as a reaction every target takes | `PumpKing.gdd` (Q, how it is built, decisions), `FOES.gdd` §crowd control, `Feedback.gdd` §6.6, KNOWLEDGE v0.12.11 |
-| 0.12.12 | — | **THE VOID darkens a fight**: held, F blinds every foe for 10 s (a sight cap of 0, foes arriving in the dark included), surviving a switch — the last item behaviour | `ITEMS.gdd` §7.2 *Built* |
+| 0.12.12 | `de2e5ef` | **THE VOID darkens a fight**: held, F blinds every foe for 10 s (a sight cap of 0, foes arriving in the dark included), surviving a switch — the last item behaviour | `ITEMS.gdd` §7.2 *Built* |
+| 0.12.13 | — | **The owner's answers**: the Black Prison is as wide as a slowed fighter needs its whole 4 s to walk out of (19.1 m; its 3 m heart keeps the blast, the mouth and the pumpkins), a prisoner does not see its border; a silenced fighter uses no item; each fighter's ult ring is their own and survives the fight's end (saved) | `PumpKing.gdd` (Q, *The owner's answers*), `ITEMS.gdd` §3.3, `NODES.gdd` §3.3, KNOWLEDGE v0.12.13 |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.12, all passing:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.13, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
@@ -72,10 +75,10 @@ other parallel session) and **v0.12.12** (THE VOID's darkness — every item now
 | VFX | `Scenes/Feedback/VfxCheck.tscn` | 1298 |
 | Audio | `Scenes/Feedback/AudioCheck.tscn` | 1108 |
 | Map content | `Scenes/MapCreation/MapContentCheck.tscn` | 1171 |
-| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 259 at v0.12.11 (the Black Prison; ~23 s) |
+| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 265 at v0.12.13 (the Black Prison and its size rule; ~25 s) |
 | Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
-| Run | `Scenes/Run/RunWalkCheck.tscn` | 2019 at v0.12.9 without `--saves` (2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
-| Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 87 at v0.12.12 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives, THE VOID's darkness |
+| Run | `Scenes/Run/RunWalkCheck.tscn` | 2031 at v0.12.13 without `--saves` (the ult rings walk; 2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
+| Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 88 at v0.12.13 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives, THE VOID's darkness, no item while silenced |
 | Recruit + shelter (new, v0.12.9) | `Scenes/Run/RecruitShelterCheck.tscn` | 418 at v0.12.10 — homes, the starting roster, recruits at the capitals, saves keep their roster, the station table, every station against the exits rule, each kind of shelter walked with the keys, the plantation and the altar used (`-- --shots=dir` in a window for pictures) |
 
 **Look and listen without a fight:**
@@ -91,7 +94,7 @@ other parallel session) and **v0.12.12** (THE VOID's darkness — every item now
   variants of Cleopastar, Pixolotl, Sifu Pangda and Pomegraknight are the next step.
 - **Ultimates (#5):** PumpKing's is built (v0.12.11, the Black Prison); the other four still do
   nothing on Q. Every other character GDD defers its ultimate, so write the designs first
-  (TBD #21). The ring itself is not kept across a switch or a fight (TBD #83).
+  (TBD #21). Since v0.12.13 each fighter's ring is their own and is kept from fight to fight.
 - **Items (#19): done** — v0.12.8, their shelter screens in v0.12.10 (the plantation and the
   enchanting altar), THE VOID's darkness in v0.12.12 (on the Black Prison's sight cap).
   Also open: rolled 60–140 % inheritance on harvests, the mushroom's outcome (f), and the
@@ -201,27 +204,29 @@ other parallel session) and **v0.12.12** (THE VOID's darkness — every item now
   - every realm's boss is PumpKing (beating him recruits the realm's own since v0.12.9);
   - ~~8 of 14 items cannot be obtained~~ (v0.12.8: every item has a source);
   - ~~"?" nodes have 3 placeholder events~~ (20 since v0.12.8).
-- **Two parallel sessions started 2026-11-27 from v0.12.7** (each wrote
-  `Docs/_handoff/<name>.md`; this branch integrates them, on the owner's "合并"):
-  **`recruit-shelter`** — merged as v0.12.9 (its reserved spots filled in v0.12.10);
-  **`pumpking-ult`** — merged as v0.12.11; its sight cap carries THE VOID's skill since
-  v0.12.12. Both sessions are finished; their branches are merged and can be archived.
+- **Two parallel sessions started 2026-11-27 from v0.12.7:** **`recruit-shelter`** (merged as
+  v0.12.9) and **`pumpking-ult`** (merged as v0.12.11). Both were archived on 2026-11-28 on the
+  owner's word; their branches stay as refs.
 - **v0.12.9's calls for the owner to confirm** (written into the GDDs; each changes code if
-  answered otherwise):
+  answered otherwise). **Confirmed 2026-11-28:** a recruit takes the first empty team slot; the
+  interact keys (E, W / ↑). Still open:
   - a run starts with its home protagonist alone (Pomegraknight — every run's home is
     VanillaKindom today);
   - the recruit belongs to the realm, not the boss kit; homes VK Pomegraknight, KH PumpKing, TF
     Pixolotl, **SL Cleopastar** and **BM Sifu Pangda** (the last two provisional, TBD #37/#38);
     HollowCastle, TheDeserted and the Palace of LOOING recruit nobody (TBD #70);
-  - a recruit takes the first empty team slot (the GDD said the bench), at full HP, with the
-    roster's shared Blessings;
+  - a recruit joins at full HP, with the roster's shared Blessings;
   - one fighter: no Switch slot, Tab does nothing;
-  - interact is E, also W / ↑ (TBD #74); one room, 48 × 16 m, for every world until each has
-    its own (TBD #71); a closed station stays, dimmed, and says why.
-- **v0.12.11's calls for the owner to confirm** (in `PumpKing.gdd`'s decisions log):
-  - cast range 8 m; radius 3 m — his head's blast (may feel small, TBD #82);
-  - silence shuts skills, not the basic attack (the seagull's poop is its basic attack); items
-    are not silenced (TBD #84);
+  - one room, 48 × 16 m, for every world until each has its own (TBD #71); a closed station
+    stays, dimmed, and says why.
+- **v0.12.11's calls for the owner to confirm** (in `PumpKing.gdd`'s decisions log).
+  **Answered 2026-11-28 (v0.12.13):** the size (a slowed enemy walks out in exactly 4 s), items
+  are silenced, a prisoner does not see the border (the whole view another world — for
+  multiplayer, TBD #87), and each fighter's ring is their own and kept. **New call to confirm:**
+  the size is measured against the standard 10 m/s fighter (19.1 m; a crab's pace would give
+  about 5 m — TBD #86). Still open:
+  - cast range 8 m;
+  - silence shuts skills, not the basic attack (the seagull's poop is its basic attack);
   - "one cell around you" = 3 × 3 cells = a 3 m sight cap; the border is not a wall;
   - eight pumpkins a prison, 10–25 damage, no shove; the recast is free, once, after the
     warning, and its 100-damage blast does not shove (it would throw the prisoners out);

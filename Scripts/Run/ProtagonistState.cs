@@ -54,6 +54,12 @@ public sealed class ProtagonistState
     public float ShiftAltCdRemaining;
     public float ESkillAltCdRemaining;
 
+    /// <summary>This protagonist's own ult ring (v0.12.13, the owner: per character, never
+    /// cleared when a fight ends). Filled only by the body in play; a benched protagonist keeps
+    /// what it had. The run carries it from fight to fight and through a save; a new run and a
+    /// newly recruited protagonist start empty.</summary>
+    public float UltCharge;
+
     // Universal basic-attack magazine state. It is persisted while this protagonist is
     // benched so a Tab switch cannot create a free reload (Gameplay.gdd §A.2.1/A.3).
     public bool AmmoInitialized;

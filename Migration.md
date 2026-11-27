@@ -9,6 +9,26 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.13** — **The owner's answers on the Black Prison and the ult ring** (2026-11-28).
+  - **The prison's size is a rule:** a slowed enemy walks out of it from the centre in exactly
+    its 4 s. Measured against the standard fighter (10 m/s, a 0.9 m hit circle): **19.1 m**
+    (`BlackPrison.RadiusM`), up from 3 m — wider than the view. Its **heart** keeps the old 3 m
+    (his head's blast): the recast's blast, the mouth and where the pumpkins grow. The
+    placeholder is redrawn in metres so it reads the same at any size (KNOWLEDGE v0.12.13).
+  - **A prisoner does not see its border** (the owner: their whole map is another world). A
+    prisoner's own view now hides the prison's drawing; the full replacement of the map waits
+    for multiplayer (TBD #87).
+  - **Silenced, no item:** F is refused with a toast and nothing is spent; passives go on
+    (`ITEMS.gdd` §3.3).
+  - **Each protagonist's ult ring is their own and survives the fight's end:**
+    `ProtagonistState.UltCharge`, saved (older saves load empty), loaded when a body enters and
+    written back on every way out — only into the record it came from (KNOWLEDGE v0.12.13).
+  - The owner also confirmed: a recruit joins the team directly; the interact keys stay.
+  - **Checks:** boss 265 (the rule, a crab 8 m in held but not blasted, `PrisonWalkOut` — a
+    10 m/s fighter caught 10 m off walks out in 2.02 s, from the centre in 4.00 s); flow 88 (a
+    silenced holder cannot use THE VOID); run 2031 (`WalkTheUltRings`: a switch, a won fight,
+    the day's end, a save, a load, the next fight). Eight mutants, each caught. Every suite is
+    clean.
 - **0.12.12** — **THE VOID darkens a fight** — the last wonder-item behaviour (`ITEMS.gdd` §7.2).
   - Held, **F** starts its 2 days and casts `VoidBlindness` into the arena. For 10 s every
     hostile target — foes, objectives, a boss — has a sight cap of 0 under the cast's own source.

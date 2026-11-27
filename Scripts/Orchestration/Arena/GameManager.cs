@@ -611,6 +611,8 @@ public partial class GameManager : Node2D
             // Restore saved cooldown remaining from the protagonist's run state (background-CD, NODES §3.3)
             _player.LoadCooldownsFromState(_protagonist);
             _player.LoadAmmoFromState(_protagonist);
+            // Each protagonist's own ult ring, carried from fight to fight (v0.12.13).
+            _player.LoadUltChargeFromState(_protagonist);
             _itemRuntime = new ItemRuntime(_player, _protagonist);
             BindPossessions(rs);
             ApplyMushroomDay(rs);
@@ -752,7 +754,12 @@ public partial class GameManager : Node2D
         // Debug selection preserves the visible HP ratio but must not copy the outgoing
         // body's magazine/reload state into a different character's BA controller.
         float carriedRatio = _player.HpRatio;
-        if (_hasRun && _protagonist != null) _protagonist.HpRatio = carriedRatio;
+        if (_hasRun && _protagonist != null)
+        {
+            _protagonist.HpRatio = carriedRatio;
+            // The real body's ring goes home first (a debug-worn body has none to give).
+            _player.SaveUltChargeToState(_protagonist);
+        }
 
         _player.HpChanged -= OnPlayerHpChanged;
         _player.Died -= OnPlayerDied;

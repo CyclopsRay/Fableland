@@ -102,6 +102,13 @@ public sealed class ItemRuntime : IDisposable
     {
         reason = null;
         if (Definition == null || _behavior == null || PassiveOnly || State == null) { reason = "This held item has no combat skill."; return false; }
+        // A silenced body uses no item (the owner, v0.12.13): the press is gone, nothing is
+        // spent. Passives keep working — a silence stops what you do, not what you carry.
+        if (Holder != null && GodotObject.IsInstanceValid(Holder) && Holder.Silenced)
+        {
+            reason = $"Silenced: {Definition.DisplayName} can't be used until it lifts.";
+            return false;
+        }
         if (Definition.DayCooldownDays > 0 && State.HeldItemDayCooldownRemaining > 0)
         {
             int days = State.HeldItemDayCooldownRemaining;

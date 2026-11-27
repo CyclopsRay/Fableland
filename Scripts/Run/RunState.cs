@@ -1528,6 +1528,7 @@ public partial class RunState : Node
         destination.ESkillCdRemaining = source.ESkillCdRemaining;
         destination.ShiftAltCdRemaining = source.ShiftAltCdRemaining;
         destination.ESkillAltCdRemaining = source.ESkillAltCdRemaining;
+        destination.UltCharge = source.UltCharge;
         destination.AmmoInitialized = source.AmmoInitialized;
         destination.AmmoCurrent = source.AmmoCurrent;
         destination.AmmoAttackCooldownRemaining = source.AmmoAttackCooldownRemaining;
@@ -1552,6 +1553,7 @@ public partial class RunState : Node
             ESkillCdRemaining = Math.Max(0f, source.ESkillCdRemaining),
             ShiftAltCdRemaining = Math.Max(0f, source.ShiftAltCdRemaining),
             ESkillAltCdRemaining = Math.Max(0f, source.ESkillAltCdRemaining),
+            UltCharge = float.IsFinite(source.UltCharge) ? Math.Max(0f, source.UltCharge) : 0f,
             AmmoInitialized = source.AmmoInitialized,
             AmmoCurrent = Math.Max(0, source.AmmoCurrent),
             AmmoAttackCooldownRemaining = Math.Max(0f, source.AmmoAttackCooldownRemaining),

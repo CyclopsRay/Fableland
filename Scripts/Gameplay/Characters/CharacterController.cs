@@ -608,6 +608,29 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		if (p == null) return;
 		p.HpRatio = HpRatio;
 		if (_boundAmmoState != null) Ammo?.Save(p);
+		SaveUltChargeToState(p);
+	}
+
+	// The ult ring belongs to the protagonist, not to the body (v0.12.13): each keeps its own,
+	// from fight to fight. A body writes its ring back only into the record it was filled from,
+	// so a debug-worn body never pours its ring into another character's.
+	private ProtagonistState _boundUltState;
+
+	/// <summary>Take this protagonist's ring from the run (on entering a fight or being switched
+	/// in, after InitCharacter). Filling it this way is not "becoming ready": no cue.</summary>
+	public void LoadUltChargeFromState(ProtagonistState p)
+	{
+		_boundUltState = p;
+		float charge = p == null || !float.IsFinite(p.UltCharge) ? 0f : p.UltCharge;
+		UltCharge = Mathf.Clamp(charge, 0f, MaxUltCharge);
+		UltChargeChanged?.Invoke(UltCharge, MaxUltCharge);
+	}
+
+	/// <summary>Give the ring back to the record it came from (switch-out, fight end, quit).</summary>
+	public void SaveUltChargeToState(ProtagonistState p)
+	{
+		if (p == null || !ReferenceEquals(p, _boundUltState)) return;
+		p.UltCharge = UltCharge;
 	}
 
 	/// <summary>Restore persisted BA ammo after InitCharacter has configured it.</summary>
@@ -644,6 +667,10 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		// its own test attacks must not overwrite that record with another character's
 		// magazine definition or reload timer.
 		_boundAmmoState = null;
+		// Nor its ring: a debug body starts empty (the debug page fills it) and keeps it to itself.
+		_boundUltState = null;
+		UltCharge = 0f;
+		UltChargeChanged?.Invoke(UltCharge, MaxUltCharge);
 	}
 
 	/// <summary>Copy the internal velocity channels from another character so the incoming

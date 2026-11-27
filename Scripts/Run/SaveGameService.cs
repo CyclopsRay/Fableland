@@ -361,6 +361,8 @@ public sealed class ProtagonistSaveData
     public float ESkillCdRemaining { get; set; }
     public float ShiftAltCdRemaining { get; set; }
     public float ESkillAltCdRemaining { get; set; }
+    /// <summary>v0.12.13; absent from older saves, which load with an empty ring.</summary>
+    public float UltCharge { get; set; }
     public bool AmmoInitialized { get; set; }
     public int AmmoCurrent { get; set; }
     public float AmmoAttackCooldownRemaining { get; set; }

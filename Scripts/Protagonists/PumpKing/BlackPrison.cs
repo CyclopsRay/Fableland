@@ -6,14 +6,17 @@ using Fableland.MapCreation.Data;
 /// PumpKing's ultimate, the Black Prison (黑狱) — <c>Docs/PumpKing.gdd</c>, "Q — the Black Prison".
 ///
 /// A circle he opens where he aims (at most <see cref="PumpKing.PrisonCastRangeM"/> from him),
-/// with the radius of his head's biggest blast. For <see cref="WarnSeconds"/> it only warns:
-/// nothing happens to anyone. Then for <see cref="HoldSeconds"/> every body of the other side
-/// inside it (its hit circle touching the prison) moves at half speed, jumps half as high, is
-/// silenced, and sees only one map cell around itself. Walking out frees a body at once; walking
-/// in catches it. Every <see cref="PumpkinEvery"/> a pumpkin grows on the prison's vines and is
+/// so wide that a fighter slowed inside it needs all of its <see cref="HoldSeconds"/> to walk out
+/// from the centre (<see cref="RadiusM"/>). For <see cref="WarnSeconds"/> it only warns: nothing
+/// happens to anyone. Then for <see cref="HoldSeconds"/> every body of the other side inside it
+/// (its hit circle touching the prison) moves at half speed, jumps half as high, is silenced,
+/// and sees only one map cell around itself. Walking out frees a body at once; walking in
+/// catches it. Every <see cref="PumpkinEvery"/> a pumpkin grows on the vines at its heart and is
 /// flung outward (<see cref="PrisonPumpkin"/>). While it stands he may recast once, free
 /// (<see cref="Recast"/>): its mouth opens at the centre, he blinks into it and his head goes off
-/// there at its biggest (<see cref="PumpKing.LandInPrisonMouth"/>).
+/// there at its biggest — his head's blast, the prison's <see cref="Heart"/>
+/// (<see cref="PumpKing.LandInPrisonMouth"/>). A prisoner does not see its border: their view is
+/// another world (<see cref="PrisonVeil"/>).
 ///
 /// Like his head, it lives on its own once opened: a Tab switch or his death leaves it standing
 /// for its time, pumpkins and all; only the recast needs him. It fights for the caster's side,
@@ -37,6 +40,19 @@ public partial class BlackPrison : Node2D
     public const float SightCells = 1.5f;
     public const float SightMetres = SightCells * MapGrid.MetersPerCell;
 
+    // ── Its size (the owner, v0.12.13) ──
+    /// <summary>The run its size is measured by: a fighter's standard 10 m/s
+    /// (<see cref="CharacterController.MoveSpeed"/>'s default — Pomegraknight, Pixolotl, Cleopastar).</summary>
+    public const float ReferenceRunMps = 10f;
+    /// <summary>A fighter's hit circle (<see cref="CharacterController.HitRadius"/>): 0.9 m.</summary>
+    public const float ReferenceHitRadiusM = Units.PlayerHeightM * 0.45f;
+    /// <summary>The owner's rule: a fighter at the standard run, slowed to <see cref="MoveScale"/>,
+    /// who sets out from the centre as it forms is free — its hit circle clear of the rim — just
+    /// as it lets go, <see cref="HoldSeconds"/> later. Caught at the centre, held all the while;
+    /// caught nearer the rim, out sooner; a slower body, held longer. 0.5 × 10 m/s × 4 s − 0.9 m
+    /// = 19.1 m: wider than the view, so from inside its border is rarely in sight at all.</summary>
+    public const float RadiusM = ReferenceRunMps * MoveScale * HoldSeconds - ReferenceHitRadiusM;
+
     // ── Pumpkins ──
     public const float PumpkinEvery = 0.5f;
     /// <summary>One as it forms, then every <see cref="PumpkinEvery"/> while it stands: 8.</summary>
@@ -51,7 +67,7 @@ public partial class BlackPrison : Node2D
     /// <summary>Upward kick on top of the outward throw, so a pumpkin arcs out instead of
     /// rolling along the floor.</summary>
     public const float PumpkinKickMps = 4f;
-    /// <summary>Pumpkins grow anywhere within this share of the radius.</summary>
+    /// <summary>Pumpkins grow anywhere within this share of its <see cref="Heart"/>.</summary>
     public const float PumpkinSpawnShare = 0.8f;
 
     // ── The recast ──
@@ -68,6 +84,10 @@ public partial class BlackPrison : Node2D
     public bool Over => Stage == Phase.Over;
     public Vector2 Centre => _centre;
     public float Radius => _radius;
+    /// <summary>Its heart, px: his head's biggest blast around the centre (all the prison was
+    /// before v0.12.13). The pumpkins grow in it, the recast's mouth opens on it and the
+    /// recast's blast covers it.</summary>
+    public float Heart => _heart;
     /// <summary>Seconds since he opened it (warning included).</summary>
     public float Age => _age;
     /// <summary>Its age when the warning ended and it began to hold, and when it let go
@@ -100,6 +120,7 @@ public partial class BlackPrison : Node2D
     private float _damageScale = 1f;
     private Vector2 _centre;
     private float _radius;
+    private float _heart;
     private string _source;
     private bool _begun;
 
@@ -116,8 +137,9 @@ public partial class BlackPrison : Node2D
     private PrisonVeil _veil;
     private CharacterController _veiled;
 
-    /// <summary>Open the prison. Call right after AddChild.</summary>
-    public void Begin(PumpKing caster, Vector2 centre, float radius, float damageScale)
+    /// <summary>Open the prison: <paramref name="radius"/> wide, its <paramref name="heart"/> his
+    /// head's blast (both px). Call right after AddChild.</summary>
+    public void Begin(PumpKing caster, Vector2 centre, float radius, float heart, float damageScale)
     {
         _caster = caster;
         _side = caster.Side;
@@ -127,6 +149,7 @@ public partial class BlackPrison : Node2D
         _damageScale = damageScale;
         _centre = centre;
         _radius = radius;
+        _heart = Mathf.Min(heart, radius);
         GlobalPosition = centre;
         _source = "pumpking.black_prison#" + GetInstanceId();
         if (Rng == null)
@@ -152,7 +175,7 @@ public partial class BlackPrison : Node2D
         if (Stage != Phase.Standing || _recastUsed) return false;
         _recastUsed = true;
         _mouth = MouthSeconds;
-        CueBus.EmitAt(_cueOwner, "ult.mouth", _centre, this, _side, size: _radius * 0.5f,
+        CueBus.EmitAt(_cueOwner, "ult.mouth", _centre, this, _side, size: _heart * 0.5f,
             magnitude: MouthSeconds, ownerClass: _cueClass);
         return true;
     }
@@ -309,7 +332,10 @@ public partial class BlackPrison : Node2D
             magnitude: damage, direction: launch.Normalized(), ownerClass: _cueClass);
     }
 
-    /// <summary>A random point inside the prison that is not inside solid ground (a few tries).</summary>
+    /// <summary>A random point in the prison's heart that is not inside solid ground (a few
+    /// tries). The heart, not the whole prison: thrown outward from there, a pumpkin crosses the
+    /// prison and comes down among its prisoners (since v0.12.13 the prison is far wider than a
+    /// throw).</summary>
     private Vector2 PumpkinSpot()
     {
         PhysicsDirectSpaceState2D space = GetWorld2D()?.DirectSpaceState;
@@ -318,7 +344,7 @@ public partial class BlackPrison : Node2D
         for (int attempt = 0; attempt < 8; attempt++)
         {
             float a = Rng.RandfRange(0f, Mathf.Tau);
-            float d = Mathf.Sqrt(Rng.Randf()) * _radius * PumpkinSpawnShare;   // uniform over the disc
+            float d = Mathf.Sqrt(Rng.Randf()) * _heart * PumpkinSpawnShare;   // uniform over the disc
             spot = _centre + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * d;
             if (space == null) break;
             query.Position = spot;
@@ -367,15 +393,34 @@ public partial class BlackPrison : Node2D
     private static readonly Color Danger = new("#D8323A");
     private static readonly Color DangerDeep = new("#7A161C");
 
-    private const int RimSegments = 64;
-    private const int Bristles = 44;
+    // Sizes on the rim are in metres, so the border reads the same at any radius.
+    private const float BristleSpacingM = 0.5f;
+    private const float BristleOutM = 0.6f;
+    private const float BristleInM = 0.21f;
+    private const float BristleHalfWidthM = 0.165f;
     private Vector2[] _circle;
+    private int _segments;
+
+    /// <summary>Enough segments for a smooth rim at any size: about one every 24 px.</summary>
+    private static int SegmentsFor(float r) => Mathf.Clamp((int)(Mathf.Tau * r / 24f), 64, 360);
 
     public override void _Draw()
     {
         if (!_begun) return;
         float r = _radius;
-        _circle ??= Ring(r, RimSegments);
+        if (_circle == null)
+        {
+            _segments = SegmentsFor(r);
+            _circle = Ring(r, _segments);
+        }
+
+        // A prisoner does not see the border, nor any of this (the owner, v0.12.13): their view
+        // is the other world (the veil). Only what is about to happen to them shows — the mouth.
+        if (VeilShown)
+        {
+            DrawMouth(_heart);
+            return;
+        }
 
         if (Stage == Phase.Warning)
         {
@@ -394,11 +439,11 @@ public partial class BlackPrison : Node2D
         float rise = Stage == Phase.Standing ? Mathf.Clamp(_standing / 0.6f, 0f, 1f) : 1f;
         DrawCircle(Vector2.Zero, r, new Color(Board, 0.22f));   // inside: a little darker
         DrawHouses(r, rise);                                     // behind: cardboard houses rising
-        DrawVines(r);                                            // in front: vines the pumpkins grow on
+        DrawVines(_heart);                                       // at its heart: the vines the pumpkins grow on
         DrawBristles(r, 1f, Colors.Black);                       // the border: black, bristling
-        DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, RimSegments, Colors.Black, 5f);
-        DrawArc(Vector2.Zero, r - 3f, 0f, Mathf.Tau, RimSegments, new Color(DangerDeep, 0.9f), 1.5f);
-        DrawMouth(r);
+        DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, _segments, Colors.Black, 5f);
+        DrawArc(Vector2.Zero, r - 3f, 0f, Mathf.Tau, _segments, new Color(DangerDeep, 0.9f), 1.5f);
+        DrawMouth(_heart);
     }
 
     private static Vector2[] Ring(float r, int segments)
@@ -412,9 +457,10 @@ public partial class BlackPrison : Node2D
         return points;
     }
 
+    /// <summary>The warning's rim: a dash about every metre.</summary>
     private void DrawDashedRim(float r, Color colour, float width)
     {
-        const int dashes = 24;
+        int dashes = Mathf.Max(24, (int)(Mathf.Tau * r / Units.Px(1f)));
         for (int i = 0; i < dashes; i++)
         {
             float a0 = i * Mathf.Tau / dashes;
@@ -422,16 +468,20 @@ public partial class BlackPrison : Node2D
         }
     }
 
-    /// <summary>Thorns all round the rim, outward and in, their lengths twitching.</summary>
+    /// <summary>Thorns all round the rim, outward and in, their lengths twitching: one every
+    /// <see cref="BristleSpacingM"/> of rim, whatever the size.</summary>
     private void DrawBristles(float r, float grow, Color colour)
     {
-        for (int i = 0; i < Bristles; i++)
+        int count = Mathf.Max(44, (int)(Mathf.Tau * r / Units.Px(BristleSpacingM)));
+        float step = Mathf.Tau / count;
+        float half = Units.Px(BristleHalfWidthM) / r;
+        float outBase = Units.Px(BristleOutM), inBase = Units.Px(BristleInM);
+        for (int i = 0; i < count; i++)
         {
-            float a = i * Mathf.Tau / Bristles + 0.05f * Mathf.Sin(i * 12.9898f);
+            float a = i * step + 0.35f * step * Mathf.Sin(i * 12.9898f);
             float jitter = 0.65f + 0.35f * Mathf.Sin(_age * (5f + i % 7) + i * 1.7f);
-            float outLen = r * 0.20f * jitter * grow * (i % 3 == 0 ? 1.4f : 1f);
-            float inLen = r * 0.07f * jitter * grow;
-            float half = 0.055f;
+            float outLen = outBase * jitter * grow * (i % 3 == 0 ? 1.4f : 1f);
+            float inLen = inBase * jitter * grow;
             Vector2 dir = new(Mathf.Cos(a), Mathf.Sin(a));
             Vector2 baseL = new Vector2(Mathf.Cos(a - half), Mathf.Sin(a - half)) * r;
             Vector2 baseR = new Vector2(Mathf.Cos(a + half), Mathf.Sin(a + half)) * r;
@@ -440,16 +490,19 @@ public partial class BlackPrison : Node2D
         }
     }
 
-    /// <summary>Cardboard houses that rise from below, turning upright — seen only through the
-    /// prison: each is cut to the circle.</summary>
+    /// <summary>Cardboard houses that rise from below, turning upright — a row across the prison,
+    /// standing a metre under its centre (about where the feet are of a body he aimed at), seen
+    /// only through the prison: each is cut to the circle.</summary>
     private void DrawHouses(float r, float rise)
     {
-        for (int i = 0; i < 4; i++)
+        int count = Mathf.Max(2, (int)(1.7f * r / Units.Px(6.5f)));
+        float ground = Units.Px(1f);
+        for (int i = 0; i < count; i++)
         {
-            float x = Mathf.Lerp(-0.62f, 0.62f, i / 3f) * r;
-            float w = r * (i % 2 == 0 ? 0.34f : 0.26f);
-            float h = r * (i % 2 == 0 ? 0.42f : 0.55f);
-            float baseY = r * 0.78f + (1f - rise) * r * 0.9f;
+            float x = Mathf.Lerp(-0.85f, 0.85f, i / (float)(count - 1)) * r;
+            float w = Units.Px(i % 2 == 0 ? 3.2f : 2.4f);
+            float h = Units.Px(i % 2 == 0 ? 4f : 5.2f);
+            float baseY = ground + (1f - rise) * h * 1.2f;
             float turn = (1f - rise) * (i % 2 == 0 ? 1.2f : -1.2f);
             Vector2 pivot = new(x, baseY);
             Vector2[] house =
@@ -471,19 +524,19 @@ public partial class BlackPrison : Node2D
         }
     }
 
-    /// <summary>Vines hanging from the top of the circle, swaying.</summary>
-    private void DrawVines(float r)
+    /// <summary>Vines hanging over the prison's heart, swaying: the pumpkins grow on them.</summary>
+    private void DrawVines(float heart)
     {
         for (int i = 0; i < 5; i++)
         {
-            float x = Mathf.Lerp(-0.7f, 0.7f, i / 4f) * r;
-            float top = -Mathf.Sqrt(Mathf.Max(0f, r * r - x * x));
-            float length = r * (0.55f + 0.3f * ((i * 37) % 5) / 4f);
+            float x = Mathf.Lerp(-0.8f, 0.8f, i / 4f) * heart;
+            float top = -heart * 1.7f;
+            float length = heart * (1.2f + 0.45f * ((i * 37) % 5) / 4f);
             Vector2 previous = new(x, top);
             for (int s = 1; s <= 6; s++)
             {
                 float u = s / 6f;
-                Vector2 next = new(x + Mathf.Sin(_age * 1.6f + i * 2.1f + u * 3f) * r * 0.06f * u, top + length * u);
+                Vector2 next = new(x + Mathf.Sin(_age * 1.6f + i * 2.1f + u * 3f) * heart * 0.06f * u, top + length * u);
                 DrawLine(previous, next, new Color(Moon, 0.5f), 2f);
                 if (s % 2 == 0)
                     DrawColoredPolygon(new[] { next, next + new Vector2(5f, -3f), next + new Vector2(2f, 4f) }, new Color(MoonPale, 0.45f));

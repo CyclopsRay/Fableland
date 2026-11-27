@@ -1,4 +1,4 @@
-# PumpKing — GDD v1.3
+# PumpKing — GDD v1.4
 
 > **Ported from the Unity `GloryOfFableland` source.** Numbers reflect the shipped Unity
 > kit; Godot movement derives from `Units.cs` (all speeds/distances in meters·seconds).
@@ -163,9 +163,19 @@ ultimate**, the game's first. Code: `PumpKing.HandleSkillUlt` → `BlackPrison`,
 first pass; the owner's own numbers are in **bold**.
 
 **1. The prison opens.** Q with a full ring opens a circle where he aims:
-- **Radius: his head's biggest blast — 3 m** (`ExplosionRadius`, 96 px; pumping only grows the
-  head's look, see the Passive). *3 m may feel small for an ultimate; making only the prison
-  bigger is one number (pass a prison radius instead of `ExplosionRadius`) — the owner's call.*
+- **Size — the owner's rule (v0.12.13): a slowed enemy walks out of it in exactly its 4 s.** A
+  fighter caught at the centre and walking straight out at half speed is free — hit circle
+  clear of the rim — just as the prison lets go; so one caught at the centre is held nearly
+  the whole time, one caught near the rim walks out sooner. Measured against **the standard
+  fighter: 10 m/s** (Pomegraknight, Pixolotl, Cleopastar; `CharacterController`'s default run)
+  with a 0.9 m hit circle: **0.5 × 10 m/s × 4 s − 0.9 m = 19.1 m** (`BlackPrison.RadiusM`). That
+  is wider than the view (about 36 × 20 m), so from inside its border is rarely in sight. A
+  slower body is held longer — PumpKing himself (8 m/s) would need 5 s, Sifu Pangda (6.5 m/s)
+  6 s, a crab (2.8–5.6 m/s) 7–14 s: all of the hold. *Which run to measure by is TBD #86 — if
+  the owner meant a foe's pace it is one constant, `ReferenceRunMps`.*
+- **Its heart: his head's biggest blast, 3 m around the centre** (`ExplosionRadius`, 96 px;
+  pumping only grows the head's look, see the Passive) — all the prison was until v0.12.13. The
+  pumpkins grow in it, the recast's mouth opens on it and the recast's blast covers it.
 - **Cast range: 8 m** from his centre to the prison's. An aim farther off is pulled back along
   the same line, so the prison is always where he points, at most 8 m away — about where a
   level throw of his head comes down (7.7 m). He may open it on himself.
@@ -181,24 +191,33 @@ circle, the same test as his blast — is held:
 - **moves at 50 %** — walking, running, swimming and flying (a Soul Form already cast flies at
   half its speed too), not a skill's own fixed speed (a dash);
 - **jumps 50 % as high** (the launch is ×√0.5);
-- **silenced: no skill starts.** The **basic attack still goes** — a fighter's BA, a foe's body
-  blow, the seagull's poop (its basic attack since v0.5.3, FOES §4). A skill already under way
-  runs its course (a seagull mid-telegraph still dashes; Pixolotl's held Shift resolves on
-  release). Items are not skills;
+- **silenced: no skill starts and no item is used.** The **basic attack still goes** — a
+  fighter's BA, a foe's body blow, the seagull's poop (its basic attack since v0.5.3, FOES §4). A
+  skill already under way runs its course (a seagull mid-telegraph still dashes; Pixolotl's held
+  Shift resolves on release). **Items (the owner, v0.12.13):** a held item's skill (F) is refused
+  — "Silenced: … can't be used until it lifts", nothing spent; its passive keeps working;
 - **sees only one map cell around itself:** the 3 × 3 cells centred on the body, i.e.
   1.5 cells = **3 m** from its centre (a cell is 2 m, `MapGrid`). A foe cannot find the player
   past it; one that had the player in its sights loses them **at once** (not after FOES §6's
   three more looks), and a blow does not tell a blinded foe where the player is. A boss's
   brain finds no target past it. The player, held by a BOSS PumpKing's prison, sees darkness
   past it (§ *The view from inside*).
+- **does not see its border (the owner, v0.12.13):** inside, *the whole map is replaced by
+  another world*, so a prisoner cannot tell where the edge is. Built so far: a prisoner's own
+  view hides the border (the prison draws only its mouth for them) and the veil paints the Dark
+  Wood past one cell. **The full replacement — the map within that cell too — is for multiplayer**
+  (the owner: it can wait; TBD #87). No foe's or boss's mind reads the border either: they know
+  only the sight cap.
 
 The border is **not a wall**: walking out frees a body at once, walking in catches it — checked
 every physics tick. The fallen and the invincible are not held (invincibility holds off every
 status). His own side is never held, his own body included.
 
 **4. The pumpkins.** As the prison forms and **every 0.5 s** while it stands — **eight** in
-all — a pumpkin of **random size** grows on its vines and is flung outward:
-- it grows for 0.25 s at a random point within 80 % of the radius — harmless, a tell. It
+all — a pumpkin of **random size** grows on the vines at its heart and is flung outward:
+- it grows for 0.25 s at a random point within 80 % of **its heart** (3 m; the whole prison
+  until v0.12.13 — thrown from the heart, a pumpkin crosses the prison and comes down among
+  its prisoners instead of far beyond a throw) — harmless, a tell. It
   tries eight points for one outside solid ground (a prison opened half in a wall); if none is
   free it grows at the last;
 - then it flies **outward from the centre through the point it grew at**, at 9–13 m/s plus a
@@ -215,8 +234,8 @@ all — a pumpkin of **random size** grows on its vines and is flung outward:
 - **he blinks into it:** to the nearest spot to the centre his body fits (the centre itself
   unless it is in solid ground; else up, sideways, down — within the prison), arriving still.
   With no room anywhere in the prison he stays where he is and the blast still goes off;
-- **his head goes off there at once, at its biggest:** the prison's radius (3 m), **100
-  damage** (twice the head's 50) × his damage multiplier, the default gain-no window (0.5 s
+- **his head goes off there at once, at its biggest:** his head's blast (3 m — the prison's
+  heart, not the whole 19.1 m prison), **100 damage** (twice the head's 50) × his damage multiplier, the default gain-no window (0.5 s
   at 100), and **no shove** — a 15 m/s shove would carry a foe at the centre exactly to the rim
   and everyone else out of it, ending the control the ultimate exists for. It costs **no head**:
   the magazine, the pump stacks and the shell are untouched;
@@ -235,11 +254,11 @@ where you aim, Q again to blink in.
 | What | Number |
 |---|---|
 | Cost | the full ring, 1500; the recast is free |
-| Cast range · radius | 8 m · 3 m (his head's blast) |
+| Cast range · radius | 8 m · **19.1 m** (a slowed 10 m/s fighter walks out from the centre in exactly 4 s) · its heart 3 m (his head's blast) |
 | Warning · held | **1 s · 4 s** |
-| Held | **move ×0.5 · jump height ×0.5 · silenced (skills; BA allowed) · sight 1 cell = 3 m** |
-| Pumpkins | **one every 0.5 s**, 8 · 10–25 damage by size · 0.25–0.6 m · 9–13 m/s out + 4 up · no shove |
-| Recast | windup 0.4 s · blink to the centre · blast 3 m / 100 / no shove · once |
+| Held | **move ×0.5 · jump height ×0.5 · silenced (skills and items; BA allowed) · sight 1 cell = 3 m · the border unseen** |
+| Pumpkins | **one every 0.5 s**, 8, grown in its heart · 10–25 damage by size · 0.25–0.6 m · 9–13 m/s out + 4 up · no shove |
+| Recast | windup 0.4 s · blink to the centre · blast 3 m (its heart) / 100 / no shove · once |
 
 #### TODO(art) — the Black Prison is all placeholder
 
@@ -250,16 +269,17 @@ where you aim, Q again to blink in.
 > was generated.
 
 1. **TODO(art) The border, seen from outside:** a black, bristling, horrific ring; the inside a
-   little darker. *Now:* 44 black thorns (out and in) that twitch, a black rim, a dark-red inner
-   line; the inside a 30 % wash of the board colour.
+   little darker. *Now:* a black thorn (out and in) every 0.5 m of rim that twitches — 240 on
+   the 19.1 m prison, sized in metres so the rim reads the same at any size — a black rim, a
+   dark-red inner line; the inside a 22 % wash of the board colour. A prisoner sees none of it.
 2. **TODO(art) The warning (1 s):** *now* a dashed red rim flickering faster, thorns growing.
 3. **TODO(art) The world inside — PumpKing's realm, seen only through the prison** (the Kingdom
    of Horror's Dark Wood):
    - **behind:** small Halloween houses made of **cardboard**, rising from below and turning
-     upright as it forms. *Now:* four flat blue house cut-outs with a lit window, clipped to
-     the circle;
+     upright as it forms. *Now:* a row of flat blue house cut-outs (one every ~6.5 m, 2.4–3.2 m
+     wide) with a lit window, standing a metre under the centre, clipped to the circle;
    - **in front:** **vines** on which the pumpkins grow and from which they fall. *Now:* five
-     swaying blue lines with leaf ticks.
+     swaying blue lines with leaf ticks, hanging over its heart.
    - **TODO(eng, with the art):** this view belongs **between the map's backdrop and its
      battlefield** (the background is replaced, not the ground). Today the placeholder is drawn
      over the fight, translucent, because a kit may not reach into the arena's tree (T00). The
@@ -272,13 +292,15 @@ where you aim, Q again to blink in.
 6. **TODO(art) The blink and the biggest blast:** he is drawn into the mouth, and his head
    swells to its five-stack size and bursts. *Now:* nothing beyond the cues (`ult.blink`,
    `ult.blast`, `Feedback.gdd` §6.6).
-7. **TODO(art) The view from inside** (only if a BOSS PumpKing casts it on the player): darkness
-   except one cell around you; the rest of the background replaced by the **cardboard horror
+7. **TODO(art) The view from inside** (only if a BOSS PumpKing casts it on the player, or in
+   multiplayer): **the whole map replaced by another world** (the owner, v0.12.13) — no border
+   in sight; darkness except one cell around you; the background the **cardboard horror
    backdrop** of the Dark Wood. *Now:* the board colour with a feathered 3 m hole, three
-   cut-out dead trees and a crooked lit house on each side.
+   cut-out dead trees and a crooked lit house on each side; the prison's own drawing hidden.
+   Inside the hole the real map still shows (TBD #87).
 8. **TODO(art) The aim preview:** where Q will open it and how far it can reach. *Now:* a red
-   circle at the clamped aim and a faint 8 m ring, drawn with the debug ranges, only while Q is
-   ready.
+   19.1 m circle at the clamped aim with its 3 m heart, and a faint 8 m ring, drawn with the
+   debug ranges, only while Q is ready.
 9. **TODO(animation)** the cast clip and the recast's windup clip (`NOTE(animation)` markers in
    `HandleSkillUlt`).
 10. **TODO(feedback)** VFX and sound rows for the `ult.*` cues; until then they fall back to
@@ -294,7 +316,7 @@ where you aim, Q again to blink in.
 | BA | Fire/Detonate Head | 1.5 s (reload windup) | Launch rolling head (30 contact DMG); detonate for 3 m / 50 DMG AoE |
 | Shift | Soul Form | 12 s | 6 s free-flight, 5 m/s speed, 0.5 s windup |
 | E | Pump Up | 0.5 s (inner CD) | +20 shield/stack, max 5; head grows; speed penalty |
-| Q (ult) | The Black Prison (黑狱) | the full ring (1500) | 3 m circle within 8 m: 1 s warning, then 4 s of move ×0.5, jump ×0.5, silence, sight 3 m on foes inside; a pumpkin every 0.5 s; recast once (free): blink in, 100-damage blast |
+| Q (ult) | The Black Prison (黑狱) | the full ring (1500, his own, kept between fights) | 19.1 m circle within 8 m (a slowed fighter walks out from the centre in its 4 s): 1 s warning, then 4 s of move ×0.5, jump ×0.5, silence (skills and items), sight 3 m on foes inside; a pumpkin every 0.5 s from its 3 m heart; recast once (free): blink in, 100-damage 3 m blast |
 
 ---
 
@@ -316,7 +338,8 @@ that realm's boss arena (`FOES.gdd` §8.1). His HP there is his row's × the day
 1–10, 720, 900, 1200, and 1800 from day 36.
 
 **The Black Prison on the boss — TBD (follow-up).** His kit has the ultimate (it is side-
-agnostic: on his side it holds the player, silences them, slows them and darkens their view),
+agnostic: on his side it holds the player, silences them — skills and items — slows them and
+darkens their view; at 19.1 m it covers most of his arena),
 but **his brain never presses Q**. A rule for it is the next step: open it when the player is
 within 8 m and his ring is full; recast when the player is near its centre. His ring fills only
 from damage he takes, as any boss's. The boss check already proves the kit works for him
@@ -459,6 +482,29 @@ Three changes to the kit, made for the boss fight and true for the protagonist t
 - **Checked by** the boss check (`40-QA.md`): `ProbeTheBlackPrison`, `ProbeBlackPrisonOnFoes`,
   `ProbePrisonPumpkins`, `ProbePrisonTakesSides` — 67 checks; each rule was broken once and caught.
 
+### The owner's answers — how they are built (v0.12.13)
+- **Its size is a rule, not a number:** `BlackPrison.RadiusM = ReferenceRunMps × MoveScale ×
+  HoldSeconds − ReferenceHitRadiusM` (10 m/s × 0.5 × 4 s − 0.9 m = 19.1 m). `Begin` takes the
+  radius and the **heart** (his `ExplosionRadius`); `Heart` is what the recast's blast
+  (`LandInPrisonMouth`), the mouth and `PumpkinSpot` use — so the pumpkins' throws are exactly
+  what they were.
+- **The placeholder is drawn in metres** (thorns every 0.5 m, dashes every metre, houses every
+  ~6.5 m, segments by circumference), not as shares of the radius, so it reads the same at 3 m
+  or 19 m. While `VeilShown` (the local player is a prisoner) `_Draw` draws only the mouth.
+- **Silence takes items:** `ItemRuntime.TryUse` refuses a silenced holder before any cooldown
+  is read — nothing is spent, and the arena's toast says why. Passives are untouched.
+- **His ring is his own, kept between fights:** `ProtagonistState.UltCharge` (saved since
+  v0.12.13; older saves load empty). `CharacterController.LoadUltChargeFromState` /
+  `SaveUltChargeToState` — a body writes its ring back only into the record it was filled
+  from (a debug-worn body keeps its ring to itself); `WriteBackToState` carries it with HP
+  at a switch, a fight's end, a quit and a fall.
+- **Checked by:** the boss check — the rule itself, a 19.1 m prison holding a crab 8 m off whom
+  the 3 m blast misses, the player running out of a boss's prison from 13 m, and
+  `PrisonWalkOut` (a 10 m/s fighter caught 10 m off walks out in 2.02 s, from the centre in
+  4.00 s — the whole hold); the flow check — a silenced holder cannot use THE VOID and spends
+  nothing; the run check — `WalkTheUltRings` (a switch, a won fight, the day's end, a save and a
+  load, the next fight).
+
 ### State Machine
 Three states (`PKState` enum: Normal, Rolling, Soul). State transitions are gated —
 BA does nothing in Soul; Pump Up only works in Normal; firing head only works in
@@ -530,4 +576,19 @@ when the magazine is full.
     what stands outside.
   - **Soul Form obeys move-speed shares** (a fix the prison needed: a soul flew through it).
 
-*Last Updated: November 2026 (the Black Prison) | Version: 1.3 | Generated from Unity source PumpKing.cs + PumpKingHead.cs*
+- **(v0.12.13) The owner's answers on the Black Prison:**
+  - **"4 s: a slowed enemy just walks out"** — the size is that rule. Decided here, for the
+    owner to overrule (TBD #86): it is measured against the standard fighter (10 m/s) — the
+    owner spoke of later multiplayer, where the prisoner is a fighter — and "walks out" is the
+    game's own test (the hit circle clear of the rim), hence 19.1 m and not 20.
+  - **His head's blast stays his head's:** the recast's blast, the mouth and the pumpkins keep
+    the old 3 m — a 100-damage blast over 19 m would be another ultimate.
+  - **"A prisoner can't see its border — their whole map is another world"** — the owner allows
+    it to wait for multiplayer. Now: the border is hidden from a prisoner, the veil stands for
+    the other world past one cell (TBD #87).
+  - **"Silenced, items can't be used"** — a held item's skill is refused, nothing spent; its
+    passive goes on.
+  - **"Each character's ult energy is their own and is not cleared when a level ends"** — kept
+    on the run record, through switches, days and saves; a new run and a new recruit start empty.
+
+*Last Updated: November 2026 (the owner's answers on the Black Prison) | Version: 1.4 | Generated from Unity source PumpKing.cs + PumpKingHead.cs*

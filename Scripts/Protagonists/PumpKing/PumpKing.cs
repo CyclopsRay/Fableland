@@ -14,11 +14,12 @@ using Fableland.Run;
 /// SHIFT    Soul Form (12s CD, 0.5s windup) — 6s free-flight ghost form; a live head
 ///          becomes autonomous (visual bounce only, no AoE on its own explosion).
 /// E        Pump Up (0.5s inner CD, max 5 stacks) — Normal state only.
-/// Q        The Black Prison (黑狱, a full ult ring) — a circle the size of his head's blast,
-///          where he aims (8 m at most): 1 s of warning, then 4 s in which every foe inside is
-///          slowed, jumps low, is silenced and blind past one cell, while pumpkins fly out of it.
-///          Q again while it stands (free, once): its mouth opens, he blinks into it and his head
-///          goes off there at its biggest. <see cref="BlackPrison"/>.
+/// Q        The Black Prison (黑狱, a full ult ring) — a circle 19.1 m wide (a slowed fighter
+///          walks out of it from the centre in exactly its 4 s), where he aims (8 m at most):
+///          1 s of warning, then 4 s in which every foe inside is slowed, jumps low, is silenced
+///          and blind past one cell, while pumpkins fly out of its heart. Q again while it stands
+///          (free, once): its mouth opens, he blinks into it and his head goes off there at its
+///          biggest. <see cref="BlackPrison"/>.
 ///
 /// Animation automata mirrors the Unity "PumpKing" animator — only idle/walk/jump/
 /// soul body clips exist in the source art (no dead/stun clip); the neck-head child
@@ -73,9 +74,9 @@ public partial class PumpKing : CharacterController
     /// <summary>How far from him the prison's centre may be: an aim farther off is pulled back
     /// along the same line. About where a level throw of his head comes down (7.7 m).</summary>
     public const float PrisonCastRangeM = 8f;
-    /// <summary>The recast's blast is his head's at its biggest: the prison's radius (the head's
-    /// blast radius) and this many times the head's damage. It shoves nobody: the prison keeps
-    /// its prisoners.</summary>
+    /// <summary>The recast's blast is his head's at its biggest: the head's blast radius (the
+    /// prison's <see cref="BlackPrison.Heart"/>) and this many times the head's damage. It shoves
+    /// nobody: the prison keeps its prisoners.</summary>
     public const float UltBlastDamageScale = 2f;
     /// <summary>How finely the blink looks for room for his body near the mouth, px.</summary>
     private const float BlinkSearchStep = 8f;
@@ -347,10 +348,10 @@ public partial class PumpKing : CharacterController
         DrainUltCharge(UltCharge);
         var prison = new BlackPrison { Name = "BlackPrison" };
         GetParent().AddChild(prison);
-        prison.Begin(this, centre, ExplosionRadius, DamageDealtMultiplier);
+        prison.Begin(this, centre, Units.Px(BlackPrison.RadiusM), ExplosionRadius, DamageDealtMultiplier);
         _prison = prison;
         // NOTE(animation): the cast clip (he reaches toward the circle) starts here.
-        CueBus.Emit(this, "ult.cast", size: ExplosionRadius, magnitude: BlackPrison.WarnSeconds,
+        CueBus.Emit(this, "ult.cast", size: prison.Radius, magnitude: BlackPrison.WarnSeconds,
             direction: (centre - GlobalPosition).Normalized());
     }
 
@@ -367,9 +368,10 @@ public partial class PumpKing : CharacterController
     /// The recast lands (<see cref="BlackPrison"/>, when its mouth has opened): he blinks to the
     /// nearest spot to its centre his body fits — the centre itself unless it is inside solid
     /// ground, then up, sideways, down, within the prison — arriving still, and his head goes off
-    /// at the centre at its biggest: the prison's radius, <see cref="UltBlastDamageScale"/>× the
-    /// head's damage, no shove. It costs no head: the magazine is not touched. With no room
-    /// anywhere in the prison he stays where he is; the blast still goes off at the centre.
+    /// at the centre at its biggest: his head's blast radius (the prison's heart, not the whole
+    /// prison), <see cref="UltBlastDamageScale"/>× the head's damage, no shove. It costs no head:
+    /// the magazine is not touched. With no room anywhere in the prison he stays where he is; the
+    /// blast still goes off at the centre.
     /// </summary>
     public void LandInPrisonMouth(BlackPrison prison)
     {
@@ -382,11 +384,11 @@ public partial class PumpKing : CharacterController
 
         float damage = ExplosionDamage * UltBlastDamageScale * DamageDealtMultiplier;
         Vector2 at = prison.Centre;
-        CueBus.EmitAt(FeedbackId, "ult.blast", at, this, Side, size: prison.Radius, magnitude: damage,
+        CueBus.EmitAt(FeedbackId, "ult.blast", at, this, Side, size: prison.Heart, magnitude: damage,
             ownerClass: FeedbackClass);
         foreach (ICombatTarget target in CombatTargets.HostileTo(GetTree(), Side))
         {
-            if (target.GlobalPosition.DistanceTo(at) - target.HitRadius > prison.Radius) continue;
+            if (target.GlobalPosition.DistanceTo(at) - target.HitRadius > prison.Heart) continue;
             ReportDamageDealt(target.TakeHit(new HitInfo(damage, Vector2.Zero).FromRanged(this, "ult.blast"), at));
         }
     }
@@ -565,7 +567,8 @@ public partial class PumpKing : CharacterController
         if (UltReady && !Dead && Side == CombatSide.Player)
         {
             Vector2 centre = ClampPrisonCentre(GlobalPosition, Controls.AimPoint(this), Units.Px(PrisonCastRangeM)) - GlobalPosition;
-            DrawArc(centre, ExplosionRadius, 0f, Mathf.Tau, 48, new Color(0.85f, 0.2f, 0.23f, 0.7f), 2f);
+            DrawArc(centre, Units.Px(BlackPrison.RadiusM), 0f, Mathf.Tau, 160, new Color(0.85f, 0.2f, 0.23f, 0.7f), 2f);
+            DrawArc(centre, ExplosionRadius, 0f, Mathf.Tau, 48, new Color(0.85f, 0.2f, 0.23f, 0.35f), 1f);   // its heart
             DrawArc(Vector2.Zero, Units.Px(PrisonCastRangeM), 0f, Mathf.Tau, 96, new Color(0.85f, 0.2f, 0.23f, 0.18f), 1f);
         }
     }

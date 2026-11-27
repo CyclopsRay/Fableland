@@ -141,6 +141,15 @@ ability cooldowns — ticks down with the arena clock, unaffected by the day cyc
 An item may have **both** a day-based CD and a second-based CD if it has two skills
 (not currently spec'd, but the architecture supports it).
 
+### 3.3 Silenced: no item (v0.12.13, the owner)
+
+A **silenced** fighter (a Black Prison holds them — `PumpKing.gdd` §Q) **uses no item**: F is
+refused with a toast ("Silenced: … can't be used until it lifts") and **nothing is spent** —
+no cooldown starts, no day is counted, a single-use item is not used up. The item's
+**passive keeps working** (a silence stops what you do, not what you carry), and so does a
+Possession item's. Checked first, before either cooldown (`ItemRuntime.TryUse`). Today only a
+BOSS PumpKing's prison could silence the player, and his brain does not cast it yet (TBD #79).
+
 ---
 
 ## 4. Feature / tag catalog
