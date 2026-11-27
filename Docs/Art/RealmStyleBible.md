@@ -799,9 +799,24 @@ Recorded here rather than silently chosen (`00-OVERVIEW.md` §5):
    default, 0.1) for the drop of every plain volume. Open with it: whether foes should
    float too, and how long the jump cooldown should be inside a volume (TBD #27, #34, #35).
 8. **Destroyable trees** (the Dark Wood brief) are not built; `deco.kh_tree` is scenery.
+9. **Each realm's repaint has a direction (the owner's picks, 2026-11-28 —
+   `StyleExploration/PICKS.md`):** Beach → mid-century gouache picture book (VK-B), Starfield →
+   flat minimalist poster (SL-A), Wulin → freehand ink 写意 (BM-A), Dungeon → dark fairy-tale
+   gouache (HC-C), Ghost Town → toy theatre (TD-C), Loong's Nest → gongbi 工笔重彩 (PL-A), Dark
+   Wood → silhouette shadow theatre (KH-C), Forgotten City → lush modern pixel art (TF-B), Cloud
+   Court → embroidered silk (CC-B). The realm sections above still describe the **shipped**
+   kits; a section is rewritten when its realm is repainted. Still open before any repaint:
+   grid and collision, who paints (AI-made sprites in a kit or not), 32 or 64 px/m, and which
+   world goes first (`PICKS.md`, "Still open").
 
 ## Decisions log
 
+- **(2026-11-28) The owner picked a direction per realm** from the style exploration
+  (`StyleExploration/PICKS.md`; §10 item 9). Five of them change a realm's medium — the
+  Beach, Dungeon, Ghost Town, Dark Wood and Cloud Court leave watercolour, lit realism,
+  linocut, scratchboard and enamel; Starfield, Wulin, Loong's Nest and the Forgotten City keep
+  theirs. Two meet the review's collision notes — two paper-theatre worlds inside a paper
+  overworld, two gouache worlds — which the repaints must keep apart.
 - **A realm is a medium.** Six worlds, six picture-making traditions; palette alone never
   distinguishes two realms. Keeps "different stories and fables" true at a glance.
 - **Painted by code, replaceable by hand.** Deterministic painters own geometry, tiling and

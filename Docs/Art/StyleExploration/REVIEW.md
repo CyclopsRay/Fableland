@@ -2,6 +2,8 @@
 
 *2026-11-25. Covers all 78 concept images in `img/` (34 from GPT Image 2.5, 44 from Midjourney v8.2), read against the brief in `README.md`, the style bible (§0, §2.4, §2.6, §2.8) and what ships today. The gallery for choosing is `index.html` in this folder. Nothing here changes a shipped asset.*
 
+**The owner's picks (2026-11-28) are in `PICKS.md`** — seven match the verdicts below; VK (B), TD (C) and TF (B) are the owner's own.
+
 **How to read it.** Nine worlds in the brief's order, then the overworld. For each: every image in a sentence or two; whether the arena reads; what a kit would take; a verdict with a pick and a runner-up. "A, in Midjourney's handling" means direction A as the Midjourney variants paint it, with the best variant named. The last section has the summary table, where picks collide, what else needs deciding, and sharper prompts for a second round.
 
 **How it was looked at.** GPT Image pictures at preview size; Midjourney variants side by side at about 780 px each; four crops from the full-size originals to check mark quality. Stills cannot show motion, the game's own characters, or the game's resolution — see the end.

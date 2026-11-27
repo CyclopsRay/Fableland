@@ -1,7 +1,9 @@
 # The overworld as torn storybook pages — method
 
 *A demo and the method behind it. Status: a third view of the generated map, off by default
-(`MapGDD.md` §11a); the art kits are AI-made placeholders. Captures in
+(`MapGDD.md` §11a); the art kits are AI-made placeholders. **The owner picked this direction,
+OW-B, on 2026-11-28** (`StyleExploration/PICKS.md`); the default view and the fidelity are
+still open. Captures in
 `Docs/Art/Overworld/captures/`. Everything below describes what is built and measured, not a
 plan — except §9 and §10, which say so.*
 

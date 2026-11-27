@@ -1,6 +1,7 @@
 # Realm style exploration — concept images for the owner to choose from
 
-**Status: exploration only. Nothing here changes a shipped art asset.** The owner found some
+**Status: the owner picked a direction per world on 2026-11-28 — `PICKS.md`.** Nothing here
+changes a shipped art asset; a pick is what a world's repaint will follow. The owner found some
 of the combat maps *too rigid* (2026-11-25): the code-painted kits sit on the 2 m grid, repeat
 their tiles, and compose in rectangles. Before repainting anything, each implemented world
 gets a handful of AI concept images showing how loose and hand-made its arenas *could* look.

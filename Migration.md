@@ -9,6 +9,13 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.14** — **The owner's style picks, recorded** (docs only). One direction per world, picked in
+  the style gallery on 2026-11-28: VK-B, SL-A, BM-A, HC-C, TD-C, PL-A, KH-C, TF-B, CC-B, and OW-B for the
+  overworld — `Docs/Art/StyleExploration/PICKS.md`, with where they depart from `REVIEW.md` (VK, TD, TF),
+  the review's collision notes they meet, and what is still open before any repaint (grid and
+  collision, who paints, 32 or 64 px/m, the pilot world). Pointers in the exploration README and
+  review, `RealmStyleBible.md` §10 and its decisions log, `OverworldStyle.md`, `PumpKing.gdd` and
+  HANDOFF. Nothing shipped is repainted.
 - **0.12.13** — **The owner's answers on the Black Prison and the ult ring** (2026-11-28).
   - **The prison's size is a rule:** a slowed enemy walks out of it from the centre in exactly
     its 4 s. Measured against the standard fighter (10 m/s, a 0.9 m hit circle): **19.1 m**

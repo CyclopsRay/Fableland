@@ -9,18 +9,18 @@ kit/GDD mismatches fixed, `FlowCheck`), **v0.12.5–v0.12.7** (the shell, events
 shelter, merged from a parallel session), **v0.12.10** (the plantation and the enchanting
 altar in the hub's room), **v0.12.11** (PumpKing's ultimate, the Black Prison, merged from the
 other parallel session), **v0.12.12** (THE VOID's darkness — every item now has its behaviour)
-and **v0.12.13** (the owner's answers: the Black Prison's size rule, silenced items, each
-fighter's own ult ring kept between fights). **Replace this file at every hand-off:** it describes
+**v0.12.13** (the owner's answers: the Black Prison's size rule, silenced items, each
+fighter's own ult ring kept between fights) and **v0.12.14** (the owner's style picks recorded). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.13**, twenty-one commits and two
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.14**, twenty-two commits and two
   merges on top of v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - `main` was fast-forwarded to **v0.12.13** on 2026-11-28 (the owner: "版本可以帮更新"),
   **locally, not pushed** (it was at v0.12.3 before). The owner asks for each fast-forward.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.13, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.14, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -65,7 +65,8 @@ fighter's own ult ring kept between fights). **Replace this file at every hand-o
 | 0.12.10 | `092ec07` | **The plantation and the enchanting altar** stand in the hub's room: sow and harvest, enchant Possession with the Blessing of Shieldon, each through its own panel | `ITEMS.gdd` §4.3, §7.1, `NODES.gdd` §5.0, KNOWLEDGE v0.12.10 |
 | 0.12.11 | `be10b44` | **PumpKing's ultimate, the Black Prison** (from the `pumpking-ult` session, `370d1cd`, merged): a 3 m prison ≤ 8 m away, 1 s warning, 4 s of half speed, half jumps, silence and a 3 m sight cap on the other side, pumpkins every 0.5 s, a free recast that blinks him in for a 100-damage blast; crowd control (slow, low jump, silence, sight cap) as a reaction every target takes | `PumpKing.gdd` (Q, how it is built, decisions), `FOES.gdd` §crowd control, `Feedback.gdd` §6.6, KNOWLEDGE v0.12.11 |
 | 0.12.12 | `de2e5ef` | **THE VOID darkens a fight**: held, F blinds every foe for 10 s (a sight cap of 0, foes arriving in the dark included), surviving a switch — the last item behaviour | `ITEMS.gdd` §7.2 *Built* |
-| 0.12.13 | — | **The owner's answers**: the Black Prison is as wide as a slowed fighter needs its whole 4 s to walk out of (19.1 m; its 3 m heart keeps the blast, the mouth and the pumpkins), a prisoner does not see its border; a silenced fighter uses no item; each fighter's ult ring is their own and survives the fight's end (saved) | `PumpKing.gdd` (Q, *The owner's answers*), `ITEMS.gdd` §3.3, `NODES.gdd` §3.3, KNOWLEDGE v0.12.13 |
+| 0.12.13 | `f705cf9` | **The owner's answers**: the Black Prison is as wide as a slowed fighter needs its whole 4 s to walk out of (19.1 m; its 3 m heart keeps the blast, the mouth and the pumpkins), a prisoner does not see its border; a silenced fighter uses no item; each fighter's ult ring is their own and survives the fight's end (saved) | `PumpKing.gdd` (Q, *The owner's answers*), `ITEMS.gdd` §3.3, `NODES.gdd` §3.3, KNOWLEDGE v0.12.13 |
+| 0.12.14 | — | **The owner's style picks** — one direction per world (VK-B, SL-A, BM-A, HC-C, TD-C, PL-A, KH-C, TF-B, CC-B; OW-B for the overworld), recorded with what they leave open. Docs only | `Docs/Art/StyleExploration/PICKS.md` |
 
 **Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.13, all passing:
 
@@ -163,10 +164,13 @@ fighter's own ult ring kept between fights). **Replace this file at every hand-o
 
 ## 4. Waiting on the owner
 
-- **Style picks.** Gallery: https://claude.ai/artifact/BfrSTsTwjZypx4J7aMvW2b. Picks save to its database (collection `picks`, doc `owner`). Recommendations are in `REVIEW.md`; three decisions gate any repaint:
+- **Style picks — made 2026-11-28**, recorded in `Docs/Art/StyleExploration/PICKS.md` (and in the
+  gallery's database, collection `picks`, doc `owner`): VK-B, SL-A, BM-A, HC-C, TD-C, PL-A, KH-C,
+  TF-B, CC-B, OW-B. Nothing shipped is repainted yet. Still gating any repaint:
   - grid collision versus painterly art;
   - 32 versus 64 px/m;
-  - whether AI art may enter kits.
+  - whether AI art may enter kits;
+  - which world to pilot first.
 - **Overworld pages:**
   - is this the direction, at this fidelity?
   - should it be the default view?
