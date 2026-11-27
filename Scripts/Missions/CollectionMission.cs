@@ -107,6 +107,9 @@ public sealed class CollectionMission : Mission
             _completing = true;
             _graceTimer = GraceTime;
             KillAllFoes();
+            // NODES §4.1: the foes die and the grace is the player's — the ambient trickle must
+            // not refill the field during it (audit v0.11.1, "also met").
+            if (_arena?.Spawner != null) _arena.Spawner.Enabled = false;
         }
         else if (!_completing)
         {

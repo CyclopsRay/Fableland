@@ -9,12 +9,12 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.6**, fifteen commits on top of
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.7**, sixteen commits on top of
   v0.11.0. **Not pushed.** Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - `main` was fast-forwarded to v0.12.3 (`7afe440`) on 2026-11-27, **locally, not pushed**. The
   owner asks for each fast-forward; until then it trails the branch.
   `LocalTimeScale` (the main checkout, `/Users/cyclops/fableland`) and `origin/*` are still at
-  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.6, first run
+  **v0.11.0** (`b861921`). If a new session's worktree starts older than v0.12.7, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
@@ -52,7 +52,8 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 | 0.12.3 | `7afe440` | **Māra built** (`Mara.gdd` steps 1–2, the owner's "先做…占位先"): the **Wheel of Becoming** as his signature (rests, skips, stacks, the realms' modifiers, the lock, the Last Turn, Liberation, the Offering) and **his own kit** (Claw Rake, Noose, Hand of the Wheel, every realm's arrival strike, Doubt's false tells, Delusion's images). Placeholders drawn in code; **art prompts written, not generated** | `Docs/Mara.gdd` §13.4, `Docs/Art/MaraArtPrompts.md` |
 | 0.12.4 | `2774457` | **The audit's bugs that could end or stall a run, and kits back to their GDDs** (Part 2 #11–#17): resolution invincibility held by sources (Pixolotl's Shift), the Eidolon Shelter's dead end, Yukai's Rope letting go, Cleopastar's star jump, damage credited to Pangda's blows and to thrown stars and heads, the Fire Tornado replacing Slash 1 and spinning in place, the seagull's puddle and dash; the Asura's flurry lands every arm. New **`FlowCheck`**, each fix broken once | `Docs/Research/AUDIT-v0.11.1.md` Part 2 (its status line), KNOWLEDGE v0.12.4 |
 | 0.12.5 | `a419a6a` | **The player is told what happens**: a Controls card in the pause menu and a key line under the countdown; rewards named in the toast (and the day's notes kept for the summary); wonder cores on the map; each fighter's own face in the portrait and the Switch slot, the magazine as pips; the run-over screen names the dark leader | `Docs/Research/AUDIT-v0.11.1.md` Part 2 status |
-| 0.12.6 | — | **The shell, and the road between fights**: a real Settings screen (comfort + volumes, saved beside the slots), Quit on the title, a beat before RUN OVER, the map's mist on by default, debug tools only in a debug build; fifteen "?" events (stray storybook pages) with costs, prices — wonder cores' first use — and stats | `NODES.gdd` §6.1, `Feedback.gdd` §7 |
+| 0.12.6 | `b149cca` | **The shell, and the road between fights**: a real Settings screen (comfort + volumes, saved beside the slots), Quit on the title, a beat before RUN OVER, the map's mist on by default, debug tools only in a debug build; fifteen "?" events (stray storybook pages) with costs, prices — wonder cores' first use — and stats | `NODES.gdd` §6.1, `Feedback.gdd` §7 |
+| 0.12.7 | — | Collection's grace stops the ambient spawner; a benched fighter's item cools down at the bench rate | NODES §3.3, §4.1 |
 
 **Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.4, all passing:
 
@@ -74,6 +75,18 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
 
 ## 3. Not done — in the order the owner's request implies
 
+**The big pieces left after v0.12.7** (each needs design calls; the audit's Part 2 numbers):
+- **Realm bosses (#10):** every realm's 4-1 is BOSS PumpKing, so beating it recruits nobody.
+  BOSS variants of Cleopastar, Pixolotl, Sifu Pangda and Pomegraknight are the core loop of
+  recruiting. Whether a run then starts with one protagonist is the owner's call.
+- **Ultimates (#5):** the ring fills and Q does nothing for all five. Every character GDD
+  defers its ultimate, so write the designs first (TBD #21).
+- **Items (#19):** 8 of 14 have no behaviour. Most need systems that do not exist yet:
+  planting (TBD #5), possession enchanting, phantoms, chests, a day rewind.
+- **Zone 6:** the other eight guardians, and the Unwritten's Borrowed Shapes and Blank Page
+  (item 6 below).
+- **Feedback for the four other kits** (item 1 below).
+
 1. **The other four kits' feedback.** Cleopastar, Pixolotl, PumpKing and Sifu Pangda raise almost
    no cues. Through the fallback they get their home medium's generic effects and sounds.
    - **Work order:** `AUDIT-v0.11.1.md` Part 1, 161 rows, one per gameplay moment, with file → method and geometry.
@@ -83,9 +96,9 @@ kit/GDD mismatches fixed, `FlowCheck`). **Replace this file at every hand-off:**
    - Remove the five direct `ShakeCamera()` calls (4 in Sifu Pangda, 1 in Pixolotl).
    - Audio memory will pass its 8 MB budget once the kits are wired; the owner must choose a policy (§4).
 2. **Gameplay bugs from the audit** (Part 2) — **#11–#17 fixed in v0.12.4**, each reproduced
-   and pinned by `Scenes/Run/FlowCheck.tscn`. Still open from that list: the ambient foes that
-   keep arriving during Collection's grace, and Pixolotl's magazine reloading only from empty
-   (its GDD is silent).
+   and pinned by `Scenes/Run/FlowCheck.tscn`; Collection's grace spawns and benched item
+   cooldowns fixed in v0.12.7. Still open: Pixolotl's magazine reloads only from empty (her GDD
+   is silent: a design call).
 
 3. **Shell polish** (audit Part 2 #1–4, #6, #20). **Mostly done in v0.12.5–v0.12.6**: the
    Controls card, rewards named, cores shown, faces and magazine pips, debug tools gated, a

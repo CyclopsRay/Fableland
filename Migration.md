@@ -9,6 +9,12 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.7** — **Two small rules from the audit's notes.**
+  - **Collection's grace:** the ambient spawner stops when the grace begins. Its foes die
+    (NODES §4.1), and the trickle no longer refills the field during it.
+  - **Benched items:** a benched fighter's held item cools down at the bench rate, 1/(2n−2)
+    (NODES §3.3). It did not cool at all off the field (audit Part 4 #12).
+  - **Checks:** the run check (it plays Collection to its goal) and the flow check, both clean.
 - **0.12.6** — **The shell, and the road between fights.** Audit v0.11.1 #4, #18 and #20.
   - **Settings (#20):** a real Settings screen in the pause menu and on the title. It has a
     slider for each comfort setting (shake, camera punch, flash, hit-stop, particles) and each

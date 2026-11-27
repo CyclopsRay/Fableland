@@ -421,7 +421,8 @@ mission the moment belongs to.
 > line), **#2**, **#3** (shown on the map; a use is TBD #11), **#6** (faces, magazine pips; a
 > refused attack is still silent). Then in v0.12.6: **#4** (hidden in a release build; the
 > editor's debug build keeps them), **#18** (fifteen events), **#20** (Settings, Quit, mist on, a
-> beat before RUN OVER; an arena's missing Map button is NODES §7.2's rule, kept). Overtaken by later work: **#8** (VFX v0.11.6, audio v0.11.7 — the four kits'
+> beat before RUN OVER; an arena's missing Map button is NODES §7.2's rule, kept). v0.12.7: the
+> "also met" Collection spawns during the grace, and Part 4 #12 (benched items cool down). Overtaken by later work: **#8** (VFX v0.11.6, audio v0.11.7 — the four kits'
 > own cues remain, Part 1) and **#9** (zone 6's own bosses, v0.12.0–v0.12.3). The rest stand.
 
 Ordered by how much of a new player's session each one touches, starting from the title

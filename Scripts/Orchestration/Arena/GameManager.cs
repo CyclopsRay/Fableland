@@ -753,6 +753,9 @@ public partial class GameManager : Node2D
             if (p.ESkillCdRemaining > 0f) p.ESkillCdRemaining = Mathf.Max(0f, p.ESkillCdRemaining - bgDt);
             if (p.ShiftAltCdRemaining > 0f) p.ShiftAltCdRemaining = Mathf.Max(0f, p.ShiftAltCdRemaining - bgDt);
             if (p.ESkillAltCdRemaining > 0f) p.ESkillAltCdRemaining = Mathf.Max(0f, p.ESkillAltCdRemaining - bgDt);
+            // A benched fighter's held item cools at the same rate (NODES §3.3; audit v0.11.1
+            // Part 4 #12 — it did not cool at all off the field).
+            if (p.HeldItemSecondCooldownRemaining > 0f) p.HeldItemSecondCooldownRemaining = Mathf.Max(0f, p.HeldItemSecondCooldownRemaining - bgDt);
             AmmoController.TickPersisted(p, bgDt);
         }
     }
