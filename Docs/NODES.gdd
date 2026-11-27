@@ -94,7 +94,7 @@ without stopping. The rules:
 ### 2.1 Victory
 
 Reach the **level-6 node** (`XX-6-1`) in zone 6 and defeat the **final BOSS**
-(the dark leader — name TBD; see `FOES.gdd` §8).
+(the dark leader: the variant's final boss, the Unwritten or Māra; see `Zone6.gdd`, `Mara.gdd`).
 
 ### 2.2 Permadeath
 

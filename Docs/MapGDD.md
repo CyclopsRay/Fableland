@@ -19,7 +19,8 @@ are now connected. On the road she meets friends and enemies and finally uncover
 cause.
 
 The game is a **rogue-like**. The goal of a run is to reach the **dark zone** at the
-center and confront the **dark leader** (final boss — *name TBD*). Reaching the center
+center and confront the **dark leader**: the final boss of the run's zone-6 variant, the
+**Unwritten** in the Void Frontier or **Māra** in Avīci (`Zone6.gdd`, `Mara.gdd`). Reaching the center
 means crossing the ring of fused worlds while the **VOID** closes in from outside.
 
 ## 2. Zones and realms
@@ -404,7 +405,8 @@ These were resolved to keep the map functional; flag any you want changed:
 - **(v0.10.0) Zone-6 access is item-built, not generated.** The five old `XX-S` passages are
   removed. TwistedReality alone creates an LV4 → LV5 Eidolon bridge, so spending or losing it
   before making that crossing is a meaningful run-ending routing risk.
-- **Dark leader / dark-zone proper name:** still **TBD** (deferred).
+- **Dark leader:** each zone-6 variant's own final boss (the owner, 2026-11-27): the Unwritten
+  or Māra. **The dark zone's proper name** is still TBD; each variant has its own (§7).
 - **Home world** always at ring index 0 (Pomo → VanillaKindom); 45-day clock is
   intentional (see Pacing intent above).
 - **(v0.3.7) Devour kills:** a player standing on a devoured ring at day-end loses the

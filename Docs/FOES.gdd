@@ -469,7 +469,7 @@ protagonist**: they recruit nobody and pay no item (`BossDef.Recruits` is false)
 | Variant | Mini-bosses (XX-5-1 … 5) | Final boss (XX-6-1) |
 |---------|--------------------------|---------------------|
 | The Void Frontier | the Ferryman · the Weigher of Hearts · Meng Po · Xolotl · Stingy Jack | **the Unwritten** — signature **Styx Tide** |
-| Avīci | Preta (贪) · Asura of Wrath (嗔) · the Boar of Delusion (痴) · the Fallen Deva (慢) · Ox-Head and Horse-Face (疑) | **Māra Pāpīyas** — loses a power per gate won |
+| Avīci | Preta (贪) · Asura of Wrath (嗔) · the Boar of Delusion (痴) · the Fallen Deva (慢) · Ox-Head and Horse-Face (疑) | **Māra Pāpīyas** — loses a power per gate won; full design proposed in `Mara.gdd` (the Wheel of Becoming) |
 
 - **Stand-in.** Until its own kit is built, every one fields BOSS PumpKing's kit under its own
   row: its name on the bar, its HP (600 for a mini-boss, 900 for a final boss, at foe level 1,
@@ -483,7 +483,7 @@ protagonist**: they recruit nobody and pay no item (`BossDef.Recruits` is false)
   the Unwritten's **Styx Tide** — a 5.5 m wave across the whole floor every 9 s; two in a row
   below half HP, the second from the other side below a quarter (`Zone6.gdd` §4.2).
 - **Māra's seals** come off after his row: −12 % HP and −10 points of damage per sealed power,
-  until his five powers are his kit (`Zone6.gdd` §5.2).
+  until his five powers are his kit (`Zone6.gdd` §5.2; the kit to come is `Mara.gdd`).
 - **Debug.** The debug page (key 4) lists realm bosses one button each, and zone 6's twelve in
   one picker with a Fight button; a zone-6 fight is staged at its node's level, on the map its
   node would be dealt, with the rules a run would carry.

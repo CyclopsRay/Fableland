@@ -113,7 +113,7 @@ open TBDs harvested from the GDDs (keep this list pruned as they close):
 
 | # | TBD | Home |
 |---|-----|------|
-| 1 | Dark leader (final boss) name + full design. *v0.12.0: proposed — **the Unwritten**, the Void Frontier's final boss (one never written, in a black hole that eats stories); Avīci's is Māra. Confirm, or name another* | MapGDD §10, FOES §8, Zone6.gdd §4.2 |
+| 1 | ~~Dark leader (final boss) name + full design.~~ **Resolved 2026-11-27 (the owner):** the dark leader is not one being. It is the final boss of the run's zone-6 variant: **the Unwritten** for the Void Frontier, a different one for Avīci. Avīci's is **Māra**, whose full design is proposed in `Mara.gdd` (v0.12.2); its open questions are in that document's §14 | MapGDD §10, FOES §8, Zone6.gdd §4.2 |
 | 2 | Boss foes. *v0.10.11: the system is built — a boss is its protagonist's kit on the Foe side with its own table row, a rule-based brain and an arena made for it; BOSS PumpKing is the first (FOES §8).* Still open: **what makes a boss differ from its protagonist** (larger magazine, quicker cooldowns, a held item, … — every `BossTable` value is a first-pass placeholder); phases; the other realms' bosses; the LV6 final boss; whether a boss can be executed (Cleopastar's Blackhole under 10% HP currently can); whether BOSS PumpKing should let a closing head arrive instead of setting it off beside the player (a touch costs a standing player 48, a detonation 30 — FOES §8.3). *v0.11.0: PumpKing stands in as **every** realm's boss until each has its own — "the other realms' bosses" is now seven rows to add to `BossTable`* | FOES §8, NODES §4.5 |
 | 3 | Question-mark node event content + probabilities | NODES §6.1 |
 | 4 | Shelter **Wish** action | NODES §5.5 |

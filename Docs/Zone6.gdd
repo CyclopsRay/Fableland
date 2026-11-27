@@ -162,8 +162,9 @@ through its telegraph, rides at **16.0 m/s** and throws the player up at **21.5 
 ### 4.2 The Unwritten (无名者) — the final boss
 
 *A faceless figure of torn pages and erased ink, with a hole for a face: the one character no
-storybook ever wrote, who tore the books apart looking for a story of its own.* Proposed as the
-run's **dark leader** (TBD #1).
+storybook ever wrote, who tore the books apart looking for a story of its own.* The Void
+Frontier's **dark leader**. The owner settled this on 2026-11-27 (TBD #1): each variant has a
+dark leader of its own, and Avīci's is Māra (`Docs/Mara.gdd`).
 
 | Skill | What it does |
 |-------|--------------|
@@ -220,6 +221,13 @@ the map.
 | XX-5-4 | 慢 Pride | **The Fallen Deva (衰天)** — a god in the five decays. **Heavy Halo**, **Wilting Garland**, **Pride's Armour** (poise, and a phase taking 70 % less damage) | **Burden**: move speed −15 % | **Iron Throne** — an invulnerable throne phase |
 | XX-5-5 | 疑 Doubt | **Ox-Head and Horse-Face (牛头马面)** — two wardens. **Two Minds** (only the real one takes damage; they swap), **Chain Hook**, **Trident Feint** | **Hesitation**: attack interval +20 % | **Doubt** — a curse that makes some of your casts fizzle |
 
+The "Māra loses" column is the v0.12.0 design, which the stand-in still follows. The full
+design of the five powers, each now the realm of its gate on Māra's wheel, is proposed in
+`Mara.gdd` §5 (v0.12.2). Three of them change there:
+- **Iron Throne:** 70 % less damage instead of invulnerable;
+- **Wrath:** belongs to the asuras' realm, at any HP, instead of below half HP;
+- **Doubt:** false tells instead of casts that fizzle.
+
 How a seal reaches a body: reload and attack interval through the magazine's multipliers,
 damage taken through the defense pool (the defense that makes 100/(100+d) the scale: one stack
 of Smoulder is −13.0), cooldowns through the kits' one cooldown helper, move speed on walking,
@@ -242,13 +250,22 @@ vajra strikes a player 4 m away once going and once coming back. (Past about 4.8
 blows land within the player's 0.8 s of post-hit grace, and only the first counts — the return
 is for a player who dodged the throw.)
 
-### 5.2 Māra Pāpīyas (天魔波旬) — the final boss
+### 5.2 Māra Pāpīyas (天魔波旬) — the final boss, Avīci's dark leader
 
 *A black-blue wrathful demon with a crown of five skulls, holding the Wheel of Life in his
-claws.* His five powers are the five above; each gate you win **seals** one. Until his kit is
-built (the five powers are its design), the stand-in loses **12 % of its HP and 10 points of
-damage per sealed power** (`MaraHpPerSeal`, `MaraDamagePerSeal`), applied after his row — at
-foe level 8 with two sealed: 3420 of 4500 HP, damage ×1.60 of ×1.80. Five sealed leaves 40 %.
+claws.* His five powers are the five above, and each gate you win **seals** one.
+
+**His full design is `Docs/Mara.gdd`** (proposed in v0.12.2, for the owner's review):
+- **The Wheel of Becoming.** The realm under his fangs rules the fight. Five realms carry the
+  five poisons' powers; the human realm is the only interval, where he takes ×1.5 damage.
+- **What a gate does to the wheel.** A gate won seals its realm, and the wheel skips it. Each
+  stack of a poison in you holds its realm 1 s longer.
+- **The finish.** His last 5 % falls only in the human realm.
+
+**Until his kit is built,** the stand-in loses **12 % of its HP and 10 points of damage per
+sealed power** (`MaraHpPerSeal`, `MaraDamagePerSeal`), applied after his row. At foe level 8
+with two sealed, that is 3420 of 4500 HP, and damage ×1.60 of ×1.80. Five sealed leaves 40 %.
+This rule retires when the wheel lands (`Mara.gdd` §13, step 1).
 
 ---
 
@@ -375,7 +392,7 @@ TBD #33 continues); whether the VOID treatment's looks (§6) should move toward 
 |------|---------------|---------|
 | The twelve bosses' kits | **the Ferryman and the Asura of Wrath on their own (v0.12.1)**; the other ten on BOSS PumpKing's kit under their own rows | the other ten |
 | The Unwritten | the stand-in + the real **Styx Tide / Rising Tide** | Borrowed Shapes, Blank Page; its arena (Z6-VF-F) |
-| Māra | the stand-in, −12 % HP and −10 damage per sealed power | his five powers, each removed by its seal |
+| Māra | the stand-in, −12 % HP and −10 damage per sealed power | `Mara.gdd` §13, in order: the Wheel of Becoming as a signature on the stand-in; then his kit; then the art |
 | Zone-6 arenas | run worlds' boss arenas, VOID-touched per variant; the Frontier's core on Starland's sea-level plain | each variant's own maps and tile kit (cyanotype, nagtang) |
 | Meng Po's bridge, the Weigher's pans | — | arenas of their own |
 | HUD seals | text lines | icons (TBD #67) |
@@ -412,13 +429,16 @@ Every entry is **provisional** — a first pass to be played and confirmed by th
 | 2026-11-27 | The obols are aimed by range (45°, v = √(d·g·G)), not thrown at a fixed speed | Under this game's gravity (64 m/s²) a fixed 13 m/s throw lands 2 m away; aimed, the fan brackets the player at any range and any G |
 | 2026-11-27 | The obol's toll is net of the ult charge its own blow pays the victim | Otherwise a 150 toll reads 138 |
 | 2026-11-27 | The Ferryman holds his perch on foot (no jumping); the Ram rides level along the floor he stands on | First pass; a skiff that leaves the floor is for his own arena |
+| 2026-11-27 | **The owner:** the dark leader is each variant's own final boss. The Void Frontier's is the Unwritten; Avīci's is a different one. **Closes TBD #1** | "无名者应该是虚无的最终首领。地狱也应该有一个不同的黑暗首领" |
+| 2026-11-27 | Avīci's dark leader stays **Māra**, with a full design proposed in `Mara.gdd` (v0.12.2): the Wheel of Becoming, the human realm as the only interval, and the last 5 % falling only there | Yama is a Dharma protector in Tibetan Buddhism; Māra is the tradition's own antagonist (`Mara.gdd` §2.3) |
 
 ---
 
 ## 11. TBDs
 
-In the registry (`Docs/Instructions/10-DESIGN.md` §6): **#1** (the dark leader — proposed: the
-Unwritten), **#33** (zone 6's own maps), **#49** (zone-6 half closed), and new: **#62** laws
+In the registry (`Docs/Instructions/10-DESIGN.md` §6): **#1** (closed: each variant's final
+boss is its dark leader; Māra's open questions are in `Mara.gdd` §14), **#33** (zone 6's own
+maps), **#49** (zone-6 half closed), and new: **#62** laws
 for the other seven realms · **#63** rotation as meta-progression · **#64** the ten other zone-6
 kits and both final bosses' full kits · **#65** whether a mini-boss defeat should cost more
 than the day (an item, a shelter's blessing) · **#66** the seal and ladder numbers, played ·

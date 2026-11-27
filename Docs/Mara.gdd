@@ -1,0 +1,575 @@
+# Fableland — Māra Pāpīyas (天魔波旬), Avīci's Dark Leader GDD
+
+**Proposed in v0.12.2, for the owner's review.** Nothing in this document is built yet beyond
+the v0.12.0 stand-in: BOSS PumpKing's kit under Māra's row, losing 12 % HP and 10 points of
+damage per sealed power. Every number is a first pass (§12).
+
+This is Māra's home document. `Zone6.gdd` §5.2 points here; the five poisons and their seals
+are defined in `Zone6.gdd` §5.1.
+
+---
+
+## 0. On one screen
+
+- **Who he is.** The lord of the Wheel of Life. He is Avīci's final boss, and the run's **dark
+  leader** whenever zone 6 is Avīci. The owner decided on 2026-11-27 that every variant has a
+  dark leader of its own; the Void Frontier's is the Unwritten.
+- **The idea.** Avīci (无间) means *without interval*. Māra holds the Wheel of Life behind the
+  arena, and the realm under his fangs rules the fight:
+  - each of five realms gives him the power of the poison you met at that realm's gate;
+  - the sixth, the human realm, is the only **interval** in Avīci: his powers lapse and his
+    guard opens.
+- **Both ladders meet on the wheel.**
+  - Every gate you **won** seals its realm. The wheel skips a sealed realm, so the interval
+    comes sooner and more often.
+  - Every stack of a poison **in you** holds the wheel one second longer in that poison's
+    realm.
+- **The finish.**
+  - The last 5 % of his life can only be taken in the human realm.
+  - If he reaches it anywhere else, the wheel spins to the human realm, and every realm you
+    left unsealed strikes once as it passes.
+  - Then you get one interval to land the last blow.
+- **The look.** Tibetan nagtang: gold line on black.
+  - A colossus behind the arena bites the wheel and holds it.
+  - His emanation fights you on the floor.
+  - His crown of five skulls shows which powers you have sealed.
+
+---
+
+## 1. The owner's brief, and what it settles
+
+> 无名者应该是虚无的最终首领。地狱也应该有一个不同的黑暗首领，但是还没有创建。你可以写一个gdd我们看看。
+
+Earlier briefs: Avīci's mini-bosses are the five poisons 贪嗔痴慢疑; the final boss is dark
+Buddhist; every gate won seals one of the final boss's powers (`Zone6.gdd` §1). Avīci's style
+is Tibetan Buddhist, chosen by us: nagtang (`Zone6.gdd` §7.2).
+
+- **TBD #1 is closed.** There is no single dark leader: it is the final boss of the run's zone-6
+  variant. The Void Frontier's is the Unwritten (`Zone6.gdd` §4.2); Avīci's is Māra (this
+  document). A future variant brings its own.
+- **Avīci's dark leader had not been created.** v0.12.0 gave him only a name, a concept sheet
+  and a stand-in. This document is his design. His name stays; §2.3 says why.
+
+---
+
+## 2. Who he is
+
+### 2.1 In the story
+
+A magic turbulence fused the storybooks (`MapGDD.md` §1), and at the centre, where the stories
+meet, a hole opened that eats them. In a run whose zone 6 is Avīci, what waits in that hole is
+**Māra**.
+
+He does not destroy stories; he **keeps** them. Every tale drawn to the centre is bound to his
+wheel, and ends only to begin again: the same deaths and the same births, without interval.
+The poisons are the spokes. Greed, anger, delusion, pride and doubt keep every character
+turning. The VOID closing in from the edge of the map is the rim of his wheel tightening.
+
+The heroes are the one thing his wheel cannot hold for good: people. The human realm is the
+only birth from which anyone steps off the wheel.
+
+### 2.2 The two dark leaders
+
+| | The Unwritten (the Void Frontier) | Māra (Avīci) |
+|---|---|---|
+| What it is | a story that never began | a story that never ends |
+| What it wants | a story of its own, torn out of everyone else's | every story kept, turning forever |
+| The run's ladder | gravity: every gate won makes you lighter | seals: every gate won seals one of his realms; every gate lost puts a poison in you |
+| Its signature punishes | **weight**: the heavier you are, the harder the Styx Tide is to jump | **poison**: the more you carry, the longer his realms hold |
+| The way out | up | the human realm |
+
+### 2.3 Why Māra, and not Yama
+
+- **The figure holding the wheel.** In Tibetan paintings the Wheel of Life is held by the Lord
+  of Death. It is read as Yama or as Māra.
+- **Yama would make a protector the enemy.** In Tibetan Buddhism, Yama Dharmarāja is also a
+  Dharma protector.
+- **Māra is Buddhism's own antagonist.** He is the tempter the Buddha defeated under the Bodhi
+  tree, lord of desire and of death. Casting him as the villain follows the tradition rather
+  than turning it upside down.
+- **The teaching names four māras,** and one figure can carry them all:
+  - the māra of the afflictions: the poisons are his;
+  - the māra of death: the wheel is death's;
+  - the māra of the aggregates: the body that turns with the wheel;
+  - the god Māra: the tempter himself (§7.5).
+- **Naming.** On the bar he is **Māra Pāpīyas (天魔波旬)**, his row's name, unchanged. The
+  Tibetan for a māra is *bdud* (བདུད).
+
+---
+
+## 3. The fight at a glance
+
+1. **Entry.**
+   - The arena is black stone over a sea of fire, with the colossus behind it.
+   - The wheel rests on **Hell**, because you are in Avīci.
+   - The HUD lists what is sealed in him, as it does today ("Sealed in Māra: …").
+2. **The wheel turns** after every rest (§4).
+   - Each realm in force gives him its power (§5).
+   - The human realm is the **interval** (§5.6).
+3. **Below half HP,** the wheel's rests shorten.
+4. **The lock.** His last 5 % can only be taken in the interval. The first time he reaches it
+   outside an interval, the **Last Turn** spins the wheel to the human realm through every
+   realm left unsealed (§7.3).
+5. **Liberation.** The last blow lands in the interval: his claws open, the wheel stops on the
+   human realm, and the run is won.
+
+---
+
+## 4. The Wheel of Becoming (轮回之轮), the signature
+
+Like the Unwritten's Styx Tide, the wheel is a **signature** (`BossDef.Signature = "wheel"`):
+the fight runs it whatever kit stands in. So it can be built, and played, before Māra's own kit
+exists (§13).
+
+### 4.1 The six realms
+
+The realms are laid out as in many Tibetan paintings, clockwise from the top: gods, asuras,
+hungry ghosts, hell, animals, humans.
+
+- **Five realms belong to the gates.** Each non-human realm is home to one gate's warden, and
+  carries that warden's poison as a **sigil** on the rim.
+- **Sigil colours.** Each sigil is drawn in the colour Tibetan art gives that poison's
+  buddha-family.
+  - The five colours are red, blue, white, yellow and green.
+  - The concept sheets already have them on the rim (§9.3).
+  - In that scheme the fifth poison is jealousy; this game's fifth is doubt (疑).
+- **Sigil emblems.**
+  - The rooster, the snake and the pig are the three animals at the wheel's hub: greed,
+    hatred, delusion.
+  - Pride and doubt have no animal there, so their sigils come from their wardens.
+
+| Realm | Gate and warden | Poison | Sigil on the rim | Māra's power |
+|---|---|---|---|---|
+| Gods (天) | XX-5-4, the Fallen Deva | 慢 Pride | a wilting garland, yellow | **Iron Throne** (§5.1) |
+| Asuras (修罗) | XX-5-2, the Asura of Wrath | 嗔 Anger | a snake, blue | **Wrath** (§5.2) |
+| Hungry ghosts (饿鬼) | XX-5-1, Preta | 贪 Greed | a rooster, red | **Devour** (§5.3) |
+| Hell (地狱) | XX-5-5, Ox-Head and Horse-Face | 疑 Doubt | an ox horn and a horse ear, crossed, green | **Doubt** (§5.4) |
+| Animals (畜生) | XX-5-3, the Boar of Delusion | 痴 Delusion | a pig, white | **Delusion** (§5.5) |
+| Humans (人) | — | — | none: an open segment | **the Interval** (§5.6) |
+
+### 4.2 How it turns
+
+- **The realm in force** is the segment under his fangs, at the top of the wheel. The fight
+  opens on **Hell**.
+- **Order.** The wheel rests on a realm, then turns to the next **unsealed** realm in the
+  order above. From Hell that is animals, humans, gods, asuras, hungry ghosts, hell again. It
+  passes a sealed realm without stopping.
+- **Rests.**
+  - A non-human realm: **8 s**, or **6 s** below half HP.
+  - The human realm: **6 s**, always.
+- **Your poison holds it.**
+  - Each stack of a poison you carry (Avīci's seals, `Zone6.gdd` §5.1, at most 3) adds
+    **1 s** to the rest on that poison's realm.
+  - If Māra has that realm sealed, it is skipped and the stacks do nothing here. They still
+    weigh on you.
+- **The tell.** 1.0 s before a turn, the incoming segment's sigil flares and the stone grinds.
+  A gong strikes as the wheel lands, and the arena's light changes to the new realm's (§9.4).
+- **All five realms sealed.** The wheel has nowhere left to go, so it stays on the human realm
+  all fight. He is open throughout, with nothing but his own hands.
+
+### 4.3 What each gate won buys
+
+A cycle is the rests of every unsealed realm plus the 6 s interval. With no poison in you:
+
+| Realms sealed in Māra | Cycle above half HP | Interval's share | Cycle below half HP | Interval's share |
+|---|---|---|---|---|
+| 0 | 46 s | 13 % | 36 s | 17 % |
+| 1 | 38 s | 16 % | 30 s | 20 % |
+| 2 | 30 s | 20 % | 24 s | 25 % |
+| 3 | 22 s | 27 % | 18 s | 33 % |
+| 4 | 14 s | 43 % | 12 s | 50 % |
+| 5 | — | 100 % | — | 100 % |
+
+With nothing sealed, the first interval opens at 16 s (Hell, then the animals). With the
+animals sealed, it opens at 8 s.
+
+### 4.4 Rules
+
+- The wheel belongs to the arena. Stun, knock-back and hit-stop on Māra's body never delay it.
+- A turn waits while the colossus has a hand off the wheel (Hand of the Wheel, §6), for at most
+  1.5 s.
+- During the Last Turn the wheel moves only as that spin (§7.3).
+
+---
+
+## 5. The five powers, and the Interval
+
+Each power lasts while its realm is in force:
+- it **arrives** with a strike, once, as the wheel lands;
+- then it **holds** for the rest of that realm's turn.
+
+A sealed realm never comes round, so its power never does. Each power is the poison its gate's
+warden fought with, in Māra's hands.
+
+### 5.1 Iron Throne (Gods · 慢 Pride)
+
+- **Arrives:** he leaps onto the black throne at the arena's centre (§8) and sits.
+- **Holds:**
+  - He takes **70 % less damage**, and cannot be staggered or knocked back (the Fallen Deva's
+    Pride's Armour).
+  - From the throne he casts **Heavy Halo**: a gold ring drops where you stand after a 0.8 s
+    shadow, every 2.5 s, for 30 damage.
+  - Once per rest he casts **Wilting Garland**: petals fall in a lane and burn where they land
+    for 3 s.
+- **Your play:** keep moving, and spend this rest reloading and letting cooldowns come back.
+- **What changed from v0.12.0:** it was an *invulnerable* throne phase. It is now 70 % less
+  damage, so a hit still counts and the rest is never dead time.
+
+### 5.2 Wrath (Asuras · 嗔 Anger)
+
+- **Arrives:** **Wrath Fire**: two floor waves, one left and one right, that can be jumped. It is
+  the Asura's attack (`WrathFireWave`).
+- **Holds:** his attack interval and cooldowns ×0.6; Claw Rake gains a third swipe; his
+  aureole roars.
+- **What changed from v0.12.0:** it was an enraged phase below half HP. The rage now belongs to
+  the asuras' realm, at any HP.
+
+### 5.3 Devour (Hungry ghosts · 贪 Greed)
+
+- **Arrives:** **Gorge**. He inhales for 2 s, and every fighter within 14 m is drawn toward him
+  at 4 m/s (the Ferryman's Undertow). The pull ends in a bite for 30 damage.
+- **Holds:**
+  - Every hit he lands **heals him 2.5 % of his max HP**.
+  - Projectiles that reach his front are **swallowed**: each heals him 1 % instead of hurting
+    him. Strike him from behind or from above.
+- **What changed from v0.12.0:** it was "heals from the damage he deals". That is kept, at a
+  size a 4500-HP boss feels.
+
+### 5.4 Doubt (Hell · 疑 Doubt)
+
+- **Arrives:** **Chain Hooks**: two hooks fly in from both walls, and only one is real.
+- **Holds:**
+  - Every attack he starts shows **two tells, one false**: a mirrored copy on his other side.
+  - The true tell is the one his **third eye looks at**: a hairline of gold runs from his brow
+    to it.
+  - The false tell fades 0.15 s before the strike.
+- **What changed from v0.12.0:** it was "a curse that makes some of your casts fizzle". Doubt
+  is now a test of reading the fight, not a dice roll against your buttons.
+
+### 5.5 Delusion (Animals · 痴 Delusion)
+
+- **Arrives:** **Blind Charge**: he and two **mirror images** charge across the floor. Jump
+  them.
+- **Holds:**
+  - The two images stay. They copy his attacks 0.3 s late, at **40 % damage**.
+  - One hit pops an image, which reforms after 3 s.
+  - Only he takes damage.
+  - The tell: only his crown burns (the images' skulls are cold), and only he casts a shadow on
+    the fire.
+- **What stays with the Boar:** the Boar of Delusion's Mire, which swaps left and right, is the
+  Boar's alone. Māra never touches your controls.
+
+### 5.6 The Interval (Humans · 间)
+
+- **Arrives:** after the gong, silence and **one bell**. The light turns to warm daylight, and
+  his powers lapse.
+- **Holds:**
+  - He takes **×1.5 damage**.
+  - He **can be staggered**: he takes stun and knock-back as a protagonist does.
+  - The colossus's hands rest on the wheel, so there is no Hand of the Wheel. The emanation
+    fights with Claw Rake and the Noose only.
+- **The last blow:** only here can the last 5 % of his life be taken (§7.2).
+- **Text:** the first interval of the fight says *人身难得 — a human birth is hard to come by.*
+
+---
+
+## 6. His own kit
+
+On the floor you fight **his emanation (化身)**. Behind the arena, **the colossus** holds the
+wheel. They are one Māra, with one HP bar: the emanation's.
+
+Damage figures are the kit's own constants, before his row's damage share and the node's level
+(the same convention as the Asura's).
+
+| Move | What it does |
+|---|---|
+| **Claw Rake** (BA) | Two claw swipes 0.15 s apart in a 4 m cone, 16 damage each, every 1.3 s. Three swipes during Wrath |
+| **Noose of Craving (爱索)** (S1, 9 s) | A noose flies 12 m low along the floor. Jump it, or be yanked (0.4 s) to his claws and bitten for 25 damage and a 0.5 s stun. Craving is the link that binds beings to the wheel |
+| **Hand of the Wheel (轮手)** (S2, 12 s) | The colossus lets go with one claw and slams a 6 m stretch of floor where you stand. Its shadow is the 1.0 s tell; the slam does 40 damage and knocks you up. Never during the Interval |
+| **Crown of Five Skulls** (passive, display only) | Each skull is a poison. A sealed one is dark, closed in a gold lotus: the seals shown on his body |
+| **Moves** | A heavy walk at 3 m/s and no jump. He leaps only onto and off the throne |
+| **Brain** | **The realm decides first:** in the Gods' realm he holds the throne. **Otherwise, in order:** the Noose at 6–12 m when it is ready; Claw Rake within 4 m; Hand of the Wheel on a player who has stayed still, or 3 m or more up, for 1.5 s; walk toward you |
+
+---
+
+## 7. Phases and the finish
+
+### 7.1 Below half HP
+
+- A non-human rest shortens from 8 s to 6 s. The Interval stays at 6 s.
+- No adds: `FOES.gdd` §8.6's two foes do not come. In Avīci the realms are his army.
+
+### 7.2 The lock
+
+His last **5 %** is drawn in gold on the bar.
+- Outside the Interval, damage stops at the lock and the rest of it is lost.
+- Inside the Interval, the lock is open.
+
+### 7.3 The Last Turn
+
+The first time he reaches the lock outside an interval:
+
+1. **The spin.** The wheel spins toward the human realm, passing every unsealed realm in order,
+   0.9 s each. Each realm's **arrival strike** fires as it passes; for the gods' realm that is a
+   Heavy Halo instead of the leap to the throne.
+2. **The interval.** The Interval opens for 6 s, and the lock opens with it.
+
+So the gauntlet lasts 0.9 s for every realm you left unsealed: 4.5 s with none sealed, nothing
+with all five. If the Interval ends with him still alive, the fight goes on, and the lock holds
+until the next interval.
+
+### 7.4 Liberation, the win
+
+The last blow lands:
+- his claws open;
+- the wheel stops on the human realm;
+- the Interval's light fills the arena;
+- a white moon rises in the upper corner. In the traditional painting it is what the Buddha
+  points to outside the wheel; the Buddha is not drawn.
+
+The run is won: *The wheel stops. You step off it.*
+
+### 7.5 The Tempter's Offering (optional, and the first thing to cut)
+
+- **When:** once per fight, the first time the fighter in play drops below 30 % HP.
+- **What:** Māra sets a gold bowl on the throne for 8 s.
+- **Touching it:**
+  - heals you to full;
+  - and puts one more stack of the poison you carry most into you. If you carry none, it is
+    Greed's. A poison already at the 3-stack cap is passed over for the next.
+- **The bowl shows its price before you touch it.** He is, after all, the tempter.
+
+---
+
+## 8. The arena: the bottom of Avīci (`Z6-AV-F`)
+
+- **The floor:** one long floor of black stone over a sea of fire, wall to wall. The fire is
+  below and behind; there is no pit.
+- **The black throne** at the centre: a ledge 2 m up and 3 m wide. It is his seat in the gods'
+  realm, and yours otherwise.
+- **Four burning lotus pedestals** as ledges: two at 3.5 m, two at 6 m.
+- **Behind:** the colossus, seen from the chest up, biting the top of the wheel and gripping its
+  rim. The wheel's upper half and its hub are in frame. The segment under his fangs is the realm
+  in force.
+- **Until the arena is painted:**
+  - The core keeps the run world's boss arena it is dealt today, VOID-touched in Avīci's look
+    (`Zone6.gdd` §3, §6).
+  - The colossus and wheel are drawn as one backdrop layer above it, with the wheel a separate
+    sprite that turns.
+  - Iron Throne's leap goes to his perch, the Level Goal marker he opened on.
+
+---
+
+## 9. The look: Tibetan nagtang (黑唐卡)
+
+The medium is the one `Zone6.gdd` §7.2 sets for Avīci:
+- gold and vermilion line on black;
+- azurite blue and malachite green;
+- flame aureoles;
+- flat, iconographic poses.
+
+### 9.1 The colossus
+
+As in `Z6-AV-F` and `Z6-AV-6`:
+- black-blue skin and three eyes;
+- fangs biting the wheel, claws gripping its rim;
+- a crown of five skulls and a blazing aureole.
+
+He is seen from the chest up behind the arena. Only his eyes, his brow and one hand move (Hand
+of the Wheel).
+
+### 9.2 The emanation (the sprite)
+
+- **The figure:** the same as the colossus, at fighting size.
+  - Black-blue skin, three eyes and the five-skull crown.
+  - A tiger skin at the waist, bare claws, a noose of gold-and-red cord at his belt, and a
+    small aureole.
+  - No wheel in his hands: the colossus holds it.
+- **Size:** **4 m** tall, which is 128 px in game. The sheet is drawn at 384 px, like the
+  Asura's.
+- **The sheet:** side view facing left, keyed from magenta as the Asura's was (`Zone6.gdd`
+  §7.3).
+- **The crown:** each skull's flame is a separate small overlay, so the seals can show (§6).
+
+### 9.3 The wheel
+
+- **Layout:** six segments as in §4.1, the three animals at the hub, and the five poison
+  sigils on the rim in their colours.
+- **A sealed sigil:** its flame goes out and a gold lotus closes over it.
+- **Segments:** the segment in force glows; a sealed segment is dimmed.
+- **Fix from the concept sheets.** `Z6-AV-F` and `Z6-AV-6` put a **Dharma wheel** and an
+  **endless knot** on the rim among the "poisons". Both are auspicious symbols of the teaching.
+  The painted asset replaces them with the sigils above.
+
+### 9.4 The light of each realm
+
+| Realm | Light over the arena |
+|---|---|
+| Gods | pale gold and white, with a slow drift of petals |
+| Asuras | red-orange, smoke and sparks |
+| Hungry ghosts | a grey-green haze |
+| Hell | deep crimson; the fire below rises |
+| Animals | dull ochre-brown |
+| Humans (the Interval) | clear, warm daylight: the only natural light in Avīci |
+
+### 9.5 Cultural care
+
+- **Why Māra is the villain:** Buddhism's own stories make him one.
+- **Never as enemies, and never as Māra's face:**
+  - buddhas or bodhisattvas;
+  - the Dharma protectors: Mahākāla, Yamāntaka, Palden Lhamo, Yama Dharmarāja.
+- **No auspicious symbol as a mark of poison** (§9.3).
+- **No legible scripture or mantra as decoration.** The art bans text already.
+- **The Wheel of Life is a teaching image.** The fight frees it from his grip; it never breaks
+  it.
+- **No sampled liturgy and no voiced mantra in the audio** (§10).
+
+---
+
+## 10. Sound and music
+
+The fight gets a music profile of its own (`MusicProfiles`), synthesised like every other
+(`Audio.gdd`).
+
+- **Bed:**
+  - a long-horn drone in the manner of a dungchen: two low, detuned brass voices around 55 Hz,
+    swelling slowly;
+  - a rattle-drum pulse in the manner of a damaru, at the fight's tempo.
+- **The turn:** a stone grind as the wheel moves, then a cymbal crash and a gong as it lands.
+- **The realms** each swap in one stem of their own:
+
+  | Realm | Its stem |
+  |---|---|
+  | Gods | a high shimmer of bells |
+  | Asuras | doubled war drums |
+  | Hungry ghosts | a hollow wind |
+  | Hell | the drone drops a fifth, with fire crackle |
+  | Animals | a low herd thud |
+- **The Interval:** the bed cuts out, leaving one clear bell and a breath. The drone returns
+  with the next turn.
+- **Liberation:** the bell rings on, the drone resolves up a fifth, then silence.
+- **Everything is synthesised "in the manner of" these instruments.** There are no sampled
+  ritual recordings and no voice.
+
+**Effects.** Hits are drawn in the VOID medium today, because Avīci maps to VOID (`Zone6.gdd`
+§6). A nagtang medium (gold hairline bursts, vermilion flame scrolls) belongs to TBD #68.
+
+---
+
+## 11. Text on screen
+
+| When | Line |
+|---|---|
+| Entering the arena | 无间 · Avīci — the wheel turns. Only the human realm opens. |
+| Each turn (a small toast) | the realm's name: 天 Gods · 修罗 Asuras · 饿鬼 Hungry ghosts · 地狱 Hell · 畜生 Animals · 人 Humans |
+| The first interval | 人身难得 — a human birth is hard to come by. |
+| The Offering (on the bowl) | 供 — healed to full; Greed enters you. |
+| The lock | the gold notch on the bar; the first time it holds: "Only in the human realm." |
+| The win | The wheel stops. You step off it. |
+| The run-over screen | You reached the centre and stopped Māra's wheel. *(Today it reads "…defeated the dark leader".)* |
+
+---
+
+## 12. Numbers (first pass)
+
+| What | Value |
+|---|---|
+| HP | 900 at level 1 × level 8 = **4500**: the row, unchanged. The stand-in's −12 % HP and −10 damage per seal retire with step 1 (§13) |
+| A non-human rest | 8 s; 6 s below half HP; +1 s per stack of that poison in you |
+| The human rest (the Interval) | 6 s |
+| The turn's tell | 1.0 s |
+| The Interval | damage taken ×1.5; stun and knock-back taken as a protagonist's |
+| The lock | the last 5 % |
+| The Last Turn | 0.9 s per unsealed realm, then a 6 s Interval |
+| Iron Throne | damage taken ×0.3, no knock-back. Heavy Halo: 30 damage every 2.5 s, 0.8 s tell. Wilting Garland: a burning lane for 3 s, once per rest |
+| Wrath | cooldowns and attack interval ×0.6; Claw Rake gets 3 swipes. Wrath Fire on arrival: 15 damage + 20 OnFire per wave |
+| Devour | heals 2.5 % of max HP per hit landed; a projectile at his front heals 1 % instead of hurting. Gorge on arrival: 14 m, 4 m/s, 2 s, then a 30-damage bite |
+| Doubt | the false tell is mirrored and fades 0.15 s before the strike. Chain Hooks on arrival: 25 damage from the real one |
+| Delusion | 2 images, 0.3 s late, at 40 % damage; one hit pops one, and it reforms after 3 s. Blind Charge on arrival: 30 damage |
+| Claw Rake | 2 × 16 damage in a 4 m cone, every 1.3 s |
+| Noose of Craving | 12 m; 25 damage + 0.5 s stun; 9 s cooldown |
+| Hand of the Wheel | 6 m wide; 1.0 s tell; 40 damage + knock-up; 12 s cooldown |
+| The Offering | below 30 % HP, once per fight; the bowl stays 8 s; a full heal for one stack |
+| Fight length (target) | about 3–4 min with nothing sealed, about 1.5 min with all five, inside the core's 360 s timer. To be played (TBD #66) |
+
+---
+
+## 13. Build plan
+
+The order follows the Unwritten's: the signature first, on the stand-in; then the kit; then the
+art.
+
+### Step 1: the wheel as a signature, whatever kit stands in
+
+- **The node.** `WheelOfBecoming`, next to `StyxTideHazard`, keeps the order, the rests, the
+  skips and the stacks, and raises the cues.
+- **What it puts on the boss's body,** as modifiers keyed by source (`zone6:wheel`):
+  - the Interval: ×1.5 damage taken and the lowered poise;
+  - Iron Throne: ×0.3 damage taken and no knock-back;
+  - Wrath: ×0.6 on cooldowns and the attack interval.
+- **Two new hooks on `CharacterController`:**
+  - **an HP floor keyed by source,** for the lock;
+  - **a damage-dealt hook,** for Devour's heal. It is gameplay, so it must never listen on the
+    cue bus (T00).
+- **Rules.** `ArenaRules` already carries the sealed powers. It must also carry the party's
+  stacks of each poison, for the rests.
+- **Retire and rewrite:**
+  - retire `MaraHpPerSeal` and `MaraDamagePerSeal`;
+  - rewrite the Wrath and Doubt summaries in `Zone6Table` (§5.2, §5.4).
+- **Also in this step:** the Last Turn and Liberation.
+- **Not yet:** on the stand-in, the Doubt and Delusion realms show but do nothing until step 2.
+- **Checks (Zone6Check):**
+  - the order runs from Hell, and a sealed realm is skipped;
+  - each stack adds 1 s;
+  - the cycle table of §4.3 comes out as written;
+  - ×1.5 applies only in the Interval;
+  - the lock holds outside the Interval and opens inside it;
+  - the Last Turn lasts 0.9 s × the unsealed realms;
+  - with all five sealed, the wheel never leaves the human realm.
+
+### Step 2: his kit
+
+`Scripts/Bosses/Zone6/Mara.cs`, a `Zone6BossFighter`:
+- Claw Rake, the Noose and the Hand of the Wheel;
+- the five arrival strikes;
+- Delusion's images;
+- Doubt's two tells and the gaze;
+- the leap to the throne;
+- the Offering.
+
+Each gets its rows in BossFightCheck.
+
+### Step 3: art and sound
+
+- the keyed emanation sprite, with the crown's overlays;
+- the colossus-and-wheel backdrop, with the wheel separate so it can turn;
+- the arena (`Z6-AV-F`) as a map;
+- the music profile, and the turn and interval cues.
+
+### Cues
+
+All are proposed under the owner `z6_mara`, and go into `Feedback.gdd` §6 when they are built:
+
+| Cue | Kind | Carries |
+|---|---|---|
+| `wheel.turn` | one-shot | variant = the realm landing; tag = its id |
+| `realm` | loop | tag = the realm's id |
+| `interval` | loop | — |
+| `last_turn` | one-shot | — |
+| `liberation` | one-shot | — |
+| `ba.swing`, `s1.cast`, `s1.catch`, `s2.cast`, `s2.slam`, `offering` | one-shot | — |
+
+---
+
+## 14. Questions for the owner
+
+1. **His name.** Does Māra keep it, or should Avīci have another lord?
+2. **The finish.** Should the last 5 % only fall in the human realm, with the Last Turn
+   gauntlet before it?
+3. **The Offering.** Keep it, or cut it?
+4. **Five gates won.** Right now that means the wheel stands still and he is open all fight. Is
+   that the reward you want, or should the wheel keep turning, slowly, even with one realm left?
+5. **The story frame (§2.1).** Is "a hole at the centre, filled by each run's dark leader" the
+   game's answer to the turbulence? Or is there one cause behind every variant, to be revealed
+   later?
+6. **The first-pass numbers.** These wait for play (TBD #66).

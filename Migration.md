@@ -9,6 +9,19 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.2** — **Each zone-6 variant has its own dark leader, and Māra has a design.** The
+  owner settled TBD #1: the dark leader is the final boss of the run's zone-6 variant — the
+  Unwritten for the Void Frontier, a different one for Avīci. New **`Docs/Mara.gdd`** proposes
+  Avīci's, Māra Pāpīyas, in full, for the owner's review. His signature is **the Wheel of
+  Becoming**: the realm under his fangs rules the fight, five realms carry the five poisons'
+  powers, and the human realm is the only interval (×1.5 damage taken). A gate won seals its
+  realm so the wheel skips it; each stack of a poison in you holds its realm 1 s longer. His
+  last 5 % falls only in the human realm, after a Last Turn gauntlet through every realm left
+  unsealed. Also: his kit (Claw Rake, Noose of Craving, Hand of the Wheel), the arena, the
+  nagtang look with notes on cultural care, music, on-screen text, first-pass numbers, a
+  three-step build plan and six questions for the owner. `Zone6.gdd`, `FOES.gdd`, `NODES.gdd`,
+  `MapGDD.md` and the TBD registry now point to it. Docs only; no code changed beyond the
+  version.
 - **0.12.1** — **The Ferryman and the Asura of Wrath fight with their own kits.** The first
   two zone-6 bosses off the stand-in (`Docs/Zone6.gdd` §4.1, §5.1), each a Foe-side fighter
   that is nobody's protagonist, on the keyed concept sprite, driven by its own rules. **The
