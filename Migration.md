@@ -9,6 +9,16 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.18** — **The realm system, designed with the owner** (docs only; v0.12.16–17 are the art pilot's
+  commits, on its own branch until the owner approves its look). `Docs/Realms.gdd`: sub-realms opened by
+  skills, bosses, items and weather, joined to the battlefield by (main anchor, sub anchor, name, ratio) —
+  sizes may differ, anchors may move; anyone in scope goes in, the caster included; only protagonists and
+  foes cross; nothing hits across in v1 (the owner asked for my call: symmetric, so fair, and bug-free);
+  objectives stay outside; a window with lenses; the main scene heard twisted and muffled; the Black
+  Prison (ratio 2, a 16 m border, only silence, random pumpkins), the tsunami into the Loong's Palace,
+  BOSS PumpKing's ult (boss ring 1500, +10/s, +5 per damage). `Docs/Tech/T50-REALMS.md`: far-off spaces
+  in the one physics world, the target filter, going in and out, views, the Elsewhere bus, preloading,
+  the checks. TBD #79/#80/#87 settled, #88–#95 new.
 - **0.12.15** — **The Black Prison is 8 m** (the owner: 19.1 m was too big). `BlackPrison.RadiusM`
   is the owner's number; v0.12.13's rule (a slowed 10 m/s fighter walks out from the centre in the whole
   4 s) and its reference constants are gone, and TBD #86 with them. A 10 m/s fighter now walks out from

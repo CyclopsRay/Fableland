@@ -157,6 +157,12 @@ stacks to 0) or Soul Form is entered (shield cleared, stacks reset).
 
 ### Q — The Black Prison (黑狱) — ultimate
 
+> **Being redesigned as the first sub-realm (2026-11-28, `Docs/Realms.gdd` §12):** the 8 m
+> circle becomes a window onto a horror-world patch at ratio 2. Everyone in it is pulled in, him
+> included; inside there is only silence on his enemies, with no slow, jump limit or sight cap.
+> Pumpkins grow at random in the patch and fly in random directions; nothing crosses the
+> border. Until that is built, the rules below are what ships.
+
 **Cost:** the full ult ring (1500), spent on the first press. **A strong field-control
 ultimate**, the game's first. Code: `PumpKing.HandleSkillUlt` → `BlackPrison`,
 `PrisonPumpkin`, `PrisonVeil` (`Scripts/Protagonists/PumpKing/`). Every number below is a
@@ -335,7 +341,10 @@ until the other realms have bosses of their own, **he stands in at every realm's
 that realm's boss arena (`FOES.gdd` §8.1). His HP there is his row's × the day: 600 on days
 1–10, 720, 900, 1200, and 1800 from day 36.
 
-**The Black Prison on the boss — TBD (follow-up).** His kit has the ultimate (it is side-
+**The Black Prison on the boss — designed 2026-11-28, `Realms.gdd` §13:** a boss's ring fills
++10 per second and +5 per point of damage he deals or takes; full, he aims 5 m ahead of the
+player's movement and recasts the moment it forms. Building it is the realm plan's first step.
+**Before that (as shipped):** His kit has the ultimate (it is side-
 agnostic: on his side it holds the player, silences them — skills and items — slows them and
 darkens their view; 8 m in radius),
 but **his brain never presses Q**. A rule for it is the next step: open it when the player is
@@ -587,6 +596,9 @@ when the magazine is full.
     passive goes on.
   - **"Each character's ult energy is their own and is not cleared when a level ends"** — kept
     on the run record, through switches, days and saves; a new run and a new recruit start empty.
+- **(2026-11-28) The realm design** (`Realms.gdd`): the prison becomes a sub-realm; only
+  silence inside; the caster is pulled in too; nothing crosses its border; random pumpkins;
+  BOSS PumpKing will cast it with a boss's ring. Not built yet.
 - **(v0.12.15) "黑狱太大了，半径改成8m"** — the owner's number replaces the rule; TBD #86 (which run
   to measure by) is moot. A 10 m/s fighter now walks out from the centre in 1.8 s; slow foes
   are still held the whole time.

@@ -12,6 +12,7 @@ the tech doc for the concern you're touching.
 | `T20-EXTENSIBILITY.md` | How to make every system appendable: registries, def/behavior split, pipelines & hooks, deprecation |
 | `T30-FEATURE-BLUEPRINTS.md` | Concrete implementation designs for the next milestones (RunState, foe FSM, missions, items, save/load, scene flow) |
 | `T40-PERFORMANCE.md` | Lag, GC pressure, pooling, physics/render budgets, profiling without a toolchain |
+| `T50-REALMS.md` | Sub-realms (designed 2026-11-28, not built): far-off spaces joined by a projection, membership and the target filter, going in and out, views, the Elsewhere sound, preloading |
 
 ---
 

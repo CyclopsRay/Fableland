@@ -1,0 +1,212 @@
+# Realms — GDD v0.1
+
+> **Status: designed with the owner on 2026-11-28; nothing here is built yet.** The engine
+> contract is `Docs/Tech/T50-REALMS.md`; the build order is §16. Until each piece is built,
+> what ships is what the other GDDs describe (the Black Prison of `PumpKing.gdd` v1.5, the
+> beach's tsunami hazard).
+
+## 1. The idea
+
+Fableland is worlds torn from different storybooks. A **realm** makes that literal inside a
+fight: a character, a boss, an item or a map's weather opens a **sub-realm** — another world's
+ground under a patch of the battlefield — and whoever is caught is *in that world* until they
+get out. The owner calls this a core concept of the game: many protagonists, bosses, items
+and weathers will use it, so it is one system with data, not a trick per skill.
+
+## 2. Words
+
+| Word | Meaning |
+|---|---|
+| **Main realm** | The battlefield: the map the fight was dealt. |
+| **Sub-realm** | Another world a body can be inside. Each open one is an **instance**, named (`prison#2`), made from a **definition** (the horror patch). |
+| **Definition** | What a sub-realm is: a full interactive **map** (e.g. a VOID boss's void space) or a **patch** (the Black Prison's horror world). |
+| **Region** | Where the sub-realm sits in the main realm: a circle, or a moving shape (a wave). |
+| **Anchors** | A point in the main realm and its partner in the sub-realm. |
+| **Ratio** | Sub-realm metres per main-realm metre. 2 = everything inside is twice as far apart. |
+| **Exit border** | The line in the sub-realm that leads back out: the region's edge, times the ratio. |
+| **Window** | What someone in the main realm sees where a region is: the sub-realm inside it. |
+| **Lens** | A colour rule on the window. The outside view may lie about the inside. |
+
+## 3. Who can open one
+
+| Source | Example | Status |
+|---|---|---|
+| A protagonist's skill | PumpKing's Black Prison (Q) | designed here, §12 |
+| A boss's skill | BOSS PumpKing's Black Prison; a VOID boss dragging you into the void space | §13; the void space TBD #95 |
+| An item | — (none yet) | TBD |
+| A map's **weather** — an environment hazard the map carries | the beach's tsunami drags you into the Loong's Palace | §14 |
+
+## 4. The projection — anchors and ratio (the owner's rule)
+
+Every instance carries a tuple **(main anchor, sub anchor, instance name, ratio)**. A position
+in one realm has exactly one partner in the other:
+
+- into the sub-realm: `sub = subAnchor + ratio × (main − mainAnchor)`
+- back out: `main = mainAnchor + (sub − subAnchor) ÷ ratio`
+
+Everything follows from it:
+- **No slows needed.** At ratio 2 a body walks at its normal speed inside, but the exit
+  border is twice as far: leaving takes twice as long, measured in the main realm.
+- **Small outside, vast inside.** A 1 m circle at ratio 20 is a 20 m world, hard to escape.
+- **Wormholes.** The main anchor may **move** while the realm stands. You come out relative to
+  where it is *now*, somewhere other than where you went in (§14, the tsunami).
+- The ratio is the same across and up (circles stay circles, a jump stays a jump).
+
+## 5. Going in
+
+- **Who:** anyone in scope — every protagonist, foe and boss of **either side**, the caster
+  included. A ranged caster who opens it under his own feet chose to (the owner). Never pulled
+  in: projectiles, ground, platforms, hazards, mission objectives, pickups, wonder cores, props.
+- **When:** as the realm opens, and — if its definition says so — whenever someone walks into
+  the region while it stands.
+- **Where you land:** your projected position, nudged a little inside the exit border so one
+  step back doesn't throw you out. Landing in mid-air: you fall. Landing inside ground: you are
+  moved to the nearest open spot.
+- **Your momentum is kept** as it was (not multiplied by the ratio).
+
+## 6. Inside
+
+- You stand on the sub-realm's ground and see **only the sub-realm**. **You cannot see the
+  border:** a definition's ground and art go on past its exit border, so nothing marks the way
+  out.
+- You can hit and be hit only by bodies, projectiles and hazards **of the same realm** (§8).
+- The definition's own rules apply (the prison: silence on the caster's enemies; §12) and its
+  own creatures and hazards (the prison's pumpkins). A realm may carry its world's laws
+  (gravity, swimming — `MapGDD.md` §2.3).
+- Time runs at the same rate (a time ratio is TBD #91).
+
+## 7. Coming out
+
+Three ways:
+1. **Cross the exit border** (from inside). You land at your projected main position, nudged a
+   little outside the region.
+2. **The realm closes.** Everyone inside lands at their projected main positions.
+3. **Your own time is up** — for realms that carry you for a while (the tsunami, §14).
+
+Landing inside ground moves you to the nearest open spot; past the map's edge, to the edge.
+After coming out you cannot be pulled back into the same instance for **0.5 s**, so standing
+on the edge does not bounce you in and out.
+
+## 8. Across the border: nothing, in the first version
+
+The owner's question (2026-11-28): if only PumpKing could attack from outside, the prisoners
+could not fight back; if everything crosses, bugs. **Decided for v1: nothing crosses in
+either direction.** A shot fired at the region from outside flies through it; a shot inside
+stays inside; hits, area blasts, auras and target lists see only their own realm.
+- **It is fair:** a caster who stays outside cannot touch the prisoners either, and they
+  cannot touch him. His way in is the recast, which takes him inside, where they can hit back.
+- **It is safe:** a projectile never has to be projected, sped up or slowed at a border, and
+  never orphaned when a realm closes with it inside.
+- **Later, by design:** a specific skill may be made a *portal* (say, a bomb that may be
+  thrown into a realm), one at a time with its own check — TBD #92.
+
+## 9. Seeing and hearing
+
+- **From inside:** only the sub-realm (§6).
+- **From outside:** the region is a **window**. The sub-realm is drawn into it shrunk by the
+  ratio, prisoners at their projected spots, so a caster can watch and time his recast.
+- **The lens:** a window may show the inside through a colour rule — a palette swap. One set
+  of sprites serves both views. *The owner's example:* from outside the sub-realm looks
+  beautiful, cloud and fog under a soft sky; you jump in and it is hell, and the cloud and fog
+  are burning. The same trick gives a map its night and morning from one sheet (TBD #90).
+- **Sound inside:** the sub-realm's own sound, plus the main scene's sound **twisted, hollow
+  and muffled** — dreamcore, the decayed-ballroom feel of The Caretaker's records.
+- **Sound outside:** the sub-realm's sound muffled the same way (proposed; TBD #94).
+
+## 10. Missions
+
+Objectives stay in the main realm, and **the mission clock keeps running** while you are away.
+A protect target can be lost while its guard is in a sub-realm.
+
+## 11. Limits in the first version
+
+- **No nesting:** a body in a sub-realm is never pulled into another, and a skill that opens a
+  realm cannot be used inside one (it is refused with the usual "can't use that" toast).
+  Projections would chain neatly, so this can open later (TBD #93).
+- **Two instances never share a space:** two Black Prisons are two horror worlds.
+- **Silence and items:** a silenced body uses no skill and no item (`ITEMS.gdd` §3.3).
+
+## 12. The Black Prison as a sub-realm (replaces its v1.5 rules once built)
+
+| | Number |
+|---|---|
+| Warning | 1 s, on the battlefield, as now |
+| Region | a circle, **8 m** radius, centred where he aims (≤ 8 m from him) |
+| Sub-realm | a **patch** of PumpKing's horror world, the Dark Wood |
+| Ratio | **2** — the exit border is **16 m** from the patch's centre; the patch goes on well past it (about 24 m) |
+| Pulled in | everyone in the circle as it forms, him included; and anyone who walks in while it stands |
+| Inside | **silence on the caster's enemies only** (skills and items). **No** slow, **no** jump limit, **no** sight limit |
+| Pumpkins | every 0.5 s (8 in all), one grows at a **random** spot in the patch and is **shot in a random direction**: 10–25 damage by size, no shove; they hit only the caster's enemies and never leave the patch |
+| Recast | Q again, free, once, after it forms: his mouth opens at the patch's centre (0.4 s), he blinks there (entering if he was outside) and his head's biggest blast goes off: 3 m, 100 × his damage multiplier, no shove |
+| Ends | 4 s after forming; everyone inside comes out at their projected positions |
+| From outside | a window onto the horror world, half size, through the Dark Wood's lens (TBD #90) |
+
+Gone once this is built: the move and jump scales, the 3 m sight cap, the dark veil, pumpkins
+grown at the heart and thrown outward, pumpkins hitting outside. The caster may recast from
+inside or outside. Pumpkin numbers wait for play tests; for now they are random.
+
+## 13. BOSS PumpKing casts his ultimate
+
+- **A boss's ring:** 1500 to fill, **+10 per second** while the fight runs, **+5 per point of
+  damage** he deals or takes. *(Players are unchanged: +1 per damage dealt, +2 per damage
+  taken, nothing over time, kept between fights — `NODES.gdd` §3.3.)*
+- **When full, he aims 5 m ahead of the player along their moving direction**, so the player
+  walks into the centre during the 1 s warning. A player standing still: at the player. In the
+  air: at the player's height. Beyond his 8 m cast range: he closes in first.
+- **He recasts the moment the prison forms** (blink, the 100-damage blast).
+
+## 14. Weather: the tsunami
+
+Today the beach has a one-shot tsunami: a wave 32 m wide and 16 m tall that crosses the arena
+right to left at 15 m/s, costing a third of max HP, a shove and 1 s of no control
+(`Scripts/Hazard/TsunamiHazard.cs`). As a realm source:
+- the wave is a **moving region**, its main anchor travelling with it;
+- whoever it sweeps is pulled into the **Loong's Palace** — the Palace of LOOING's undersea
+  world, where everyone swims;
+- each rider stays a few seconds (their own timer), then comes out **where the wave is now**,
+  further along its path.
+
+Open (TBD #88): the ride time, whether it still hurts or shoves, its direction (the owner
+said left to right; today it runs right to left), the ratio, and the Palace's patch.
+
+## 15. No hitch when a realm opens (the owner's rule)
+
+When a map loads, the fight already knows every realm it might need: the battle party's
+skills, the boss's, every item the team holds or owns as a Possession, and the map's weather.
+Each of those worlds is built **once, before the countdown ends**, switched off. Opening a
+realm only switches it on and moves bodies. A full map costs about what the arena does, a
+patch far less; T50 §8 sets the budget.
+
+## 16. Build order
+
+1. **BOSS PumpKing casts his ult** with the boss ring (§13). Independent of realms; the boss
+   check proves it.
+2. **The realm core** (T50): spaces, membership and the target filter, going in and coming
+   out, the camera and backdrops, preloading. A realm check proves the projection, the
+   landings, the grace, the filter and the limits.
+3. **The Black Prison moves onto it** (§12): the horror patch, random pumpkins, silence, the
+   window. The boss check's prison probes are rewritten.
+4. **The tsunami** as the first weather realm (§14), on the beach — VK is the art pilot's
+   reference world too.
+5. Lenses, the dreamcore sound, then items and other weathers, one at a time.
+
+## 17. Decisions log
+
+- **(2026-11-28) The owner's design.** Sub-realms opened by skills, bosses, items and weather;
+  every possible world preloaded with the map; a body in a realm is on another layer.
+  Projection by **(main anchor, sub anchor, name, ratio)**; sizes may differ; anchors may move
+  (wormholes). Out by crossing the border (which only the main realm shows) or when it closes.
+  The ratio replaces the slow; the prison is ratio 2, a 16 m border. Anyone in scope is pulled
+  in, the caster included. Only protagonists and foes cross between realms. Objectives stay
+  outside and the clock runs. Pumpkins random for now. A realm is a map or a patch. Weather
+  example: the tsunami into the Loong's Palace. In the prison: no jump limit, **only silence**.
+  The window, with lenses (palette rules) later. Sound: the main scene twisted, hollow and
+  muffled, plus the realm's own. Boss ring 1500, +10/s, +5 per damage; players unchanged.
+- **(2026-11-28) Proposed by me and accepted ("all other designs follow your suggestions"):**
+  a nudge inside on entry and outside on exit, a 0.5 s re-entry grace, the nearest open spot
+  for a landing in ground, clamping to the map, patches larger than their exit border,
+  objectives never pulled in, the per-body timer as a third way out, no nesting at first,
+  momentum kept, one space per instance, silence only on the caster's enemies (he can always
+  recast), the boss's aim cases (standing, airborne, out of range).
+- **(2026-11-28) Asked of me by the owner — "allow projectiles or not?":** not in v1, in either
+  direction (§8). Symmetric, so fair; and the main source of border bugs never exists.

@@ -10,19 +10,25 @@ shelter, merged from a parallel session), **v0.12.10** (the plantation and the e
 altar in the hub's room), **v0.12.11** (PumpKing's ultimate, the Black Prison, merged from the
 other parallel session), **v0.12.12** (THE VOID's darkness — every item now has its behaviour)
 **v0.12.13** (the owner's answers: the Black Prison's size rule, silenced items, each
-fighter's own ult ring kept between fights) **v0.12.14** (the owner's style picks recorded) and **v0.12.15** (the prison at 8 m; everything pushed). **Replace this file at every hand-off:** it describes
+fighter's own ult ring kept between fights) **v0.12.14** (the owner's style picks recorded), **v0.12.15** (the prison at 8 m; everything pushed) and **v0.12.18** (the realm system designed with the owner — docs only; v0.12.16–17 are the art pilot's commits on its own branch). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.15**, twenty-three commits and two
-  merges on top of v0.11.0. The branch itself is not pushed; `main` and `LocalTimeScale` carry it. Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.18**, twenty-four commits and two
+  merges on top of v0.11.0. The branch itself is not pushed; `main` and `LocalTimeScale` carry it up to v0.12.15. Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - **`main` and `LocalTimeScale` were fast-forwarded to v0.12.15 and pushed to `origin` on
   2026-11-28** (the owner: "本地顺手就push吧" — the first push since v0.11.0). `LocalTimeScale` is
   the main checkout, `/Users/cyclops/fableland`; the owner's uncommitted `project.godot` edits
   and untracked art there were kept as they were. The owner asks for each fast-forward and
-  push. If a new session's worktree starts older than v0.12.15, first run
+  push. If a new session's worktree starts older than v0.12.18, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
+- **The art pilot (VK beach in VK-B, phase 1) is on branch `worktree-agent-a55a787814459bcfb`**
+  (worktree `.claude/worktrees/agent-a55a787814459bcfb`, v0.12.16–v0.12.17, all suites clean), **not
+  merged**: the owner is judging its look (§4). Its five full-size Tripo originals are also copied
+  into this worktree's git-ignored `Docs/Art/StyleExploration/_originals/`. Merging it is a
+  fast-forward of its two commits plus this branch's v0.12.18 docs: resolve the version trio to the
+  next number and keep both Migration entries.
 - The owner's Godot editor (and a running game) was open on
   `.claude/worktrees/game-map-editor-ui-b1ced6`: v0.10.9 plus the old **uncommitted** swimming
   edits. v0.11.1 supersedes them. **Never commit them**, because they read `Input` directly and the
@@ -68,7 +74,9 @@ fighter's own ult ring kept between fights) **v0.12.14** (the owner's style pick
 | 0.12.12 | `de2e5ef` | **THE VOID darkens a fight**: held, F blinds every foe for 10 s (a sight cap of 0, foes arriving in the dark included), surviving a switch — the last item behaviour | `ITEMS.gdd` §7.2 *Built* |
 | 0.12.13 | `f705cf9` | **The owner's answers**: the Black Prison is as wide as a slowed fighter needs its whole 4 s to walk out of (19.1 m; its 3 m heart keeps the blast, the mouth and the pumpkins), a prisoner does not see its border; a silenced fighter uses no item; each fighter's ult ring is their own and survives the fight's end (saved) | `PumpKing.gdd` (Q, *The owner's answers*), `ITEMS.gdd` §3.3, `NODES.gdd` §3.3, KNOWLEDGE v0.12.13 |
 | 0.12.14 | `a7cbf6b` | **The owner's style picks** — one direction per world (VK-B, SL-A, BM-A, HC-C, TD-C, PL-A, KH-C, TF-B, CC-B; OW-B for the overworld), recorded with what they leave open. Docs only | `Docs/Art/StyleExploration/PICKS.md` |
-| 0.12.15 | — | **The Black Prison is 8 m** (the owner: the rule's 19.1 m was too big); pushed with `main` and `LocalTimeScale` | `PumpKing.gdd` §Q |
+| 0.12.15 | `9f307bc` | **The Black Prison is 8 m** (the owner: the rule's 19.1 m was too big); pushed with `main` and `LocalTimeScale` | `PumpKing.gdd` §Q |
+| 0.12.16–17 | `8ac29c6`, `391ad1b` (branch `worktree-agent-a55a787814459bcfb`, not merged) | **The art pilot, phase 1:** the beach slice repainted in VK-B (ground, two ledges, the campfire, sun, clouds, a far sky) and the crab in the characters' style with seven animations; the repaint pipeline written for the other worlds | `Docs/Art/RealmRepaintPipeline.md`, `BeachTileSet.md` (on that branch) |
+| 0.12.18 | — | **The realm system, designed with the owner** — sub-realms joined to the battlefield by (anchor, anchor, ratio); who crosses; no cross-realm attacks in v1; the window and lenses; the dreamcore sound; the Black Prison and the tsunami as its first users; BOSS PumpKing's ult. Docs only | `Docs/Realms.gdd`, `Docs/Tech/T50-REALMS.md` |
 
 **Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.15, all passing:
 
@@ -90,6 +98,11 @@ fighter's own ult ring kept between fights) **v0.12.14** (the owner's style pick
 - `Scenes/Dev/OverworldArtDemo.tscn`
 
 ## 3. Not done — in the order the owner's request implies
+
+**Next, agreed 2026-11-28:** the realm build order, `Realms.gdd` §16 — (1) BOSS PumpKing casts his
+ult with the boss ring; (2) the realm core (T50); (3) the Black Prison as a sub-realm; (4) the
+tsunami as the first weather realm; (5) lenses, the dreamcore sound, items and other weathers. In
+parallel, the art pilot's phase 2 once the owner answers its questions (§4).
 
 **The big pieces left after v0.12.7** (each needs design calls; the audit's Part 2 numbers):
 - **Realm bosses (#10):** recruiting works since v0.12.9 — a run starts alone and a realm's 4-1
@@ -165,6 +178,17 @@ fighter's own ult ring kept between fights) **v0.12.14** (the owner's style pick
    - Open TBDs from this session: #36–#61 in `10-DESIGN.md` §6.
 
 ## 4. Waiting on the owner
+
+- **The art pilot's seven questions** (asked 2026-11-28, pictures sent): (1) the beach look — as
+  built / richer (near leaves, a headland and lighthouse) / closer to the concept's glow; (2) the crab
+  as the characters' style; (3) ledges — keep the lounger and bench or add driftwood decks and turf
+  islands (a map change); (4) the five older Seashore maps — evening sky / own times of day /
+  retire; (5) three house rules — the 2 m collision grid, 32 px/m with art at 2×, light caps and
+  nothing hanging into the fighting band; (6) phase 2 scope (8–12 images, 20 credits each — the free
+  monthly images are used up); (7) housekeeping — delete the old watercolour ground, give the boss
+  crab the new crab at 2×. My recommendations: B, A, B, A, yes ×3, B (with the overworld page), yes ×2.
+- **Realm open questions** #88–#95 (`10-DESIGN.md`): the tsunami's numbers, the weather catalogue,
+  lenses, a time ratio, portal skills, nesting, hearing the inside, the VOID's space.
 
 - **Style picks — made 2026-11-28**, recorded in `Docs/Art/StyleExploration/PICKS.md` (and in the
   gallery's database, collection `picks`, doc `owner`): VK-B, SL-A, BM-A, HC-C, TD-C, PL-A, KH-C,
