@@ -60,6 +60,18 @@ public static class RealmTable
         },
     };
 
+    /// <summary>Who may open which realms (T50 §2, `RealmSourceDef` in its simplest form): a
+    /// protagonist's roster id, a boss row's id, an item's def id or a weather's id → the realms
+    /// it can open. The arena preloads every realm its fight's owners list (T50 §8).</summary>
+    private static readonly Dictionary<string, string[]> Sources = new(StringComparer.Ordinal)
+    {
+        ["PumpKing"] = new[] { BlackPrisonId },
+        ["boss_pumpking"] = new[] { BlackPrisonId },
+    };
+
+    public static IReadOnlyList<string> SourcesOf(string ownerId) =>
+        ownerId != null && Sources.TryGetValue(ownerId, out string[] ids) ? ids : Array.Empty<string>();
+
     public static bool TryGet(string id, out RealmDef def)
     {
         def = null;

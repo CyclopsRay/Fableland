@@ -362,12 +362,13 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
         TickTimers(dt);
         var player = GetTree().GetFirstNodeInGroup("player") as CharacterController;
         // A player in another realm is not here (Realms.gdd §6): no sight, no chase, no contact.
-        if (player != null && !Fableland.Realms.Realm.SameAs(this, player)) player = null;
+        bool elsewhere = player != null && !Fableland.Realms.Realm.SameAs(this, player);
+        if (elsewhere) player = null;
 
         // 1. status decay (may Die)
         if (UpdateStatus(dt)) return;
         // 2. sight timer / FSM
-        UpdateSight(dt, player);
+        UpdateSight(dt, player, elsewhere);
         if (!held)
         {
             // 3. state behaviour (movement intent) + passive contact damage
@@ -439,9 +440,12 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
     }
 
     // ── Sight / aggro FSM ─────────────────────────────────────────────────────────
-    private void UpdateSight(float dt, CharacterController player)
+    private void UpdateSight(float dt, CharacterController player, bool elsewhere)
     {
         if (!FoeStats.HasAggro(CurrentLevel)) { State = FoeState.Patrol; return; }
+        // Gone into another world, the player left nothing here to chase: a foe that had turned
+        // on them loses them at once, not after three more looks (KNOWLEDGE v0.12.21).
+        if (elsewhere && State == FoeState.Aggro) { State = FoeState.Patrol; _missCount = 0; }
 
         _sightTimer -= dt;
         if (_sightTimer > 0f) return;
@@ -620,9 +624,10 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
         PopNumber(dealt);
 
         // Getting hit alerts a sight-capable foe: force aggro + reset the miss counter — unless a
-        // sight cap keeps the player out of its view: a blinded foe feels the blow, not where it
-        // came from.
-        if (FoeStats.HasAggro(CurrentLevel) && InSightRange(CharacterController.LocalPlayer)) { EnterAggro(); _missCount = 0; }
+        // sight cap keeps the player out of its view (a blinded foe feels the blow, not where it
+        // came from), or the player is in another realm (nobody here to turn on, Realms.gdd §6).
+        if (FoeStats.HasAggro(CurrentLevel) && InSightRange(CharacterController.LocalPlayer)
+            && Fableland.Realms.Realm.SameAs(this, CharacterController.LocalPlayer)) { EnterAggro(); _missCount = 0; }
 
         // Single-player prototype: any damage a foe takes came from the player, so credit
         // "damage dealt" ult charge here for every source without threading a dealer ref.

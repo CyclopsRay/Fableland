@@ -354,20 +354,23 @@ Fire's `s1.wrath_fire`.
 The prison's own cues are raised at a position, sourced from the prison (or its pumpkin), in
 the caster's class (`fighter`, or `boss` for a BOSS PumpKing's). No director has rows for them
 yet: they fall back to the class and `any` until the prison's art and sound exist (PumpKing.gdd,
-TODO(art)).
+TODO(art)). **Since v0.12.21 the prison is a sub-realm** (`Realms.gdd` §12): the warning and the
+prison loop sit on the battlefield, at the circle's centre; the mouth, the pumpkins and the blast
+are in the horror patch, at or around its centre (the sub anchor). Taking bodies in is the
+realm's work: its `realm.*` cues (T50 §9) are not built yet.
 
 | Action | Kind | Variant | Size · Magnitude · Direction · Position | Raised by |
 |---|---|---|---|---|
 | `ult.cast` | one-shot, on him | — | size = the prison's radius (8 m since v0.12.15) · magnitude = the warning's seconds · direction = to the centre | *PumpKing.HandleSkillUlt* |
 | `ult.warn` | **loop** | — | at the centre · size = the radius · magnitude = 1 s | *BlackPrison.Begin → Form (or _ExitTree)* |
 | `ult.prison` | **loop** | — | at the centre · size = the radius · magnitude = 4 s | *BlackPrison.Form → End (or _ExitTree)* |
-| `ult.catch` | one-shot | — | at a body as it is caught · size = its hit radius | *BlackPrison.Hold* |
-| `ult.pumpkin` | one-shot | which (1–8) | where it grows · size = its radius px · magnitude = its damage · direction = its throw · source = the pumpkin | *BlackPrison.GrowPumpkin* |
+| ~~`ult.catch`~~ | — | — | not raised since v0.12.21 (the realm takes bodies in; `realm.enter`, T50 §9, is to replace it) | — |
+| `ult.pumpkin` | one-shot | which (1–8) | where it grows, in the patch · size = its radius px · magnitude = its damage · direction = its throw (random) · source = the pumpkin | *BlackPrison.GrowPumpkin* |
 | `ult.pumpkin.splat` | one-shot | — | where it burst on the ground, or ended its flight · size · direction = its travel | *PrisonPumpkin.Burst* (a pumpkin that hits a body is told by its `HitCue`) |
 | `ult.recast` | one-shot, on him | — | magnitude = the mouth's seconds (0.4) · direction = to the centre | *PumpKing.HandleSkillUlt* |
-| `ult.mouth` | one-shot | — | at the centre · size = half its heart (his head's 3 m blast; v0.12.13) · magnitude = 0.4 s | *BlackPrison.Recast* |
+| `ult.mouth` | one-shot | — | at the patch's centre (since v0.12.21) · size = half its heart (his head's 3 m blast; v0.12.13) · magnitude = 0.4 s | *BlackPrison.Recast* |
 | `ult.blink` | one-shot, on him | — | where he lands · magnitude = how far px · direction | *PumpKing.LandInPrisonMouth* |
-| `ult.blast` | one-shot | — | at the centre · size = its heart, his head's blast (3 m; the whole prison before v0.12.13) · magnitude = its damage | *PumpKing.LandInPrisonMouth* |
+| `ult.blast` | one-shot | — | at the mouth, the patch's centre (since v0.12.21) · size = its heart, his head's blast (3 m; the whole prison before v0.12.13) · magnitude = its damage | *PumpKing.LandInPrisonMouth* |
 
 ---
 

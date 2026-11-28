@@ -22,6 +22,9 @@ public sealed class RealmSpace
     /// is in this realm (T50 §4 — membership follows position, so there is no second record of it
     /// to fall out of step, T00 rule 2).</summary>
     public Rect2 Bounds { get; init; }
+    /// <summary>World px: where the art is — the camera of someone inside never looks past it, so
+    /// the world never visibly ends (`Realms.gdd` §6). Empty: <see cref="Bounds"/>.</summary>
+    public Rect2 View { get; init; }
     /// <summary>The node the space was built under, or null.</summary>
     public Node2D Root { get; init; }
 }
@@ -46,6 +49,9 @@ public interface IRealmSpaces
 public static class Realm
 {
     public const string SpacesGroup = "realm_spaces";
+    /// <summary>The draw layer of a realm's window on the battlefield: above its art (close view
+    /// 20, effects 30). A realm's own rim (the Black Prison's) draws one above it.</summary>
+    public const int WindowZ = 40;
 
     /// <summary>The open instance whose space holds <paramref name="position"/>; null = the main realm.</summary>
     public static RealmInstance Of(Vector2 position)

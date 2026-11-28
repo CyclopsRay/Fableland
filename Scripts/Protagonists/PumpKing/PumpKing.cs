@@ -77,8 +77,6 @@ public partial class PumpKing : CharacterController
     /// prison's <see cref="BlackPrison.Heart"/>) and this many times the head's damage. It shoves
     /// nobody: the prison keeps its prisoners.</summary>
     public const float UltBlastDamageScale = 2f;
-    /// <summary>How finely the blink looks for room for his body near the mouth, px.</summary>
-    private const float BlinkSearchStep = 8f;
 
     // Unity's headNeckOffset (0.6 m ⇒ 19 px) put the head at chest/waist height on
     // our sprites — the body art's collar sits ~28 px above origin (measured from the
@@ -364,67 +362,32 @@ public partial class PumpKing : CharacterController
     }
 
     /// <summary>
-    /// The recast lands (<see cref="BlackPrison"/>, when its mouth has opened): he blinks to the
-    /// nearest spot to its centre his body fits — the centre itself unless it is inside solid
-    /// ground, then up, sideways, down, within the prison — arriving still, and his head goes off
-    /// at the centre at its biggest: his head's blast radius (the prison's heart, not the whole
-    /// prison), <see cref="UltBlastDamageScale"/>× the head's damage, no shove. It costs no head:
-    /// the magazine is not touched. With no room anywhere in the prison he stays where he is; the
-    /// blast still goes off at the centre.
+    /// The recast lands (<see cref="BlackPrison"/>, when its mouth has opened): he blinks into his
+    /// mouth at the centre of the prison's horror world — into the realm if he stood outside it,
+    /// across it if inside — on the nearest spot his body fits, arriving still. His head goes off
+    /// there at its biggest: his head's blast radius (the prison's heart), <see cref="UltBlastDamageScale"/>×
+    /// the head's damage, no shove. It costs no head: the magazine is not touched.
     /// </summary>
     public void LandInPrisonMouth(BlackPrison prison)
     {
-        if (prison == null) return;
-        Vector2 from = GlobalPosition;
-        Vector2 spot = FreeSpotNear(prison.Centre, prison.Radius) ?? from;
-        GlobalPosition = spot;
+        Fableland.Realms.RealmInstance realm = prison?.Realm;
+        if (realm == null) return;
+        // Where he blinks from, in the prison's own world: from outside, his projected spot.
+        Vector2 from = realm.Holds(this) ? GlobalPosition : realm.ToSub(GlobalPosition);
+        Vector2 mouth = realm.Space.Anchor;
+        if (!realm.Admit(this, mouth)) return;
+        Vector2 spot = GlobalPosition;
         RestoreMovementVelocityState(Vector2.Zero, Vector2.Zero);
         CueBus.Emit(this, "ult.blink", magnitude: from.DistanceTo(spot), direction: (spot - from).Normalized(), at: spot);
 
         float damage = ExplosionDamage * UltBlastDamageScale * DamageDealtMultiplier;
-        Vector2 at = prison.Centre;
-        CueBus.EmitAt(FeedbackId, "ult.blast", at, this, Side, size: prison.Heart, magnitude: damage,
+        CueBus.EmitAt(FeedbackId, "ult.blast", mouth, this, Side, size: prison.Heart, magnitude: damage,
             ownerClass: FeedbackClass);
         foreach (ICombatTarget target in CombatTargets.HostileTo(GetTree(), Side))
         {
-            if (target.GlobalPosition.DistanceTo(at) - target.HitRadius > prison.Heart) continue;
-            ReportDamageDealt(target.TakeHit(new HitInfo(damage, Vector2.Zero).FromRanged(this, "ult.blast"), at));
+            if (target.GlobalPosition.DistanceTo(mouth) - target.HitRadius > prison.Heart) continue;
+            ReportDamageDealt(target.TakeHit(new HitInfo(damage, Vector2.Zero).FromRanged(this, "ult.blast"), mouth));
         }
-    }
-
-    // Up first (a centre in the floor), then sideways, then down.
-    private static readonly Vector2[] BlinkSearch =
-    {
-        Vector2.Up, Vector2.Left, Vector2.Right, new(-0.7071f, -0.7071f), new(0.7071f, -0.7071f), Vector2.Down,
-    };
-
-    /// <summary>The nearest spot to <paramref name="centre"/>, within <paramref name="within"/>,
-    /// where his collision shape overlaps no solid ground; null when there is none.</summary>
-    private Vector2? FreeSpotNear(Vector2 centre, float within)
-    {
-        CollisionShape2D shape = null;
-        foreach (Node child in GetChildren())
-        {
-            if (child is CollisionShape2D { Shape: not null, Disabled: false } found) { shape = found; break; }
-        }
-        PhysicsDirectSpaceState2D space = IsInsideTree() ? GetWorld2D()?.DirectSpaceState : null;
-        if (shape == null || space == null) return centre;
-
-        var query = new PhysicsShapeQueryParameters2D { Shape = shape.Shape, CollisionMask = 1u << (Units.LayerGround - 1) };
-        Transform2D placed = shape.GlobalTransform;
-        Vector2 offset = placed.Origin - GlobalPosition;
-        for (float d = 0f; d <= within; d += BlinkSearchStep)
-        {
-            foreach (Vector2 dir in BlinkSearch)
-            {
-                Vector2 spot = centre + dir * d;
-                placed.Origin = spot + offset;
-                query.Transform = placed;
-                if (space.IntersectShape(query, 1).Count == 0) return spot;
-                if (d == 0f) break;   // the centre is one spot, not six
-            }
-        }
-        return null;
     }
 
     private void RefreshPassive()

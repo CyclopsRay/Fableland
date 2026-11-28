@@ -310,8 +310,38 @@ public partial class GameManager : Node2D
         DdCreature.Reclaimed += OnDdReclaimed;
         SetupPlayer(rs);
         SetupHud();
+        SetupRealms();
         ApplyRulesToArena();
         RaiseArenaEntered();
+    }
+
+    // ── Sub-realms (Docs/Realms.gdd, Docs/Tech/T50-REALMS.md) ─────────────────────────────
+
+    private System.Collections.Generic.IReadOnlyList<MapParallaxLayer> _mainParallax = System.Array.Empty<MapParallaxLayer>();
+    private ArenaRealmSpaces _realmSpaces;
+
+    /// <summary>Builds, before the countdown ends, every sub-realm this fight's owners can open —
+    /// the battle party's kits and the boss (T50 §8) — and the view that shows them. Nothing here
+    /// reads the map or the run beyond the ids the arena already holds.</summary>
+    private void SetupRealms()
+    {
+        var owners = new System.Collections.Generic.List<string>(_battlePartyIds);
+        if (owners.Count == 0 && _player != null) owners.Add(_player.Name.ToString());
+        if (!string.IsNullOrWhiteSpace(BossId)) owners.Add(BossId);
+        var realms = new System.Collections.Generic.List<string>();
+        foreach (string owner in owners) realms.AddRange(RealmTable.SourcesOf(owner));
+
+        var camera = _player?.GetNodeOrNull<Camera2D>("Camera2D");
+        var limits = camera != null
+            ? new Rect2I(camera.LimitLeft, camera.LimitTop, camera.LimitRight - camera.LimitLeft, camera.LimitBottom - camera.LimitTop)
+            : new Rect2I(0, 0, 4000, 2000);
+        Rect2 main = _usingAuthoredMap
+            ? new Rect2(0f, 0f, _authoredMapWidth, _authoredMapHeight)
+            : new Rect2(limits.Position, limits.Size);
+        _realmSpaces = new ArenaRealmSpaces { Name = "RealmSpaces" };
+        AddChild(_realmSpaces);
+        _realmSpaces.Prepare(realms, main);
+        RealmView.Attach(this, _realmSpaces, _mainParallax, limits, _world);
     }
 
     /// <summary>
@@ -481,6 +511,7 @@ public partial class GameManager : Node2D
         build.AnchorParallax(build.CharacterSpawns.Count > 0
             ? build.CharacterSpawns[0]
             : new Vector2(_authoredMapWidth * 0.5f, _authoredMapHeight * 0.5f));
+        _mainParallax = build.ParallaxLayers;   // the realm view hides them while the player is in a sub-realm
 
         var camera = _player?.GetNodeOrNull<Camera2D>("Camera2D");
         if (camera != null)

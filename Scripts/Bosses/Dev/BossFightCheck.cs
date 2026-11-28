@@ -7,6 +7,8 @@ using Godot;
 using Fableland.Data;
 using Fableland.Missions;
 using Fableland.Run;
+using Fableland.Realms;
+using Fableland.MapCreation.Runtime;
 
 /// <summary>
 /// Headless check for the boss-fight system (40-QA.md §2, FOES.gdd §8):
@@ -70,6 +72,7 @@ public partial class BossFightCheck : Node
         {
             RunLogicSelfTests();
             CheckBossContent();
+            PrepareRealmSpaces();
 
             Engine.PhysicsTicksPerSecond = ticksPerSecond * SpeedUp;
             Engine.TimeScale = SpeedUp;
@@ -1469,30 +1472,73 @@ public partial class BossFightCheck : Node
         for (int i = 0; i < budget && GodotObject.IsInstanceValid(prison) && prison.Stage != stage; i++) await Ticks(1);
     }
 
-    private static bool HeldBy(float move, float jump, bool silenced, float sight) =>
-        Mathf.IsEqualApprox(move, BlackPrison.MoveScale) && Mathf.IsEqualApprox(jump, BlackPrison.JumpScale) && silenced
-        && Mathf.IsEqualApprox(sight, Units.Px(BlackPrison.SightMetres));
-    private static bool FreeOf(float move, float jump, bool silenced, float sight) =>
-        Mathf.IsEqualApprox(move, 1f) && Mathf.IsEqualApprox(jump, 1f) && !silenced && float.IsPositiveInfinity(sight);
-    private static string RulesOf(float move, float jump, bool silenced, float sight) =>
-        $"move ×{move:0.##}, jump ×{jump:0.##}, {(silenced ? "silenced" : "not silenced")}, sight {(float.IsPositiveInfinity(sight) ? "∞" : M(sight) + " m")}";
-    private static bool Held(BaseFoe f) => HeldBy(f.MoveSpeedScale, f.JumpHeightScale, f.Silenced, f.SightLimitPx);
-    private static bool Held(CharacterController c) => HeldBy(c.MoveSpeedScale, c.JumpHeightScale, c.Silenced, c.SightLimitPx);
-    private static bool Free(BaseFoe f) => FreeOf(f.MoveSpeedScale, f.JumpHeightScale, f.Silenced, f.SightLimitPx);
-    private static bool Free(CharacterController c) => FreeOf(c.MoveSpeedScale, c.JumpHeightScale, c.Silenced, c.SightLimitPx);
-    private static string Rules(BaseFoe f) => RulesOf(f.MoveSpeedScale, f.JumpHeightScale, f.Silenced, f.SightLimitPx);
-    private static string Rules(CharacterController c) => RulesOf(c.MoveSpeedScale, c.JumpHeightScale, c.Silenced, c.SightLimitPx);
-    private static string Held4 => $"move ×{BlackPrison.MoveScale}, jump ×{BlackPrison.JumpScale}, silenced, sight {BlackPrison.SightMetres} m";
+    /// <summary>In this prison's horror world (`Realms.gdd` §12): inside its sub-realm.</summary>
+    private static bool In(BlackPrison prison, Node2D body) => prison?.Realm != null && Realm.Of(body) == prison.Realm;
+
+    /// <summary>The sub-realm spaces the prison opens into: the real horror patch, built once,
+    /// two copies (a player's PumpKing and a boss's), the way the arena does before a fight.</summary>
+    private ArenaRealmSpaces _realmSpaces;
+    private static readonly Rect2 RealmMain = new(0f, FloorY - 3000f, 6000f, 3200f);
+
+    private void PrepareRealmSpaces()
+    {
+        _realmSpaces = new ArenaRealmSpaces { Name = "RealmSpaces" };
+        AddChild(_realmSpaces);
+        _realmSpaces.Prepare(new[] { RealmTable.BlackPrisonId, RealmTable.BlackPrisonId }, RealmMain);
+
+        // Built before the first cast (Realms.gdd §15): two horror patches, each far from the
+        // battlefield and from the other, its far layers hidden until someone is inside, its ground
+        // going on well past the 16 m exit border (the owner: inside, nothing marks the way out).
+        IReadOnlyList<ArenaRealmSpaces.Prepared> spaces = _realmSpaces.Spaces;
+        Expect(spaces.Count == 2, $"realm spaces: two Black Prison patches must be built before the fight ({spaces.Count})");
+        float border = Units.Px(BlackPrison.RadiusM) * (RealmTable.TryGet(RealmTable.BlackPrisonId, out RealmDef def) ? def.Ratio : 0f);
+        for (int i = 0; i < spaces.Count; i++)
+        {
+            RealmSpace space = spaces[i].Space;
+            Rect2 b = space.Bounds, art = space.View;
+            Vector2 a = space.Anchor;
+            // The art covers the whole exit circle — so the window from outside is all horror
+            // world — and runs a little past it across, where a prisoner walks out.
+            bool wide = a.X - art.Position.X >= border + Units.Px(4f) && art.End.X - a.X >= border + Units.Px(4f)
+                        && a.Y - art.Position.Y >= border && art.End.Y - a.Y >= border;
+            Expect(space.Def.Id == RealmTable.BlackPrisonId && !spaces[i].InUse && art.HasPoint(a) && b.Encloses(art) && wide,
+                $"realm spaces: patch {i} must be the prison's, free, its art round its anchor past the {M(border)} m border ({M(a.X - art.Position.X)} / {M(art.End.X - a.X)} m across, {M(a.Y - art.Position.Y)} m up, {M(art.End.Y - a.Y)} m down)");
+            Expect(!b.Intersects(RealmMain) && (i == 0 || !b.Intersects(spaces[0].Space.Bounds)),
+                "realm spaces: a patch must lie apart from the battlefield and from the other patch");
+            int far = 0, fixedShown = 0;
+            bool hidden = true;
+            foreach (MapParallaxLayer layer in spaces[i].Parallax)
+            {
+                if (layer.FollowsCamera) { far++; hidden &= !layer.Visible; }
+                else if (layer.Visible) fixedShown++;
+            }
+            Expect(far > 0 && hidden && fixedShown > 0,
+                $"realm spaces: patch {i} must hide its far layers until someone is inside ({far} far) and keep its ground's art on for the window ({fixedShown} shown)");
+        }
+    }
+
+    private async Task ProcessFrames(int count)
+    {
+        for (int i = 0; i < count; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+    }
+
+    private static int WindowsOn(Node2D stage, RealmInstance realm)
+    {
+        int count = 0;
+        foreach (Node child in stage.GetChildren())
+            if (child is RealmWindow window && !window.IsQueuedForDeletion() && window.Instance == realm) count++;
+        return count;
+    }
 
     /// <summary>
-    /// The Black Prison cast by the player's PumpKing on a crab penned at its centre. Q on an
+    /// The Black Prison cast by the player's PumpKing as a sub-realm (`Realms.gdd` §12). Q on an
     /// empty ring opens nothing; on a full one it spends the ring and opens where he aims. For a
-    /// second it only warns — nobody touched, nothing grown, a recast refused. Then the crab
-    /// at its centre walks at half speed and is held (jump, silence, sight), as is one 6 m off,
-    /// while a crab past its 8 m rim is untouched. The recast, free and once, blinks him to the
-    /// nearest spot at the mouth his body fits (the centre is at a crab's height, in the floor for
-    /// him) and his head's biggest blast lands on the crab at the centre — its heart — and not on
-    /// the one 6 m off or the far one. It holds four seconds, then lets go.
+    /// second it only warns. Then a crab at its centre, one 6 m off and he himself (7 m off: the
+    /// caster is pulled in too) are in his horror world — the crabs silenced, he not — while a crab
+    /// past the 8 m rim stays on the battlefield. Inside, the ratio replaces the slow: a crab walks
+    /// at its full pace. The recast, free and once, blinks him to the mouth at the patch's centre,
+    /// and his head's biggest blast hits the crab there — its heart — not the one 12 m from it.
+    /// It holds four seconds; then everyone comes out.
     /// </summary>
     private async Task ProbeTheBlackPrison()
     {
@@ -1521,30 +1567,23 @@ public partial class BossFightCheck : Node
 
     private async Task TheBlackPrison(Node2D stage, List<HitCue> blasts, List<Cue> blinks, List<Cue> recasts)
     {
-        // The owner's numbers (PumpKing.gdd): changing one is a design decision, not a tune.
+        // The owner's numbers (PumpKing.gdd, Realms.gdd §12): changing one is a design decision.
         Expect(Mathf.IsEqualApprox(BlackPrison.WarnSeconds, 1f) && Mathf.IsEqualApprox(BlackPrison.HoldSeconds, 4f)
-               && Mathf.IsEqualApprox(BlackPrison.MoveScale, 0.5f) && Mathf.IsEqualApprox(BlackPrison.JumpScale, 0.5f)
-               && Mathf.IsEqualApprox(BlackPrison.PumpkinEvery, 0.5f) && Mathf.IsEqualApprox(BlackPrison.SightMetres, 3f),
-            "black prison: the owner's numbers moved (1 s warning, 4 s held, half speed, half jump, a pumpkin every 0.5 s, sight one cell = 3 m)");
-        // The owner's number for its size (v0.12.15).
-        Expect(Mathf.IsEqualApprox(BlackPrison.RadiusM, 8f), $"black prison: its radius is {BlackPrison.RadiusM} m; the owner's is 8 m");
+               && Mathf.IsEqualApprox(BlackPrison.PumpkinEvery, 0.5f) && Mathf.IsEqualApprox(BlackPrison.RadiusM, 8f)
+               && RealmTable.TryGet(RealmTable.BlackPrisonId, out RealmDef realmDef) && Mathf.IsEqualApprox(realmDef.Ratio, 2f)
+               && realmDef.SilenceCastersEnemies,
+            "black prison: the owner's numbers moved (1 s warning, 4 s held, a pumpkin every 0.5 s, 8 m, ratio 2, silence)");
 
         (PumpKing king, VirtualPad pad) = PlayerPumpKing(stage, 2000f);
-        // The blink lands him beside the penned crab, whose body blow stuns him for 0.25 s — and
-        // a stunned body reads no button, so a press there is simply lost. His poise is the
-        // probe's: no gain-no window, so every Q pressed below reaches the kit.
-        king.SetStunTakenScale("probe.no_stun", 0f);
-        // 7 m off (inside his 8 m), at a crab's height: level with what it holds — a blast from
-        // above a crab would meet its Soft Shell and count double.
-        Vector2 centre = new(2000f + Units.Px(7f), FloorY - 22f);
+        king.SetStunTakenScale("probe.no_stun", 0f);    // a stunned body reads no button (KNOWLEDGE v0.12.11)
+        Vector2 centre = new(2000f + Units.Px(7f), FloorY - 22f);   // 7 m off, at a crab's height
         Pen(stage, centre.X - 70f, centre.X + 70f);
         CrabFoe walker = Crab(stage, centre.X, 1, 3);
-        // 6 m off: inside the 8 m prison, outside its heart (his head's 3 m blast) wherever the
-        // crab walks in its pen (±1.4 m).
+        CrabFoe target = Crab(stage, centre.X, 1, 9);
+        target.ApplyTrapped(60f);                          // stays where the mouth will open
         float midX = centre.X + Units.Px(6f);
         Pen(stage, midX - 70f, midX + 70f);
         CrabFoe mid = Crab(stage, midX, 1, 7);
-        // 6 m past its rim.
         float farX = centre.X + Units.Px(BlackPrison.RadiusM + 6f);
         Pen(stage, farX - 70f, farX + 70f);
         CrabFoe far = Crab(stage, farX, 1, 5);
@@ -1561,47 +1600,48 @@ public partial class BossFightCheck : Node
         Expect(prison != null, "black prison: Q on a full ring opened no prison");
         if (prison == null) return;
         Expect(king.UltCharge < 1f, $"black prison: opening it must spend the whole ring ({king.UltCharge:0} of {king.MaxUltCharge:0} left)");
-        Expect(prison.Centre.DistanceTo(centre) < 0.5f, $"black prison: it opened at {prison.Centre}, not where he aimed ({centre}), 7 m off and inside his {PumpKing.PrisonCastRangeM} m");
-        Expect(Mathf.IsEqualApprox(prison.Radius, Units.Px(BlackPrison.RadiusM)) && Mathf.IsEqualApprox(prison.Heart, king.ExplosionRadius),
-            $"black prison: it opened {M(prison.Radius)} m wide with a {M(prison.Heart)} m heart; the owner's is {BlackPrison.RadiusM:0.0} m, its heart his head's blast ({M(king.ExplosionRadius)} m)");
+        Expect(prison.Centre.DistanceTo(centre) < 0.5f && Mathf.IsEqualApprox(prison.Radius, Units.Px(BlackPrison.RadiusM))
+               && Mathf.IsEqualApprox(prison.Heart, king.ExplosionRadius),
+            $"black prison: it must open where he aimed, {BlackPrison.RadiusM} m wide, its heart his head's blast (at {prison.Centre}, {M(prison.Radius)} m, heart {M(prison.Heart)} m)");
 
-        // The warning: nobody touched, nothing grown, a recast refused.
         bool early = false;
         for (int i = 0; i < 90 && prison.Stage == BlackPrison.Phase.Warning; i++)
         {
-            if (!Free(walker) || prison.PumpkinsGrown > 0) early = true;
+            if (Realm.Of(walker) != null || Realm.Of(king) != null || prison.PumpkinsGrown > 0) early = true;
             if (i == 10) pad.Tap(ControlAction.Ult);
             await Ticks(1);
         }
-        Expect(!early, "black prison: in its warning second it already held the crab inside or grew a pumpkin");
+        Expect(!early, "black prison: in its warning second it already took someone in or grew a pumpkin");
         Expect(!prison.RecastUsed, "black prison: a recast pressed in the warning was taken; it must wait for the prison to form");
         Expect(prison.Standing && Mathf.Abs(prison.FormedAt - BlackPrison.WarnSeconds) <= 1.5f * Tick,
             $"black prison: it began to hold after {prison.FormedAt:0.000} s; the warning is {BlackPrison.WarnSeconds} s");
 
-        Expect(Held(walker) && Held(mid), $"black prison: the crabs inside — at its centre and 6 m off — must be held ({Rules(walker)} · {Rules(mid)}; expected {Held4})");
-        Expect(Free(far), $"black prison: a crab past its rim must be untouched ({Rules(far)})");
-        float slowed = await TopSpeedX(walker, 30);
-        Expect(Mathf.Abs(slowed - walk * BlackPrison.MoveScale) <= walk * 0.06f,
-            $"black prison: the crab inside walks {M(slowed)} m/s; half its {M(walk)} m/s is {M(walk * BlackPrison.MoveScale)}");
+        RealmInstance realm = prison.Realm;
+        Expect(realm != null && Mathf.IsEqualApprox(realm.ExitRadiusPx, Units.Px(16f)), "black prison: it must open its sub-realm, whose exit border is 16 m");
+        Expect(In(prison, walker) && In(prison, mid) && In(prison, target), "black prison: the crabs in the circle must be in his horror world");
+        Expect(In(prison, king), "black prison: the caster in the circle is pulled in too (the owner: anyone in scope)");
+        Expect(Realm.Of(far) == null, "black prison: a crab past the rim must stay on the battlefield");
+        Expect(walker.Silenced && mid.Silenced && !king.Silenced, $"black prison: silence falls on his enemies only (crabs {walker.Silenced}/{mid.Silenced}, him {king.Silenced})");
+        float inside = await TopSpeedX(walker, 30);
+        Expect(Mathf.Abs(inside - walk) <= walk * 0.06f,
+            $"black prison: inside, the ratio replaces the slow — a crab walks its full {M(walk)} m/s ({M(inside)})");
 
-        // The recast: free, once.
+        // The recast: free, once — the mouth at the patch's centre, his blink, his head's biggest blast.
         float charge = king.UltCharge;
         pad.Tap(ControlAction.Ult);
         for (int i = 0; i < 60 && !prison.Swallowed; i++) await Ticks(1);
-        Expect(prison.RecastUsed && prison.Swallowed, "black prison: Q while it stood did not blink him into it");
-        // Where his body is, not where the cue says (it lands him just above the floor, and he
-        // may have dropped those few px by the time this runs).
-        Vector2 landed = king.GlobalPosition;
-        // Both: where the blink put him (the cue — clear of the floor, whatever the physics does
-        // next) and where his body is.
-        Expect(blinks.Count == 1 && blinks[0].Position.Y + 32f <= FloorY + 0.5f && landed.DistanceTo(centre) <= 24f && landed.Y + 32f <= FloorY + 0.5f,
-            $"black prison: the recast must land him at the mouth, on the nearest spot his body fits (he is at {landed}; the centre {centre} is {M(FloorY - centre.Y)} m over the floor)");
+        Expect(prison.RecastUsed && prison.Swallowed, "black prison: Q while it stood did not blink him into its mouth");
+        Expect(blinks.Count == 1 && In(prison, king) && king.GlobalPosition.DistanceTo(realm.Space.Anchor) <= Units.Px(1f),
+            $"black prison: the recast must land him at the mouth, the patch's centre ({M(king.GlobalPosition.DistanceTo(realm.Space.Anchor))} m from it)");
         Expect(king.UltCharge >= charge - 0.01f, $"black prison: the recast must be free (ring {charge:0} → {king.UltCharge:0})");
         float blastWants = king.ExplosionDamage * PumpKing.UltBlastDamageScale * king.DamageDealtScale;
-        Expect(blasts.Exists(h => ReferenceEquals(h.Victim, walker) && Mathf.IsEqualApprox(h.Damage, blastWants, 0.01f) && h.Knockback == Vector2.Zero),
-            $"black prison: his head's biggest blast must land on the crab inside for {blastWants:0}, shoving nobody ({blasts.Count} blast hit(s))");
-        Expect(!blasts.Exists(h => ReferenceEquals(h.Victim, far) || ReferenceEquals(h.Victim, mid)),
-            "black prison: the recast's blast reached a crab 6 m off or past the rim — it is his head's (the prison's heart), not the prison's");
+        // The mouth is at the patch's anchor, a body's height over the floor: a crab standing under
+        // it takes the blast from above, which its shell doubles (CrabFoe).
+        bool Blast(float d) => Mathf.IsEqualApprox(d, blastWants, 0.01f) || Mathf.IsEqualApprox(d, 2f * blastWants, 0.01f);
+        Expect(blasts.Exists(h => ReferenceEquals(h.Victim, target) && Blast(h.Damage) && h.Knockback == Vector2.Zero),
+            $"black prison: his head's biggest blast must land on the crab at the mouth for {blastWants:0} (twice that through its shell), shoving nobody ({string.Join(", ", blasts.ConvertAll(h => $"{(h.Victim as Node)?.Name} {h.Damage:0}"))})");
+        Expect(!blasts.Exists(h => ReferenceEquals(h.Victim, mid) || ReferenceEquals(h.Victim, far)),
+            "black prison: the blast reached a crab 12 m from the mouth, or one on the battlefield — it is his head's, the prison's heart");
         int blastCount = blasts.Count;
         await Ticks(20);
         for (int i = 0; i < 8; i++)
@@ -1609,25 +1649,27 @@ public partial class BossFightCheck : Node
             pad.Tap(ControlAction.Ult);
             await Ticks(6);
         }
-        await Ticks(40);
+        await Ticks(30);
         Expect(recasts.Count == 1 && blinks.Count == 1 && blasts.Count == blastCount,
-            $"black prison: Q pressed again after the recast opened {recasts.Count - 1} more mouth(s) and blinked him {blinks.Count - 1} more time(s); the recast is once a prison");
+            $"black prison: Q pressed again after the recast opened {recasts.Count - 1} more mouth(s); the recast is once a prison");
 
         for (int i = 0; i < 60 * 5 && !prison.Over; i++) await Ticks(1);
         Expect(prison.Over && Mathf.Abs(prison.EndedAt - prison.FormedAt - BlackPrison.HoldSeconds) <= 1.5f * Tick,
             $"black prison: it held {prison.EndedAt - prison.FormedAt:0.000} s; it holds {BlackPrison.HoldSeconds} s");
-        Expect(Free(walker), $"black prison: when it ends the crab must be let go ({Rules(walker)})");
-        float after = await TopSpeedX(walker, 30);
-        Expect(Mathf.Abs(after - walk) <= walk * 0.06f, $"black prison: let go, the crab walks {M(after)} m/s; it walked {M(walk)}");
-        GD.Print($"  boss     black prison   {M(prison.Radius)} m wide · {prison.FormedAt:0.00} s of warning, then held {prison.EndedAt - prison.FormedAt:0.00} s · a crab inside walks {M(walk)} → {M(slowed)} → {M(after)} m/s · " +
-                 $"the recast lands him {M(landed.DistanceTo(centre))} m above a centre in the floor · his biggest blast {blastWants:0} over its {M(prison.Heart)} m heart, no shove");
+        await Ticks(2);
+        Expect(Realm.Of(walker) == null && Realm.Of(mid) == null && Realm.Of(target) == null && Realm.Of(king) == null,
+            "black prison: when it ends, everyone must come back to the battlefield");
+        Expect(!walker.Silenced && !mid.Silenced, "black prison: when it ends, no crab keeps its silence");
+        GD.Print($"  boss     black prison   {M(prison.Radius)} m, ratio 2 (a 16 m border) · {prison.FormedAt:0.00} s warning, {prison.EndedAt - prison.FormedAt:0.00} s held · " +
+                 $"two crabs and him in, the far crab out · a crab walks {M(walk)} → {M(inside)} m/s inside · his blink to the mouth, " +
+                 $"{blasts.Find(h => ReferenceEquals(h.Victim, target)).Damage:0} on the crab there ({blastWants:0}, its shell doubling a blow from above)");
     }
 
     /// <summary>
-    /// What the prison does to a foe's mind. A level-6 crab beside him, inside it — one that
-    /// would jump at once — starts no skill until it lets go, then jumps. A level-3 crab inside it
-    /// 5 m from him, who would see him, cannot (blind past one cell) and does not turn on him
-    /// even when struck, until it lets go.
+    /// What the prison does to minds. A level-6 crab caught in it — one that would jump at once —
+    /// starts no Jump until it lets go (silence), then jumps. A crab outside that had turned on the
+    /// player loses them the moment they are pulled into another world, and finds them again
+    /// when they come out.
     /// </summary>
     private async Task ProbeBlackPrisonOnFoes()
     {
@@ -1641,65 +1683,76 @@ public partial class BossFightCheck : Node
     {
         const float x = 2000f;
         (PumpKing king, VirtualPad pad) = PlayerPumpKing(stage, x);
-        Pen(stage, x + 48f, x + 108f);     // the jumper, 2.2–2.7 m from him: inside its jump trigger and its sight
-        Pen(stage, x + 128f, x + 198f);    // the watcher, 4.7–5.5 m from him: inside its sight, past the prison's cell
-        // The watcher turns on him first: blinded, it must lose him at once, not after three
-        // more looks (FOES §6's rule for a player who slipped out of its sight shape).
-        CrabFoe watcher = Crab(stage, x + 163f, 3, 13);
+        king.SetStunTakenScale("probe.no_stun", 0f);
+        Pen(stage, x - Units.Px(5.5f) - 35f, x - Units.Px(5.5f) + 35f);
+        CrabFoe watcher = Crab(stage, x - Units.Px(5.5f), 3, 13);      // 5.5 m to his left: outside a prison 7 m to his right
         for (int i = 0; i < 90 && !watcher.Aggroed; i++) await Ticks(1);
-        Expect(watcher.Aggroed, "black prison on foes: the level-3 crab 5 m off never saw him — the probe needs it to");
-        BlackPrison prison = await CastPrison(king, pad, new Vector2(x + 120f, FloorY - 22f));
+        Expect(watcher.Aggroed, "black prison on foes: the level-3 crab 5.5 m off never saw him — the probe needs it to");
+
+        Vector2 centre = new(x + Units.Px(7f), FloorY - 22f);
+        BlackPrison prison = await CastPrison(king, pad, centre);
         Expect(prison != null, "black prison on foes: no prison opened");
         if (prison == null) return;
-        bool sawHimInTheWarning = true;
+        bool keptInTheWarning = true;
         for (int i = 0; i < 90 && prison.Stage == BlackPrison.Phase.Warning; i++)
         {
-            if (!watcher.Aggroed) sawHimInTheWarning = false;
+            if (!watcher.Aggroed) keptInTheWarning = false;
             await Ticks(1);
         }
+        Expect(In(prison, king) && Realm.Of(watcher) == null, "black prison on foes: he must be in his prison and the watcher outside it");
         int lostAfter = -1;
         for (int i = 0; i < 30; i++)
         {
             if (!watcher.Aggroed) { lostAfter = i; break; }
             await Ticks(1);
         }
-        Expect(sawHimInTheWarning && lostAfter >= 0 && lostAfter <= 3,
-            $"black prison on foes: a crab that had turned on him must keep him through the warning and lose him the moment it is blinded ({(lostAfter < 0 ? "still on him half a second later" : $"lost after {lostAfter} tick(s)")})");
+        Expect(keptInTheWarning && lostAfter >= 0 && lostAfter <= 3,
+            $"black prison on foes: a crab that had turned on him must keep him through the warning and lose him the moment he is in another world ({(lostAfter < 0 ? "still on him half a second later" : $"lost after {lostAfter} tick(s)")})");
 
-        // The jumper is placed once it holds, so its very first look is already a prisoner's.
-        CrabFoe jumper = Crab(stage, x + 78f, 6, 11);
-        bool jumped = false, turned = false, struck = false;
+        // The jumper arrives while it stands, 1.2 m from where he stood: taken in 2.4 m from him
+        // (the ratio doubles it) — inside its 3 m jump trigger — and silenced at once.
+        CrabFoe jumper = Crab(stage, x + Units.Px(1.2f), 6, 11);
+        bool jumped = false, turned = false, taken = false, wanted = false, struck = false, struckTurned = false;
         for (int i = 0; i < 60 * 5 && !prison.Over; i++)
         {
             await Ticks(1);
-            // Only while it still holds: on the tick it lets go a crab may jump in the same frame.
             if (prison.Over) break;
-            if (jumper.Velocity.Y < -200f) jumped = true;
+            if (jumper.Velocity.Y < -200f && jumper.Silenced) jumped = true;
             if (watcher.Aggroed) turned = true;
-            if (i == 60) { watcher.TakeHit(new HitInfo(1f), king.GlobalPosition); struck = true; }
+            if (In(prison, jumper) && jumper.Silenced) taken = true;
+            if (In(prison, jumper) && jumper.Aggroed && jumper.GlobalPosition.DistanceTo(king.GlobalPosition) <= Units.Px(3f)) wanted = true;
+            if (i == 60)
+            {
+                // A blow tells a foe where the player is — not a player in another world.
+                watcher.TakeHit(new HitInfo(1f), watcher.GlobalPosition + new Vector2(40f, 0f));
+                struckTurned = watcher.Aggroed;
+                struck = true;
+            }
         }
-        Expect(prison.Over && struck, "black prison on foes: it never ended");
-        Expect(Free(jumper) && Free(watcher), $"black prison on foes: let go, a crab kept a rule ({Rules(jumper)} · {Rules(watcher)})");
-        Expect(!jumped, "black prison on foes: a silenced crab beside him jumped (its Jump is a skill)");
-        Expect(!turned, "black prison on foes: a crab blind past one cell turned on him from 5 m — or when struck");
+        Expect(prison.Over, "black prison on foes: it never ended");
+        Expect(taken, "black prison on foes: a crab placed in the circle while it stands must be taken in, silenced");
+        Expect(wanted, "black prison on foes: inside, the level-6 crab never turned on him within its 3 m jump trigger — the probe needs it to want to jump");
+        Expect(!jumped, "black prison on foes: a silenced crab in the prison jumped (its Jump is a skill)");
+        Expect(!turned, "black prison on foes: a crab outside turned on a player who was in another world");
+        Expect(struck && !struckTurned, "black prison on foes: struck, a crab outside turned on a player who was in another world");
 
         bool jumpsAfter = false, turnsAfter = false;
-        for (int i = 0; i < 120 && !(jumpsAfter && turnsAfter); i++)
+        for (int i = 0; i < 150 && !(jumpsAfter && turnsAfter); i++)
         {
             await Ticks(1);
             if (jumper.Velocity.Y < -200f) jumpsAfter = true;
             if (watcher.Aggroed) turnsAfter = true;
         }
-        Expect(jumpsAfter, "black prison on foes: let go, the crab beside him never jumped — the probe's crab must want to");
-        Expect(turnsAfter, "black prison on foes: let go, the crab 5 m off never saw him — the probe's crab must be able to");
-        GD.Print($"  boss     black prison   on foes: a level-6 crab beside him starts no Jump while held, jumps when let go · a level-3 crab 5 m off is blind to him (sight {BlackPrison.SightMetres} m), struck or not, and turns on him when let go");
+        Expect(jumpsAfter, "black prison on foes: let go, the crab never jumped — the probe's crab must want to");
+        Expect(turnsAfter, "black prison on foes: let go, the watcher never found him again");
+        GD.Print("  boss     black prison   on foes: a level-6 crab caught in it starts no Jump, jumps when let go · a crab outside loses him the moment he is pulled in, finds him when he is back");
     }
 
     /// <summary>
-    /// The cast range and the pumpkins. The range rule alone, then a real cast aimed 30 m off:
-    /// it opens 8 m along the same line. Eight crabs stand rooted across it and round it; it grows
-    /// a pumpkin as it forms and every half second after — eight — and they hurt what they land on.
-    /// The prison's draws are seeded so the throws are the same every run.
+    /// The cast range and the pumpkins. The range rule alone, then a real cast aimed 30 m off: it
+    /// opens 8 m along the same line. It grows a pumpkin as it forms and every half second after —
+    /// eight — each at a random spot of the patch, flying off at random, never on the battlefield;
+    /// they hurt the crabs rooted inside. The prison's draws are seeded.
     /// </summary>
     private async Task ProbePrisonPumpkins()
     {
@@ -1713,9 +1766,10 @@ public partial class BossFightCheck : Node
 
         Node2D stage = BuildStage(0f, 6000f);
         var thrown = new List<int>();
+        var spots = new List<Vector2>();
         var hits = new List<HitCue>();
         int tick = 0;
-        void Heard(Cue cue) { if (cue.Owner == "pumpking" && cue.Action == "ult.pumpkin") thrown.Add(tick); }
+        void Heard(Cue cue) { if (cue.Owner == "pumpking" && cue.Action == "ult.pumpkin") { thrown.Add(tick); spots.Add(cue.Position); } }
         void Landed(HitCue hit) { if (hit.AttackOwner == "pumpking" && hit.AttackAction == "ult.pumpkin") hits.Add(hit); }
         CueBus.Raised += Heard;
         CueBus.HitLanded += Landed;
@@ -1723,7 +1777,7 @@ public partial class BossFightCheck : Node
         {
             (PumpKing king, VirtualPad pad) = PlayerPumpKing(stage, 2000f);
             float cx = 2000f + range;
-            foreach (float dx in new[] { -200f, -140f, -80f, -30f, 30f, 80f, 140f, 200f })
+            foreach (float dx in new[] { -210f, -150f, -90f, -30f, 30f, 90f, 150f, 210f })
                 Crab(stage, cx + dx, 1, 17).ApplyTrapped(60f);
             await Ticks(10);
             Vector2 at = king.GlobalPosition;
@@ -1732,11 +1786,13 @@ public partial class BossFightCheck : Node
             Expect(prison != null, "black prison: Q aimed 30 m off opened no prison");
             if (prison != null)
             {
-                prison.Rng = new RandomNumberGenerator { Seed = 20261127 };   // before it forms: nothing drawn yet
+                prison.Rng = new RandomNumberGenerator { Seed = 20261128 };   // before it forms: nothing drawn yet
                 Vector2 off = prison.Centre - at;
                 Expect(Mathf.Abs(off.Length() - range) < 0.5f && off.Normalized().Dot((aim - at).Normalized()) > 0.9999f,
                     $"black prison: aimed 30 m off it must open {PumpKing.PrisonCastRangeM} m along the aim (opened {M(off.Length())} m off)");
-                for (; tick < 60 * 8 && !(prison.Over && tick > 60 * 7); tick++) await Ticks(1);
+                await WaitForStage(prison, BlackPrison.Phase.Standing, 90);
+                Rect2 patch = prison.Realm?.Space.Bounds ?? new Rect2();
+                for (; tick < 60 * 6 && !(prison.Over && tick > 60 * 5); tick++) await Ticks(1);
 
                 Expect(prison.PumpkinsGrown == BlackPrison.PumpkinCount && thrown.Count == BlackPrison.PumpkinCount,
                     $"black prison: it grew {prison.PumpkinsGrown} pumpkin(s) and threw {thrown.Count}; one as it forms and every {BlackPrison.PumpkinEvery} s of its {BlackPrison.HoldSeconds} s is {BlackPrison.PumpkinCount}");
@@ -1744,15 +1800,13 @@ public partial class BossFightCheck : Node
                 for (int i = 1; i < thrown.Count; i++)
                     if (Mathf.Abs(thrown[i] - thrown[i - 1] - BlackPrison.PumpkinEvery * 60f) > 1.01f) even = false;
                 Expect(even, $"black prison: pumpkins must come every {BlackPrison.PumpkinEvery} s (at ticks {string.Join(", ", thrown)})");
+                Expect(spots.TrueForAll(p => patch.HasPoint(p)), "black prison: every pumpkin must grow in his horror world, never on the battlefield");
                 float lo = BlackPrison.PumpkinMinDamage * king.DamageDealtScale - 0.01f, hi = BlackPrison.PumpkinMaxDamage * king.DamageDealtScale + 0.01f;
-                Expect(hits.Count > 0, "black prison: not one pumpkin of eight hurt a crab standing in or round the prison");
-                // A crab's Soft Shell doubles a blow from above (FOES §3), and a pumpkin often
-                // comes down on one: a hit is a pumpkin's damage, or twice it.
-                bool Sized(float d) => (d >= lo && d <= hi) || (d >= 2f * lo && d <= 2f * hi);
+                bool Sized(float d) => (d >= lo && d <= hi) || (d >= 2f * lo && d <= 2f * hi);   // a crab's shell doubles a blow from above
+                Expect(hits.Count > 0, "black prison: not one pumpkin of eight hurt a crab rooted in the prison");
                 Expect(hits.TrueForAll(h => Sized(h.Damage) && h.Ranged && h.Knockback == Vector2.Zero),
                     $"black prison: a pumpkin's hit must be ranged, shove nobody and deal {lo:0}–{hi:0} (twice that through a crab's shell): {string.Join("/", hits.ConvertAll(h => h.Damage.ToString("0")))}");
-                Expect(hits.Exists(h => h.Damage >= lo && h.Damage <= hi), "black prison: no pumpkin landed a plain hit, from the side");
-                GD.Print($"  boss     black prison   aimed 30 m off it opens {M(off.Length())} m away · {thrown.Count} pumpkins, every {BlackPrison.PumpkinEvery} s · {hits.Count} hit a crab, for {string.Join("/", hits.ConvertAll(h => h.Damage.ToString("0")))}");
+                GD.Print($"  boss     black prison   aimed 30 m off it opens {M(off.Length())} m away · {thrown.Count} pumpkins at random in the horror world, every {BlackPrison.PumpkinEvery} s · {hits.Count} hit a crab, for {string.Join("/", hits.ConvertAll(h => h.Damage.ToString("0")))}");
             }
         }
         finally
@@ -1765,11 +1819,12 @@ public partial class BossFightCheck : Node
     }
 
     /// <summary>
-    /// The prison fights for whoever opens it. A BOSS PumpKing's holds the player: Skill 1 is
-    /// refused while the basic attack still swings, the run is half speed, a jump half as high,
-    /// and the view is dark past one cell — and it all comes back when it ends. The player's holds
-    /// a boss: Pump Up is refused while his head still flies, and his brain cannot find a player
-    /// 6 m away until it lets go.
+    /// The prison fights for whoever opens it. A BOSS PumpKing's takes the player — and him, in the
+    /// circle too: Skill 1 is refused while the basic attack still swings, the jump and the run are
+    /// whole. Running out over the 16 m border frees them; coming back after the grace catches
+    /// them; when it ends all is as it was. The player's takes a boss: Pump Up is refused while his
+    /// head still flies; a boss whose player is in another world finds no one. A soul already cast
+    /// is taken in and flies at its full speed. And the walk out, timed.
     /// </summary>
     private async Task ProbePrisonTakesSides()
     {
@@ -1791,7 +1846,7 @@ public partial class BossFightCheck : Node
         await Strike(stage);
 
         stage = BuildStage(0f, 6000f);
-        try { await PrisonSlowsASoul(stage); }
+        try { await PrisonTakesASoul(stage); }
         finally { _pads.Clear(); }
         await Strike(stage);
 
@@ -1799,42 +1854,89 @@ public partial class BossFightCheck : Node
         try { await PrisonWalkOut(stage); }
         finally { _pads.Clear(); }
         await Strike(stage);
+
+        stage = BuildStage(0f, 6000f);
+        try { await PrisonRecastFromOutside(stage); }
+        finally { _pads.Clear(); }
+        await Strike(stage);
     }
 
-    /// <summary>
-    /// The size and the slow, walked: a 10 m/s fighter caught 4 m from the centre of the 8 m
-    /// prison runs straight out and is free — hit circle clear of the rim — after
-    /// (8 + 0.9 − 4) m at half speed: about 1 s. (From the centre the walk is 1.8 s.)
-    /// </summary>
+    /// <summary>The recast from outside (`Realms.gdd` §12): he walks out of his own prison over its
+    /// 16 m border onto the battlefield, then presses Q again. The mouth opens at the patch's
+    /// centre and the blink takes him back in, under its rules (not silenced: his own side); his
+    /// blast hits the crab at the mouth; and he is a member again, out with everyone at the end.</summary>
+    private async Task PrisonRecastFromOutside(Node2D stage)
+    {
+        (PumpKing king, VirtualPad pad) = PlayerPumpKing(stage, 2000f);
+        king.SetStunTakenScale("probe.no_stun", 0f);
+        Vector2 centre = new(2000f + Units.Px(7f), FloorY - 22f);
+        Pen(stage, centre.X - 70f, centre.X + 70f);
+        CrabFoe target = Crab(stage, centre.X, 1, 9);
+        target.ApplyTrapped(60f);
+        var blasts = new List<HitCue>();
+        void Landed(HitCue hit) { if (hit.AttackOwner == "pumpking" && hit.AttackAction == "ult.blast") blasts.Add(hit); }
+        CueBus.HitLanded += Landed;
+        try
+        {
+            await Ticks(20);
+            BlackPrison prison = await CastPrison(king, pad, centre);
+            Expect(prison != null, "recast from outside: no prison opened");
+            if (prison == null) return;
+            await WaitForStage(prison, BlackPrison.Phase.Standing, 90);
+            RealmInstance realm = prison.Realm;
+            Expect(In(prison, king) && In(prison, target), "recast from outside: he and the crab must be in his prison as it forms");
+            if (realm == null) return;
+            pad.Hold(ControlAction.MoveLeft);                 // he is left of the patch's centre: away from it
+            for (int i = 0; i < 90 && In(prison, king); i++) await Ticks(1);
+            pad.Hold(ControlAction.MoveLeft, false);
+            await Ticks(5);
+            Expect(Realm.Of(king) == null && prison.Standing, "recast from outside: walking over the 16 m border must put him back on the battlefield while it stands");
+
+            pad.Tap(ControlAction.Ult);
+            for (int i = 0; i < 60 && !prison.Swallowed; i++) await Ticks(1);
+            Expect(prison.Swallowed && In(prison, king) && king.GlobalPosition.DistanceTo(realm.Space.Anchor) <= Units.Px(1f) && !king.Silenced,
+                $"recast from outside: the blink must take him back in, to the mouth, unsilenced ({(In(prison, king) ? M(king.GlobalPosition.DistanceTo(realm.Space.Anchor)) + " m from it" : "still outside")})");
+            Expect(blasts.Exists(h => ReferenceEquals(h.Victim, target)), "recast from outside: his blast must hit the crab at the mouth");
+            for (int i = 0; i < 60 * 5 && !prison.Over; i++) await Ticks(1);
+            await Ticks(2);
+            Expect(prison.Over && Realm.Of(king) == null && Realm.Of(target) == null, "recast from outside: when it ends he must come out with everyone");
+            GD.Print("  boss     black prison   the recast from outside: out over the border, Q blinks him back in to the mouth, the blast lands, out with everyone at the end");
+        }
+        finally { CueBus.HitLanded -= Landed; }
+    }
+
+    /// <summary>Walked: a 10 m/s fighter caught 4 m from the centre is 8 m from the patch's at
+    /// ratio 2, and is free — hit circle clear of the 16 m border — after (16 + 0.9 − 8) m at its
+    /// full speed.</summary>
     private async Task PrisonWalkOut(Node2D stage)
     {
         (CharacterController boss, VirtualPad bossPad) = StageAsleep(stage, BossTable.PumpKing, new Vector2(3000f, FloorY - 32f));
         Vector2 centre = new(3000f + Units.Px(PumpKing.PrisonCastRangeM), FloorY - 32f);
         CharacterController player = PadPlayer(stage, centre.X + Units.Px(4f), out VirtualPad pad);
         await Ticks(20);
-
         BlackPrison prison = await CastPrison((PumpKing)boss, bossPad, centre);
         Expect(prison != null, "black prison walk-out: a BOSS PumpKing's Q on a full ring opened no prison");
         if (prison == null) return;
         await WaitForStage(prison, BlackPrison.Phase.Standing, 90);
-        Expect(prison.Holds(player), $"black prison walk-out: a fighter 4 m from the centre of a {M(prison.Radius)} m prison must be held");
-        float from = player.GlobalPosition.DistanceTo(prison.Centre);
+        RealmInstance realm = prison.Realm;
+        Expect(In(prison, player), "black prison walk-out: a fighter 4 m from the centre must be in the prison");
+        if (realm == null) return;
+        float from = player.GlobalPosition.DistanceTo(realm.Space.Anchor);
         pad.Hold(ControlAction.MoveRight);
         int ticks = 0;
-        for (; ticks < 60 * 5 && prison.Holds(player) && !prison.Over; ticks++) await Ticks(1);
+        for (; ticks < 60 * 5 && In(prison, player) && !prison.Over; ticks++) await Ticks(1);
         pad.Hold(ControlAction.MoveRight, false);
         float seconds = ticks * Tick;
-        float slowed = player.MoveSpeed * BlackPrison.MoveScale;
-        float expected = (prison.Radius + player.HitRadius - from) / slowed;
+        float expected = (realm.ExitRadiusPx + player.HitRadius - from) / player.MoveSpeed;
         Expect(!prison.Over && Mathf.Abs(seconds - expected) <= 4f * Tick,
-            $"black prison walk-out: caught {M(from)} m from the centre, a slowed fighter walked out in {seconds:0.00} s; at {M(slowed)} m/s it is {expected:0.00} s");
-        float fromCentre = (prison.Radius + player.HitRadius) / slowed;
-        GD.Print($"  boss     black prison   {M(prison.Radius)} m: a {M(player.MoveSpeed)} m/s fighter caught {M(from)} m off its centre walks out in {seconds:0.00} s; from the centre, {fromCentre:0.00} s of its {BlackPrison.HoldSeconds} s");
+            $"black prison walk-out: {M(from)} m from the patch's centre, a fighter walked out in {seconds:0.00} s; at {M(player.MoveSpeed)} m/s it is {expected:0.00} s");
+        float fromCentre = (realm.ExitRadiusPx + player.HitRadius) / player.MoveSpeed;
+        GD.Print($"  boss     black prison   ratio 2: a {M(player.MoveSpeed)} m/s fighter caught 4 m off its centre walks out in {seconds:0.00} s; from the centre, {fromCentre:0.00} s of its {BlackPrison.HoldSeconds} s");
     }
 
     /// <summary>A soul flies too: a BOSS PumpKing already in Soul Form when the player's prison
-    /// forms on him flies at half his soul's speed (a silence cannot stop a Soul Form already cast).</summary>
-    private async Task PrisonSlowsASoul(Node2D stage)
+    /// forms on him is taken in, and flies at his soul's full speed — the ratio is the slow.</summary>
+    private async Task PrisonTakesASoul(Node2D stage)
     {
         (CharacterController boss, VirtualPad bossPad) = StageAsleep(stage, BossTable.PumpKing, new Vector2(3000f, FloorY - 32f));
         var soul = (PumpKing)boss;
@@ -1853,20 +1955,25 @@ public partial class BossFightCheck : Node
         bossPad.Hold(ControlAction.MoveRight);
         float held = await TopSpeedX(boss, 15);
         bossPad.Hold(ControlAction.MoveRight, false);
-        Expect(soul.CurrentState == PumpKing.PKState.Soul && Held(boss), $"prison takes sides: the soul must be held ({Rules(boss)})");
-        Expect(Mathf.Abs(free - soul.SoulMoveSpeed) <= soul.SoulMoveSpeed * 0.05f && Mathf.Abs(held - free * BlackPrison.MoveScale) <= free * 0.05f,
-            $"prison takes sides: a soul flies {M(free)} m/s, and {M(held)} m/s in the prison; half is {M(free * BlackPrison.MoveScale)}");
-        GD.Print($"  boss     black prison   a soul already cast flies {M(free)} → {M(held)} m/s in the prison");
+        Expect(soul.CurrentState == PumpKing.PKState.Soul && In(prison, boss), "prison takes sides: the soul must be taken into the prison");
+        Expect(Mathf.Abs(held - free) <= free * 0.05f, $"prison takes sides: a soul flies {M(free)} m/s, and {M(held)} m/s inside — the same");
+        GD.Print($"  boss     black prison   a soul already cast is taken in and flies {M(free)} → {M(held)} m/s");
     }
 
     private async Task PrisonOnThePlayer(Node2D stage, List<Cue> swings)
     {
         (CharacterController boss, VirtualPad bossPad) = StageAsleep(stage, BossTable.PumpKing, new Vector2(3000f, FloorY - 32f));
-        // He opens it as far to his right as he may (8 m); the player stands 5 m further right:
-        // inside the 8 m prison, near enough its rim to run out (right, away from him) while it stands.
+        // He opens it as far to his right as he may (8 m); the player stands 5 m past its centre.
         Vector2 centre = new(3000f + Units.Px(PumpKing.PrisonCastRangeM), FloorY - 32f);
         CharacterController player = PadPlayer(stage, centre.X + Units.Px(5f), out VirtualPad pad);
+        // What the player sees (T50 §6): the arena's view, on this stage.
+        var mainLimits = new Rect2I(0, (int)RealmMain.Position.Y, 6000, (int)RealmMain.Size.Y);
+        RealmView view = RealmView.Attach(stage, _realmSpaces, null, mainLimits, stage);
+        Camera2D camera = player.GetNodeOrNull<Camera2D>("Camera2D");
         await Ticks(20);
+        await ProcessFrames(2);
+        Expect(camera != null && view.Shown == null && camera.LimitLeft == mainLimits.Position.X && camera.LimitRight == mainLimits.End.X,
+            "realm view: on the battlefield the player's camera keeps the battlefield's limits");
         float rise = await JumpRise(player, pad);
         Expect(Mathf.Abs(rise - Units.Px(8f)) < Units.Px(0.6f), $"prison takes sides: before it, the player's jump rises {M(rise)} m; the standard jump is 8 m");
 
@@ -1874,13 +1981,19 @@ public partial class BossFightCheck : Node
         Expect(prison != null, "prison takes sides: a BOSS PumpKing's Q on a full ring opened no prison");
         if (prison == null) return;
         await WaitForStage(prison, BlackPrison.Phase.Standing, 90);
-        Expect(Held(player), $"prison takes sides: a BOSS PumpKing's prison must hold the player ({Rules(player)}; expected {Held4})");
-        Expect(prison.HeldCount == 1 && !prison.Holds(boss), "prison takes sides: a prison must hold the other side only");
-        Expect(prison.VeilShown, "prison takes sides: the player held by it must see only the cell around them");
+        Expect(In(prison, player) && player.Silenced, "prison takes sides: a BOSS PumpKing's prison must take the player in, silenced");
+        Expect(In(prison, boss) && !boss.Silenced, "prison takes sides: the boss in his own circle is taken in too, not silenced");
+        await ProcessFrames(2);
+        ArenaRealmSpaces.Prepared shownSpace = _realmSpaces.Find(prison.Realm?.Space);
+        bool layersShown = shownSpace != null && shownSpace.Parallax.Count > 0;
+        if (shownSpace != null) foreach (MapParallaxLayer layer in shownSpace.Parallax) layersShown &= layer.Visible;   // far and near: all on inside
+        Rect2 inner = prison.Realm?.Space.View ?? new Rect2();
+        Expect(view.Shown == prison.Realm && camera != null && camera.LimitLeft == Mathf.FloorToInt(inner.Position.X)
+               && camera.LimitTop == Mathf.FloorToInt(inner.Position.Y) && layersShown && WindowsOn(stage, prison.Realm) == 0,
+            "realm view: inside, the player's camera must show the horror world alone — its limits, its far layers, no window onto it");
 
-        float low = await JumpRise(player, pad);
-        Expect(Mathf.Abs(low - Units.Px(8f) * BlackPrison.JumpScale) < Units.Px(0.6f),
-            $"prison takes sides: held, the player's jump rises {M(low)} m; {BlackPrison.JumpScale} of 8 m is {8f * BlackPrison.JumpScale:0.0} m");
+        float inside = await JumpRise(player, pad);
+        Expect(Mathf.Abs(inside - Units.Px(8f)) < Units.Px(0.6f), $"prison takes sides: inside, the player's jump is whole ({M(inside)} m; the owner: no jump limit)");
         pad.Tap(ControlAction.Skill1);
         await Ticks(10);
         Expect(player.ShiftCooldown.Remaining <= 0f, "prison takes sides: a silenced player's Skill 1 went off");
@@ -1890,25 +2003,38 @@ public partial class BossFightCheck : Node
         Expect(swings.Count > before, "prison takes sides: a silenced player's basic attack must still swing");
         pad.Hold(ControlAction.MoveRight);
         float run = await TopSpeedX(player, 30);
-        Expect(Mathf.Abs(run - player.MoveSpeed * BlackPrison.MoveScale) <= player.MoveSpeed * 0.05f,
-            $"prison takes sides: held, the player runs {M(run)} m/s; {BlackPrison.MoveScale} of {M(player.MoveSpeed)} m/s is {M(player.MoveSpeed * BlackPrison.MoveScale)}");
-        // The border is not a wall: running on out of it frees at once, and coming back catches.
-        for (int i = 0; i < 90 && !Free(player); i++) await Ticks(1);
-        bool outWhileItStands = Free(player) && !prison.Over && !prison.VeilShown;
+        Expect(Mathf.Abs(run - player.MoveSpeed) <= player.MoveSpeed * 0.05f,
+            $"prison takes sides: inside, the player runs {M(run)} m/s — the full {M(player.MoveSpeed)} (the ratio is the slow)");
+        // Out over the 16 m border while it stands; back in after the grace.
+        for (int i = 0; i < 90 && In(prison, player); i++) await Ticks(1);
+        bool outWhileItStands = !In(prison, player) && !prison.Over && !player.Silenced;
         pad.Hold(ControlAction.MoveRight, false);
+        await ProcessFrames(2);
+        bool layersHidden = shownSpace != null;   // its far layers off, its ground's art on (the window draws it)
+        if (shownSpace != null) foreach (MapParallaxLayer layer in shownSpace.Parallax) layersHidden &= layer.FollowsCamera ? !layer.Visible : layer.Visible;
+        Expect(view.Shown == null && camera != null && camera.LimitLeft == mainLimits.Position.X && layersHidden
+               && WindowsOn(stage, prison.Realm) == 1,
+            $"realm view: out on the battlefield, the camera must be back on its limits and the prison a window onto the horror world ({WindowsOn(stage, prison.Realm)} window(s))");
+        await Ticks(Mathf.CeilToInt(RealmInstance.ReentryGraceSeconds * 60f) + 2);
         pad.Hold(ControlAction.MoveLeft);
-        for (int i = 0; i < 90 && !Held(player); i++) await Ticks(1);
+        for (int i = 0; i < 90 && !In(prison, player); i++) await Ticks(1);
         pad.Hold(ControlAction.MoveLeft, false);
-        Expect(outWhileItStands, $"prison takes sides: a player who runs out of it must be let go at once ({Rules(player)})");
-        Expect(Held(player) && prison.VeilShown && !prison.Over, $"prison takes sides: a player who comes back in must be caught again ({Rules(player)})");
+        Expect(outWhileItStands, "prison takes sides: a player who runs out over the border must be let go at once, unsilenced");
+        Expect(In(prison, player) && player.Silenced && !prison.Over, "prison takes sides: a player who comes back into the circle must be caught again");
 
         for (int i = 0; i < 60 * 5 && !prison.Over; i++) await Ticks(1);
-        Expect(prison.Over && Free(player) && !prison.VeilShown, $"prison takes sides: when it ends the player must be let go and see again ({Rules(player)})");
+        await Ticks(2);
+        Expect(prison.Over && Realm.Of(player) == null && !player.Silenced && Realm.Of(boss) == null,
+            "prison takes sides: when it ends the player and the boss must be back, the player unsilenced");
+        await ProcessFrames(3);
+        int windowsLeft = 0;
+        foreach (Node child in stage.GetChildren()) if (child is RealmWindow w && !w.IsQueuedForDeletion()) windowsLeft++;
+        Expect(windowsLeft == 0 && view.Shown == null, $"realm view: when it ends no window may stay open ({windowsLeft})");
         await Ticks(30);
         pad.Tap(ControlAction.Skill1);
         for (int i = 0; i < 20 && player.ShiftCooldown.Remaining <= 0f; i++) await Ticks(1);
         Expect(player.ShiftCooldown.Remaining > 0f, "prison takes sides: let go, the player's Skill 1 must work again");
-        GD.Print($"  boss     black prison   a BOSS PumpKing's on the player: jump {M(rise)} → {M(low)} m · run → {M(run)} m/s of {M(player.MoveSpeed)} · Skill 1 refused, the swing allowed · the view dark past {BlackPrison.SightMetres} m");
+        GD.Print($"  boss     black prison   a BOSS PumpKing's on the player: both in · jump {M(rise)} → {M(inside)} m · run {M(run)} m/s · Skill 1 refused, the swing allowed · out over the border, back in after the grace");
     }
 
     private async Task PrisonOnABoss(Node2D stage)
@@ -1925,11 +2051,10 @@ public partial class BossFightCheck : Node
         Expect(prison != null, "prison takes sides: the player's Q on a full ring opened no prison on the boss");
         if (prison == null) return;
         await WaitForStage(prison, BlackPrison.Phase.Standing, 90);
-        Expect(Held(boss), $"prison takes sides: the player's prison must hold a boss ({Rules(boss)}; expected {Held4})");
-        Expect(!prison.VeilShown, "prison takes sides: the player is not in their own prison; their view must not darken");
+        Expect(In(prison, boss) && boss.Silenced && In(prison, king) && !king.Silenced,
+            "prison takes sides: the player's prison must take the boss in, silenced — and the player, in his own circle");
         senses.Sample(boss, 0.1f);
-        Expect(!senses.HasTarget, "prison takes sides: a boss blind past one cell must not find the player 6 m off");
-
+        Expect(senses.HasTarget, "prison takes sides: in the same world, the boss's senses still find the player");
         bossPad.Tap(ControlAction.Skill2);                 // Pump Up: a skill
         await Ticks(15);
         Expect(bossKing.PumpStacks == 0, "prison takes sides: a silenced boss pumped up (Skill 2)");
@@ -1937,17 +2062,26 @@ public partial class BossFightCheck : Node
         bossPad.Tap(ControlAction.Attack);                 // his head: the basic attack
         for (int i = 0; i < 20 && !bossKing.HasLiveHead; i++) await Ticks(1);
         Expect(bossKing.HasLiveHead, "prison takes sides: a silenced boss's basic attack (his head) must still fly");
-        bossPad.Tap(ControlAction.Attack);                 // set it off, so Pump Up is his to press again
+        bossPad.Tap(ControlAction.Attack);
         for (int i = 0; i < 30 && bossKing.HasLiveHead; i++) await Ticks(1);
 
         for (int i = 0; i < 60 * 5 && !prison.Over; i++) await Ticks(1);
-        Expect(prison.Over && Free(boss), $"prison takes sides: when it ends the boss must be let go ({Rules(boss)})");
-        senses.Sample(boss, 0.1f);
-        Expect(senses.HasTarget, "prison takes sides: let go, the boss's senses must find the player again");
+        await Ticks(2);
+        Expect(prison.Over && Realm.Of(boss) == null && !boss.Silenced, "prison takes sides: when it ends the boss must be back, unsilenced");
         bossPad.Tap(ControlAction.Skill2);
         for (int i = 0; i < 20 && bossKing.PumpStacks == 0; i++) await Ticks(1);
         Expect(bossKing.PumpStacks == 1, "prison takes sides: let go, the boss must pump up again");
-        GD.Print("  boss     black prison   the player's on a boss: his brain loses a player 6 m off · Pump Up refused while his head still flies · all back when it ends");
+
+        // A boss whose player is in another world finds no one (the realm filter on his senses).
+        RealmInstance away = Realm.Open(king, RealmTable.BlackPrisonId, king.GlobalPosition, Units.Px(1f), CombatSide.Player, "probe.away");
+        Expect(away != null && Realm.Of(king) == away && Realm.Of(boss) == null, "prison takes sides: the probe's one-man realm must take the player alone");
+        senses.Sample(boss, 0.1f);
+        Expect(!senses.HasTarget, "prison takes sides: a boss must not find a player who is in another world");
+        away?.Close();
+        await Ticks(2);
+        senses.Sample(boss, 0.1f);
+        Expect(senses.HasTarget, "prison takes sides: the player back, the boss finds them again");
+        GD.Print("  boss     black prison   the player's on a boss: both in · Pump Up refused while his head still flies · a boss finds no player in another world");
     }
 
     // ---------------------------------------------------------------- 6. BOSS PumpKing's ultimate (v0.12.19)

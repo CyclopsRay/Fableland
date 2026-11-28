@@ -1,9 +1,10 @@
 # Realms — GDD v0.1
 
-> **Status: designed with the owner on 2026-11-28; nothing here is built yet.** The engine
-> contract is `Docs/Tech/T50-REALMS.md`; the build order is §16. Until each piece is built,
-> what ships is what the other GDDs describe (the Black Prison of `PumpKing.gdd` v1.5, the
-> beach's tsunami hazard).
+> **Status: designed with the owner on 2026-11-28.** Built so far (§16): the boss's ultimate
+> (v0.12.19), the realm core (v0.12.20), and the Black Prison as the first sub-realm with the
+> arena's preloaded spaces, the camera per space and the window (v0.12.21). The engine
+> contract is `Docs/Tech/T50-REALMS.md`. Not built yet: the tsunami (still the beach's one-shot
+> hazard), lenses, the realm sound, items and other weathers.
 
 ## 1. The idea
 
@@ -31,7 +32,7 @@ and weathers will use it, so it is one system with data, not a trick per skill.
 
 | Source | Example | Status |
 |---|---|---|
-| A protagonist's skill | PumpKing's Black Prison (Q) | designed here, §12 |
+| A protagonist's skill | PumpKing's Black Prison (Q) | **built v0.12.21**, §12 |
 | A boss's skill | BOSS PumpKing's Black Prison; a VOID boss dragging you into the void space | §13; the void space TBD #95 |
 | An item | — (none yet) | TBD |
 | A map's **weather** — an environment hazard the map carries | the beach's tsunami drags you into the Loong's Palace | §14 |
@@ -126,7 +127,7 @@ A protect target can be lost while its guard is in a sub-realm.
 - **Two instances never share a space:** two Black Prisons are two horror worlds.
 - **Silence and items:** a silenced body uses no skill and no item (`ITEMS.gdd` §3.3).
 
-## 12. The Black Prison as a sub-realm (replaces its v1.5 rules once built)
+## 12. The Black Prison as a sub-realm — *built v0.12.21*
 
 | | Number |
 |---|---|
@@ -141,9 +142,26 @@ A protect target can be lost while its guard is in a sub-realm.
 | Ends | 4 s after forming; everyone inside comes out at their projected positions |
 | From outside | a window onto the horror world, half size, through the Dark Wood's lens (TBD #90) |
 
-Gone once this is built: the move and jump scales, the 3 m sight cap, the dark veil, pumpkins
+Gone since v0.12.21: the move and jump scales, the 3 m sight cap, the dark veil, pumpkins
 grown at the heart and thrown outward, pumpkins hitting outside. The caster may recast from
 inside or outside. Pumpkin numbers wait for play tests; for now they are random.
+
+**As built (v0.12.21):**
+- The patch is a small map document, `Maps/Realms/kh_black_prison.json` (30 × 18 cells: a
+  floor, seven branches to stand on, the Dark Wood's far layers, the moon), made by
+  `Tools/realm_maps/build_realm_patches.py`. Its spawn marker is the sub anchor. It lives under
+  `Maps/Realms/`, so it is never dealt as a fight.
+- Since the cast range and the radius are both 8 m, **he is always in his own circle when he
+  casts it**: the farthest he can open it still touches his hit circle. He is pulled in unless
+  he steps out during the 1 s warning (from the far edge, under a metre's walk). Once inside he
+  can walk out over the 16 m border, and recast to blink back in.
+- A crab under the mouth takes the recast's blast from above, which its Soft Shell doubles
+  (200). The mouth sits at the anchor, a body's height over the floor.
+- From outside, the window shows the patch at half size, clipped to the circle, under the
+  prison's black bristling rim: its ground, trees, branches and everyone caught. It does not show
+  the patch's far scenery yet (the moon, the far wood; T50 §6), and there is no lens yet: it
+  shows the inside as it is. Inside, the camera is held to the patch's art, which covers the whole
+  16 m circle and more, so a prisoner never sees the border or the world's end.
 
 ## 13. BOSS PumpKing casts his ultimate — *built v0.12.19*
 
@@ -181,12 +199,13 @@ patch far less; T50 §8 sets the budget.
 
 1. ~~**BOSS PumpKing casts his ult** with the boss ring (§13).~~ **Built v0.12.19**; the boss
    check's `ProbeBossUlt` proves it (on today's prison — it moves onto the realm in step 3).
-2. **The realm core** (T50) — *the core is built (v0.12.20):* membership by position, the
-   filter, going in and coming out (nudges, open spots, the map's edge, the grace, rides),
-   no nesting; `RealmCheck` proves them. **Next:** the arena building spaces from map documents
-   and preloading them, the camera and backdrops per space, the window.
-3. **The Black Prison moves onto it** (§12): the horror patch, random pumpkins, silence, the
-   window. The boss check's prison probes are rewritten.
+2. ~~**The realm core** (T50).~~ **Built:** the core in v0.12.20 (membership by position, the
+   filter, going in and coming out — nudges, open spots, the map's edge, the grace, rides —
+   no nesting; `RealmCheck` proves them); in v0.12.21 the arena building spaces from map
+   documents before the fight (`ArenaRealmSpaces`), the camera and far layers per space and
+   the window (`RealmView`, `RealmWindow`).
+3. ~~**The Black Prison moves onto it** (§12).~~ **Built v0.12.21:** the horror patch, random
+   pumpkins, silence, the window. The boss check's prison probes were rewritten for it.
 4. **The tsunami** as the first weather realm (§14), on the beach — VK is the art pilot's
    reference world too.
 5. Lenses, the dreamcore sound, then items and other weathers, one at a time.
@@ -211,3 +230,11 @@ patch far less; T50 §8 sets the budget.
   recast), the boss's aim cases (standing, airborne, out of range).
 - **(2026-11-28) Asked of me by the owner — "allow projectiles or not?":** not in v1, in either
   direction (§8). Symmetric, so fair; and the main source of border bugs never exists.
+- **(v0.12.21) Found while building the prison:** the cast range and the radius are both 8 m, so
+  the caster is always inside his own circle when he casts it, and is pulled in unless he steps
+  out during the warning. Kept as the owner's rule ("anyone in scope"); flagged to the owner in
+  case he wants to open it from outside and watch (a cast range longer than the radius would
+  allow it).
+- **(v0.12.21) A foe drops a player who goes into another realm at once,** not after the three
+  more looks a foe gives a player who slips out of its sight (FOES §6), and a blow does not
+  turn it on a player in another realm.

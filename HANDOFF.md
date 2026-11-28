@@ -10,18 +10,18 @@ shelter, merged from a parallel session), **v0.12.10** (the plantation and the e
 altar in the hub's room), **v0.12.11** (PumpKing's ultimate, the Black Prison, merged from the
 other parallel session), **v0.12.12** (THE VOID's darkness — every item now has its behaviour)
 **v0.12.13** (the owner's answers: the Black Prison's size rule, silenced items, each
-fighter's own ult ring kept between fights) **v0.12.14** (the owner's style picks recorded), **v0.12.15** (the prison at 8 m; everything pushed), **v0.12.18** (the realm system designed with the owner — docs only; v0.12.16–17 are the art pilot's commits on its own branch) **v0.12.19** (BOSS PumpKing casts his ult, with the boss ring) and **v0.12.20** (the realm core). **Replace this file at every hand-off:** it describes
+fighter's own ult ring kept between fights) **v0.12.14** (the owner's style picks recorded), **v0.12.15** (the prison at 8 m; everything pushed), **v0.12.18** (the realm system designed with the owner — docs only; v0.12.16–17 are the art pilot's commits on its own branch) **v0.12.19** (BOSS PumpKing casts his ult, with the boss ring), **v0.12.20** (the realm core) and **v0.12.21** (the Black Prison as a sub-realm: the arena's preloaded spaces, the camera and the window). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.20**, twenty-six commits and two
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.21**, twenty-seven commits and two
   merges on top of v0.11.0. The branch itself is not pushed; `main` and `LocalTimeScale` carry it up to v0.12.15. Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - **`main` and `LocalTimeScale` were fast-forwarded to v0.12.15 and pushed to `origin` on
   2026-11-28** (the owner: "本地顺手就push吧" — the first push since v0.11.0). `LocalTimeScale` is
   the main checkout, `/Users/cyclops/fableland`; the owner's uncommitted `project.godot` edits
   and untracked art there were kept as they were. The owner asks for each fast-forward and
-  push. If a new session's worktree starts older than v0.12.20, first run
+  push. If a new session's worktree starts older than v0.12.21, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - **The art pilot (VK beach in VK-B, phase 1) is on branch `worktree-agent-a55a787814459bcfb`**
   (worktree `.claude/worktrees/agent-a55a787814459bcfb`, v0.12.16–v0.12.17, all suites clean), **not
@@ -78,9 +78,10 @@ fighter's own ult ring kept between fights) **v0.12.14** (the owner's style pick
 | 0.12.16–17 | `8ac29c6`, `391ad1b` (branch `worktree-agent-a55a787814459bcfb`, not merged) | **The art pilot, phase 1:** the beach slice repainted in VK-B (ground, two ledges, the campfire, sun, clouds, a far sky) and the crab in the characters' style with seven animations; the repaint pipeline written for the other worlds | `Docs/Art/RealmRepaintPipeline.md`, `BeachTileSet.md` (on that branch) |
 | 0.12.18 | `883c7c5` | **The realm system, designed with the owner** — sub-realms joined to the battlefield by (anchor, anchor, ratio); who crosses; no cross-realm attacks in v1; the window and lenses; the dreamcore sound; the Black Prison and the tsunami as its first users; BOSS PumpKing's ult. Docs only | `Docs/Realms.gdd`, `Docs/Tech/T50-REALMS.md` |
 | 0.12.19 | `006455e` | **BOSS PumpKing casts his ult** (realm build step 1): a boss's ring fills +10/s and +5 per damage dealt or taken (a hit now credits its attacker); his brain opens the Black Prison 5 m ahead of the player's movement, closes in when out of reach, recasts the moment it forms | `Realms.gdd` §13, `FOES.gdd` §8.3 |
-| 0.12.20 | — | **The realm core** (realm build step 2, first half): `Realm` / `RealmInstance` / `BodyPlacement` / `RealmTable` — sub-realms as far-off spaces joined by (anchor, anchor, ratio); membership by position; going in (nudged inside, nearest open spot) and out (border, close, ride timer; sideways nudge, the map's edge, a 0.5 s grace); no nesting; the realm filter where lookups ignore distance; objectives immune. New `RealmCheck` (28) | `T50-REALMS.md`, `Realms.gdd` §16 |
+| 0.12.20 | `612f592` | **The realm core** (realm build step 2, first half): `Realm` / `RealmInstance` / `BodyPlacement` / `RealmTable` — sub-realms as far-off spaces joined by (anchor, anchor, ratio); membership by position; going in (nudged inside, nearest open spot) and out (border, close, ride timer; sideways nudge, the map's edge, a 0.5 s grace); no nesting; the realm filter where lookups ignore distance; objectives immune. New `RealmCheck` (28) | `T50-REALMS.md`, `Realms.gdd` §16 |
+| 0.12.21 | — | **The Black Prison is a sub-realm** (realm build steps 2 and 3): the arena builds every realm its fight's owners can open from map documents before the countdown (`ArenaRealmSpaces`); the camera held to a space's art inside, a window onto it outside (`RealmView`, `RealmWindow`); the prison opens `realm.kh.black_prison` (patch `Maps/Realms/kh_black_prison.json`): everyone in the circle pulled in, his enemies silenced, nothing else; pumpkins at random in the patch; the recast blinks him in through `Admit`. Foes drop a player in another realm at once. Screenshots sent | `Realms.gdd` §12, `PumpKing.gdd` §Q (v1.6), `T50-REALMS.md` §6, §8, KNOWLEDGE v0.12.21 |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.20, all passing:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.21, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
@@ -88,11 +89,11 @@ fighter's own ult ring kept between fights) **v0.12.14** (the owner's style pick
 | VFX | `Scenes/Feedback/VfxCheck.tscn` | 1298 |
 | Audio | `Scenes/Feedback/AudioCheck.tscn` | 1108 |
 | Map content | `Scenes/MapCreation/MapContentCheck.tscn` | 1171 |
-| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 276 at v0.12.19 (the Black Prison at 8 m; BOSS PumpKing's ult; ~30 s) |
+| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 297 (the Black Prison as a sub-realm on the real patch, its view and window; BOSS PumpKing's ult; ~2 min) |
 | Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
-| Run | `Scenes/Run/RunWalkCheck.tscn` | 2031 at v0.12.13 without `--saves` (the ult rings walk; 2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
+| Run | `Scenes/Run/RunWalkCheck.tscn` | 2039 without `--saves` (the ult rings walk; every boss arena builds the prison before the fight; 2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
 | Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 88 at v0.12.13 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives, THE VOID's darkness, no item while silenced |
-| Realms (new, v0.12.20) | `Scenes/Run/RealmCheck.tscn` | 28 — the realm core on test patches (`40-QA.md`); ten mutants |
+| Realms (new, v0.12.20) | `Scenes/Run/RealmCheck.tscn` | 36 — the realm core on test patches, adoption, `Admit`, a respawn let go (`40-QA.md`); ten + four mutants |
 | Recruit + shelter (new, v0.12.9) | `Scenes/Run/RecruitShelterCheck.tscn` | 418 at v0.12.10 — homes, the starting roster, recruits at the capitals, saves keep their roster, the station table, every station against the exits rule, each kind of shelter walked with the keys, the plantation and the altar used (`-- --shots=dir` in a window for pictures) |
 
 **Look and listen without a fight:**
@@ -103,9 +104,11 @@ fighter's own ult ring kept between fights) **v0.12.14** (the owner's style pick
 ## 3. Not done — in the order the owner's request implies
 
 **Next, agreed 2026-11-28:** the realm build order, `Realms.gdd` §16 — (1) ~~BOSS PumpKing casts his
-ult with the boss ring~~ done v0.12.19; (2) the realm core (T50) — **its core is built (v0.12.20); next, the arena's spaces from map documents, preloading, the camera and backdrops per space, the window**; (3) the Black Prison as a sub-realm; (4) the
-tsunami as the first weather realm; (5) lenses, the dreamcore sound, items and other weathers. In
-parallel, the art pilot's phase 2 once the owner answers its questions (§4).
+ult with the boss ring~~ done v0.12.19; (2) ~~the realm core~~ done v0.12.20–21; (3) ~~the Black
+Prison as a sub-realm~~ done v0.12.21; **(4) the tsunami as the first weather realm** (its numbers
+are TBD #88: ask the owner first); (5) lenses, the dreamcore sound, items and other weathers. Small
+and ready: the window's far scenery (a second set of a space's far layers bound to the window's
+camera, T50 §6). In parallel, the art pilot's phase 2 once the owner answers its questions (§4).
 
 **The big pieces left after v0.12.7** (each needs design calls; the audit's Part 2 numbers):
 - **Realm bosses (#10):** recruiting works since v0.12.9 — a run starts alone and a realm's 4-1
@@ -192,6 +195,11 @@ parallel, the art pilot's phase 2 once the owner answers its questions (§4).
   crab the new crab at 2×. My recommendations: B, A, B, A, yes ×3, B (with the overworld page), yes ×2.
 - **Realm open questions** #88–#95 (`10-DESIGN.md`): the tsunami's numbers, the weather catalogue,
   lenses, a time ratio, portal skills, nesting, hearing the inside, the VOID's space.
+- **The Black Prison as built (v0.12.21), raised with the owner:** with the cast range and the
+  radius both 8 m, PumpKing is always in his own circle when he casts it, and is pulled in unless
+  he steps out in the 1 s warning (kept as "anyone in scope"; a longer cast range would let him
+  watch from outside). Also decided for him to overrule: invincibility does not keep a body out;
+  pumpkins grow within 85 % of the exit border.
 
 - **Style picks — made 2026-11-28**, recorded in `Docs/Art/StyleExploration/PICKS.md` (and in the
   gallery's database, collection `picks`, doc `owner`): VK-B, SL-A, BM-A, HC-C, TD-C, PL-A, KH-C,
@@ -259,13 +267,13 @@ parallel, the art pilot's phase 2 once the owner answers its questions (§4).
   (v0.12.15):** the owner found the rule's 19.1 m too big and set **8 m**. Still open:
   - cast range 8 m;
   - silence shuts skills, not the basic attack (the seagull's poop is its basic attack);
-  - "one cell around you" = 3 × 3 cells = a 3 m sight cap; the border is not a wall;
+  - ~~"one cell around you" = a 3 m sight cap~~ (gone with the realm, v0.12.21); the border is not a wall;
   - eight pumpkins a prison, 10–25 damage, no shove; the recast is free, once, after the
     warning, and its 100-damage blast does not shove (it would throw the prisoners out);
   - one prison at a time; it outlives a Tab switch and his death;
-  - BOSS PumpKing does not cast it yet (TBD #79); the realm view is drawn over the fight until
-    the arena has a slot behind it (TBD #80). Try it: debug page (key 4) → PumpKing → *Fill the
-    ult ring (then Q)*.
+  - ~~BOSS PumpKing does not cast it yet~~ (he does since v0.12.19); ~~the realm view is drawn over
+    the fight~~ (a sub-realm of its own since v0.12.21). Try it: debug page (key 4) → PumpKing →
+    *Fill the ult ring (then Q)*.
 
 ## 5. How to work here (each of these cost hours)
 

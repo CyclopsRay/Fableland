@@ -13,9 +13,11 @@ public enum RealmExit { Border, Close, Timer }
 /// and back. A node beside whoever opened it, so it closes — everyone inside coming out — when its
 /// opener closes it or the arena goes, whatever happens to the opener.
 ///
-/// Every physics tick, in this order (T00 rule 3): the re-entry graces count down; members whose
-/// ride is over come out; members whose hit circle has cleared the exit border come out; then, for
-/// a continuous realm, anyone whose hit circle touches the region is taken in.
+/// Every physics tick, in this order (T00 rule 3): the re-entry graces count down; a member moved
+/// out of the space by other means (a respawn) is let go where it is; members whose ride is over
+/// come out; members whose hit circle has cleared the exit border come out; a body standing in
+/// the space that is not a member is adopted; then, for a continuous realm, anyone whose hit
+/// circle touches the region is taken in.
 /// </summary>
 public partial class RealmInstance : Node
 {
@@ -92,6 +94,14 @@ public partial class RealmInstance : Node
         {
             if (!_members.TryGetValue(id, out Node2D body)) continue;
             if (!GodotObject.IsInstanceValid(body) || !body.IsInsideTree()) { Forget(id); continue; }
+            if (!Space.Bounds.HasPoint(body.GlobalPosition))
+            {
+                // Moved out by other means (a respawn, a teleport): it is where it is now. Let go
+                // of it there — never project it back out of the border (KNOWLEDGE v0.12.21).
+                if (body is ICombatTarget gone) gone.SetSilenced(Source, false);
+                Forget(id);
+                continue;
+            }
             if (_ride.TryGetValue(id, out float ride))
             {
                 ride -= dt;
@@ -101,7 +111,50 @@ public partial class RealmInstance : Node
             if (PastBorder(body)) Exit(body, RealmExit.Border);
         }
 
+        AdoptStrays();
         if (Def.Pull == RealmPull.Continuous) PullIn();
+    }
+
+    /// <summary>A body standing in the space that is not yet a member — a protagonist switched in
+    /// by Tab where the one before stood — is one now, so it comes out with everyone.</summary>
+    private void AdoptStrays()
+    {
+        SceneTree tree = GetTree();
+        if (tree == null) return;
+        foreach (string group in new[] { CombatTargets.PlayerGroup, CombatTargets.EnemyGroup })
+        {
+            foreach (Node node in tree.GetNodesInGroup(group))
+            {
+                if (node is not Node2D body || node is not ICombatTarget target || node is IRealmImmune) continue;
+                ulong id = node.GetInstanceId();
+                if (_members.ContainsKey(id) || !Space.Bounds.HasPoint(body.GlobalPosition)) continue;
+                _members[id] = body;
+                if (Def.SilenceCastersEnemies && target.Side != CasterSide) target.SetSilenced(Source, true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Brings a body in at a chosen spot in the space (world px) — PumpKing's recast blinking into
+    /// his prison's mouth. A member already is moved there; a body from the main realm becomes a
+    /// member, under this realm's rules. Lands on the nearest open spot. False when it cannot.
+    /// </summary>
+    public bool Admit(Node2D body, Vector2 spot)
+    {
+        if (!IsOpen || body == null || !GodotObject.IsInstanceValid(body) || body is not ICombatTarget target) return false;
+        RealmInstance elsewhere = Realm.Of(body);
+        if (elsewhere != null && elsewhere != this) return false;   // no nesting (v1)
+        spot = BodyPlacement.FreeSpotNear(body, spot, ExitRadiusPx) ?? spot;
+        BodyPlacement.Teleport(body, spot);
+        ulong id = body.GetInstanceId();
+        if (!_members.ContainsKey(id))
+        {
+            _members[id] = body;
+            _grace.Remove(id);
+            if (Def.RideSeconds > 0f) _ride[id] = Def.RideSeconds;
+            if (Def.SilenceCastersEnemies && target.Side != CasterSide) target.SetSilenced(Source, true);
+        }
+        return true;
     }
 
     /// <summary>Everyone comes out at their projected spots; the space is given back.</summary>

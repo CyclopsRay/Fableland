@@ -9,6 +9,32 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.21** — **The Black Prison is a sub-realm** (the realm build's steps 2 and 3; `Realms.gdd` §12, T50).
+  - **The arena's spaces:** `ArenaRealmSpaces` (orchestration) builds every realm the fight's owners can
+    open (`RealmTable.SourcesOf`: the battle party, the boss) from its map document before the countdown
+    ends, up to two copies, 40 000 px apart above the battlefield, each with its own backdrop and far
+    layers; `GameManager.SetupRealms`. The prison's patch is `Maps/Realms/kh_black_prison.json` (30 × 22
+    cells, 296 tiles; `Tools/realm_maps/build_realm_patches.py`), never dealt as a fight.
+  - **The view:** `RealmView` (presentation). Inside, the camera is held to the space's art
+    (`RealmSpace.View`) and shows its far layers; outside, each open realm is a `RealmWindow` (a
+    `SubViewport` on the shared world, zoom 1/ratio, a circle mask with a `lens` uniform; z
+    `Realm.WindowZ`). Only layers that `FollowsCamera` are switched; the ground's art stays on.
+  - **The prison on it:** `BlackPrison` opens the realm as it forms; the realm pulls in, silences his
+    enemies and lets go. Gone: `PrisonVeil`, the slows, the sight cap, the houses and vines drawn over
+    the fight. Pumpkins grow at random in the patch and fly at random; the recast's mouth is
+    `PrisonMouth` at the patch's centre and his blink uses the new `RealmInstance.Admit` (from inside or
+    outside). A body that turns up in a space is adopted (a Tab switch); one moved out by a respawn is
+    let go where it is.
+  - **Foes:** a player in another realm is absent. A foe drops them at once, and a blow does not turn
+    it on them (`BaseFoe`).
+  - **Checks:** boss 279 → 297 (the prison probes rewritten on the real patch: who goes in, silence
+    only, the ratio as the slow, the recast from inside and outside, the camera and the window, the
+    preloaded patches); realm 28 → 36 (adoption, `Admit`, a respawn let go); run 2031 → 2039 (every
+    boss arena builds the prison before the fight). Fifteen mutants, each caught. KNOWLEDGE: aggro
+    across realms, a blast from the anchor, a member moved out, every layer a `MapParallaxLayer`,
+    the camera held to the art, waiting for process frames.
+  - Screenshots in the real renderer (the window, the inside, the mouth, the blink) sent to the owner.
+    Not yet: the window's far scenery, lenses, the realm sound, cues, the tsunami.
 - **0.12.20** — **The realm core** (the realm build's step 2, first half; `Docs/Tech/T50-REALMS.md`).
   - `Scripts/Data/RealmTable.cs` (definitions; the Black Prison's registered for step 3) and
     `Scripts/Gameplay/Realms/`: `Realm` (which realm a body is in — by position, since spaces never

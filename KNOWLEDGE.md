@@ -190,6 +190,64 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### A foe's aggro memory must not outlive a realm switch (v0.12.21, the boss check)
+- **Symptom:** a crab that had turned on PumpKing kept `Aggroed` for up to three seconds after he
+  was pulled into his own prison. A blow on a foe outside also turned it on a player who was in
+  another world.
+- **Rule:** a player in another realm is *absent* to a foe, not just unseen. `BaseFoe` drops
+  aggro at once when the player is elsewhere (`UpdateSight(…, elsewhere)`), and its hit-aggro
+  asks `Realm.SameAs` as well as the sight cap. Anything that remembers a target (a brain, a
+  lock-on, a homing shot) must drop it the same way.
+- **Why:** FOES §6's three misses model losing sight of someone who is still there; the crab's
+  look comes once a second, so the memory lasted three seconds. A player in another world has
+  left nothing to chase. `ProbeBlackPrisonOnFoes` checks both, within three ticks and when struck.
+
+### Something placed at a sub-realm's anchor is above whoever stands under it (v0.12.21, the boss check)
+- **Symptom:** the recast's blast hit the crab at the prison's mouth for 200, not 100.
+- **Rule:** a patch's anchor is its spawn marker, a fighter's centre: a body's height above the
+  floor. The mouth and the blast sit there, so a crab standing under it is hit from within its
+  shell's 30° upward cone, which doubles the hit. Checks allow ×1 or ×2 on crabs. Put an effect
+  at floor height if a level blow is meant.
+- **Why:** `CrabFoe.IncomingDamageMult` judges by the source's direction alone. On the
+  battlefield the prison's centre happened to be at a crab's height.
+
+### A realm member that leaves its space by other means is let go where it is (v0.12.21, found in the audit)
+- **Symptom it would have had:** a debug-lives respawn teleports the player from the patch to
+  the map's spawn point. The realm would then find them "past the border" and exit them through
+  the projection *from the spawn point*, about 20 000 px off, clamped onto the map's edge.
+- **Rule:** a member found outside its space's bounds has already left (a respawn, a teleport, a
+  switch-out): forget it and clear the realm's statuses on it, but never project or move it.
+  Only a member still in the space crosses the border.
+- **Why:** membership is by position (T50 §4). The member list is a cache of that fact and must
+  follow it, not fight it.
+
+### Every map layer's art is a MapParallaxLayer — the ground's too (v0.12.21, the realm screenshot)
+- **Symptom:** from the battlefield, the Black Prison's window showed the prisoners on a flat dark
+  disc, with no ground, branches or trees. The headless checks were green.
+- **Rule:** `CombatMapBuild.ParallaxLayers` holds *every* layer's art, the battlefield layer
+  included (parallax 1, fixed in the world). Only a layer that follows the camera
+  (`MapParallaxLayer.FollowsCamera`: parallax ≠ 1, auto-scroll or a loop) needs hiding when its
+  space is not the one in view, because it positions itself for one camera and would draw itself
+  into the wrong view. A fixed layer stays on: it is far away and looks right from any camera,
+  a realm's window included. The same holds for any "show only this space" switch.
+- **Why:** one node has one position, so it cannot serve two cameras. The window's camera
+  therefore cannot show a patch's far scenery (moon, far wood) without a second set of those
+  layers bound to it (T50 §6, still to build). Only a picture showed the bug: look at a new
+  view in the real renderer before calling it done.
+
+### A sub-realm's camera is held to its art, not to its membership bounds (v0.12.21, the realm screenshot)
+- **Rule:** `RealmSpace.Bounds` is the map rectangle grown by 6 m, so a body a little off the art is
+  still in the realm. The camera of someone inside takes `RealmSpace.View`, the art's own
+  rectangle. Held to `Bounds`, a prisoner near the 16 m border could see 4 m past the world's end.
+  Author a patch so its art covers the whole exit circle round the anchor (the window from
+  outside shows exactly that circle) and runs on past it across.
+
+### A check reading presentation must wait for process frames (v0.12.21, the boss check)
+- **Rule:** the checks speed time up eightfold (`PhysicsTicksPerSecond` and `TimeScale` × 8), so
+  one process frame can run several physics ticks, and a node that updates in `_Process`
+  (`RealmView`: camera limits, windows) may not have run after one physics tick. Await
+  `SceneTree.ProcessFrame` (the boss check's `ProcessFrames`) before reading it.
+
 ### The ratio doubles every offset from the anchor — up and down too (v0.12.20, the realm check)
 - **Symptom:** a fighter standing level with a realm's main anchor landed 0.25 m higher than its
   projected spot. Its centre sat a few px below the anchor's height; ratio 2 doubled that, into

@@ -469,7 +469,7 @@ public partial class RunWalkCheck : Node
         string directory = ProjectSettings.GlobalizePath("res://Maps");
         string[] paths = Directory.GetFiles(directory, "*.json", SearchOption.TopDirectoryOnly);
         Array.Sort(paths, StringComparer.Ordinal);
-        int entered = 0, arenas = 0, fought = 0;
+        int entered = 0, arenas = 0, fought = 0, realmsBuilt = 0;
         var scene = ResourceLoader.Load<PackedScene>("res://Scenes/Arena.tscn");
 
         for (int i = 0; i < paths.Length; i++)
@@ -499,6 +499,13 @@ public partial class RunWalkCheck : Node
             {
                 arenas++;
                 CharacterController boss = BossOf(GetTree());
+                // The arena built the boss's realms before the countdown ended (Realms.gdd §15).
+                var spaces = arena.GetNodeOrNull<ArenaRealmSpaces>("RealmSpaces");
+                int wanted = RealmTable.SourcesOf(BossTable.StandIn.Id).Count;
+                int built = 0;
+                if (spaces != null) foreach (ArenaRealmSpaces.Prepared prepared in spaces.Spaces) if (prepared.Space.Def.Id == RealmTable.BlackPrisonId) built++;
+                Expect(wanted > 0 && built >= 1, $"{where}: the arena must have built BOSS PumpKing's Black Prison before the fight ({built} built)");
+                if (built > 0) realmsBuilt++;
                 Expect(arena.LevelGoalPoints.Count >= 2, $"{where}: a boss arena needs two perches (Level Goal markers); it has {arena.LevelGoalPoints.Count}");
                 Expect(boss != null, $"{where}: no boss was staged");
                 if (boss != null)
@@ -535,7 +542,7 @@ public partial class RunWalkCheck : Node
             arena.QueueFree();
             await Ticks(3);
         }
-        GD.Print($"  run      every map      {entered} shipped maps entered: the player stands and the mission runs on each · {arenas} boss arenas each stage the boss on a perch, and on {fought} of them he gets a head away at a player who only stands");
+        GD.Print($"  run      every map      {entered} shipped maps entered: the player stands and the mission runs on each · {arenas} boss arenas each stage the boss on a perch, and on {fought} of them he gets a head away at a player who only stands · on {realmsBuilt} the arena built his Black Prison before the fight");
     }
 
     /// <summary>The LV6 core's boss: still the stand-in crab (FOES.gdd §8.1).</summary>

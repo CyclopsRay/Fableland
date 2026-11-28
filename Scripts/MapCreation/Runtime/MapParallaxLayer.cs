@@ -80,6 +80,11 @@ public partial class MapParallaxLayer : Node2D
         }
     }
 
+    /// <summary>True when the layer moves with the camera (parallax, auto-scroll or a loop). A layer
+    /// that does not is fixed in world space — the battlefield's own art — and looks right from
+    /// any camera, a realm's window included (T50 §6).</summary>
+    public bool FollowsCamera => _loop || _parallax != Vector2.One || _autoScroll != Vector2.Zero;
+
     /// <summary>The world point at which authored tile positions are visually exact — the
     /// character spawn. With the camera centred there, every layer lines up as painted.</summary>
     public void SetAnchor(Vector2 anchorWorld)

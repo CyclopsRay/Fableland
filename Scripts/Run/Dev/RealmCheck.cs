@@ -59,6 +59,7 @@ public partial class RealmCheck : Node2D, IRealmSpaces
             await ProbeOpenSpot();
             await ProbeWormhole();
             await ProbeMapEdge();
+            await ProbeAdoptAndAdmit();
         }
         catch (Exception e)
         {
@@ -340,6 +341,59 @@ public partial class RealmCheck : Node2D, IRealmSpaces
             $"realm: a way out past the map's edge must land on the edge (at {M(crab.GlobalPosition.X)} m of a {M(StageWidth)} m map)");
         GD.Print($"  realm    map edge       a way out 200 m past the edge lands at {M(crab.GlobalPosition.X)} m of {M(StageWidth)}");
         realm.Close();
+        await Strike(stage);
+    }
+
+    /// <summary>Two ways in besides the pull. A body that turns up inside the space — a protagonist
+    /// switched in by Tab where the one before stood — is a member from then on, under the realm's
+    /// rules, and comes out with everyone. <c>Admit</c> brings a body in from outside to a chosen
+    /// spot (PumpKing's recast), and refuses one that is in another realm (no nesting).</summary>
+    private async Task ProbeAdoptAndAdmit()
+    {
+        Node2D stage = BuildStage();
+        CharacterController player = Fighter(stage, A, out _);
+        CrabFoe stray = Crab(stage, A.X + Units.Px(30f), 17);
+        CrabFoe called = Crab(stage, A.X - Units.Px(25f), 19);
+        CrabFoe other = Crab(stage, A.X + Units.Px(60f), 23);
+        for (int i = 0; i < 10; i++) { await Ticks(1); stray.ApplyTrapped(1f); called.ApplyTrapped(1f); other.ApplyTrapped(1f); }
+        RealmInstance realm = Realm.Open(player, Ratio2, A, Units.Px(8f), CombatSide.Player, "check.adopt");
+        Expect(realm != null && Realm.Of(player) == realm && Realm.Of(stray) == null && Realm.Of(called) == null,
+            "realm: the adopt probe's realm must take the player and leave the far crabs out");
+        if (realm == null) { await Strike(stage); return; }
+
+        BodyPlacement.Teleport(stray, realm.Space.Anchor + new Vector2(Units.Px(4f), 0f));
+        stray.ApplyTrapped(1f);
+        await Ticks(2);
+        Expect(realm.Holds(stray) && stray.Silenced,
+            "realm: a body that turns up inside the space must be a member from then on, under the realm's rules (silenced: the caster's enemy)");
+
+        Vector2 spot = realm.Space.Anchor + new Vector2(-Units.Px(3f), 0f);
+        bool admitted = realm.Admit(called, spot);
+        Expect(admitted && realm.Holds(called) && Realm.Of(called) == realm && called.Silenced && called.GlobalPosition.DistanceTo(spot) <= Units.Px(1f),
+            $"realm: Admit must bring a body in from outside at its spot, under the realm's rules ({M(called.GlobalPosition.DistanceTo(spot))} m from it)");
+
+        RealmInstance second = Realm.Open(stage, Blocked, other.GlobalPosition, Units.Px(1f), CombatSide.Player, "check.second");
+        Expect(second != null && Realm.Of(other) == second, "realm: the second realm must take its crab");
+        Expect(!realm.Admit(other, spot) && (second == null || Realm.Of(other) == second),
+            "realm: Admit must refuse a body that is in another realm (no nesting)");
+        second?.Close();
+
+        // A member moved out by other means (a respawn teleports the player to the map's spawn):
+        // let go where it is — unsilenced, not projected back out of the border.
+        Vector2 respawn = new(A.X - Units.Px(25f), FloorY - 22f);
+        BodyPlacement.Teleport(called, respawn);
+        called.ApplyTrapped(1f);
+        await Ticks(2);
+        Expect(!realm.Holds(called) && Realm.Of(called) == null && !called.Silenced && called.GlobalPosition.DistanceTo(respawn) < Units.Px(0.6f),
+            $"realm: a member moved out of the space by other means must be let go where it is, unsilenced ({M(called.GlobalPosition.DistanceTo(respawn))} m from where it was put)");
+
+        Vector2 strayBack = realm.ToMain(stray.GlobalPosition);
+        realm.Close();
+        await Ticks(3);
+        Expect(Realm.Of(stray) == null && !stray.Silenced, "realm: a close must bring out the adopted body too, unsilenced");
+        Expect((stray.GlobalPosition - strayBack).Length() < Units.Px(0.6f),
+            $"realm: the adopted body comes out at its projected spot ({M((stray.GlobalPosition - strayBack).Length())} m off)");
+        GD.Print("  realm    adopt, admit   a body turning up inside is a member (silenced), Admit brings one in at its spot and refuses one in another realm; one moved out by a respawn is let go where it is; a close returns the adopted");
         await Strike(stage);
     }
 

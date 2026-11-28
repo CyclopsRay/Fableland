@@ -246,7 +246,23 @@ PATROL ──(player in sight)──▶ AGGRO ──(3 consecutive misses)──
 After 3 consecutive misses, the foe resumes its Patrol behaviour from its current
 position. The miss counter resets to 0 on re-aggro.
 
+### A player in another realm (v0.12.21, `Realms.gdd` §6)
+
+A foe sees, chases and touches only a player **in its own realm** (`Realm.SameAs`): the main
+realm or the same sub-realm. A player pulled into a sub-realm the foe is not in is not there at
+all:
+- a foe that had turned on them **drops aggro at once**, not after three misses. Nothing is
+  left to chase, so it gets no three more looks;
+- **a blow does not turn it on them** (a pumpkin, an ally, a hazard);
+- when they come back to its realm, it finds them again on its next sight check.
+
+Inside a sub-realm, foes fight whoever shares it, by the same rules as anywhere.
+
 ### Crowd control laid on a foe (v0.12.11 — PumpKing's Black Prison, `PumpKing.gdd`)
+
+*Since v0.12.21 the Black Prison lays only the silence; it is a sub-realm. The other rules
+stay for other sources: the sight cap for THE VOID, the move and jump shares for world laws and
+zone-6 seals.*
 
 A skill can lay four rules on a foe, each held by a named source (`ICombatTarget`):
 - **a move-speed share** — its walking or flying speed (`CurrentMoveSpeed`), not a skill's own
