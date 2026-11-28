@@ -181,9 +181,10 @@ patch far less; T50 §8 sets the budget.
 
 1. ~~**BOSS PumpKing casts his ult** with the boss ring (§13).~~ **Built v0.12.19**; the boss
    check's `ProbeBossUlt` proves it (on today's prison — it moves onto the realm in step 3).
-2. **The realm core** (T50): spaces, membership and the target filter, going in and coming
-   out, the camera and backdrops, preloading. A realm check proves the projection, the
-   landings, the grace, the filter and the limits.
+2. **The realm core** (T50) — *the core is built (v0.12.20):* membership by position, the
+   filter, going in and coming out (nudges, open spots, the map's edge, the grace, rides),
+   no nesting; `RealmCheck` proves them. **Next:** the arena building spaces from map documents
+   and preloading them, the camera and backdrops per space, the window.
 3. **The Black Prison moves onto it** (§12): the horror patch, random pumpkins, silence, the
    window. The boss check's prison probes are rewritten.
 4. **The tsunami** as the first weather realm (§14), on the beach — VK is the art pilot's

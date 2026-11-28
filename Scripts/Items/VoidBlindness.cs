@@ -28,9 +28,11 @@ public partial class VoidBlindness : Node
 
     private readonly List<ICombatTarget> _blinded = new();
     private readonly HashSet<ulong> _seen = new();
+    private Fableland.Realms.RealmInstance _realm;   // null: the main realm
 
-    /// <summary>Darken the arena for the side's foes, under <paramref name="parent"/>.</summary>
-    public static VoidBlindness Cast(Node parent, CombatSide side, string source)
+    /// <summary>Darken the arena for the side's foes, under <paramref name="parent"/> — the foes of
+    /// <paramref name="caster"/>'s own realm only (T50 §4; the main realm when no caster is given).</summary>
+    public static VoidBlindness Cast(Node parent, CombatSide side, string source, Node2D caster = null)
     {
         var darkness = new VoidBlindness
         {
@@ -38,6 +40,7 @@ public partial class VoidBlindness : Node
             Source = string.IsNullOrWhiteSpace(source) ? "item:the_void:blind" : source,
             Side = side,
             SecondsLeft = Seconds,
+            _realm = Fableland.Realms.Realm.Of(caster),
         };
         parent.AddChild(darkness);
         return darkness;
@@ -72,6 +75,7 @@ public partial class VoidBlindness : Node
     {
         foreach (ICombatTarget target in CombatTargets.HostileTo(GetTree(), Side))
         {
+            if (target is Node2D node && Fableland.Realms.Realm.Of(node) != _realm) continue;
             if (!_seen.Add(target.TargetId)) continue;
             target.SetSightLimit(Source, 0f);
             _blinded.Add(target);

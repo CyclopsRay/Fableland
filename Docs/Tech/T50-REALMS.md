@@ -1,8 +1,11 @@
 # T50 — Realms: the engine contract
 
-> **Status: designed 2026-11-28, not built.** The game rules are `Docs/Realms.gdd`; this is
-> how the engine keeps them. Read T00 (the dependency law) and T10 §4a–§4b (sides, targets,
-> cues) first.
+> **Status: the core is built (v0.12.20)** — `Scripts/Data/RealmTable.cs`,
+> `Scripts/Gameplay/Realms/` (`Realm`, `RealmInstance`, `BodyPlacement`), the filter at the
+> places that ignore distance, `RealmCheck` (28). **Still to build:** the arena's spaces built
+> from map documents and preloaded (§8), views and the window (§6), the Elsewhere sound (§7),
+> cues (§9). The game rules are `Docs/Realms.gdd`; this is how the engine keeps them. Read T00
+> (the dependency law) and T10 §4a–§4b (sides, targets, cues) first.
 
 ## 1. Where it sits
 
@@ -53,17 +56,23 @@ only by the projection.
 
 ## 4. Membership and the target filter
 
-- Every combat body has `Realm` (0 = the main realm; otherwise its instance id).
-- **`CombatTargets.HostileTo(tree, side)` returns only bodies in the asker's realm.** It is the
-  one choke point every kit already uses (T00), so no kit changes.
+- **A body's realm is where it stands (as built, v0.12.20):** inside an open instance's space
+  bounds, that realm; anywhere else, the main realm — `Realm.Of(body)`. Spaces never overlap,
+  so position is the one owner of the fact (T00 rule 2); the field on `ICombatTarget` first
+  designed here would have been a second record to fall out of step.
+- **Two lookups, by what they measure.** Kit hits measure distance and keep using
+  `CombatTargets.HostileTo(tree, side)` unchanged: other realms are thousands of pixels away.
+  What ignores distance asks `Realm.HostileTo(asker, side)` / `Realm.SameAs(a, b)`: a foe's
+  player lookup (`BaseFoe`), a boss's senses (`BossSenses`), zone-6 targeting
+  (`Zone6BossFighter.TargetBody`), THE VOID's darkness (cast in its holder's realm).
 - Projectiles, hazards and realm creatures record the realm they were made in. Under option A
   they are physically there as well.
 - **AI:** a target must share the foe's realm. When the player leaves, foes in the main realm
   lose them at once.
 - **Global walkers** (THE VOID's darkness, zone-6 seals, realm laws, Māra's wheel) must state
   their realm scope. The default is the source's own realm.
-- **Never pulled in:** mission objectives, pickups, wonder cores, props (a `RealmImmune` marker
-  on the body or scene).
+- **Never pulled in:** mission objectives, pickups, wonder cores, props — the `IRealmImmune`
+  marker (on `DestroyObjective` since v0.12.20).
 
 ## 5. Going in and coming out
 
@@ -76,7 +85,8 @@ only by the projection.
 
 **Exit(body, reason)** — the reason is `Border`, `Close` or `Timer`.
 1. `p = mainAnchor(now) + (p_sub − subAnchor) ÷ ratio`, using the *current* main anchor (a
-   wormhole). Nudge it outward to just past the region.
+   wormhole). Out over the border or at a ride's end, nudge it **sideways** to just past the
+   region, keeping its height (a side view: never pushed into the floor or into the air).
 2. Use the nearest free spot; clamp to the main map's bounds.
 3. Move the body, keep its velocity, clear the rules, set `Realm = 0`, start a **0.5 s
    re-entry grace** for this instance, and raise `realm.exit`.

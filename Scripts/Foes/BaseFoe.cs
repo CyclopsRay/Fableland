@@ -361,6 +361,8 @@ public partial class BaseFoe : CharacterBody2D, ICombatTarget, IFeedbackBody
 
         TickTimers(dt);
         var player = GetTree().GetFirstNodeInGroup("player") as CharacterController;
+        // A player in another realm is not here (Realms.gdd §6): no sight, no chase, no contact.
+        if (player != null && !Fableland.Realms.Realm.SameAs(this, player)) player = null;
 
         // 1. status decay (may Die)
         if (UpdateStatus(dt)) return;

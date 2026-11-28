@@ -190,6 +190,17 @@ It is also an x86_64 binary: **never launch Godot from it** (caveat below, v0.11
 
 ## Caveats / gotchas (grow this on every bug fix)
 
+### The ratio doubles every offset from the anchor — up and down too (v0.12.20, the realm check)
+- **Symptom:** a fighter standing level with a realm's main anchor landed 0.25 m higher than its
+  projected spot. Its centre sat a few px below the anchor's height; ratio 2 doubled that, into
+  the patch's floor, and the open-spot search lifted it out.
+- **Rule:** a realm patch's floor sits half a fighter below its anchor, and the projection
+  doubles (at ratio 2) whatever height a body has relative to the main anchor: expect small
+  lifts, and author patches with room above and below the anchor. Checks compare the landing
+  across exactly and up or down within half a metre.
+- **Why:** the projection is the same affine map in both axes (`Realms.gdd` §4); the two maps'
+  ground has nothing in common, so the nearest open spot is the rule that reconciles them.
+
 ### A body writes run state back only into the record it was loaded from (v0.12.13, the ult rings; designed in)
 - **Rule:** per-protagonist state a body carries through a fight — HP, the magazine, and since
   v0.12.13 the ult ring — is loaded from that protagonist's `ProtagonistState` when the body

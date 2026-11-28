@@ -471,7 +471,7 @@ internal sealed class TheVoidBehavior : ICombatItemBehavior
             reason = "There is nothing here for THE VOID to darken.";
             return false;
         }
-        VoidBlindness.Cast(parent, runtime.Holder.Side, runtime.SourceKey + ":blind");
+        VoidBlindness.Cast(parent, runtime.Holder.Side, runtime.SourceKey + ":blind", runtime.Holder);
         reason = null;
         return true;
     }

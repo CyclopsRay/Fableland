@@ -227,6 +227,8 @@ public sealed class BossSenses
         if (!self.IsInsideTree()) return;
         if (self.GetTree().GetFirstNodeInGroup(CombatTargets.PlayerGroup) is not CharacterController player) return;
         if (player.IsDefeated || !GodotObject.IsInstanceValid(player)) return;
+        // A player in another realm is not here (Realms.gdd §6).
+        if (!Fableland.Realms.Realm.SameAs(self, player)) return;
 
         // A sight cap a skill laid on him (the Black Prison): past it he does not know where
         // the player is, and every rule that needs a target waits.

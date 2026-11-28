@@ -9,6 +9,17 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.20** — **The realm core** (the realm build's step 2, first half; `Docs/Tech/T50-REALMS.md`).
+  - `Scripts/Data/RealmTable.cs` (definitions; the Black Prison's registered for step 3) and
+    `Scripts/Gameplay/Realms/`: `Realm` (which realm a body is in — by position, since spaces never
+    overlap; `Open`; the filter), `RealmInstance` (the projection, in and out, graces, rides, close),
+    `BodyPlacement` (the nearest open spot, generalised from PumpKing's blink).
+  - Out over a border or at a ride's end a body is nudged **sideways** clear of the region, keeping its
+    height; a way out past the map lands on its edge; objectives (`IRealmImmune`) never go in.
+  - The realm filter where lookups ignore distance: foes' player lookup, a boss's senses, zone-6
+    targeting, THE VOID's darkness (cast in its holder's realm). Kit hits are unchanged.
+  - **Checks:** new `RealmCheck` (28); ten mutants, each caught. KNOWLEDGE: the ratio doubles height offsets.
+  - Not yet: the arena's spaces from map documents and preloading, views, the window, sound, cues.
 - **0.12.19** — **BOSS PumpKing casts his ultimate** (the realm build's step 1, `Realms.gdd` §13).
   - **The boss ring:** `BossDef.UltRingPerSecond` (10) and `UltRingPerDamage` (5), set on every boss by
     `BossSetup.ApplyRow`; `CharacterController.UltChargePerSecond` ticks it. A hit on the player now

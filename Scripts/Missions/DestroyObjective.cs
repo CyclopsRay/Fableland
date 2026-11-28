@@ -11,7 +11,7 @@ namespace Fableland.Missions;
 /// (<see cref="CanEvolve"/>) so a target can't level up mid-fight and grow its HP. HP is set
 /// table-driven via <see cref="BaseFoe.OverrideMaxHp"/>, not foe-level scaling.
 /// </summary>
-public partial class DestroyObjective : BaseFoe
+public partial class DestroyObjective : BaseFoe, Fableland.Realms.IRealmImmune   // objectives stay on the battlefield (Realms.gdd §10)
 {
     protected override void InitFoe()
     {

@@ -72,7 +72,9 @@ public abstract partial class Zone6BossFighter : CharacterController, IBossFight
     protected float TargetMetres => Senses.HasTarget ? Senses.Distance / Units.PixelsPerMeter : float.PositiveInfinity;
 
     /// <summary>The player's body, when there is one.</summary>
-    protected CharacterController TargetBody => GetTree().GetFirstNodeInGroup(CombatTargets.PlayerGroup) as CharacterController;
+    protected CharacterController TargetBody =>
+        GetTree().GetFirstNodeInGroup(CombatTargets.PlayerGroup) is CharacterController player
+        && Fableland.Realms.Realm.SameAs(this, player) ? player : null;   // another realm is not here
 
     /// <summary>Turns toward the player through the pad (the body flips on its next tick).</summary>
     protected void FaceTarget(VirtualPad pad)
