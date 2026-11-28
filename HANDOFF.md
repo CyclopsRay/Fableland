@@ -10,18 +10,18 @@ shelter, merged from a parallel session), **v0.12.10** (the plantation and the e
 altar in the hub's room), **v0.12.11** (PumpKing's ultimate, the Black Prison, merged from the
 other parallel session), **v0.12.12** (THE VOID's darkness — every item now has its behaviour)
 **v0.12.13** (the owner's answers: the Black Prison's size rule, silenced items, each
-fighter's own ult ring kept between fights) **v0.12.14** (the owner's style picks recorded), **v0.12.15** (the prison at 8 m; everything pushed) and **v0.12.18** (the realm system designed with the owner — docs only; v0.12.16–17 are the art pilot's commits on its own branch). **Replace this file at every hand-off:** it describes
+fighter's own ult ring kept between fights) **v0.12.14** (the owner's style picks recorded), **v0.12.15** (the prison at 8 m; everything pushed), **v0.12.18** (the realm system designed with the owner — docs only; v0.12.16–17 are the art pilot's commits on its own branch) and **v0.12.19** (BOSS PumpKing casts his ult, with the boss ring). **Replace this file at every hand-off:** it describes
 *now*; `Migration.md` §0 describes history.
 
 ## 1. Where the work is
 
-- **Branch `claude/game-prototype-completion-d9792d`, v0.12.18**, twenty-four commits and two
+- **Branch `claude/game-prototype-completion-d9792d`, v0.12.19**, twenty-five commits and two
   merges on top of v0.11.0. The branch itself is not pushed; `main` and `LocalTimeScale` carry it up to v0.12.15. Worktree: `.claude/worktrees/sheik-shark-medical-city-1ade9e`.
 - **`main` and `LocalTimeScale` were fast-forwarded to v0.12.15 and pushed to `origin` on
   2026-11-28** (the owner: "本地顺手就push吧" — the first push since v0.11.0). `LocalTimeScale` is
   the main checkout, `/Users/cyclops/fableland`; the owner's uncommitted `project.godot` edits
   and untracked art there were kept as they were. The owner asks for each fast-forward and
-  push. If a new session's worktree starts older than v0.12.18, first run
+  push. If a new session's worktree starts older than v0.12.19, first run
   `git merge --ff-only claude/game-prototype-completion-d9792d`.
 - **The art pilot (VK beach in VK-B, phase 1) is on branch `worktree-agent-a55a787814459bcfb`**
   (worktree `.claude/worktrees/agent-a55a787814459bcfb`, v0.12.16–v0.12.17, all suites clean), **not
@@ -76,9 +76,10 @@ fighter's own ult ring kept between fights) **v0.12.14** (the owner's style pick
 | 0.12.14 | `a7cbf6b` | **The owner's style picks** — one direction per world (VK-B, SL-A, BM-A, HC-C, TD-C, PL-A, KH-C, TF-B, CC-B; OW-B for the overworld), recorded with what they leave open. Docs only | `Docs/Art/StyleExploration/PICKS.md` |
 | 0.12.15 | `9f307bc` | **The Black Prison is 8 m** (the owner: the rule's 19.1 m was too big); pushed with `main` and `LocalTimeScale` | `PumpKing.gdd` §Q |
 | 0.12.16–17 | `8ac29c6`, `391ad1b` (branch `worktree-agent-a55a787814459bcfb`, not merged) | **The art pilot, phase 1:** the beach slice repainted in VK-B (ground, two ledges, the campfire, sun, clouds, a far sky) and the crab in the characters' style with seven animations; the repaint pipeline written for the other worlds | `Docs/Art/RealmRepaintPipeline.md`, `BeachTileSet.md` (on that branch) |
-| 0.12.18 | — | **The realm system, designed with the owner** — sub-realms joined to the battlefield by (anchor, anchor, ratio); who crosses; no cross-realm attacks in v1; the window and lenses; the dreamcore sound; the Black Prison and the tsunami as its first users; BOSS PumpKing's ult. Docs only | `Docs/Realms.gdd`, `Docs/Tech/T50-REALMS.md` |
+| 0.12.18 | `883c7c5` | **The realm system, designed with the owner** — sub-realms joined to the battlefield by (anchor, anchor, ratio); who crosses; no cross-realm attacks in v1; the window and lenses; the dreamcore sound; the Black Prison and the tsunami as its first users; BOSS PumpKing's ult. Docs only | `Docs/Realms.gdd`, `Docs/Tech/T50-REALMS.md` |
+| 0.12.19 | — | **BOSS PumpKing casts his ult** (realm build step 1): a boss's ring fills +10/s and +5 per damage dealt or taken (a hit now credits its attacker); his brain opens the Black Prison 5 m ahead of the player's movement, closes in when out of reach, recasts the moment it forms | `Realms.gdd` §13, `FOES.gdd` §8.3 |
 
-**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.15, all passing:
+**Checks.** All are headless, each with a scratch `HOME`; commands are in `40-QA.md`. Counts at v0.12.19, all passing:
 
 | Check | Scene | Count |
 |---|---|---|
@@ -86,7 +87,7 @@ fighter's own ult ring kept between fights) **v0.12.14** (the owner's style pick
 | VFX | `Scenes/Feedback/VfxCheck.tscn` | 1298 |
 | Audio | `Scenes/Feedback/AudioCheck.tscn` | 1108 |
 | Map content | `Scenes/MapCreation/MapContentCheck.tscn` | 1171 |
-| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 263 at v0.12.15 (the Black Prison at 8 m; ~25 s) |
+| Boss | `Scenes/Bosses/BossFightCheck.tscn` | 276 at v0.12.19 (the Black Prison at 8 m; BOSS PumpKing's ult; ~30 s) |
 | Zone 6 | `Scenes/Run/Zone6Check.tscn` | 115 |
 | Run | `Scenes/Run/RunWalkCheck.tscn` | 2031 at v0.12.13 without `--saves` (the ult rings walk; 2005 at v0.12.1 with `-- --saves=<copy of the owner's slots>`) |
 | Flow (new, v0.12.4) | `Scenes/Run/FlowCheck.tscn` | 88 at v0.12.13 — the audit's Part 2 fixes on real bodies, the HUD's faces, settings, events, the wonder items' lifecycles, DD, item passives, THE VOID's darkness, no item while silenced |
@@ -99,8 +100,8 @@ fighter's own ult ring kept between fights) **v0.12.14** (the owner's style pick
 
 ## 3. Not done — in the order the owner's request implies
 
-**Next, agreed 2026-11-28:** the realm build order, `Realms.gdd` §16 — (1) BOSS PumpKing casts his
-ult with the boss ring; (2) the realm core (T50); (3) the Black Prison as a sub-realm; (4) the
+**Next, agreed 2026-11-28:** the realm build order, `Realms.gdd` §16 — (1) ~~BOSS PumpKing casts his
+ult with the boss ring~~ done v0.12.19; (2) **the realm core (T50), next**; (3) the Black Prison as a sub-realm; (4) the
 tsunami as the first weather realm; (5) lenses, the dreamcore sound, items and other weathers. In
 parallel, the art pilot's phase 2 once the owner answers its questions (§4).
 

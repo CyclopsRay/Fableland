@@ -9,6 +9,15 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.19** — **BOSS PumpKing casts his ultimate** (the realm build's step 1, `Realms.gdd` §13).
+  - **The boss ring:** `BossDef.UltRingPerSecond` (10) and `UltRingPerDamage` (5), set on every boss by
+    `BossSetup.ApplyRow`; `CharacterController.UltChargePerSecond` ticks it. A hit on the player now
+    credits its attacker's ring at the attacker's own rate (bosses had never been credited for damage
+    dealt). Players are unchanged: +1 dealt, +2 taken, nothing over time.
+  - **His brain:** `recast` (the moment his prison forms), `black prison` (full ring: 5 m ahead of the
+    player's movement, on a still player, at the player's height) and `close in` (walk into range).
+  - **Checks:** boss 263 → 276 (`ProbeBossUlt`: the ring, a cast 5.0 m ahead of a walking player and a
+    recast 0.15 s after it formed, closing in from 16 m to 7.3 m). Six mutants.
 - **0.12.18** — **The realm system, designed with the owner** (docs only; v0.12.16–17 are the art pilot's
   commits, on its own branch until the owner approves its look). `Docs/Realms.gdd`: sub-realms opened by
   skills, bosses, items and weather, joined to the battlefield by (main anchor, sub anchor, name, ratio) —

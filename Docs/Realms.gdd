@@ -145,7 +145,7 @@ Gone once this is built: the move and jump scales, the 3 m sight cap, the dark v
 grown at the heart and thrown outward, pumpkins hitting outside. The caster may recast from
 inside or outside. Pumpkin numbers wait for play tests; for now they are random.
 
-## 13. BOSS PumpKing casts his ultimate
+## 13. BOSS PumpKing casts his ultimate — *built v0.12.19*
 
 - **A boss's ring:** 1500 to fill, **+10 per second** while the fight runs, **+5 per point of
   damage** he deals or takes. *(Players are unchanged: +1 per damage dealt, +2 per damage
@@ -179,8 +179,8 @@ patch far less; T50 §8 sets the budget.
 
 ## 16. Build order
 
-1. **BOSS PumpKing casts his ult** with the boss ring (§13). Independent of realms; the boss
-   check proves it.
+1. ~~**BOSS PumpKing casts his ult** with the boss ring (§13).~~ **Built v0.12.19**; the boss
+   check's `ProbeBossUlt` proves it (on today's prison — it moves onto the realm in step 3).
 2. **The realm core** (T50): spaces, membership and the target filter, going in and coming
    out, the camera and backdrops, preloading. A realm check proves the projection, the
    landings, the grace, the filter and the limits.

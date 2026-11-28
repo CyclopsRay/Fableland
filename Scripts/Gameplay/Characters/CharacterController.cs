@@ -43,6 +43,9 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 	[Export] public float MaxUltCharge = 1500f;
 	[Export] public float UltChargeDealtRate = 1f;     // charge per point of damage dealt
 	[Export] public float UltChargeReceivedRate = 2f;  // charge per point of damage received
+	/// <summary>Charge gained every second the body is alive. 0 for protagonists; a boss's row
+	/// sets its own (+10, Realms.gdd §13) through <c>BossSetup.ApplyRow</c>.</summary>
+	public float UltChargePerSecond;
 
 	[ExportGroup("Movement")]
 	[Export] public float MoveSpeed = 320f;              // ~10 m/s target
@@ -704,6 +707,7 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		_hurtTicks.Tick((float)delta);
 		if (_dead) { if (ShowDebugRanges) QueueRedraw(); return; }
 		CombatInactivitySeconds += (float)delta;
+		if (UltChargePerSecond > 0f) GainUltCharge(UltChargePerSecond * dt);
 
 		// Every clock keeps running through a hit-stop — cooldowns, ammo, statuses, the
 		// gain-no window — and abilities are still read, so a press during a stop is never
@@ -1272,6 +1276,10 @@ public partial class CharacterController : CharacterBody2D, ICombatTarget, IFeed
 		if (playerSide)
 		{
 			if (hit.Knockback != Vector2.Zero) _invulnTimer = 0.8f;
+			// The fighter who landed it fills their own ring for the damage dealt, at their own
+			// rate (a boss's +5 a point, Realms.gdd §13). A foe with no ring (a crab) is not one.
+			if (hit.Attacker is CharacterController striker && striker != this && GodotObject.IsInstanceValid(striker))
+				striker.GainUltCharge(dealt * striker.UltChargeDealtRate);
 		}
 		else
 		{

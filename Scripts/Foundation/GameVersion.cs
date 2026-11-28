@@ -5,5 +5,5 @@
 /// </summary>
 public static class GameVersion
 {
-    public const string Current = "0.12.18";
+    public const string Current = "0.12.19";
 }

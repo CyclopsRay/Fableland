@@ -373,13 +373,20 @@ His hands and legs are separate rule lists (§8.4), most urgent first:
 | Channel | Rule | When | Does |
 |---------|------|------|------|
 | legs | **soul flight** | in Soul Form | flies to the perch he chose: up clear of the higher end, across, down onto it |
+| legs | **close in** *(v0.12.19)* | his ring is full but where he would open the Black Prison is beyond his 8 m cast range | walks toward that point, jumping a step |
 | legs | **hold perch** | otherwise | walks back to his perch, jumps when under it or blocked, faces the player |
+| hands | **recast** *(v0.12.19)* | his Black Prison has formed and he has not recast | the second phase at once (Q): blinks into its mouth, his head's biggest blast |
+| hands | **black prison** *(v0.12.19)* | his ring is full and the aim point is within 8 m | opens it (Q) **5 m ahead of the player along the way they move** — they walk into its centre during the 1 s warning; on a player slower than 1 m/s across, on them; at the player's own height (`Realms.gdd` §13) |
 | hands | **detonate** | his rolling head is within 0.8 blast radii of the player | sets it off (BA) |
 | hands | **call back** | his head has been rolling *away* from the player for 0.9 s, 1.5 radii clear | sets it off, so the magazine reloads |
 | hands | **soul away** | the player has been in his face — within 3.5 m, about level — for 1.2 s, and Soul Form is ready | Soul Form (Shift); leaves for the perch farthest from the player |
 | hands | **bowl** | head on his neck and pumped enough for the range | aims and throws (BA) |
 | hands | **pump up** | not yet pumped enough for the range | Pump Up (E) |
 
+- **His ring** (v0.12.19, `Realms.gdd` §13): a boss's ring fills **+10 a second** of the fight and
+  **+5 a point of damage** he deals or takes (`BossDef.UltRingPerSecond` / `UltRingPerDamage`,
+  set by `BossSetup.ApplyRow` for every boss). A player's ring keeps its slower rates. At 1500
+  he casts about once in two and a half minutes of a quiet fight, sooner the harder it is.
 - **Pumping by range.** Before a throw he wants 3 stacks with the player beyond 14 m, 2
   beyond 8 m, 1 beyond 5 m, none closer: the farther the player, the longer he can afford to
   build shell, and the more he will need it when they arrive. Up close he throws at once.

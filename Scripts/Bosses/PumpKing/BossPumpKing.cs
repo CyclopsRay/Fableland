@@ -16,8 +16,12 @@ using Fableland.Data;
 /// His hands are a rule list (<see cref="BuildRules"/>) pressing the kit's own buttons:
 ///
 ///   legs   soul flight   — in Soul Form: fly to the perch he chose
+///          close in      — his ring is full but where he'd aim is past his cast range: walk to it
 ///          hold perch    — otherwise: walk (and jump) back to his perch, face the player
-///   hands  detonate      — his rolling head is beside the player: set it off
+///   hands  recast        — his Black Prison has formed: the second phase, at once
+///          black prison  — his ring is full: open it 5 m ahead of where the player is moving
+///                          (Realms.gdd §13), so they walk into its centre during the warning
+///          detonate      — his rolling head is beside the player: set it off
 ///          call back     — his head has rolled past the player: set it off, reload
 ///          soul away     — the player has been in his face too long: Soul Form, new perch
 ///          bowl          — head on his neck and pumped enough for the range: throw it
@@ -55,6 +59,11 @@ public partial class BossPumpKing : PumpKing, IBossFighter
     private const float SoulCruiseM = 1.5f;
     /// <summary>…and starts coming down once this close to the perch, sideways.</summary>
     private const float SoulDescendWithinM = 2f;
+    /// <summary>The Black Prison (Realms.gdd §13, the owner): its centre goes this far ahead of
+    /// the player along the way they are moving, so the warning walks them into it…</summary>
+    public const float PrisonLeadM = 5f;
+    /// <summary>…unless they are this slow across: then he opens it on them.</summary>
+    public const float PrisonStillMps = 1f;
 
     private BossBrain _brain;
     private BossArena _arena;
@@ -100,6 +109,7 @@ public partial class BossPumpKing : PumpKing, IBossFighter
     public void StandDown()
     {
         Invincible = true;
+        UltChargePerSecond = 0f;     // the fight is over: his ring stops filling
         _brain?.Sleep();
     }
 
@@ -142,9 +152,24 @@ public partial class BossPumpKing : PumpKing, IBossFighter
 
         // legs
         rules.Add(new BossRule(BossBrain.Move, "soul flight", () => CurrentState == PKState.Soul) { Each = FlyToPerch });
+        rules.Add(new BossRule(BossBrain.Move, "close in", () => UltReady && _senses.HasTarget && !PrisonAimInReach()) { Each = CloseIn });
         rules.Add(new BossRule(BossBrain.Move, "hold perch", () => true) { Each = HoldPerch });
 
-        // hands, most urgent first
+        // hands, most urgent first: his ultimate before anything his head does
+        rules.Add(new BossRule(BossBrain.Act, "recast", () => Prison is { Standing: true, RecastUsed: false })
+        {
+            OnStart = () => pad.Tap(ControlAction.Ult),
+            Cooldown = 0.3f,
+        });
+        rules.Add(new BossRule(BossBrain.Act, "black prison", () => UltReady && _senses.HasTarget && PrisonAimInReach())
+        {
+            OnStart = () =>
+            {
+                pad.Aim = PrisonAim();
+                pad.Tap(ControlAction.Ult);
+            },
+            Cooldown = 0.5f,
+        });
         rules.Add(new BossRule(BossBrain.Act, "detonate", HeadIsBesidePlayer)
         {
             OnStart = () => pad.Tap(ControlAction.Attack),
@@ -183,6 +208,36 @@ public partial class BossPumpKing : PumpKing, IBossFighter
             OnStart = () => pad.Tap(ControlAction.Skill2),
             Cooldown = PumpInnerCD + 0.05f,
         });
+    }
+
+    /// <summary>
+    /// Where his Black Prison goes (Realms.gdd §13): 5 m ahead of the player along the way they
+    /// are moving across — they walk into its centre during the 1 s warning. A player standing
+    /// still gets it on them; one in the air, at their own height.
+    /// </summary>
+    public Vector2 PrisonAim()
+    {
+        Vector2 at = _senses.TargetPosition;
+        float across = _senses.TargetVelocity.X;
+        if (Mathf.Abs(across) >= Units.Px(PrisonStillMps)) at.X += Mathf.Sign(across) * Units.Px(PrisonLeadM);
+        return at;
+    }
+
+    /// <summary>His cast range reaches that point (the kit would pull a farther aim back).</summary>
+    private bool PrisonAimInReach() =>
+        _senses.HasTarget && GlobalPosition.DistanceTo(PrisonAim()) <= Units.Px(PrisonCastRangeM);
+
+    /// <summary>Ring full, aim out of reach: walk toward the point he wants, jumping a step.</summary>
+    private void CloseIn()
+    {
+        VirtualPad pad = _brain.Pad;
+        float dx = PrisonAim().X - GlobalPosition.X;
+        if (Mathf.Abs(dx) > Units.Px(PerchReachM))
+        {
+            pad.Hold(dx > 0f ? ControlAction.MoveRight : ControlAction.MoveLeft);
+            pad.Facing = 0f;
+        }
+        if (_senses.OnFloor && _senses.OnWall) pad.Tap(ControlAction.Jump);
     }
 
     private bool HeadIsBesidePlayer()

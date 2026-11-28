@@ -88,6 +88,7 @@ public partial class BossFightCheck : Node
             await ProbeBlackPrisonOnFoes();
             await ProbePrisonPumpkins();
             await ProbePrisonTakesSides();
+            await ProbeBossUlt();
         }
         catch (Exception e)
         {
@@ -1947,5 +1948,120 @@ public partial class BossFightCheck : Node
         for (int i = 0; i < 20 && bossKing.PumpStacks == 0; i++) await Ticks(1);
         Expect(bossKing.PumpStacks == 1, "prison takes sides: let go, the boss must pump up again");
         GD.Print("  boss     black prison   the player's on a boss: his brain loses a player 6 m off · Pump Up refused while his head still flies · all back when it ends");
+    }
+
+    // ---------------------------------------------------------------- 6. BOSS PumpKing's ultimate (v0.12.19)
+
+    /// <summary>
+    /// BOSS PumpKing uses his ultimate (Realms.gdd §13). A boss's ring fills +10 a second and +5
+    /// a point of damage he deals or takes; the player's keeps its own slower rates. Full, he
+    /// opens the Black Prison 5 m ahead of a player walking at him and recasts the moment it
+    /// forms; a player standing out of reach he closes in on, then opens it on them.
+    /// </summary>
+    private async Task ProbeBossUlt()
+    {
+        Node2D stage = BuildStage(0f, 6000f);
+        try { await BossRing(stage); }
+        finally { _pads.Clear(); }
+        await Strike(stage);
+
+        stage = BuildStage(0f, 6000f);
+        try { await BossCastsAhead(stage); }
+        finally { _pads.Clear(); }
+        await Strike(stage);
+
+        stage = BuildStage(0f, 6000f);
+        try { await BossClosesIn(stage); }
+        finally { _pads.Clear(); }
+        await Strike(stage);
+    }
+
+    private async Task BossRing(Node2D stage)
+    {
+        (CharacterController boss, VirtualPad _) = StageAsleep(stage, BossTable.PumpKing, new Vector2(3000f, FloorY - 32f));
+        CharacterController player = StillPlayer(stage, 3000f - Units.Px(20f));
+        await Ticks(30);
+        Expect(Mathf.IsEqualApprox(boss.UltChargePerSecond, 10f) && Mathf.IsEqualApprox(boss.UltChargeDealtRate, 5f)
+               && Mathf.IsEqualApprox(boss.UltChargeReceivedRate, 5f),
+            $"boss ult: a boss's ring fills +10 a second and +5 a point (got {boss.UltChargePerSecond}/s, ×{boss.UltChargeDealtRate} dealt, ×{boss.UltChargeReceivedRate} taken)");
+        Expect(player.UltChargePerSecond == 0f && Mathf.IsEqualApprox(player.UltChargeDealtRate, 1f) && Mathf.IsEqualApprox(player.UltChargeReceivedRate, 2f),
+            $"boss ult: the player's ring keeps its slower rates, +1 dealt and +2 taken, nothing over time (got {player.UltChargePerSecond}/s, ×{player.UltChargeDealtRate}, ×{player.UltChargeReceivedRate})");
+
+        float bossBefore = boss.UltCharge, playerBefore = player.UltCharge;
+        await Ticks(60);
+        float second = boss.UltCharge - bossBefore;
+        Expect(Mathf.Abs(second - 10f) <= 0.6f, $"boss ult: in a second of nothing his ring rose {second:0.0}; it fills 10 a second");
+        Expect(Mathf.IsEqualApprox(player.UltCharge, playerBefore), $"boss ult: in a second of nothing the player's ring rose {player.UltCharge - playerBefore:0.0}; it fills only from damage");
+
+        // A point he deals to the player: +5 for him. (HP lost is what the hit dealt: the
+        // probe's fighter has no shield to absorb it.)
+        float hp = player.CurrentHP, before = boss.UltCharge;
+        player.TakeHit(new HitInfo(10f).From(boss, "probe.blow"), boss.GlobalPosition);
+        float lost = hp - player.CurrentHP, gainedDealt = boss.UltCharge - before;
+        Expect(lost > 0f && Mathf.Abs(gainedDealt - 5f * lost) <= 0.5f,
+            $"boss ult: dealing {lost:0} to the player must fill his ring by {5f * lost:0} (it rose {gainedDealt:0.0})");
+
+        // A point he takes: +5 for him.
+        hp = boss.CurrentHP;
+        before = boss.UltCharge;
+        boss.TakeHit(new HitInfo(10f), player.GlobalPosition);
+        lost = hp - boss.CurrentHP;
+        float gainedTaken = boss.UltCharge - before;
+        Expect(lost > 0f && Mathf.Abs(gainedTaken - 5f * lost) <= 0.5f,
+            $"boss ult: taking {lost:0} must fill his ring by {5f * lost:0} (it rose {gainedTaken:0.0})");
+        GD.Print($"  boss     boss ult       his ring: +{second:0.0} in a second, +{gainedDealt:0} for dealing and +{gainedTaken:0} for taking 10 · the player's: +0 a second, ×1 dealt, ×2 taken");
+    }
+
+    private async Task BossCastsAhead(Node2D stage)
+    {
+        var king = (BossPumpKing)StageBoss(stage, BossTable.PumpKing, new Vector2(3000f, FloorY - 32f));
+        CharacterController player = PadPlayer(stage, 3000f - Units.Px(14f), out VirtualPad pad);
+        await Ticks(30);
+        king.GainUltCharge(king.MaxUltCharge);
+        pad.Hold(ControlAction.MoveRight);                 // walking at him
+        BlackPrison prison = null;
+        float playerAt = 0f;
+        for (int i = 0; i < 60 * 4 && prison == null; i++)
+        {
+            await Ticks(1);
+            if (king.Prison != null) { prison = king.Prison; playerAt = player.GlobalPosition.X; }
+        }
+        pad.Hold(ControlAction.MoveRight, false);
+        Expect(prison != null, "boss ult: with a full ring and a player walking at him he never opened his Black Prison");
+        if (prison == null) return;
+        float lead = (prison.Centre.X - playerAt) / Units.PixelsPerMeter;
+        Expect(lead > 3f && lead < 6.5f,
+            $"boss ult: he must open it about {BossPumpKing.PrisonLeadM} m ahead of a player walking his way (it opened {lead:0.0} m ahead)");
+        await WaitForStage(prison, BlackPrison.Phase.Standing, 90);
+        int ticks = 0;
+        for (; ticks < 60 && !prison.RecastUsed; ticks++) await Ticks(1);
+        Expect(prison.Standing && prison.RecastUsed && ticks * Tick <= 0.45f,
+            $"boss ult: he must recast the moment it forms (recast {(prison.RecastUsed ? $"{ticks * Tick:0.00} s after" : "never")})");
+        for (int i = 0; i < 40 && !prison.Swallowed; i++) await Ticks(1);
+        Expect(prison.Swallowed, "boss ult: his recast must blink him into the mouth");
+        GD.Print($"  boss     boss ult       full ring: opened {lead:0.0} m ahead of a player walking at him · recast {ticks * Tick:0.00} s after it formed");
+    }
+
+    private async Task BossClosesIn(Node2D stage)
+    {
+        var king = (BossPumpKing)StageBoss(stage, BossTable.PumpKing, new Vector2(3000f, FloorY - 32f));
+        CharacterController player = StillPlayer(stage, 3000f - Units.Px(16f));
+        await Ticks(30);
+        float startGap = king.GlobalPosition.DistanceTo(player.GlobalPosition);
+        king.GainUltCharge(king.MaxUltCharge);
+        BlackPrison prison = null;
+        float gapAtCast = 0f;
+        for (int i = 0; i < 60 * 6 && prison == null; i++)
+        {
+            await Ticks(1);
+            if (king.Prison != null) { prison = king.Prison; gapAtCast = king.GlobalPosition.DistanceTo(player.GlobalPosition); }
+        }
+        Expect(prison != null, $"boss ult: a full ring and a player standing {M(startGap)} m off: he never opened it");
+        if (prison == null) return;
+        Expect(gapAtCast <= Units.Px(PumpKing.PrisonCastRangeM) + 2f && gapAtCast < startGap - Units.Px(4f),
+            $"boss ult: from {M(startGap)} m he must close in to his {PumpKing.PrisonCastRangeM} m first (he cast from {M(gapAtCast)} m)");
+        Expect(prison.Centre.DistanceTo(player.GlobalPosition) <= Units.Px(0.6f),
+            $"boss ult: on a player standing still he opens it on them ({M(prison.Centre.DistanceTo(player.GlobalPosition))} m off)");
+        GD.Print($"  boss     boss ult       a still player {M(startGap)} m off: he walked in to {M(gapAtCast)} m and opened it on them");
     }
 }

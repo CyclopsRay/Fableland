@@ -341,10 +341,11 @@ until the other realms have bosses of their own, **he stands in at every realm's
 that realm's boss arena (`FOES.gdd` §8.1). His HP there is his row's × the day: 600 on days
 1–10, 720, 900, 1200, and 1800 from day 36.
 
-**The Black Prison on the boss — designed 2026-11-28, `Realms.gdd` §13:** a boss's ring fills
-+10 per second and +5 per point of damage he deals or takes; full, he aims 5 m ahead of the
-player's movement and recasts the moment it forms. Building it is the realm plan's first step.
-**Before that (as shipped):** His kit has the ultimate (it is side-
+**The Black Prison on the boss — built v0.12.19 (`Realms.gdd` §13, `FOES.gdd` §8.3):** a boss's
+ring fills +10 a second and +5 a point of damage he deals or takes; full, he opens it 5 m ahead
+of the player's movement (on a player standing still, on them; out of reach, he closes in
+first) and recasts the moment it forms. The boss check's `ProbeBossUlt` proves each rule.
+*Until v0.12.19:* His kit has the ultimate (it is side-
 agnostic: on his side it holds the player, silences them — skills and items — slows them and
 darkens their view; 8 m in radius),
 but **his brain never presses Q**. A rule for it is the next step: open it when the player is

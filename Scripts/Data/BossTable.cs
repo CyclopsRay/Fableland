@@ -56,6 +56,12 @@ public sealed class BossDef
     /// <summary>Multiplier on the kit's skill cooldowns (below 1 = quicker).</summary>
     public float CooldownScale { get; init; } = 1f;
 
+    /// <summary>A boss's ult ring (`Realms.gdd` §13, the owner, 2026-11-28): it fills this much
+    /// every second of the fight, and this much per point of damage the boss deals or takes.
+    /// Players fill theirs more slowly (their kit's own rates, nothing over time).</summary>
+    public float UltRingPerSecond { get; init; } = 10f;
+    public float UltRingPerDamage { get; init; } = 5f;
+
     /// <summary>The boss's own basic-attack magazine.</summary>
     public CharacterAmmoDef Ammo { get; init; }
 

@@ -100,5 +100,9 @@ public static class BossSetup
         body.SetDamageDealtBonus(Source, def.DamageScale * level.AtkMult - 1f);
         body.SetKnockbackTakenScale(Source, def.KnockbackTaken);
         body.SetStunTakenScale(Source, def.StunTaken);
+        // The boss ring (Realms.gdd §13): over time, and per point dealt or taken.
+        body.UltChargePerSecond = def.UltRingPerSecond;
+        body.UltChargeDealtRate = def.UltRingPerDamage;
+        body.UltChargeReceivedRate = def.UltRingPerDamage;
     }
 }
