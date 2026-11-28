@@ -358,7 +358,7 @@ TODO(art)).
 
 | Action | Kind | Variant | Size · Magnitude · Direction · Position | Raised by |
 |---|---|---|---|---|
-| `ult.cast` | one-shot, on him | — | size = the prison's radius (19.1 m since v0.12.13) · magnitude = the warning's seconds · direction = to the centre | *PumpKing.HandleSkillUlt* |
+| `ult.cast` | one-shot, on him | — | size = the prison's radius (8 m since v0.12.15) · magnitude = the warning's seconds · direction = to the centre | *PumpKing.HandleSkillUlt* |
 | `ult.warn` | **loop** | — | at the centre · size = the radius · magnitude = 1 s | *BlackPrison.Begin → Form (or _ExitTree)* |
 | `ult.prison` | **loop** | — | at the centre · size = the radius · magnitude = 4 s | *BlackPrison.Form → End (or _ExitTree)* |
 | `ult.catch` | one-shot | — | at a body as it is caught · size = its hit radius | *BlackPrison.Hold* |

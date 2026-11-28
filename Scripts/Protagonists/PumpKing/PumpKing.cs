@@ -14,12 +14,11 @@ using Fableland.Run;
 /// SHIFT    Soul Form (12s CD, 0.5s windup) — 6s free-flight ghost form; a live head
 ///          becomes autonomous (visual bounce only, no AoE on its own explosion).
 /// E        Pump Up (0.5s inner CD, max 5 stacks) — Normal state only.
-/// Q        The Black Prison (黑狱, a full ult ring) — a circle 19.1 m wide (a slowed fighter
-///          walks out of it from the centre in exactly its 4 s), where he aims (8 m at most):
-///          1 s of warning, then 4 s in which every foe inside is slowed, jumps low, is silenced
-///          and blind past one cell, while pumpkins fly out of its heart. Q again while it stands
-///          (free, once): its mouth opens, he blinks into it and his head goes off there at its
-///          biggest. <see cref="BlackPrison"/>.
+/// Q        The Black Prison (黑狱, a full ult ring) — a circle 8 m in radius where he aims
+///          (8 m at most): 1 s of warning, then 4 s in which every foe inside is slowed, jumps
+///          low, is silenced (skills and items) and blind past one cell, while pumpkins fly out of
+///          its 3 m heart. Q again while it stands (free, once): its mouth opens, he blinks into
+///          it and his head goes off there at its biggest. <see cref="BlackPrison"/>.
 ///
 /// Animation automata mirrors the Unity "PumpKing" animator — only idle/walk/jump/
 /// soul body clips exist in the source art (no dead/stun clip); the neck-head child

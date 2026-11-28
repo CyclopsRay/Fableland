@@ -1,4 +1,4 @@
-# PumpKing — GDD v1.4
+# PumpKing — GDD v1.5
 
 > **Ported from the Unity `GloryOfFableland` source.** Numbers reflect the shipped Unity
 > kit; Godot movement derives from `Units.cs` (all speeds/distances in meters·seconds).
@@ -163,16 +163,12 @@ ultimate**, the game's first. Code: `PumpKing.HandleSkillUlt` → `BlackPrison`,
 first pass; the owner's own numbers are in **bold**.
 
 **1. The prison opens.** Q with a full ring opens a circle where he aims:
-- **Size — the owner's rule (v0.12.13): a slowed enemy walks out of it in exactly its 4 s.** A
-  fighter caught at the centre and walking straight out at half speed is free — hit circle
-  clear of the rim — just as the prison lets go; so one caught at the centre is held nearly
-  the whole time, one caught near the rim walks out sooner. Measured against **the standard
-  fighter: 10 m/s** (Pomegraknight, Pixolotl, Cleopastar; `CharacterController`'s default run)
-  with a 0.9 m hit circle: **0.5 × 10 m/s × 4 s − 0.9 m = 19.1 m** (`BlackPrison.RadiusM`). That
-  is wider than the view (about 36 × 20 m), so from inside its border is rarely in sight. A
-  slower body is held longer — PumpKing himself (8 m/s) would need 5 s, Sifu Pangda (6.5 m/s)
-  6 s, a crab (2.8–5.6 m/s) 7–14 s: all of the hold. *Which run to measure by is TBD #86 — if
-  the owner meant a foe's pace it is one constant, `ReferenceRunMps`.*
+- **Radius: 8 m — the owner's number (v0.12.15)** (`BlackPrison.RadiusM`). v0.12.13 sized it by
+  the owner's rule — a slowed 10 m/s fighter walks out from the centre in the whole 4 s, 19.1 m,
+  wider than the view — and the owner found that too big. Walking straight out from the
+  centre at half speed (free once the hit circle clears the rim), a 10 m/s fighter is out
+  after **1.8 s**, PumpKing himself (8 m/s) 2.2 s, Sifu Pangda (6.5 m/s) 2.7 s, a level-8 crab
+  (5.6 m/s) 3.1 s; a level-1 crab (2.8 m/s) needs 6.3 s, so it is held all 4 s.
 - **Its heart: his head's biggest blast, 3 m around the centre** (`ExplosionRadius`, 96 px;
   pumping only grows the head's look, see the Passive) — all the prison was until v0.12.13. The
   pumpkins grow in it, the recast's mouth opens on it and the recast's blast covers it.
@@ -235,7 +231,7 @@ all — a pumpkin of **random size** grows on the vines at its heart and is flun
   unless it is in solid ground; else up, sideways, down — within the prison), arriving still.
   With no room anywhere in the prison he stays where he is and the blast still goes off;
 - **his head goes off there at once, at its biggest:** his head's blast (3 m — the prison's
-  heart, not the whole 19.1 m prison), **100 damage** (twice the head's 50) × his damage multiplier, the default gain-no window (0.5 s
+  heart, not the whole 8 m prison), **100 damage** (twice the head's 50) × his damage multiplier, the default gain-no window (0.5 s
   at 100), and **no shove** — a 15 m/s shove would carry a foe at the centre exactly to the rim
   and everyone else out of it, ending the control the ultimate exists for. It costs **no head**:
   the magazine, the pump stacks and the shell are untouched;
@@ -254,7 +250,7 @@ where you aim, Q again to blink in.
 | What | Number |
 |---|---|
 | Cost | the full ring, 1500; the recast is free |
-| Cast range · radius | 8 m · **19.1 m** (a slowed 10 m/s fighter walks out from the centre in exactly 4 s) · its heart 3 m (his head's blast) |
+| Cast range · radius | 8 m · **8 m** (the owner's) · its heart 3 m (his head's blast) |
 | Warning · held | **1 s · 4 s** |
 | Held | **move ×0.5 · jump height ×0.5 · silenced (skills and items; BA allowed) · sight 1 cell = 3 m · the border unseen** |
 | Pumpkins | **one every 0.5 s**, 8, grown in its heart · 10–25 damage by size · 0.25–0.6 m · 9–13 m/s out + 4 up · no shove |
@@ -271,8 +267,8 @@ where you aim, Q again to blink in.
 > art is cut-out black against moonlit light — the cardboard houses already belong to it.
 
 1. **TODO(art) The border, seen from outside:** a black, bristling, horrific ring; the inside a
-   little darker. *Now:* a black thorn (out and in) every 0.5 m of rim that twitches — 240 on
-   the 19.1 m prison, sized in metres so the rim reads the same at any size — a black rim, a
+   little darker. *Now:* a black thorn (out and in) every 0.5 m of rim that twitches — 100 on
+   the 8 m prison, sized in metres so the rim reads the same at any size — a black rim, a
    dark-red inner line; the inside a 22 % wash of the board colour. A prisoner sees none of it.
 2. **TODO(art) The warning (1 s):** *now* a dashed red rim flickering faster, thorns growing.
 3. **TODO(art) The world inside — PumpKing's realm, seen only through the prison** (the Kingdom
@@ -301,7 +297,7 @@ where you aim, Q again to blink in.
    cut-out dead trees and a crooked lit house on each side; the prison's own drawing hidden.
    Inside the hole the real map still shows (TBD #87).
 8. **TODO(art) The aim preview:** where Q will open it and how far it can reach. *Now:* a red
-   19.1 m circle at the clamped aim with its 3 m heart, and a faint 8 m ring, drawn with the
+   8 m circle at the clamped aim with its 3 m heart, and a faint 8 m ring, drawn with the
    debug ranges, only while Q is ready.
 9. **TODO(animation)** the cast clip and the recast's windup clip (`NOTE(animation)` markers in
    `HandleSkillUlt`).
@@ -318,7 +314,7 @@ where you aim, Q again to blink in.
 | BA | Fire/Detonate Head | 1.5 s (reload windup) | Launch rolling head (30 contact DMG); detonate for 3 m / 50 DMG AoE |
 | Shift | Soul Form | 12 s | 6 s free-flight, 5 m/s speed, 0.5 s windup |
 | E | Pump Up | 0.5 s (inner CD) | +20 shield/stack, max 5; head grows; speed penalty |
-| Q (ult) | The Black Prison (黑狱) | the full ring (1500, his own, kept between fights) | 19.1 m circle within 8 m (a slowed fighter walks out from the centre in its 4 s): 1 s warning, then 4 s of move ×0.5, jump ×0.5, silence (skills and items), sight 3 m on foes inside; a pumpkin every 0.5 s from its 3 m heart; recast once (free): blink in, 100-damage 3 m blast |
+| Q (ult) | The Black Prison (黑狱) | the full ring (1500, his own, kept between fights) | 8 m circle within 8 m: 1 s warning, then 4 s of move ×0.5, jump ×0.5, silence (skills and items), sight 3 m on foes inside; a pumpkin every 0.5 s from its 3 m heart; recast once (free): blink in, 100-damage 3 m blast |
 
 ---
 
@@ -341,7 +337,7 @@ that realm's boss arena (`FOES.gdd` §8.1). His HP there is his row's × the day
 
 **The Black Prison on the boss — TBD (follow-up).** His kit has the ultimate (it is side-
 agnostic: on his side it holds the player, silences them — skills and items — slows them and
-darkens their view; at 19.1 m it covers most of his arena),
+darkens their view; 8 m in radius),
 but **his brain never presses Q**. A rule for it is the next step: open it when the player is
 within 8 m and his ring is full; recast when the player is near its centre. His ring fills only
 from damage he takes, as any boss's. The boss check already proves the kit works for him
@@ -485,9 +481,8 @@ Three changes to the kit, made for the boss fight and true for the protagonist t
   `ProbePrisonPumpkins`, `ProbePrisonTakesSides` — 67 checks; each rule was broken once and caught.
 
 ### The owner's answers — how they are built (v0.12.13)
-- **Its size is a rule, not a number:** `BlackPrison.RadiusM = ReferenceRunMps × MoveScale ×
-  HoldSeconds − ReferenceHitRadiusM` (10 m/s × 0.5 × 4 s − 0.9 m = 19.1 m). `Begin` takes the
-  radius and the **heart** (his `ExplosionRadius`); `Heart` is what the recast's blast
+- **Its size** was a rule in v0.12.13 (19.1 m) and is the owner's number since v0.12.15:
+  `BlackPrison.RadiusM = 8`. `Begin` takes the radius and the **heart** (his `ExplosionRadius`); `Heart` is what the recast's blast
   (`LandInPrisonMouth`), the mouth and `PumpkinSpot` use — so the pumpkins' throws are exactly
   what they were.
 - **The placeholder is drawn in metres** (thorns every 0.5 m, dashes every metre, houses every
@@ -500,10 +495,9 @@ Three changes to the kit, made for the boss fight and true for the protagonist t
   `SaveUltChargeToState` — a body writes its ring back only into the record it was filled
   from (a debug-worn body keeps its ring to itself); `WriteBackToState` carries it with HP
   at a switch, a fight's end, a quit and a fall.
-- **Checked by:** the boss check — the rule itself, a 19.1 m prison holding a crab 8 m off whom
-  the 3 m blast misses, the player running out of a boss's prison from 13 m, and
-  `PrisonWalkOut` (a 10 m/s fighter caught 10 m off walks out in 2.02 s, from the centre in
-  4.00 s — the whole hold); the flow check — a silenced holder cannot use THE VOID and spends
+- **Checked by:** the boss check — the 8 m, a crab 6 m off held whom the 3 m blast misses, the
+  player running out of a boss's prison from 5 m, and `PrisonWalkOut` (a 10 m/s fighter caught
+  4 m off walks out when its hit circle clears the rim, to the tick); the flow check — a silenced holder cannot use THE VOID and spends
   nothing; the run check — `WalkTheUltRings` (a switch, a won fight, the day's end, a save and a
   load, the next fight).
 
@@ -582,7 +576,8 @@ when the magazine is full.
   - **"4 s: a slowed enemy just walks out"** — the size is that rule. Decided here, for the
     owner to overrule (TBD #86): it is measured against the standard fighter (10 m/s) — the
     owner spoke of later multiplayer, where the prisoner is a fighter — and "walks out" is the
-    game's own test (the hit circle clear of the rim), hence 19.1 m and not 20.
+    game's own test (the hit circle clear of the rim), hence 19.1 m and not 20. *(Superseded in
+    v0.12.15: the owner found it too big and set 8 m.)*
   - **His head's blast stays his head's:** the recast's blast, the mouth and the pumpkins keep
     the old 3 m — a 100-damage blast over 19 m would be another ultimate.
   - **"A prisoner can't see its border — their whole map is another world"** — the owner allows
@@ -592,5 +587,8 @@ when the magazine is full.
     passive goes on.
   - **"Each character's ult energy is their own and is not cleared when a level ends"** — kept
     on the run record, through switches, days and saves; a new run and a new recruit start empty.
+- **(v0.12.15) "黑狱太大了，半径改成8m"** — the owner's number replaces the rule; TBD #86 (which run
+  to measure by) is moot. A 10 m/s fighter now walks out from the centre in 1.8 s; slow foes
+  are still held the whole time.
 
-*Last Updated: November 2026 (the owner's answers on the Black Prison) | Version: 1.4 | Generated from Unity source PumpKing.cs + PumpKingHead.cs*
+*Last Updated: November 2026 (the prison's 8 m) | Version: 1.5 | Generated from Unity source PumpKing.cs + PumpKingHead.cs*

@@ -9,6 +9,13 @@
 ## 0. Prototype 0 — DELIVERED & PLAYABLE ✅ (2026-07-03)
 
 ### Changelog
+- **0.12.15** — **The Black Prison is 8 m** (the owner: 19.1 m was too big). `BlackPrison.RadiusM`
+  is the owner's number; v0.12.13's rule (a slowed 10 m/s fighter walks out from the centre in the whole
+  4 s) and its reference constants are gone, and TBD #86 with them. A 10 m/s fighter now walks out from
+  the centre in 1.8 s; a level-1 crab (6.3 s) is still held all 4 s. Its 3 m heart is unchanged. The
+  boss check's probes moved to fit (a crab 6 m in, the player 5 m in, the walk-out from 4 m).
+  Also on the owner's word: `main` and `LocalTimeScale` fast-forwarded and pushed (the first push since
+  v0.11.0).
 - **0.12.14** — **The owner's style picks, recorded** (docs only). One direction per world, picked in
   the style gallery on 2026-11-28: VK-B, SL-A, BM-A, HC-C, TD-C, PL-A, KH-C, TF-B, CC-B, and OW-B for the
   overworld — `Docs/Art/StyleExploration/PICKS.md`, with where they depart from `REVIEW.md` (VK, TD, TF),

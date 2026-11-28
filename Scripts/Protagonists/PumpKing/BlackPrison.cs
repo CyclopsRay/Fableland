@@ -5,9 +5,8 @@ using Fableland.MapCreation.Data;
 /// <summary>
 /// PumpKing's ultimate, the Black Prison (黑狱) — <c>Docs/PumpKing.gdd</c>, "Q — the Black Prison".
 ///
-/// A circle he opens where he aims (at most <see cref="PumpKing.PrisonCastRangeM"/> from him),
-/// so wide that a fighter slowed inside it needs all of its <see cref="HoldSeconds"/> to walk out
-/// from the centre (<see cref="RadiusM"/>). For <see cref="WarnSeconds"/> it only warns: nothing
+/// A circle <see cref="RadiusM"/> wide that he opens where he aims (at most
+/// <see cref="PumpKing.PrisonCastRangeM"/> from him). For <see cref="WarnSeconds"/> it only warns: nothing
 /// happens to anyone. Then for <see cref="HoldSeconds"/> every body of the other side inside it
 /// (its hit circle touching the prison) moves at half speed, jumps half as high, is silenced,
 /// and sees only one map cell around itself. Walking out frees a body at once; walking in
@@ -40,18 +39,12 @@ public partial class BlackPrison : Node2D
     public const float SightCells = 1.5f;
     public const float SightMetres = SightCells * MapGrid.MetersPerCell;
 
-    // ── Its size (the owner, v0.12.13) ──
-    /// <summary>The run its size is measured by: a fighter's standard 10 m/s
-    /// (<see cref="CharacterController.MoveSpeed"/>'s default — Pomegraknight, Pixolotl, Cleopastar).</summary>
-    public const float ReferenceRunMps = 10f;
-    /// <summary>A fighter's hit circle (<see cref="CharacterController.HitRadius"/>): 0.9 m.</summary>
-    public const float ReferenceHitRadiusM = Units.PlayerHeightM * 0.45f;
-    /// <summary>The owner's rule: a fighter at the standard run, slowed to <see cref="MoveScale"/>,
-    /// who sets out from the centre as it forms is free — its hit circle clear of the rim — just
-    /// as it lets go, <see cref="HoldSeconds"/> later. Caught at the centre, held all the while;
-    /// caught nearer the rim, out sooner; a slower body, held longer. 0.5 × 10 m/s × 4 s − 0.9 m
-    /// = 19.1 m: wider than the view, so from inside its border is rarely in sight at all.</summary>
-    public const float RadiusM = ReferenceRunMps * MoveScale * HoldSeconds - ReferenceHitRadiusM;
+    // ── Its size (the owner, v0.12.15) ──
+    /// <summary>The owner's number: 8 m. (v0.12.13 sized it by a rule — a slowed 10 m/s fighter
+    /// walks out from the centre in the whole 4 s, 19.1 m — and the owner found that too big.)
+    /// A 10 m/s fighter caught at the centre now walks out in (8 + 0.9) m / 5 m/s = 1.8 s; a
+    /// level-1 crab (2.8 m/s) needs 6.3 s, so stays held all 4 s.</summary>
+    public const float RadiusM = 8f;
 
     // ── Pumpkins ──
     public const float PumpkinEvery = 0.5f;
